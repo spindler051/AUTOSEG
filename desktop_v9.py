@@ -12,6 +12,9 @@ PRETO='#000000';CINZA='#AAAAAA';AMARELO='#FFD400';VERDE='#20C878';ESCURO='#15151
 
 class DesktopV9Mixin:
     def iniciar_tuneis_v91(self, mostrar_avisos=True):
+        if __import__("os").environ.get("AUTOSEG_DEV") == "1":
+            print("AUTOSEG DEV: túneis Cloudflare bloqueados.")
+            return
         """Integra o gerenciador ao desktop, sem travar a interface."""
         import shutil
         if not (shutil.which('cloudflared') or __import__('pathlib').Path('/usr/local/bin/cloudflared').is_file()):

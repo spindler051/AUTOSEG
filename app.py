@@ -93,7 +93,12 @@ class App(DesktopV9Mixin,tk.Tk):
         self.logo_img = None
         self.icone_app = None
 
-        self.servidor_portal = ServidorPortal(BANCO, PASTA_APP)
+        self.servidor_portal = ServidorPortal(
+            BANCO,
+            PASTA_APP,
+            porta=int(os.environ.get("CLIENTE_PORT", "8765")),
+            host=os.environ.get("CLIENTE_BIND", "127.0.0.1")
+        )
         self.erro_portal = ""
 
         try:

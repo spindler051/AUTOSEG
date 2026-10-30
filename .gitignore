@@ -44,3 +44,6 @@ cloudflared.yml
 cloudflared.yaml
 cert.pem
 credentials.json
+
+# Dados locais de desenvolvimento
+dados_teste/
