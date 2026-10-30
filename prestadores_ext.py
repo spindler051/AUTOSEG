@@ -1,0 +1,378 @@
+"""Extensões AUTOSEG: prestadores, auditoria, anexos, PDF, e-mail e rascunho fiscal.
+Não modifica o esquema antigo; adiciona tabelas independentes ao mesmo banco SQLite.
+"""
+import os, sqlite3, hashlib, hmac, secrets, json, mimetypes, shutil, re
+from datetime import datetime
+from pathlib import Path
+from email.message import EmailMessage
+from email.policy import SMTP
+from contextlib import contextmanager
+
+BASE = Path(__file__).resolve().parent
+ANEXOS = BASE / 'anexos_os'
+RELATORIOS = BASE / 'relatorios_pdf'
+RASCUNHOS = BASE / 'rascunhos'
+for p in (ANEXOS, RELATORIOS, RASCUNHOS): p.mkdir(parents=True, exist_ok=True)
+
+def agora(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+@contextmanager
+def db(banco):
+    """Commit ou rollback da transação e SEMPRE fecha a conexão SQLite."""
+    c = sqlite3.connect(str(banco), timeout=20)
+    c.row_factory = sqlite3.Row
+    try:
+        c.execute('PRAGMA busy_timeout=20000')
+        c.execute('PRAGMA foreign_keys=ON')
+        with c:
+            yield c
+    finally:
+        c.close()
+
+def instalar(banco):
+    with db(banco) as c:
+        c.executescript('''
+        CREATE TABLE IF NOT EXISTS prestadores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL,
+            telefone TEXT DEFAULT '', email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+            documento TEXT DEFAULT '', especialidade TEXT DEFAULT '',
+            senha_hash TEXT NOT NULL, ativo INTEGER NOT NULL DEFAULT 1,
+            criado_em TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS os_prestadores (
+            os_id INTEGER NOT NULL, prestador_id INTEGER NOT NULL,
+            atribuido_em TEXT NOT NULL, ativo INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY(os_id,prestador_id),
+            FOREIGN KEY(prestador_id) REFERENCES prestadores(id));
+        CREATE TABLE IF NOT EXISTS os_eventos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, os_id INTEGER NOT NULL,
+            prestador_id INTEGER, ator TEXT NOT NULL, acao TEXT NOT NULL,
+            descricao TEXT NOT NULL, criado_em TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS os_anexos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, os_id INTEGER NOT NULL,
+            prestador_id INTEGER, nome_original TEXT NOT NULL, caminho TEXT NOT NULL,
+            tipo TEXT NOT NULL, criado_em TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS os_conclusoes (
+            os_id INTEGER PRIMARY KEY, prestador_id INTEGER NOT NULL,
+            relato TEXT NOT NULL, informado_em TEXT NOT NULL, aprovado_em TEXT);
+        CREATE TABLE IF NOT EXISTS os_responsaveis (
+            os_id INTEGER PRIMARY KEY, prestador_id INTEGER NOT NULL,
+            assumido_em TEXT NOT NULL,
+            FOREIGN KEY(prestador_id) REFERENCES prestadores(id));
+        CREATE INDEX IF NOT EXISTS idx_os_prestadores_prestador ON os_prestadores(prestador_id,os_id);
+        CREATE INDEX IF NOT EXISTS idx_os_responsaveis_prestador ON os_responsaveis(prestador_id);
+        CREATE INDEX IF NOT EXISTS idx_eventos_os ON os_eventos(os_id,id);
+        CREATE INDEX IF NOT EXISTS idx_anexos_os ON os_anexos(os_id);
+        ''')
+        # Migração sem alterações destrutivas: atribuições antigas continuam disponíveis.
+        # Escolhe a mais recente somente onde ainda não existe responsável atual.
+        c.execute('''INSERT OR IGNORE INTO os_responsaveis(os_id, prestador_id, assumido_em)
+                     SELECT op.os_id, op.prestador_id, op.atribuido_em
+                     FROM os_prestadores op
+                     JOIN ordens_servico o ON o.id=op.os_id
+                     WHERE op.ativo=1 AND o.status IN ('Aberta','Pendente')
+                       AND op.rowid = (SELECT op2.rowid FROM os_prestadores op2
+                                       WHERE op2.os_id=op.os_id AND op2.ativo=1
+                                       ORDER BY op2.atribuido_em DESC,op2.rowid DESC LIMIT 1)''')
+
+def senha_hash(s):
+    if len(s) < 10: raise ValueError('A senha precisa ter no mínimo 10 caracteres.')
+    salt = secrets.token_bytes(16)
+    dig = hashlib.pbkdf2_hmac('sha256', s.encode(), salt, 250000)
+    return 'pbkdf2$250000$'+salt.hex()+'$'+dig.hex()
+
+def verificar_senha(s, hash_):
+    try:
+        tag, loops, salt, digest = hash_.split('$')
+        if tag != 'pbkdf2': return False
+        esperado = hashlib.pbkdf2_hmac('sha256',s.encode(),bytes.fromhex(salt),int(loops))
+        return hmac.compare_digest(esperado,bytes.fromhex(digest))
+    except (ValueError, TypeError): return False
+
+def cadastrar(banco,nome,email,senha,telefone='',documento='',especialidade=''):
+    if not nome.strip() or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email.strip()):
+        raise ValueError('Informe nome e e-mail válido.')
+    with db(banco) as c:
+        cur=c.execute('INSERT INTO prestadores(nome,email,senha_hash,telefone,documento,especialidade,criado_em) VALUES(?,?,?,?,?,?,?)',
+        (nome.strip(),email.strip().lower(),senha_hash(senha),telefone.strip(),documento.strip(),especialidade.strip(),agora()))
+        return cur.lastrowid
+
+def autenticar(banco,email,senha):
+    with db(banco) as c:
+        p=c.execute('SELECT * FROM prestadores WHERE email=? AND ativo=1',(email.strip().lower(),)).fetchone()
+        if p and verificar_senha(senha,p['senha_hash']): return dict(p)
+    return None
+
+def evento(c,os_id,acao,descricao,prestador_id=None,ator='Administrador'):
+    c.execute('INSERT INTO os_eventos(os_id,prestador_id,ator,acao,descricao,criado_em) VALUES(?,?,?,?,?,?)',
+              (os_id,prestador_id,ator,acao,descricao,agora()))
+
+ATIVAS = ('Aberta', 'Pendente')
+
+def listar_os_compartilhadas(banco):
+    """Todas as OS ativas para todo prestador autenticado, atribuídas ou não."""
+    with db(banco) as c:
+        return [dict(x) for x in c.execute("""
+            SELECT o.id, o.numero_os, o.status, o.descricao, o.data_abertura,
+                   cl.nome AS cliente,
+                   r.prestador_id AS responsavel_id,
+                   p.nome AS responsavel,
+                   (SELECT GROUP_CONCAT(nome, ', ') FROM (
+                       SELECT DISTINCT p2.nome AS nome FROM os_prestadores op2
+                       JOIN prestadores p2 ON p2.id=op2.prestador_id
+                       WHERE op2.os_id=o.id AND op2.ativo=1 ORDER BY p2.nome
+                   )) AS participantes
+            FROM ordens_servico o
+            JOIN clientes cl ON cl.id=o.cliente_id
+            LEFT JOIN os_responsaveis r ON r.os_id=o.id
+            LEFT JOIN prestadores p ON p.id=r.prestador_id
+            WHERE o.status IN ('Aberta','Pendente')
+            ORDER BY CASE WHEN o.status='Pendente' THEN 0 ELSE 1 END, o.id DESC
+        """).fetchall()]
+
+def responsavel_atual(c, os_id):
+    x = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (os_id,)).fetchone()
+    return x['prestador_id'] if x else None
+
+def pode_assumir(c,os_id,pid):
+    """OS pendente sempre pode ser retomada; aberta só se não tem responsável."""
+    o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    p=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
+    if not o or not p: return False
+    return (o['status']=='Pendente' or (o['status']=='Aberta' and responsavel_atual(c,os_id) is None))
+
+def atribuir(banco,os_id,prestador_id,ator='Administrador'):
+    """Atribuição administrativa define responsável; preserva participantes históricos."""
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(prestador_id,)).fetchone()
+        if not o or not p: raise ValueError('OS ou prestador ativo não encontrado.')
+        if o['status'] not in ATIVAS: raise ValueError('Só é possível atribuir OS aberta ou pendente.')
+        anterior=responsavel_atual(c,os_id)
+        if anterior==prestador_id: return False
+        c.execute('INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo) VALUES(?,?,?,1) '
+                  'ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1', (os_id,prestador_id,agora()))
+        c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
+                  'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
+                  (os_id,prestador_id,agora()))
+        evento(c,os_id,'Atribuição' if anterior is None else 'Transferência administrativa',
+               f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
+        return True
+
+def assumir(banco,os_id,pid):
+    """Assunção atômica; dois prestadores não conseguem assumir a mesma OS aberta."""
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
+        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not p or not o: raise PermissionError('Prestador ou OS inválida.')
+        anterior=responsavel_atual(c,os_id)
+        if anterior==pid:
+            if o['status']=='Pendente':
+                c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?", (os_id,))
+                evento(c,os_id,'Retomada',f'{p["nome"]} retomou o atendimento pendente.',pid,p['nome'])
+                return True
+            return False
+        if not pode_assumir(c,os_id,pid):
+            raise PermissionError('OS em atendimento por outro prestador. Aguarde ficar pendente ou solicite transferência.')
+        c.execute('INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo) VALUES(?,?,?,1) '
+                  'ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1', (os_id,pid,agora()))
+        c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
+                  'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
+                  (os_id,pid,agora()))
+        # Uma retomada inicia atendimento; mantém o histórico da pendência anterior.
+        if o['status']=='Pendente':
+            c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?",(os_id,))
+        evento(c,os_id,'Retomada' if anterior is not None else 'Assunção',
+               f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
+        return True
+
+def acesso(c,os_id,pid):
+    """Legado: acesso operacional (mutação) apenas ao responsável atual."""
+    return responsavel_atual(c,os_id)==pid
+
+def registrar(banco,os_id,pid,acao,descricao):
+    descricao=descricao.strip()
+    if not descricao or len(descricao)>5000: raise ValueError('Informe descrição de até 5000 caracteres.')
+    if acao not in ('Atividade','Pendência','Conclusão informada'): raise ValueError('Ação inválida.')
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
+        if not o or not p or not acesso(c,os_id,pid): raise PermissionError('Assuma a OS para registrar atividades.')
+        if o['status'] not in ATIVAS: raise ValueError('OS não está aberta ou pendente.')
+        if acao=='Pendência': c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",(os_id,))
+        if acao=='Conclusão informada':
+            c.execute('INSERT INTO os_conclusoes(os_id,prestador_id,relato,informado_em,aprovado_em) VALUES(?,?,?,?,NULL) ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id,relato=excluded.relato,informado_em=excluded.informado_em,aprovado_em=NULL',(os_id,pid,descricao,agora()))
+            c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",(os_id,))
+        evento(c,os_id,acao,descricao,pid,p['nome'])
+
+def validar_imagem(conteudo):
+    """Validação antes de alterar o banco; evita fotos malformadas no PDF."""
+    if not isinstance(conteudo,bytes) or not conteudo:
+        raise ValueError('Selecione uma imagem válida.')
+    if len(conteudo)>8*1024*1024:
+        raise ValueError('Limite de 8 MB por imagem.')
+    from PIL import Image
+    import io
+    try:
+        with Image.open(io.BytesIO(conteudo)) as original:
+            original.verify()
+        with Image.open(io.BytesIO(conteudo)) as original:
+            formato=original.format
+            largura,altura=original.size
+    except Exception as erro:
+        raise ValueError('Não foi possível validar a imagem. Use JPG, PNG ou WEBP.') from erro
+    if formato not in ('JPEG','PNG','WEBP') or largura*altura>25000000:
+        raise ValueError('Use JPG, PNG ou WEBP de até 25 megapixels.')
+    return formato, {'JPEG':'.jpg','PNG':'.png','WEBP':'.webp'}[formato]
+
+
+def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=False):
+    """Anexa ao banco na transação de encerramento, antes de gerar o PDF."""
+    formato,extensao=validar_imagem(conteudo)
+    if pid is not None:
+        prestador_ativo=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
+        if not prestador_ativo: raise PermissionError('Prestador inativo.')
+        if not permitir_colaboracao and not acesso(c,os_id,pid):
+            raise PermissionError('Assuma a OS para anexar imagens.')
+    o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    if not o:raise ValueError('OS não existe.')
+    if pid is not None and o['status'] not in ATIVAS:
+        raise ValueError('OS encerrada: não é permitido anexar novas fotos.')
+    ANEXOS.mkdir(parents=True,exist_ok=True)
+    destino=ANEXOS/(secrets.token_hex(16)+extensao)
+    destino.write_bytes(conteudo)
+    try:
+        c.execute('INSERT INTO os_anexos(os_id,prestador_id,nome_original,caminho,tipo,criado_em) VALUES(?,?,?,?,?,?)',
+                  (os_id,pid,Path(nome).name[:150],str(destino),formato,agora()))
+        ator='Administrador'
+        if pid is not None:
+            ator=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome']
+        evento(c,os_id,'Imagem anexada',Path(nome).name[:150],pid,ator)
+    except Exception:
+        destino.unlink(missing_ok=True);raise
+    return str(destino)
+
+
+def salvar_imagem(banco,os_id,pid,nome,conteudo,permitir_colaboracao=False):
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        return registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao)
+
+def gerar_pdf(banco,os_id):
+    from pdf_cliente_v9 import gerar
+    return gerar(banco,os_id)
+
+    try:
+        from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as RLImage,KeepTogether
+        from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.utils import ImageReader
+        from reportlab.lib.pagesizes import A4
+    except ImportError as e:
+        raise RuntimeError('ReportLab indisponível no Python ativo. Inicie pelo INICIAR_AUTOSEG.command após executar o instalador; verifique: .venv/bin/python -m pip install reportlab pillow') from e
+    from xml.sax.saxutils import escape
+    with db(banco) as c:
+        o=c.execute('SELECT o.*,c.nome cliente_nome,c.email cliente_email FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        if not o: raise ValueError('OS não encontrada.')
+        responsavel=c.execute('SELECT p.nome FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
+        participantes=c.execute('SELECT p.nome FROM os_prestadores op JOIN prestadores p ON p.id=op.prestador_id WHERE op.os_id=? ORDER BY p.nome',(os_id,)).fetchall()
+        eventos=c.execute('SELECT criado_em,ator,acao,descricao FROM os_eventos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        anexos=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        materiais=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        financeiro=c.execute('SELECT status,valor FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
+        tem_encerramento=c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_encerramentos'").fetchone()
+        enc=c.execute('SELECT situacao,motivo,relatorio,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if tem_encerramento else None
+        sol=c.execute('SELECT descricao_original,criado_em FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_solicitacoes'").fetchone() else None
+        andamento=c.execute('SELECT iniciado_em,ator_inicio FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_atendimentos'").fetchone() else None
+    nome=f'OS_{re.sub(r"[^a-zA-Z0-9_-]","_",str(o["numero_os"]))}_{os_id}.pdf'
+    caminho=RELATORIOS/nome
+    estilos=getSampleStyleSheet(); estilos.add(ParagraphStyle(name='AUTOTitulo',parent=estilos['Title'],textColor=colors.HexColor('#222222'),spaceAfter=15))
+    estilos.add(ParagraphStyle(name='AUTOCorpo',parent=estilos['BodyText'],leading=15,spaceAfter=7))
+    estilos.add(ParagraphStyle(name='AUTOSecao',parent=estilos['Heading2'],
+        textColor=colors.HexColor('#997500'),fontSize=11,spaceBefore=15,spaceAfter=6))
+    P=lambda x: Paragraph(escape(str(x or '')).replace('\n','<br/>'),estilos['AUTOCorpo'])
+    H=lambda x: Paragraph(escape(str(x or '')),estilos['AUTOSecao'])
+    brl=lambda v: 'R$ '+f'{float(v or 0):,.2f}'.replace(',','@').replace('.',',').replace('@','.')
+    partes=[Paragraph('RELATÓRIO TÉCNICO DE SERVIÇO',estilos['AUTOTitulo']),P(f'OS: {o["numero_os"]} | Situação: {o["status"]}'),P(f'Cliente: {o["cliente_nome"]}'),P(f'Abertura: {o["data_abertura"]} | Conclusão: {o["data_conclusao"] or "Não informada"}'),P('Descrição: '+str(o['descricao'] or '')),P('Atendido por (cliente no local): '+str(o['tecnico'] or 'Não informado')),P('Observações: '+str(o['observacoes'] or '')),
+        H('VALORES E PAGAMENTO'),P('Mão de obra: '+brl(o['valor_mao_obra'])),
+        P('Materiais: '+brl(o['valor_materiais'])),
+        P('Total: '+brl(o['valor_total'])),
+        P('Forma de pagamento: '+str(o['forma_pagamento'] or 'Não informada')),
+        P('Situação financeira: '+(financeiro['status'] if financeiro else 'Sem lançamento')),
+        P('Responsável atual: '+(responsavel['nome'] if responsavel else 'Não atribuído')),P('Prestadores envolvidos: '+(', '.join(x['nome'] for x in participantes) or 'Nenhum prestador atribuído')),Spacer(1,12)]
+    if sol:
+        partes.extend([H('SOLICITAÇÃO ORIGINAL DO CLIENTE — NÃO EDITÁVEL'),P(sol['descricao_original']),P('Registrada em: '+str(sol['criado_em']))])
+    if andamento and andamento['iniciado_em']:
+        partes.append(P('Atendimento iniciado em: '+str(andamento['iniciado_em'])+' | Por: '+str(andamento['ator_inicio'])))
+    if enc:
+        partes.extend([H('ENCERRAMENTO'),P('Situação: '+enc['situacao']),
+            P('Registrado em: '+str(enc['encerrado_em'])),
+            P('Relatório técnico: '+str(enc['relatorio']))])
+        if enc['motivo']: partes.append(P('Motivo do encerramento: '+enc['motivo']))
+    partes.append(H('MATERIAIS UTILIZADOS'))
+    for m in materiais: partes.append(P(f'{m["item"]}: {m["quantidade"]} un. | {brl(m["valor_total"])}'))
+    partes.extend([Spacer(1,10),H('HISTÓRICO DE ATIVIDADES')])
+    for ev in eventos: partes.append(P(f'{ev["criado_em"]} | {ev["ator"]} | {ev["acao"]}: {ev["descricao"]}'))
+    partes.extend([Spacer(1,10),H('IMAGENS ANEXADAS')])
+    for an in anexos:
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(an['caminho']) as im: w,h=im.size
+            scale=min(460/w,340/h,1)
+            partes.append(KeepTogether([P(an['nome_original']),RLImage(an['caminho'],width=w*scale,height=h*scale),Spacer(1,8)]))
+        except Exception: partes.append(P('Imagem indisponível: '+an['nome_original']))
+    faixa=Table([[Paragraph('<font color="#FFFFFF"><b>AUTO</b></font><font color="#FFD400"><b>SEG</b></font>',
+                   ParagraphStyle('LOGO_AUTO',fontName='Helvetica-Bold',fontSize=17,leading=20)),
+                Paragraph('<font color="#FFD400">AUTOMAÇÃO E SEGURANÇA</font>',
+                   ParagraphStyle('TAG_AUTO',fontName='Helvetica-Bold',fontSize=9,alignment=2))]],
+               colWidths=[225,286])
+    faixa.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#111111')),
+        ('TOPPADDING',(0,0),(-1,-1),13),('BOTTOMPADDING',(0,0),(-1,-1),13),
+        ('LEFTPADDING',(0,0),(0,0),15),('RIGHTPADDING',(-1,0),(-1,0),15)]))
+    partes.insert(0,faixa)
+    partes.insert(1,Spacer(1,18))
+    def rodape(canvas,doc):
+        canvas.setStrokeColor(colors.HexColor('#d4ad00'))
+        canvas.line(38,34,A4[0]-38,34)
+        canvas.setFont('Helvetica',8)
+        canvas.setFillColor(colors.HexColor('#666666'))
+        canvas.drawString(38,22,'AUTOSEG - Relatório técnico de ordem de serviço')
+        canvas.drawRightString(A4[0]-38,22,f'Página {doc.page}')
+    SimpleDocTemplate(str(caminho),pagesize=A4,rightMargin=38,leftMargin=38,topMargin=42,bottomMargin=48,
+        title=f'Relatório OS {o["numero_os"]}').build(partes,onFirstPage=rodape,onLaterPages=rodape)
+    return str(caminho)
+
+def criar_email_rascunho(banco,os_id,pdf):
+    with db(banco) as c:
+        r=c.execute('SELECT o.numero_os,c.email,c.nome FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+    if not r: raise ValueError('OS inválida.')
+    if not r['email']: raise ValueError('Cadastre o e-mail do cliente antes de preparar a mensagem.')
+    msg=EmailMessage();msg['To']=r['email'];msg['Subject']=f'AUTOSEG | Relatório de serviço {r["numero_os"]}'
+    msg.set_content(f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.\n\nAtenciosamente,\nAUTOSEG')
+    msg.add_attachment(Path(pdf).read_bytes(),maintype='application',subtype='pdf',filename=Path(pdf).name)
+    path=RASCUNHOS/f'email_os_{os_id}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
+
+def criar_rascunho_fiscal(banco,os_id):
+    with db(banco) as c:
+        r=c.execute('SELECT o.*,c.nome cliente_nome,c.documento cliente_documento,c.email cliente_email FROM ordens_servico o JOIN clientes c ON o.cliente_id=c.id WHERE o.id=?',(os_id,)).fetchone()
+    if not r: raise ValueError('OS inválida')
+    if r['status']!='Concluída':
+        raise ValueError('Rascunho fiscal disponível somente para OS concluída. Cancelamentos e serviços não realizados não devem emitir nota automaticamente.')
+    payload={'status':'RASCUNHO_NAO_EMITIDO','ordem_servico_id':os_id,'numero_os':r['numero_os'],'tomador':{'nome':r['cliente_nome'],'documento':r['cliente_documento'],'email':r['cliente_email']},'descricao':r['descricao'],'valor_servico':r['valor_total'],'moeda':'BRL','integracao_api':None,'observacao':'Não é nota fiscal válida. Requer dados do emitente, município, tributos, autorização e API oficial.'}
+    path=RASCUNHOS/f'nota_fiscal_rascunho_os_{os_id}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
+
+def desatribuir(banco, os_id, ator='Administrador'):
+    """Remove apenas o responsável atual. Histórico e participantes são preservados."""
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o = c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o or o['status'] not in ATIVAS:
+            raise ValueError('Selecione uma OS aberta ou pendente.')
+        anterior = responsavel_atual(c, os_id)
+        if anterior is None: return False
+        c.execute('DELETE FROM os_responsaveis WHERE os_id=?',(os_id,))
+        evento(c,os_id,'Desatribuição',f'OS disponível para nova atribuição. Responsável anterior (ID): {anterior}.',ator=ator)
+        return True

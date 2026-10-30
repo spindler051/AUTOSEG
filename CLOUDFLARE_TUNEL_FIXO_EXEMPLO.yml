@@ -1,0 +1,11 @@
+# EXEMPLO: NÃO será executado automaticamente. Substitua domínio, UUID e arquivo de credenciais.
+# Requer conta Cloudflare e domínio configurado na Cloudflare.
+tunnel: SUBSTITUIR_UUID_DO_TUNEL
+credentials-file: /Users/SEU_USUARIO/.cloudflared/SUBSTITUIR_UUID_DO_TUNEL.json
+
+ingress:
+  - hostname: sistema.seudominio.com
+    service: http://127.0.0.1:8765
+  - hostname: portal.seudominio.com
+    service: http://127.0.0.1:8766
+  - service: http_status:404

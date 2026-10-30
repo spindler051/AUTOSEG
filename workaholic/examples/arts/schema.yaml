@@ -1,0 +1,28 @@
+name: Artes
+entities:
+  cliente:
+    fields:
+      nome: {type: string, required: true}
+      contato: {type: string}
+    deletion: archive
+  projeto:
+    fields:
+      titulo: {type: string, required: true}
+      cliente_id: {type: string}
+      tarefas: {type: list, default: []}
+      preco: {type: string}
+      prazo: {type: date}
+      publico: {type: boolean, default: false}
+      prioridade: {type: boolean, default: false}
+      notas: {type: string}
+      link: {type: string}
+    workflow:
+      states: [reservado, em_producao, congelado, lancado]
+      transitions:
+        reservado: [em_producao, congelado]
+        em_producao: [congelado, lancado]
+        congelado: [em_producao]
+        lancado: []
+    deletion: archive
+relations:
+  projeto_cliente: {from: projeto, to: cliente, field: cliente_id}

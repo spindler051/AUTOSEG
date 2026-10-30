@@ -1,0 +1,46 @@
+# Bancos de dados
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db-shm
+*.db-wal
+
+# Ambientes Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Configurações e credenciais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Arquivos de clientes e relatórios
+anexos_os/
+relatorios_pdf/
+backups/
+backup/
+*.xls
+*.xlsx
+*.csv
+
+# Arquivos temporários
+.DS_Store
+*.log
+*.tmp
+
+# Logs e dados operacionais
+logs/
+tuneis/
+
+# Configuracoes locais de tunel
+cloudflared.yml
+cloudflared.yaml
+cert.pem
+credentials.json

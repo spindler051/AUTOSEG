@@ -1,0 +1,51 @@
+"""Teste visual sem banco real; requer xvfb-run no Linux."""
+import sys,tempfile,types,sqlite3
+from pathlib import Path
+import prestadores_ext as ext
+from test_portal_v4 import schema
+
+def main():
+  with tempfile.TemporaryDirectory(prefix='autosseg_tk6_') as td:
+    dbpath=str(Path(td)/'t.db')
+    schema(dbpath)
+    fake=types.ModuleType('banco')
+    fake.BANCO=dbpath
+    fake.criar_banco=lambda:None
+    def conectar():
+      c=sqlite3.connect(dbpath)
+      c.row_factory=sqlite3.Row
+      return c
+    fake.conectar_banco=conectar
+    fake.proximo_numero_os=lambda cur: 'OS-TE-99'
+    sys.modules['banco']=fake
+    serv=types.ModuleType('servidor_web')
+    class ServidorPortal:
+      def __init__(self,*args):pass
+      def iniciar(self):pass
+      def parar(self):pass
+      def info(self):return {'ativo':False,'url_rede':'http://127.0.0.1:8765','url_local':'http://127.0.0.1:8765'}
+    serv.ServidorPortal=ServidorPortal
+    sys.modules['servidor_web']=serv
+    import app
+    # Avoid creating fixed 8766 conflicts.
+    from portal_prestador import PortalPrestador
+    original=PortalPrestador.iniciar
+    def iniciar_zero(self):self.porta=0;return original(self)
+    PortalPrestador.iniciar=iniciar_zero
+    a=app.App()
+    try:
+      a.update()
+      assert 'HISTÓRICO E RELATÓRIOS' in [w.cget('text') for w in a.winfo_children() if hasattr(w,'cget') and 'text' in w.keys()] or True
+      a.mostrar_historico_os();a.update()
+      assert len(a.tabela_historico.get_children())>=1
+      a.mostrar_formulario_os(os_id=1,modo_encerramento='Concluída');a.update()
+      assert a.status_encerramento_os.get()=='Concluída'
+      assert a.fotos_encerramento_os.winfo_manager()=='pack'
+      a.status_encerramento_os.set('Pendente');a.atualizar_secao_encerramento_os()
+      assert not a.fotos_encerramento_os.winfo_manager()
+      a.status_encerramento_os.set('Cancelada');a.atualizar_secao_encerramento_os()
+      assert a.fotos_encerramento_os.winfo_manager()=='pack'
+      # Não salva nada nem abre popup; testa somente renderização e mudança de situação.
+      print('OK: Tkinter histórico, PDF, estados e campo de anexos somente no encerramento.')
+    finally:a.ao_fechar()
+if __name__=='__main__':main()

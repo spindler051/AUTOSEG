@@ -1,0 +1,103 @@
+"""Relatório limpo, voltado ao cliente. Auditoria técnica permanece no banco, não no PDF."""
+from pathlib import Path
+from xml.sax.saxutils import escape
+from datetime import datetime
+import re
+import prestadores_ext as ext
+
+def data_br(valor):
+    s=str(valor or '').strip()
+    try:return datetime.fromisoformat(s.replace('Z','+00:00')).strftime('%d/%m/%Y às %H:%M')
+    except ValueError:return s or 'Não informado'
+
+def brl(v):
+    return 'R$ '+f'{float(v or 0):,.2f}'.replace(',','@').replace('.',',').replace('@','.')
+
+def gerar(banco,os_id):
+    from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as PdfImage,KeepTogether
+    from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER,TA_RIGHT
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from PIL import Image
+    import io
+    with ext.db(banco) as c:
+        os_=c.execute('SELECT o.*,cl.nome cliente FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        if not os_:raise ValueError('Ordem de serviço não encontrada.')
+        sol=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_solicitacoes'").fetchone() else None
+        enc=c.execute('SELECT relatorio,motivo,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_encerramentos'").fetchone() else None
+        resp=c.execute('SELECT p.nome FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
+        mats=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
+        detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
+        anexos=[]
+        if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_anexos_visiveis'").fetchone():
+            anexos=c.execute('''SELECT a.caminho,a.nome_original,COALESCE(v.legenda,'') AS legenda FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id WHERE a.os_id=? AND COALESCE(v.visivel,1)=1 ORDER BY a.id''',(os_id,)).fetchall()
+    estilo=getSampleStyleSheet()
+    preto=colors.HexColor('#171717');amarelo=colors.HexColor('#E2B800');cinza=colors.HexColor('#666666')
+    estilo.add(ParagraphStyle(name='AutosegTituloV9',fontName='Helvetica-Bold',fontSize=14,leading=18,textColor=preto,spaceAfter=8))
+    estilo.add(ParagraphStyle(name='AutosegSecaoV9',fontName='Helvetica-Bold',fontSize=10,leading=14,textColor=preto,spaceBefore=13,spaceAfter=7))
+    estilo.add(ParagraphStyle(name='AutosegCorpoV9',fontName='Helvetica',fontSize=9,leading=13,textColor=preto,spaceAfter=5))
+    estilo.add(ParagraphStyle(name='AutosegPequenoV9',fontName='Helvetica',fontSize=8,leading=11,textColor=cinza,spaceAfter=6))
+    P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
+    S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
+    linhas=[]
+    logo=Paragraph('<font color="#FFFFFF">AUTO</font><font color="#FFD400">SEG</font>',
+        ParagraphStyle('LogoV9',fontName='Helvetica-Bold',fontSize=19,leading=21))
+    marca=Paragraph('<font color="#FFD400"><b>AUTOMAÇÃO E SEGURANÇA</b></font>',
+        ParagraphStyle('TagV9',fontName='Helvetica-Bold',fontSize=8,alignment=TA_RIGHT))
+    topo=Table([[logo,marca]],colWidths=[255,255])
+    topo.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),preto),('TOPPADDING',(0,0),(-1,-1),13),('BOTTOMPADDING',(0,0),(-1,-1),13)]))
+    linhas.extend([topo,Spacer(1,13),Paragraph('RELATÓRIO TÉCNICO DE SERVIÇO',estilo['AutosegTituloV9'])])
+    dados=[[P('Ordem de serviço: '+str(os_['numero_os'])),P('Situação: '+str(os_['status']))],
+           [P('Cliente: '+str(os_['cliente'])),P('Prestador: '+(resp['nome'] if resp else 'Não informado'))],
+           [P('Abertura: '+data_br(os_['data_abertura'])),P('Encerramento: '+data_br(enc['encerrado_em'] if enc else os_['data_conclusao']))]]
+    tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
+    linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
+    linhas.append(S('02  ATENDIMENTO REALIZADO'))
+    if detalhes and any(detalhes[x] for x in ('diagnostico','execucao','resultado')):
+        for label,field in [('Diagnóstico','diagnostico'),('Serviço executado','execucao'),('Resultado e testes','resultado')]:
+            if detalhes[field]:linhas.append(P(label+': '+detalhes[field]))
+    elif enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
+    else:linhas.append(P('Relato técnico não informado.'))
+    if enc and enc['motivo']:linhas.append(P('Motivo: '+enc['motivo']))
+    linhas.append(S('03  MATERIAIS UTILIZADOS'))
+    cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]
+    registros=[cab]
+    for m in mats:
+        registros.append([P(m['item']),P(f'{float(m["quantidade"]):g} un.'),P(brl(m['valor_total']))])
+    if len(registros)==1:registros.append([P('Nenhum material detalhado'),P('—'),P('—')])
+    tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
+    tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+    linhas.append(tm)
+    linhas.append(S('04  VALORES E PAGAMENTO'))
+    valores=[['Mão de obra',brl(os_['valor_mao_obra'])],['Materiais',brl(os_['valor_materiais'])],['TOTAL',brl(os_['valor_total'])],
+            ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
+    tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,2),(-1,2),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,2),(-1,2),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
+    if anexos:
+        primeira_foto=True
+        for a in anexos:
+            p=Path(a['caminho'])
+            if not p.is_file():continue
+            try:
+                with Image.open(p) as im:
+                    im.thumbnail((900,630));buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=82);buf.seek(0)
+                    w,h=im.size
+                escala=min(400/w,265/h)
+                foto=PdfImage(buf,width=w*escala,height=h*escala)
+                bloco=([S('05  REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
+                linhas.append(KeepTogether(bloco))
+                primeira_foto=False
+            except Exception:continue
+    linhas.append(Spacer(1,9))
+    linhas.append(Paragraph('Documento de atendimento técnico. A situação financeira não equivale a comprovante de quitação nem a nota fiscal.',estilo['AutosegPequenoV9']))
+    nome=f'OS_{re.sub(r"[^A-Za-z0-9_-]","_",str(os_["numero_os"]))}_{os_id}.pdf'
+    destino=ext.RELATORIOS/nome
+    def rodape(cv,doc):
+        cv.setStrokeColor(amarelo);cv.line(40,34,A4[0]-40,34)
+        cv.setFillColor(cinza);cv.setFont('Helvetica',8)
+        cv.drawString(40,22,'AUTOSEG • Relatório técnico para o cliente')
+        cv.drawRightString(A4[0]-40,22,'Página '+str(doc.page))
+    SimpleDocTemplate(str(destino),pagesize=A4,leftMargin=42,rightMargin=42,topMargin=35,bottomMargin=49,
+        title='AUTOSEG - Relatório '+str(os_['numero_os'])).build(linhas,onFirstPage=rodape,onLaterPages=rodape)
+    return str(destino)
