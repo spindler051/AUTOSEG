@@ -163,6 +163,27 @@ pastas e URLs no aplicativo padrão do macOS.
 Não há Cage no macOS: a janela é nativa. O Tkinter legado continua disponível
 como fallback.
 
+### Status validado no macOS (02/11/2026)
+
+- MacPorts 2.12.7 com `gtk4 4.22.4 +quartz`, `libadwaita 1.9.3`,
+  `py313-gobject3` e `adwaita-icon-theme`.
+- `/opt/local/bin/python3.13` importa GTK 4.22 e Adw; o `python3.14` do
+  MacPorts ainda não tem `gi`, e o lançador cai automaticamente para o 3.13.
+- `.venv-gtk` criado em `~/GestaoServicos_DEV` e `~/gestaoservicos_MAIN`;
+  ambos importam GTK/Adw e têm reportlab/Pillow/PyYAML.
+- Teste de fumaça com o banco de teste e com um snapshot da produção: exit 0.
+- Diálogo de cliente exercitado no GTK do Mac: listou 10 clientes, editou um
+  (versão 2) e criou outro (total 11) usando o adaptador Workaholic.
+- Render offscreen das telas Início, Clientes, OS, Financeiro e Catálogo:
+  fonte `.AppleSystemUIFont 12`, tema de ícones Adwaita, modo escuro do
+  sistema e todos os ícones usados presentes.
+- PDF gerado no Mac com reportlab: `%PDF-` válido, 2,8 KB.
+- Produção em `~/gestaoservicos_MAIN` rodando no GTK, portas 8765/8766,
+  460 clientes e 3 OS. O backend antigo (`servidor_backend.py`) foi encerrado.
+- Pendente: conferir a janela no desktop após desbloquear a tela e exercitar
+  os diálogos nativos de arquivo. A validação acima foi feita por render
+  offscreen porque a tela do Mac estava bloqueada.
+
 ## Teste remoto com o macOS
 
 O código é o mesmo; o banco fica no Mac. Há dois modos seguros:
