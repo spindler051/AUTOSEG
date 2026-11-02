@@ -60,3 +60,6 @@ token.json
 *.p8
 *.pfx
 *.log.*
+
+# Rascunhos operacionais gerados pelo aplicativo (podem conter dados pessoais)
+rascunhos/
