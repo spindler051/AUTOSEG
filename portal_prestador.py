@@ -531,12 +531,44 @@ class PortalPrestador:
                           '<button type="submit">Confirmar recebimento</button></form>') if x['status']!='Recebido' else '<span class="good">Recebido</span>'
                     linhas.append((f'<a href="/os/{x["os_id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),dinheiro(x['valor']),
                         esc(x['forma_pagamento']),esc(x['status']),esc(x['vencimento'] or ''),acao))
+                pessoal=prod.financeiro_pessoal(banco,s['pid'])
+                banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
+                token=self.hidden(s)
+                extras=card('Dados bancários para e-mail de cobrança',
+                    f'<form method="post" action="/financeiro/banco/salvar">{token}'
+                    +textarea('Dados bancários / Pix (texto livre)','dados_bancarios',banco_texto,rows=5)
+                    +'<button type="submit">Salvar meus dados bancários</button></form>')
+                dividas=[]
+                for item in pessoal['repassar_a_colegas']:
+                    devido=item['valor_centavos']-item['pago_centavos']
+                    acao=''
+                    if devido>0:
+                        acao=(f'<form method="post" action="/financeiro/repasse">{token}'
+                              +f'<input type="hidden" name="os_id" value="{int(item["os_id"])}">'
+                              +f'<input type="hidden" name="secundario_id" value="{int(item["tecnico_id"])}">'
+                              +campos_escuros('Valor pago manualmente (R$)','valor',f'{devido/100:.2f}',required=True)
+                              +'<button type="submit">Registrar repasse efetuado</button></form>')
+                    dividas.append((esc(item['numero_os']),esc(item['tecnico']),dinheiro(item['valor_centavos']/100),
+                                   dinheiro(item['pago_centavos']/100),dinheiro(devido/100),acao))
+                extras+=card('Repasses manuais a outros técnicos',
+                    tabela(['OS','Colega','Parcela','Já repassado','Restante','Ação'],dividas))
+                meus=[(esc(x['numero_os']),dinheiro(x['valor_centavos']/100),
+                       dinheiro(x['pago_centavos']/100),
+                       dinheiro((x['valor_centavos']-x['pago_centavos'])/100))
+                      for x in pessoal['receber_de_colegas']]
+                extras+=card('Valores a receber de outros técnicos',
+                    tabela(['OS','Valor','Já recebido (registrado)','Restante'],meus))
+                extras+=card('Líquido próprio após rateios',
+                    tabela(['OS','Cobrado da imobiliária','Repasses devidos','Minha parcela'],
+                        [(esc(x['numero_os']),dinheiro(x['valor']),dinheiro(x['partes_centavos']/100),
+                          dinheiro(float(x['valor'])-x['partes_centavos']/100))
+                          for x in pessoal['brutos_proprios']]))
                 recebidos=sum(float(x['valor'] or 0) for x in reg if x['status']=='Recebido')
                 pendentes=sum(float(x['valor'] or 0) for x in reg if x['status']=='Aguardando pagamento')
                 return self.pagina('Financeiro',f'<div class="kpis"><div class="kpi"><span>A receber</span><strong>{dinheiro(pendentes)}</strong></div>'
                     f'<div class="kpi"><span>Recebido</span><strong>{dinheiro(recebidos)}</strong></div></div>'
                     +'<p class="notice">A forma de pagamento PIX não comprova recebimento. Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
-                    +card('Lançamentos financeiros',tabela(['OS','Cliente','Valor','Forma','Status','Vencimento','Ação'],linhas)),s)
+                    +card('Lançamentos financeiros (bruto da imobiliária)',tabela(['OS','Cliente','Valor','Forma','Status','Vencimento','Ação'],linhas))+extras,s)
 
             def relatorios(self,s,tipo='relatorios'):
                 with ext.db(banco) as c:
