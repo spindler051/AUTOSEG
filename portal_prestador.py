@@ -82,7 +82,7 @@ def layout(titulo,corpo,usuario=None,nonce=None):
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[3:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
-    footer='''<footer>Relatórios PDF disponíveis para download. E-mail e NFS-e: rascunhos; sem transmissão por API.</footer>'''
+    footer='''<footer>Relatórios PDF com acesso autorizado. Gmail usa API quando configurada; NFS-e segue como rascunho.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -515,7 +515,8 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     reg=c.execute('''SELECT f.*,o.numero_os,cl.nome cliente FROM financeiro f
                         JOIN ordens_servico o ON o.id=f.os_id JOIN clientes cl ON cl.id=f.cliente_id
-                        ORDER BY f.id DESC''').fetchall()
+                        JOIN os_conclusoes con ON con.os_id=f.os_id AND con.prestador_id=?
+                        ORDER BY f.id DESC''',(s['pid'],)).fetchall()
                 linhas=[]
                 for x in reg:
                     acao=(f'<form method="post" action="/financeiro/{x["id"]}/receber" data-confirm="Confirma que o valor foi realmente recebido?">{self.hidden(s)}'
@@ -725,6 +726,8 @@ class PortalPrestador:
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
                             if not str(d.get('relatorio_tecnico','')).strip():
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
+                            with ext.db(banco) as c:
+                                prod._os_ativa_responsavel(c,oid,pid)
                             destinatarios=(prod.destinatarios_conclusao(banco,oid,str(d.get('email_adicional','')))
                                            if str(d.get('acao_status',''))=='Concluída' else None)
                             neg.os_salvar(banco,d,pid,oid)
@@ -766,6 +769,10 @@ class PortalPrestador:
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
+                        with ext.db(banco) as c:
+                            autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_conclusoes con ON con.os_id=f.os_id
+                                WHERE f.id=? AND con.prestador_id=?''',(int(partes[1]),pid)).fetchone()
+                        if not autorizado:raise PermissionError('Financeiro restrito ao técnico finalizador.')
                         neg.financeiro_receber(banco,int(partes[1]),pid)
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
