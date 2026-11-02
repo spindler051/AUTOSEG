@@ -8,6 +8,21 @@ complexidade do Immich.
 
 ---
 
+## Resumo executivo
+
+- Adotar **monolito modular**, não microserviços.
+- Congelar `app.py` (Tkinter) e evoluir apenas o GTK/backend.
+- Separar UI, casos de uso, repositórios e infraestrutura.
+- Centralizar configuração, caminhos e portas.
+- Criar migrações versionadas antes de pensar em Postgres.
+- Manter SQLite local com um único escritor; nunca em SSHFS/SMB/NFS.
+- Containerizar somente o servidor; desktop continua nativo/AppImage.
+- Criar API HTTP apenas quando o GTK precisar acessar dados remotos ao vivo.
+- Fila SQLite/worker antes de Redis; Postgres/Redis só com gatilho real.
+- Primeiro backlog: config, migrações, repositórios, split do GTK e pytest.
+
+---
+
 ## 1. Princípios
 
 1. **Monolito primeiro, modular depois.** O sistema ainda é pequeno; não
