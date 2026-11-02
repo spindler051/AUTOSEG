@@ -925,7 +925,7 @@ class DialogoOS(Adw.Dialog):
                 return
             ui.toast(self.janela, "OS encerrada. Publicando PDF…")
             self.close()
-            self.janela.publicar_pdf(os_salvo_id)
+            self.janela.publicar_pdf(os_salvo_id, enviar_email=(acao == "Concluída"))
             self.janela.carregar_os()
             self.janela.carregar_historico()
             return

@@ -1077,18 +1077,15 @@ class PortalPrestador:
                                         '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
                                         +f'<p class="bad">{esc(str(falha)[:400])}</p>'
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
-                                if destinatarios and os.environ.get('AUTOSEG_GMAIL_ENVIO')=='1':
+                                if destinatarios:
+                                    # Disparo automático do e-mail em segundo plano:
+                                    # nunca bloqueia a resposta da conclusão da OS.
                                     try:
                                         import gmail_service
-                                        arquivo=fluxo.validar_pdf_publicado(fluxo.ultimo_documento(banco,oid))
-                                        message_id=gmail_service.enviar_email_gmail(
-                                            destinatarios,f'AUTOSEG — Relatório OS {oid}',
-                                            '<p>Relatório técnico da ordem de serviço em anexo.</p>',
-                                            caminho_pdf_relatorio=arquivo)
-                                        prod.registrar_envio(banco,oid,destinatarios,'enviado',message_id)
+                                        gmail_service.enviar_relatorio_os_concluida(banco, oid)
                                     except Exception as falha:
-                                        LOG.exception('Gmail: OS %s concluída, envio falhou',oid)
-                                        prod.registrar_envio(banco,oid,destinatarios,'falhou',erro=str(falha))
+                                        LOG.exception('Gmail: OS %s — falha ao agendar envio', oid)
+                                        prod.registrar_envio(banco, oid, destinatarios, 'falhou', erro=str(falha))
                         elif acao=='publicar':
                             fluxo.publicar_relatorio(banco,oid)
                         elif acao in ('atribuir','liberar'):

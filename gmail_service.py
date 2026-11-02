@@ -1,21 +1,31 @@
+"""Envio de e-mail pela Gmail API, com credenciais fora do repositório.
+
+As bibliotecas do Google são importadas sob demanda (lazy), para que o módulo
+possa ser importado sem dependências instaladas e a interface nunca trave: o
+envio ocorre em thread separada e qualquer falha é registrada no banco.
+"""
 import os
 import base64
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 SCOPES = ['https://www.googleapis.com/auth/gmail.send']
 
 CONFIG_DIR = os.path.expanduser('~/.config/autoseg/gmail')
 CREDENTIALS_FILE = os.path.join(CONFIG_DIR, 'credentials.json')
 TOKEN_FILE = os.path.join(CONFIG_DIR, 'token.json')
+
+
+def _google_libs():
+    """Importa as bibliotecas do Google somente quando forem necessárias."""
+    from google.auth.transport.requests import Request  # noqa: F401
+    from google.oauth2.credentials import Credentials  # noqa: F401
+    from googleapiclient.discovery import build  # noqa: F401
+    from googleapiclient.errors import HttpError  # noqa: F401
+    return Request, Credentials, build, HttpError
 
 
 def _salvar_token(creds):
@@ -37,7 +47,7 @@ def _salvar_token(creds):
 def _validar_email(campo):
     import re
     from email.utils import parseaddr
-    if not isinstance(campo, str) or len(campo)>254 or any(c in campo for c in '\r\n'):
+    if not isinstance(campo, str) or len(campo) > 254 or any(c in campo for c in '\r\n'):
         raise ValueError('Destinatário inválido.')
     nome, email = parseaddr(campo.strip())
     if nome or email != campo.strip() or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
@@ -46,6 +56,7 @@ def _validar_email(campo):
 
 
 def obter_credenciais(interativo=False):
+    Request, Credentials, build, HttpError = _google_libs()
     creds = None
 
     if os.path.exists(TOKEN_FILE):
@@ -68,9 +79,10 @@ def obter_credenciais(interativo=False):
         if not os.path.exists(CREDENTIALS_FILE):
             raise FileNotFoundError(f"[Gmail] Arquivo de credenciais não encontrado em: {CREDENTIALS_FILE}")
 
-        # Fluxo desktop localhost. O antigo redirect_uri=urn:ietf:wg:oauth:2.0:oob foi desativado pelo Google.
+        from google_auth_oauthlib.flow import InstalledAppFlow
         flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, scopes=SCOPES)
-        flow.run_local_server(port=0, open_browser=True, authorization_prompt_message='Autorize o AUTOSEG no navegador: {url}')
+        flow.run_local_server(port=0, open_browser=True,
+                              authorization_prompt_message='Autorize o AUTOSEG no navegador: {url}')
         creds = flow.credentials
 
         _salvar_token(creds)
@@ -87,23 +99,25 @@ def enviar_email_gmail(
     caminho_pdf_relatorio=None,
     caminho_pdf_nf=None
 ):
+    Request, Credentials, build, HttpError = _google_libs()
     try:
         creds = obter_credenciais(interativo=False)
         service = build('gmail', 'v1', credentials=creds)
 
-        if not isinstance(assunto,str) or any(c in assunto for c in '\r\n'):
+        if not isinstance(assunto, str) or any(c in assunto for c in '\r\n'):
             raise ValueError('Assunto inválido.')
         if isinstance(destinatario, (list, tuple)):
-            para=', '.join(_validar_email(e) for e in destinatario)
+            para = ', '.join(_validar_email(e) for e in destinatario)
         else:
-            para=', '.join(_validar_email(e.strip()) for e in destinatario.split(','))
+            para = ', '.join(_validar_email(e.strip()) for e in destinatario.split(','))
         copia = cc or []
-        if isinstance(copia,str): copia=[x.strip() for x in copia.replace(';',',').split(',') if x.strip()]
-        copia=[_validar_email(e) for e in copia]
+        if isinstance(copia, str):
+            copia = [x.strip() for x in copia.replace(';', ',').split(',') if x.strip()]
+        copia = [_validar_email(e) for e in copia]
+
         message = MIMEMultipart()
         message['To'] = para
         message['Subject'] = assunto
-
         if copia:
             message['Cc'] = ', '.join(copia)
 
@@ -114,24 +128,21 @@ def enviar_email_gmail(
             if caminho:
                 if not os.path.isfile(caminho):
                     raise FileNotFoundError(f'Anexo PDF não encontrado: {caminho}')
-                if not str(caminho).lower().endswith('.pdf') or os.path.getsize(caminho)>20*1024*1024:
+                if not str(caminho).lower().endswith('.pdf') or os.path.getsize(caminho) > 20 * 1024 * 1024:
                     raise ValueError('Anexo deve ser PDF de até 20 MB.')
-                with open(caminho,'rb') as verificar:
-                    if verificar.read(5)!=b'%PDF-':
+                with open(caminho, 'rb') as verificar:
+                    if verificar.read(5) != b'%PDF-':
                         raise ValueError('Anexo não é PDF válido.')
                 with open(caminho, 'rb') as f:
                     part = MIMEBase('application', 'pdf')
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    
                     nome_arquivo = os.path.basename(caminho)
                     part.add_header('Content-Disposition', f'attachment; filename="{nome_arquivo}"')
                     message.attach(part)
 
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
-        body = {'raw': raw_message}
-
-        send_message = service.users().messages().send(userId="me", body=body).execute()
+        send_message = service.users().messages().send(userId="me", body={'raw': raw_message}).execute()
         msg_id = send_message.get('id')
         print(f"[Gmail] E-mail enviado com sucesso. ID da mensagem: {msg_id}")
         return msg_id
@@ -141,3 +152,59 @@ def enviar_email_gmail(
         raise RuntimeError(f"[Gmail] Erro da API do Google: {erro_detalhe}")
     except Exception as e:
         raise RuntimeError(f"[Gmail] Erro ao enviar mensagem: {e}") from e
+
+
+def _enviar_relatorio_os_concluida(banco, os_id):
+    """Thread de envio: resolve destinatários, publica o PDF se necessário e envia."""
+    import produtividade_os as prod
+    try:
+        destinatarios = prod.destinatarios_conclusao(banco, os_id)
+    except Exception:
+        # Sem e-mail válido cadastrado não há o que enviar.
+        return
+    prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
+    try:
+        import fluxo_os as fluxo
+        import prestadores_ext as ext
+        documento = fluxo.ultimo_documento(banco, os_id)
+        if not documento:
+            fluxo.publicar_relatorio(banco, os_id)
+            documento = fluxo.ultimo_documento(banco, os_id)
+        if not documento:
+            raise ValueError('PDF do relatório não foi publicado.')
+        arquivo = fluxo.validar_pdf_publicado(documento)
+        with ext.db(banco) as c:
+            dados = c.execute(
+                "SELECT o.numero_os, cl.nome FROM ordens_servico o "
+                "JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?", (os_id,)).fetchone()
+        numero = dados['numero_os'] if dados else f'#{os_id}'
+        nome = (dados['nome'] or 'Cliente') if dados else 'Cliente'
+        assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
+        corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
+                 f"<p>Segue em anexo o relatório técnico do atendimento.</p>")
+        msg_id = enviar_email_gmail(destinatarios, assunto, corpo, caminho_pdf_relatorio=arquivo)
+        prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
+    except Exception as erro:
+        try:
+            import produtividade_os as prod
+            prod.registrar_envio(banco, os_id, destinatarios, 'falhou', erro=str(erro))
+        except Exception:
+            pass
+
+
+def enviar_relatorio_os_concluida(banco, os_id):
+    """Dispara em segundo plano o e-mail do relatório de uma OS concluída.
+
+    Nunca bloqueia a interface nem a resposta HTTP. Se AUTOSEG_GMAIL_DESATIVADO=1,
+    não envia (apenas registra a pendência), útil para testes sem rede.
+    """
+    if os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
+        try:
+            import produtividade_os as prod
+            destinatarios = prod.destinatarios_conclusao(banco, os_id)
+            prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
+        except Exception:
+            pass
+        return
+    threading.Thread(target=_enviar_relatorio_os_concluida, args=(banco, os_id),
+                     daemon=True, name='AUTOSEG-Gmail').start()

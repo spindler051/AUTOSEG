@@ -913,10 +913,17 @@ class Janela(Adw.ApplicationWindow):
         except Exception as erro:
             ui.aviso_erro(self, "OS", str(erro))
 
-    def publicar_pdf(self, os_id):
+    def publicar_pdf(self, os_id, enviar_email=False):
         def worker():
             try:
                 caminho = fluxo.publicar_relatorio(BANCO, os_id)
+                if enviar_email:
+                    # Envio automático em segundo plano; nunca trava a interface.
+                    try:
+                        import gmail_service
+                        gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)
+                    except Exception:
+                        pass
                 GLib.idle_add(self._pdf_publicado, True, caminho)
             except Exception as erro:
                 GLib.idle_add(self._pdf_publicado, False, str(erro))

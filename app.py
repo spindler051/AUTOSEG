@@ -1604,7 +1604,7 @@ class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
             return
         if janela is not None: janela.destroy()
         self.mostrar_ordens_servico()
-        self.publicar_pdf_em_segundo_plano(os_id)
+        self.publicar_pdf_em_segundo_plano(os_id, enviar_email=True)
 
     # ========================================================
     # FORMULÁRIO DE OS
@@ -2581,7 +2581,7 @@ class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
                     f'Os dados da OS foram salvos, mas não foi possível encerrá-la: {erro}')
                 return
             self.mostrar_ordens_servico()
-            self.publicar_pdf_em_segundo_plano(os_salvo_id)
+            self.publicar_pdf_em_segundo_plano(os_salvo_id, enviar_email=(acao_status=='Concluída'))
             return
         if anterior_os and anterior_os['status'] in fluxo.FIM and not acao_status:
             self.mostrar_historico_os()
@@ -2590,11 +2590,19 @@ class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
         messagebox.showinfo("Sucesso", "OS atualizada e registrada." if acao_status else mensagem)
         self.mostrar_ordens_servico() if acao_status else self.voltar()
 
-    def publicar_pdf_em_segundo_plano(self, os_id):
+    def publicar_pdf_em_segundo_plano(self, os_id, enviar_email=False):
         """Não bloqueia o loop do Tk. Todas as mensagens Tk ficam no thread principal."""
         respostas=queue.Queue()
         def executar():
-            try: respostas.put(('ok',fluxo.publicar_relatorio(BANCO,os_id)))
+            try:
+                caminho=fluxo.publicar_relatorio(BANCO,os_id)
+                if enviar_email:
+                    try:
+                        import gmail_service
+                        gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)
+                    except Exception:
+                        pass
+                respostas.put(('ok',caminho))
             except Exception as e:
                 import traceback
                 try:
