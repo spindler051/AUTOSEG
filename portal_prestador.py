@@ -373,12 +373,12 @@ class PortalPrestador:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     corpo+=f'<p><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b> · Participantes: {esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>'
                     if d['status'] in ext.ATIVAS:
-                        pode_iniciar = (responsavel in (None,s['pid']) or d['status']=='Pendente')
-                        if pode_iniciar and (d['status']=='Pendente' or not (andamento and andamento['iniciado_em'])):
-                            corpo+=f'<form method="post" action="/os/{oid}/iniciar">{token}<button type="submit" class="iniciar-atendimento">▶ INICIAR OS — ASSUMIR AUTOMATICAMENTE</button></form>'
-                            corpo+='<p class="muted">Registra a responsabilidade e o início no local em uma única ação. Se estiver pendente, registra a retomada.</p>'
-                        elif not pode_iniciar:
-                            corpo+='<p class="notice">OS em atendimento por outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>'
+                        if responsavel is None:
+                            corpo+=f'<form method="post" action="/os/{oid}/assumir">{token}<button type="submit" class="secondary">Assumir OS (sem iniciar)</button></form>'
+                        elif responsavel==s['pid']:
+                            corpo+=f'<form method="post" action="/os/{oid}/iniciar">{token}<button type="submit" class="iniciar-atendimento">▶ INICIAR ATENDIMENTO</button></form>'
+                        else:
+                            corpo+='<p class="notice">OS atribuída a outro prestador. Solicite reatribuição ao administrador; não se desloque para este atendimento.</p>'
                 if not cl:
                     corpo+='<p class="notice">Cadastre primeiro um cliente.</p>'
                     return self.pagina(titulo,corpo,s)
@@ -449,16 +449,10 @@ class PortalPrestador:
                 if not oid:
                     corpo+='<p class="muted">Depois de salvar a OS, você poderá atribuir um prestador e, no encerramento, anexar imagens e publicar PDF.</p>'
                     return self.pagina(titulo,card('Dados da OS',corpo),s)
-                atrib_opt=[(p['id'],f'{p["nome"]} — {p["email"]}') for p in prestadores]
+                # Atribuição e desatribuição administrativas são exclusivas do desktop.
                 if d['status'] in ext.ATIVAS:
-                    atr=f'<form method="post" action="/os/{oid}/atribuir">{token}'
-                    atr+=select('Atribuir ou transferir para','prestador_id',atrib_opt,responsavel,required=True) if atrib_opt else '<p>Cadastre prestadores pelo desktop.</p>'
-                    if atrib_opt: atr+='<button type="submit">Salvar atribuição</button>'
-                    atr+='</form>'
-                    if responsavel:
-                        atr+=f'<form method="post" action="/os/{oid}/liberar">{token}<button class="secondary">Deixar OS sem responsável</button></form>'
-                    # Assumir foi integrado ao primeiro botão INICIAR OS.
-                    corpo+=card('Prestadores e atribuição',atr)
+                    corpo+=card('Atribuição',f'<p>Responsável atual: <b>{esc(next((p["nome"] for p in prestadores if p["id"]==responsavel),"Não atribuído"))}</b></p>'
+                        '<p class="muted">Prestadores podem assumir apenas OS não atribuídas. Transferências são feitas no desktop.</p>')
                 if anexos:
                     itens=[]
                     for a in anexos:
@@ -692,10 +686,8 @@ class PortalPrestador:
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
                         elif acao=='publicar':
                             fluxo.publicar_relatorio(banco,oid)
-                        elif acao=='atribuir':
-                            ext.atribuir(banco,oid,int(d['prestador_id']),ator=f'Prestador {s["nome"]}')
-                        elif acao=='liberar':
-                            ext.desatribuir(banco,oid,ator=f'Prestador {s["nome"]}')
+                        elif acao in ('atribuir','liberar'):
+                            raise PermissionError('Atribuição administrativa disponível apenas no desktop.')
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
                         elif acao=='iniciar':
