@@ -32,6 +32,7 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import completude
+from integracao import clientes as clientes_core
 
 if os.environ.get("AUTOSEG_DEV") == "1":
     import tuneis_dev as tuneis
@@ -625,24 +626,14 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_clientes(self):
         termo = self.busca_clientes.get_text().strip() if hasattr(self, "busca_clientes") else ""
-        conexao = conectar_banco()
-        try:
-            if termo:
-                registros = conexao.execute(
-                    "SELECT * FROM clientes WHERE nome LIKE ? OR documento LIKE ? OR cidade LIKE ? "
-                    "ORDER BY nome",
-                    (f"%{termo}%", f"%{termo}%", f"%{termo}%")).fetchall()
-            else:
-                registros = conexao.execute(
-                    "SELECT * FROM clientes ORDER BY nome").fetchall()
-        finally:
-            conexao.close()
         linhas = []
-        for r in registros:
-            dados = dict(r)
+        for registro in clientes_core.listar(termo):
+            dados = dict(registro["fields"])
             linhas.append((
-                r["id"], r["nome"] or "(sem nome)", cad9.formatar_documento(r["documento"]),
-                r["cidade"] or "", r["telefone"] or "", r["status"],
+                int(registro["id"]), dados.get("nome") or "(sem nome)",
+                cad9.formatar_documento(dados.get("documento", "")),
+                dados.get("cidade") or "", dados.get("telefone") or "",
+                dados.get("status") or "",
                 "Incompletos" if completude.cliente_faltantes(dados) else "OK"))
         self.tabela_clientes.definir_linhas(linhas)
 

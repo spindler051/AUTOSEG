@@ -21,6 +21,7 @@ import estoque_materiais as estoque
 import catalogo_servicos as catalogo
 import importacao_yaml
 import completude
+from integracao import clientes as clientes_core
 
 
 def _linha_custom(widget):
@@ -36,9 +37,8 @@ class DialogoCliente(Adw.Dialog):
         self.cliente_id = cliente_id
         self.dados = dict(importado) if importado else {}
         if cliente_id is not None:
-            with ext.db(BANCO) as c:
-                registro = c.execute("SELECT * FROM clientes WHERE id=?", (cliente_id,)).fetchone()
-                self.dados = dict(registro) if registro else {}
+            registro = clientes_core.obter(cliente_id)
+            self.dados = dict(registro["fields"]) if registro else {}
 
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
@@ -214,30 +214,9 @@ class DialogoCliente(Adw.Dialog):
         return False
 
     def _salvar(self):
-        tipo_pessoa = ui.valor_combo(self.tipo_pessoa)
-        documento = cad9.digitos(self.documento.get_text())
-        documento_original = cad9.digitos(self.dados.get("documento", ""))
-        tipo_original = self.dados.get("tipo_pessoa", "Jurídica")
-        if (self.cliente_id is None or tipo_pessoa != tipo_original
-                or documento != documento_original):
-            try:
-                documento = cad9.validar_documento(tipo_pessoa, documento)
-            except ValueError as erro:
-                ui.aviso_erro(self.janela, "Documento inválido", str(erro))
-                return
-            if documento:
-                with ext.db(BANCO) as conexao:
-                    duplicado = cad9.buscar_documento_duplicado(
-                        conexao, documento, self.cliente_id)
-                if duplicado:
-                    ui.aviso_erro(
-                        self.janela, "Documento duplicado",
-                        f"CPF/CNPJ já cadastrado para {duplicado['nome']}.")
-                    return
-
         dados = {
-            "tipo_pessoa": tipo_pessoa,
-            "documento": documento,
+            "tipo_pessoa": ui.valor_combo(self.tipo_pessoa),
+            "documento": self.documento.get_text().strip(),
             "nome": self.nome.get_text().strip(),
             "nome_fantasia": self.nome_fantasia.get_text().strip(),
             "endereco": self.endereco.get_text().strip(),
@@ -258,37 +237,16 @@ class DialogoCliente(Adw.Dialog):
             "observacoes": self.observacoes.get_texto(),
             "status": ui.valor_combo(self.status),
         }
-        dados["dados_incompletos"] = 1 if completude.cliente_faltantes(dados) else 0
-        campos = list(dados)
-        conexao = conectar_banco()
         try:
-            cursor = conexao.cursor()
-            if self.cliente_id is None:
-                cursor.execute(
-                    f"INSERT INTO clientes ({', '.join(campos)}, criado_em) "
-                    f"VALUES ({', '.join(['?'] * len(campos))}, ?)",
-                    [dados[campo] for campo in campos]
-                    + [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                )
-                cliente_id = cursor.lastrowid
-            else:
-                cursor.execute(
-                    f"UPDATE clientes SET {', '.join(campo + ' = ?' for campo in campos)} WHERE id=?",
-                    [dados[campo] for campo in campos] + [self.cliente_id],
-                )
-                cliente_id = self.cliente_id
-            if (dados["tipo_pessoa"] == "Jurídica" and dados["status"] != "Inativo"
-                    and dados["nome"].strip()):
-                cad9.sincronizar_cliente_pj(conexao, cliente_id)
-            conexao.commit()
+            registro = clientes_core.salvar(self.cliente_id, dados)
+        except clientes_core.ErroCliente as erro:
+            ui.aviso_erro(self.janela, erro.titulo, str(erro))
+            return
         except Exception as erro:
-            conexao.rollback()
             ui.aviso_erro(self.janela, "Cadastro não salvo", str(erro))
             return
-        finally:
-            conexao.close()
         ui.toast(self.janela, "Cliente salvo com dados incompletos."
-                 if dados["dados_incompletos"] else "Cliente salvo.")
+                 if registro["fields"]["dados_incompletos"] else "Cliente salvo.")
         self.janela.carregar_clientes()
         self.close()
 
