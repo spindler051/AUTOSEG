@@ -104,6 +104,37 @@ class ProdutividadeTestes(unittest.TestCase):
         with self.assertRaises(ValueError):
             prod.destinatarios_conclusao(self.db,osid,'invalido\r\nBCC:fake@example.org')
 
+    def test_rateio_e_repasse_manual(self):
+        oid=self.nova_os()
+        ext.assumir(self.db,oid,self.a)
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Concluída' WHERE id=?",(oid,))
+            c.execute('CREATE TABLE IF NOT EXISTS os_encerramentos (os_id INTEGER PRIMARY KEY,prestador_id INTEGER)')
+            c.execute('INSERT INTO os_encerramentos(os_id,prestador_id) VALUES(?,?)',(oid,self.a))
+            liquido=prod.registrar_rateios_na_transacao(
+                c,oid,self.a,1000,
+                {'rateio_tecnico[]':[str(self.b)],'rateio_valor[]':['300,00']})
+        self.assertEqual(liquido,70000)
+        with self.assertRaises(ValueError):
+            with ext.db(self.db) as c:
+                prod.registrar_rateios_na_transacao(
+                    c,oid,self.a,1000,
+                    {'rateio_tecnico[]':[str(self.b)],'rateio_valor[]':['301,00']})
+        self.assertEqual(prod.confirmar_repasse(self.db,oid,self.a,self.b,'100,00'),20000)
+        self.assertEqual(prod.confirmar_repasse(self.db,oid,self.a,self.b,'200,00'),0)
+        with self.assertRaises(ValueError):
+            prod.confirmar_repasse(self.db,oid,self.a,self.b,'1,00')
+
+    def test_rateio_sem_finalizacao_rejeitado(self):
+        oid=self.nova_os()
+        ext.assumir(self.db,oid,self.a)
+        with self.assertRaises(PermissionError):
+            with ext.db(self.db) as c:
+                c.execute('CREATE TABLE IF NOT EXISTS os_encerramentos (os_id INTEGER PRIMARY KEY,prestador_id INTEGER)')
+                prod.registrar_rateios_na_transacao(
+                    c,oid,self.a,1000,
+                    {'rateio_tecnico[]':[str(self.b)],'rateio_valor[]':['300,00']})
+
     def test_pdf_restrito_participantes(self):
         osid=self.nova_os()
         with self.assertRaises(PermissionError):
