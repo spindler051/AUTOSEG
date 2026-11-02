@@ -31,7 +31,7 @@ import produtividade_os as prod
 import socket
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = '9.6.0'
+VERSAO_PORTAL = 'REV07-TESTE (base GitHub)'
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -82,7 +82,7 @@ def layout(titulo,corpo,usuario=None,nonce=None):
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[3:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
-    footer='''<footer>Relatórios PDF com acesso autorizado. Gmail usa API quando configurada; NFS-e segue como rascunho.</footer>'''
+    footer='''<footer>REV07 TESTE · Gmail envia pela API apenas com AUTOSEG_GMAIL_ENVIO=1 e OAuth configurado; NFS-e segue como rascunho.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -745,7 +745,7 @@ class PortalPrestador:
                                         '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
                                         +f'<p class="bad">{esc(str(falha)[:400])}</p>'
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
-                                if destinatarios:
+                                if destinatarios and os.environ.get('AUTOSEG_GMAIL_ENVIO')=='1':
                                     try:
                                         import gmail_service
                                         arquivo=fluxo.validar_pdf_publicado(fluxo.ultimo_documento(banco,oid))
