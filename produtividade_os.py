@@ -3,6 +3,7 @@ Migrações aditivas em SQLite, sem rede externa e sem mover dados antigos.
 """
 import json
 import re
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from hashlib import sha256
 import prestadores_ext as ext
 
@@ -37,6 +38,19 @@ def instalar(banco):
             destinatarios_json TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pendente',
             message_id TEXT, erro TEXT, atualizado_em TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS produtividade_rateios(
+            os_id INTEGER NOT NULL, tecnico_id INTEGER NOT NULL,
+            valor_centavos INTEGER NOT NULL CHECK(valor_centavos>=0),
+            definidor_id INTEGER NOT NULL, registrado_em TEXT NOT NULL,
+            PRIMARY KEY(os_id,tecnico_id));
+        CREATE TABLE IF NOT EXISTS produtividade_repasses(
+            os_id INTEGER NOT NULL, tecnico_id INTEGER NOT NULL,
+            pago_centavos INTEGER NOT NULL DEFAULT 0 CHECK(pago_centavos>=0),
+            atualizado_em TEXT NOT NULL,
+            PRIMARY KEY(os_id,tecnico_id));
+        CREATE TABLE IF NOT EXISTS produtividade_bancos(
+            prestador_id INTEGER PRIMARY KEY, dados_texto TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL);
         """)
 
 
@@ -198,3 +212,136 @@ def registrar_envio(banco,os_id,destinatarios,status='pendente',message_id=None,
         message_id=excluded.message_id,erro=excluded.erro,
         atualizado_em=excluded.atualizado_em""",
         (os_id,json.dumps(destinatarios),status,message_id,(erro or '')[:500],ext.agora()))
+
+
+def _centavos(valor):
+    """Dinheiro em centavos inteiros, sem ponto flutuante."""
+    try:
+        entrada=str(valor or '0').strip().replace('R$','').replace(' ','')
+        if ',' in entrada:entrada=entrada.replace('.','').replace(',','.')
+        montante=Decimal(entrada)
+        if not montante.is_finite() or montante<0 or montante>Decimal('10000000'):
+            raise ValueError('Valor de rateio fora dos limites.')
+        return int((montante*100).quantize(Decimal('1'),rounding=ROUND_HALF_UP))
+    except (InvalidOperation,TypeError) as erro:
+        raise ValueError('Valor de rateio inválido.') from erro
+
+
+def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
+    """Chamar dentro da transação de conclusão; Pendente/Cancelada não têm rateio."""
+    os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone()
+    if not os_atual or os_atual['status']!='Concluída' or not final or final['prestador_id']!=finalizador_id:
+        raise PermissionError('Somente o técnico finalizador pode definir valores ao concluir.')
+    tecnicos=d.get('rateio_tecnico[]',[])
+    valores=d.get('rateio_valor[]',[])
+    if not isinstance(tecnicos,list):tecnicos=[tecnicos]
+    if not isinstance(valores,list):valores=[valores]
+    if len(tecnicos)>25 or len(tecnicos)!=len(valores):
+        raise ValueError('Rateio incompleto ou com técnicos demais.')
+    parcelas={}
+    for tid,valor in zip(tecnicos,valores):
+        if not str(tid).strip() and not str(valor).strip():continue
+        if not str(tid).isdigit():
+            raise ValueError('Selecione o técnico secundário.')
+        ident=int(tid)
+        if ident==finalizador_id or ident in parcelas:
+            raise ValueError('Técnico duplicado ou finalizador indicado como secundário.')
+        cents=_centavos(valor)
+        if cents<=0:raise ValueError('Informe valor positivo para cada técnico secundário.')
+        ativo=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(ident,)).fetchone()
+        if not ativo:raise ValueError('Técnico secundário não encontrado ou inativo.')
+        parcelas[ident]=cents
+    bruto=_centavos(valor_bruto)
+    if sum(parcelas.values())>bruto:
+        raise ValueError('As parcelas dos técnicos superam o valor cobrado pela OS.')
+    # Esta função só roda na primeira conclusão. Mudanças posteriores exigem
+    # fluxo formal de revisão com auditoria, nunca substituição silenciosa.
+    if c.execute('SELECT 1 FROM produtividade_rateios WHERE os_id=?',(os_id,)).fetchone():
+        raise ValueError('Esta OS já possui rateio registrado; não é possível sobrescrever.')
+    for ident,cents in parcelas.items():
+        c.execute("""INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo)
+            VALUES(?,?,?,1) ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1""",
+            (os_id,ident,ext.agora()))
+        c.execute("""INSERT INTO produtividade_rateios
+            (os_id,tecnico_id,valor_centavos,definidor_id,registrado_em)
+            VALUES(?,?,?,?,?)""",(os_id,ident,cents,finalizador_id,ext.agora()))
+        c.execute("""INSERT INTO produtividade_repasses(os_id,tecnico_id,pago_centavos,atualizado_em)
+            VALUES(?,?,0,?)""",(os_id,ident,ext.agora()))
+    ext.evento(c,os_id,'Rateio definido',
+              f'Bruto {bruto} centavos; secundários {sum(parcelas.values())} centavos; líquido do finalizador {bruto-sum(parcelas.values())} centavos.',
+              finalizador_id,f'Prestador {finalizador_id}')
+    return bruto-sum(parcelas.values())
+
+
+def financeiro_pessoal(banco,pid):
+    """Detalha obrigações internas sem somar repasses ao faturamento bruto."""
+    with ext.db(banco) as c:
+        proprio=[dict(r) for r in c.execute("""SELECT f.os_id,o.numero_os,f.valor,
+            COALESCE((SELECT SUM(r.valor_centavos) FROM produtividade_rateios r
+                      WHERE r.os_id=f.os_id),0) partes_centavos,f.status
+            FROM financeiro f
+            JOIN ordens_servico o ON o.id=f.os_id
+            JOIN os_encerramentos e ON e.os_id=f.os_id
+            WHERE e.prestador_id=? ORDER BY f.id DESC""",(pid,))]
+        meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.valor_centavos,
+            COALESCE(p.pago_centavos,0) pago_centavos,e.prestador_id de_tecnico
+            FROM produtividade_rateios r
+            JOIN ordens_servico o ON o.id=r.os_id
+            JOIN os_encerramentos e ON e.os_id=r.os_id
+            LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
+            WHERE r.tecnico_id=? ORDER BY r.os_id DESC""",(pid,))]
+        repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.tecnico_id,t.nome tecnico,
+            r.valor_centavos,COALESCE(p.pago_centavos,0) pago_centavos
+            FROM produtividade_rateios r
+            JOIN ordens_servico o ON o.id=r.os_id
+            JOIN prestadores t ON t.id=r.tecnico_id
+            JOIN os_encerramentos e ON e.os_id=r.os_id
+            LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
+            WHERE e.prestador_id=? ORDER BY r.os_id DESC""",(pid,))]
+        return {'brutos_proprios':proprio,'receber_de_colegas':meus,'repassar_a_colegas':repassar}
+
+
+def confirmar_repasse(banco,os_id,finalizador_id,secundario_id,valor):
+    """Confirma transferência financeira já executada manualmente fora do AUTOSEG."""
+    cents=_centavos(valor)
+    if cents<=0:raise ValueError('Valor de repasse deve ser positivo.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        e=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone()
+        if not e or e['prestador_id']!=finalizador_id:
+            raise PermissionError('Somente o finalizador registra o repasse que realizou.')
+        item=c.execute('SELECT valor_centavos FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                       (os_id,secundario_id)).fetchone()
+        if not item:raise ValueError('Parcela deste técnico não existe.')
+        atual=c.execute('SELECT pago_centavos FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
+                        (os_id,secundario_id)).fetchone()
+        pago=atual['pago_centavos'] if atual else 0
+        if cents+pago>item['valor_centavos']:
+            raise ValueError('Repasse excede a parcela devida.')
+        c.execute("""INSERT INTO produtividade_repasses
+          (os_id,tecnico_id,pago_centavos,atualizado_em) VALUES(?,?,?,?)
+          ON CONFLICT(os_id,tecnico_id) DO UPDATE SET
+          pago_centavos=excluded.pago_centavos,atualizado_em=excluded.atualizado_em""",
+          (os_id,secundario_id,pago+cents,ext.agora()))
+        ext.evento(c,os_id,'Repasse confirmado',f'{cents} centavos para técnico {secundario_id}.',
+                   finalizador_id,f'Prestador {finalizador_id}')
+        return item['valor_centavos']-pago-cents
+
+
+def salvar_dados_bancarios(banco,pid,texto):
+    conteudo=str(texto or '').strip()
+    if len(conteudo)>1500:raise ValueError('Dados bancários longos demais.')
+    with ext.db(banco) as c:
+        if not c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone():
+            raise PermissionError('Prestador inexistente.')
+        c.execute("""INSERT INTO produtividade_bancos(prestador_id,dados_texto,atualizado_em)
+            VALUES(?,?,?) ON CONFLICT(prestador_id) DO UPDATE SET
+            dados_texto=excluded.dados_texto,atualizado_em=excluded.atualizado_em""",
+            (pid,conteudo,ext.agora()))
+
+
+def obter_dados_bancarios(banco,pid):
+    with ext.db(banco) as c:
+        r=c.execute('SELECT dados_texto FROM produtividade_bancos WHERE prestador_id=?',(pid,)).fetchone()
+        return r['dados_texto'] if r else ''
