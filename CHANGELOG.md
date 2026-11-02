@@ -1,5 +1,20 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.3 — REV09 — 2026-11-02 — develop (validação local)
+
+Fluxo de OS separado em ações independentes:
+
+- **ASSUMIR OS** atribui responsável e horário sem iniciar o atendimento.
+- **EM ROTA** registra o deslocamento em `os_deslocamentos`, é idempotente, aparece no Portal Prestador e no Portal Cliente e pode ser cancelado pelo responsável.
+- **INICIAR OS** registra o início efetivo, encerra o deslocamento ativo e permite retomada de OS pendente. O fluxo antigo "INICIAR OS — ASSUMIR AUTOMATICAMENTE" foi removido.
+- **SALVAR RASCUNHO** no Portal Prestador e no desktop, com persistência dos campos técnicos, materiais, valores e fotos em `produtividade_rascunhos` e `os_rascunhos_web`. Recuperação após reiniciar o servidor testada.
+- Portal Prestador exibe Em rota na lista; Portal Cliente exibe Em rota na lista e no detalhe.
+- Importação/rateio financeiro e financeiro pessoal do REV07 preservados, incluindo bloqueio de rateio fora da conclusão.
+- Importação YAML, pré-visualização, desfazer, catálogo e estoque mantidos dos REV06/REV08.
+- Testes novos em `test_rev09_fluxo_os.py` cobrem assumir, em rota, início, rascunho após reinício, conclusão, pendência, cancelamento, YAML sem gravação, PDF autorizado e bloqueio de terceiros.
+
+Pendente: homologação manual das interfaces no Mac, envio Gmail real (depende de OAuth), nota fiscal (somente rascunho) e itens ainda parciais descritos em `ROADMAP.md`.
+
 ## 9.6.0-dev.2 — REV08 — 2026-11-02 — develop (validação local pendente)
 
 - Importação YAML de materiais transacional, sem gravações parciais em falhas.

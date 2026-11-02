@@ -182,11 +182,11 @@ def responsavel_atual(c, os_id):
     return x['prestador_id'] if x else None
 
 def pode_assumir(c,os_id,pid):
-    """OS pendente sempre pode ser retomada; aberta só se não tem responsável."""
+    """Somente OS ativa sem responsável pode ser assumida por outro prestador."""
     o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     p=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
     if not o or not p: return False
-    return (o['status']=='Pendente' or (o['status']=='Aberta' and responsavel_atual(c,os_id) is None))
+    return o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
 
 def atribuir(banco,os_id,prestador_id,ator='Administrador'):
     """Atribuição administrativa define responsável; preserva participantes históricos."""
@@ -203,12 +203,14 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
         c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
                   'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
                   (os_id,prestador_id,agora()))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Atribuição' if anterior is None else 'Transferência administrativa',
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
 
 def assumir(banco,os_id,pid):
-    """Assunção atômica; dois prestadores não conseguem assumir a mesma OS aberta."""
+    """Assunção atômica de OS aberta/pendente desatribuída, sem iniciar execução."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
@@ -216,10 +218,6 @@ def assumir(banco,os_id,pid):
         if not p or not o: raise PermissionError('Prestador ou OS inválida.')
         anterior=responsavel_atual(c,os_id)
         if anterior==pid:
-            if o['status']=='Pendente':
-                c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?", (os_id,))
-                evento(c,os_id,'Retomada',f'{p["nome"]} retomou o atendimento pendente.',pid,p['nome'])
-                return True
             return False
         if not pode_assumir(c,os_id,pid):
             raise PermissionError('OS em atendimento por outro prestador. Aguarde ficar pendente ou solicite transferência.')
@@ -228,9 +226,7 @@ def assumir(banco,os_id,pid):
         c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
                   'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
                   (os_id,pid,agora()))
-        # Uma retomada inicia atendimento; mantém o histórico da pendência anterior.
-        if o['status']=='Pendente':
-            c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?",(os_id,))
+        # Assumir é diferente de iniciar; a OS pendente permanece pendente.
         evento(c,os_id,'Retomada' if anterior is not None else 'Assunção',
                f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
         return True
@@ -472,6 +468,8 @@ def desatribuir(banco, os_id, ator='Administrador'):
         anterior = responsavel_atual(c, os_id)
         if anterior is None: return False
         c.execute('DELETE FROM os_responsaveis WHERE os_id=?',(os_id,))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Desatribuição',f'OS disponível para nova atribuição. Responsável anterior (ID): {anterior}.',ator=ator)
         return True
 

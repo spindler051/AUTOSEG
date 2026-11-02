@@ -43,6 +43,7 @@ from banco import BANCO, PASTA_APP, criar_banco
 import cadastros_v9 as cad
 import catalogo_servicos as catalogo
 import atendimento_os as aten
+import produtividade_os as prod
 import cliente_fluxo_v94 as fluxo_pf
 import fluxo_os as fluxo
 import portal_cliente_v94 as cliente
@@ -137,6 +138,7 @@ class ServidorPortal:
         cad.instalar(banco)
         catalogo.instalar(banco)
         aten.instalar(banco)
+        prod.instalar(banco)
         cad.sincronizar_solicitacoes_pendentes(banco)
 
         class Handler(BaseHTTPRequestHandler):
@@ -256,7 +258,7 @@ class ServidorPortal:
             def _legado_lista(self, s):
                 card, _, _, _, _, esc, botao, tabela = cliente.u()
                 with ext.db(banco) as c:
-                    nome = c.execute('SELECT nome FROM clientes WHERE id=?', (s['cid'],)).fetchone()
+                    nome = c.execute('SELECT nome,tipo_pessoa FROM clientes WHERE id=?', (s['cid'],)).fetchone()
                     registros = c.execute(
                         '''SELECT o.id,o.numero_os,o.status,o.descricao FROM ordens_servico o
                            WHERE o.cliente_id=? ORDER BY o.id DESC LIMIT 250''', (s['cid'],)).fetchall()
@@ -264,7 +266,7 @@ class ServidorPortal:
                 for r in registros:
                     publicado = fluxo.ultimo_documento(banco, r['id']) if r['status'] in fluxo.FIM else None
                     doc = (botao('Baixar relatório PDF', f'/legado/os/{r["id"]}/pdf')
-                           if publicado else '<span class="muted">Ainda não liberado</span>')
+                           if publicado and nome and nome['tipo_pessoa']=='Física' else '<span class="muted">Relatório restrito ao titular PF ou síndico autorizado</span>')
                     linhas.append((esc(r['numero_os']), esc(r['descricao'] or '')[:160],
                                    '<span class="tag">' + esc(r['status']) + '</span>', doc))
                 corpo = ('<p>Olá, <b>' + esc(nome['nome'] if nome else 'Cliente') + '</b>. '
@@ -278,10 +280,12 @@ class ServidorPortal:
 
             def _legado_pdf(self, s, oid):
                 with ext.db(banco) as c:
-                    dono = c.execute('SELECT status FROM ordens_servico WHERE id=? AND cliente_id=?',
+                    dono = c.execute('SELECT o.status,cl.tipo_pessoa FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=? AND o.cliente_id=?',
                                      (oid, s['cid'])).fetchone()
                 if not dono:
                     return self.erro('Documento não pertence a este cadastro.', 404)
+                if dono['tipo_pessoa']!='Física':
+                    return self.erro('PDF de condomínio somente ao síndico autorizado pelo Portal Cliente.', 403)
                 if dono['status'] not in fluxo.FIM:
                     return self.erro('O atendimento ainda não foi encerrado.', 409)
                 info = fluxo.ultimo_documento(banco, oid)

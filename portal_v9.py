@@ -77,10 +77,11 @@ def painel(h,banco,s):
                         FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id
                         WHERE v.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',(s['uid'],)).fetchall()
         avisos=c.execute('SELECT id,texto,criado_em FROM v9_notificacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 20',(s['uid'],)).fetchall()
-        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id,
-                         so.status status_os
+        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id,h.organizacao_id,
+                         so.status status_os,COALESCE(des.em_rota,0) em_rota
                          FROM v9_chamados h JOIN v9_organizacoes o ON o.id=h.organizacao_id
                          LEFT JOIN ordens_servico so ON so.id=h.os_id
+                         LEFT JOIN produtividade_deslocamentos des ON des.os_id=h.os_id
                          WHERE h.usuario_id=? ORDER BY h.id DESC LIMIT 100''',(s['uid'],)).fetchall()
         nomeacoes=c.execute('SELECT organizacao_id,papel FROM v9_responsaveis WHERE usuario_id=?',(s['uid'],)).fetchall()
     responsavel_ids={x['organizacao_id']:x['papel'] for x in nomeacoes}
@@ -102,8 +103,18 @@ def painel(h,banco,s):
                 o=c.execute('SELECT nome FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(orgid,)).fetchone()
             if o:orgs.append((esc(o['nome']),esc(role),'Nomeado pela AUTOSEG',
                 botao('Histórico de todas as OS',f'/pj/sindico?org={orgid}','secondary')))
-    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc('OS '+str(x['status_os']) if x['status_os'] else x['status']),esc(x['descricao'][:100]),esc(x['criado_em']),
-               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] else '—') for x in minhas]
+    def _estado_chamado(x):
+        estado='OS '+str(x['status_os']) if x['status_os'] else x['status']
+        em_rota=bool(x['em_rota'])
+        if x['os_id']:
+            try:
+                with ext.db(banco) as c:
+                    em_rota=em_rota or ext.em_rota_atual(c,x['os_id'])
+            except Exception:
+                pass
+        return ('Técnico em rota · ' if em_rota else '')+estado
+    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(_estado_chamado(x)),esc(x['descricao'][:100]),esc(x['criado_em']),
+               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] and x['organizacao_id'] in responsavel_ids else 'Acompanhar status') for x in minhas]
     aviso_html=''.join('<p><small>'+esc(n['criado_em'])+'</small> · '+esc(n['texto'])+'</p>' for n in avisos) or '<p class="muted">Sem novas atualizações.</p>'
     return pagina(h,'Minha conta · PF / PJ',barra_links('cliente')+card('Minha conta pessoal',dados)+card('Notificações e atualizações',aviso_html)+card('Organizações vinculadas',tabela(['Organização','Meu papel','Vínculo','Ação'],orgs))+card('Meus chamados',tabela(['Nº','Condomínio / Empresa','Status','Descrição','Data','OS'],chamados)))
 
@@ -286,8 +297,10 @@ def pdf_pj(h,banco,s,chamado_id):
     with ext.db(banco) as c:
         chamado=c.execute('SELECT organizacao_id,usuario_id,os_id FROM v9_chamados WHERE id=?',(chamado_id,)).fetchone()
         if not chamado:raise ValueError('Chamado não encontrado.')
-        if chamado['usuario_id']!=s['uid'] and not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],('Síndico','Administrador')):
-            raise PermissionError('Documento restrito ao solicitante ou síndico validado.')
+        org=c.execute('SELECT tipo FROM v9_organizacoes WHERE id=?',(chamado['organizacao_id'],)).fetchone()
+        papeis=('Síndico',) if org and org['tipo']=='Condomínio' else ('Síndico','Administrador','Gestor')
+        if not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],papeis):
+            raise PermissionError('PDF restrito ao síndico ou gestor autorizado. Morador acompanha apenas o status.')
         if not chamado['os_id']:raise ValueError('A solicitação ainda não foi convertida em OS.')
         registro=fluxo.ultimo_documento(banco,chamado['os_id'])
         if not registro:raise ValueError('Relatório ainda não publicado.')

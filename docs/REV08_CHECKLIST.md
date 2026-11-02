@@ -4,7 +4,7 @@ Todos os itens estão PENDENTES DE HOMOLOGAÇÃO. Existência de código na REV0
 
 **REV08 dev.2 (testes unitários, não homologação):** itens 20–21 possuem suporte temporário no navegador do prestador, 61/65/66/68/70 possuem regressão automatizada parcial; 63 busca normalizada na API interna; os demais itens continuam pendentes de integração/verificação. A importação reversível entre dispositivos e o salvamento automático no servidor não estão incluídos.
 
-
+**REV09 dev.3:** itens 1, 3, 6, 7, 8, 9, 13, 14, 15, 16, 18, 20, 21, 22, 23, 24, 30, 31, 43, 58, 78 possuem implementação e testes automatizados no DEV; homologação manual no Mac continua pendente.
 ## A — OS e prestadores
 
 - [ ] 1. Separar as ações **Atribuir OS** e **Iniciar OS**.

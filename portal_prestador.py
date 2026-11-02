@@ -30,10 +30,11 @@ import catalogo_servicos as catalogo
 import estoque_materiais as estoque
 import portal_v9 as v9
 import links_publicos as links9
+import produtividade_os as prod
 import socket
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = '9.6.0-dev.2'
+VERSAO_PORTAL = '9.6.0-dev.3'
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -84,7 +85,7 @@ def layout(titulo,corpo,usuario=None,nonce=None):
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
-    footer='''<footer>Relatórios PDF disponíveis para download. E-mail e NFS-e: rascunhos; sem transmissão por API.</footer>'''
+    footer='''<footer>REV07 TESTE · Gmail envia pela API apenas com AUTOSEG_GMAIL_ENVIO=1 e OAuth configurado; NFS-e segue como rascunho.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -137,6 +138,7 @@ class PortalPrestador:
                 LOG.warning('Não foi possível iniciar log de arquivo: %s',exc)
         usar_https=os.environ.get('PRESTADOR_HTTPS')=='1' 
         ext.instalar(banco)
+        prod.instalar(banco)
         fluxo.instalar(banco)
         aten.instalar(banco)
         cad9.instalar(banco)
@@ -470,8 +472,18 @@ class PortalPrestador:
                     for k,v in preenchimento.items():
                         if k.startswith('v9_') or k=='relatorio_tecnico':
                             if substituir or not str(d.get(k,'')).strip():d[k]=v
+                    # Rascunho completo do servidor (produtividade_os) também chega aqui.
+                    for k in ('tecnico','valor_mao_obra','valor_materiais_manual','valor_total_override','forma_pagamento'):
+                        if k in preenchimento and (substituir or not str(d.get(k,'')).strip()):
+                            d[k]=preenchimento[k]
                     if 'material_yaml' in preenchimento and (substituir or not mat):
                         mat=preenchimento['material_yaml']
+                    itens=preenchimento.get('material_item[]',[])
+                    quantidades=preenchimento.get('material_qtd[]',[])
+                    unitarios=preenchimento.get('material_unit[]',[])
+                    if itens and (substituir or not mat):
+                        mat=[dict(item=item,quantidade=quantidades[i] if i<len(quantidades) else '',valor_unitario=unitarios[i] if i<len(unitarios) else '')
+                             for i,item in enumerate(itens) if item]
                 token=self.hidden(s)
                 titulo=f'OS {d["numero_os"]}' if oid else 'Nova ordem de serviço'
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
@@ -491,6 +503,10 @@ class PortalPrestador:
                       '<button type="submit" class="secondary">Pré-visualizar relatório YAML</button></form>'
                       '<p class="muted">Modelo pronto: <a href="/modelos/relatorio.yaml">Baixar YAML de relatório</a>. Reutilizável em qualquer OS; sem número obrigatório. Nada será salvo sem confirmação.</p>')
                     corpo+=card('Importação rápida de relatório',importar)
+                    if responsavel==s['pid']:
+                        corpo+=card('Rascunho persistente',
+                            botao('Recuperar rascunho',f'/os/{oid}/rascunho','secondary')
+                            +'<p class="muted">Seus dados salvos no servidor são recarregados automaticamente ao abrir a OS.</p>')
                 if oid:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     corpo+=f'<p><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b> · Participantes: {esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>'
@@ -517,6 +533,7 @@ class PortalPrestador:
                             corpo+='<p class="good">Atendimento iniciado em '+esc(andamento['iniciado_em'])+' por '+esc(andamento['ator_inicio'])+'.</p>'
                         elif responsavel is not None and responsavel != s['pid']:
                             corpo+='<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>'
+
                 if not cl:
                     corpo+='<p class="notice">Cadastre primeiro um cliente.</p>'
                     return self.pagina(titulo,corpo,s)
@@ -615,13 +632,25 @@ class PortalPrestador:
                     corpo+='<div id="anexo-encerramento"><label>Fotos do relatório (até 10 imagens, 8 MB por foto)</label>'
                     corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
                     corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div><button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
-                    corpo+='<p class="muted">Selecione até 10 imagens de uma só vez (JPG/PNG/WEBP, máximo de 8 MB por imagem). As imagens entram no PDF após a conclusão.</p></div>'
+                    corpo+='<p class="muted">Selecione até 10 imagens de uma só vez (JPG/PNG/WEBP, máximo de 8 MB por imagem). As imagens entram no PDF após a conclusão e podem ser salvas junto ao rascunho.</p></div>'
+                    corpo+=campos_escuros('E-mail adicional ao concluir','email_adicional',kind='email')
+                    if responsavel==s['pid']:
+                        corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
+                        corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
+                        opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
+                        for i in range(3):
+                            corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
+                            corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
+                        corpo+='</div>'
                 corpo+='</fieldset><div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
                 else:
                     if d['status'] in ext.ATIVAS:
-                        corpo+='<button class="secondary" name="modo_envio" value="rascunho" type="submit">SALVAR RASCUNHO</button>'
+                        if responsavel==s['pid']:
+                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO</button>'
+                        else:
+                            corpo+='<button class="secondary" name="modo_envio" value="rascunho" type="submit">SALVAR RASCUNHO</button>'
                     else:
                         corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
                 if oid and d['status'] in ext.ATIVAS:
@@ -630,16 +659,10 @@ class PortalPrestador:
                 if not oid:
                     corpo+='<p class="muted">Depois de salvar a OS, você poderá atribuir um prestador e, no encerramento, anexar imagens e publicar PDF.</p>'
                     return self.pagina(titulo,card('Dados da OS',corpo),s)
-                atrib_opt=[(p['id'],f'{p["nome"]} — {p["email"]}') for p in prestadores]
+                # Atribuição e desatribuição administrativas são exclusivas do desktop.
                 if d['status'] in ext.ATIVAS:
-                    atr=f'<form method="post" action="/os/{oid}/atribuir">{token}'
-                    atr+=select('Atribuir ou transferir para','prestador_id',atrib_opt,responsavel,required=True) if atrib_opt else '<p>Cadastre prestadores pelo desktop.</p>'
-                    if atrib_opt: atr+='<button type="submit">Salvar atribuição</button>'
-                    atr+='</form>'
-                    if responsavel:
-                        atr+=f'<form method="post" action="/os/{oid}/liberar">{token}<button class="secondary">Deixar OS sem responsável</button></form>'
-                    # Assumir foi integrado ao primeiro botão INICIAR OS.
-                    corpo+=card('Prestadores e atribuição',atr)
+                    corpo+=card('Atribuição',f'<p>Responsável atual: <b>{esc(next((p["nome"] for p in prestadores if p["id"]==responsavel),"Não atribuído"))}</b></p>'
+                        '<p class="muted">Prestadores podem assumir apenas OS não atribuídas. Transferências são feitas no desktop.</p>')
                 if anexos:
                     itens=[]
                     for a in anexos:
@@ -648,8 +671,16 @@ class PortalPrestador:
                               +campos_escuros('Legenda para o PDF','legenda',vis.get('legenda',''))
                               +select('Incluir no PDF','visivel',[('1','Sim — incluir foto (padrão)'),('0','Não — ocultar por privacidade')],str(vis.get('visivel',1)))
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
-                        itens.append('<div class="card"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
+                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
                     corpo+=card('Fotos da OS','<p>As fotos anexadas entram automaticamente no PDF. Se houver informação particular, selecione Ocultar por privacidade. Após alterar uma OS encerrada, publique outra versão do relatório.</p>'+''.join(itens))
+                if oid:
+                    with ext.db(banco) as c:
+                        email_log=c.execute('SELECT status,erro FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
+                    if email_log:
+                        corpo+=card('Envio de e-mail',
+                            '<p class="'+('good' if email_log['status']=='enviado' else 'warn')+'">Status: '
+                            +esc(email_log['status'])+'</p>'
+                            +('<p>'+esc(email_log['erro'])+'</p>' if email_log['erro'] else ''))
                 publicado=fluxo.ultimo_documento(banco,oid) if oid else None
                 if publicado:
                     corpo+=card('Documento liberado ao cliente',
@@ -673,19 +704,52 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     reg=c.execute('''SELECT f.*,o.numero_os,cl.nome cliente FROM financeiro f
                         JOIN ordens_servico o ON o.id=f.os_id JOIN clientes cl ON cl.id=f.cliente_id
-                        ORDER BY f.id DESC''').fetchall()
+                        JOIN os_encerramentos con ON con.os_id=f.os_id AND con.prestador_id=?
+                        ORDER BY f.id DESC''',(s['pid'],)).fetchall()
                 linhas=[]
                 for x in reg:
                     acao=(f'<form method="post" action="/financeiro/{x["id"]}/receber" data-confirm="Confirma que o valor foi realmente recebido?">{self.hidden(s)}'
                           '<button type="submit">Confirmar recebimento</button></form>') if x['status']!='Recebido' else '<span class="good">Recebido</span>'
                     linhas.append((f'<a href="/os/{x["os_id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),dinheiro(x['valor']),
                         esc(x['forma_pagamento']),esc(x['status']),esc(x['vencimento'] or ''),acao))
+                pessoal=prod.financeiro_pessoal(banco,s['pid'])
+                banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
+                token=self.hidden(s)
+                extras=card('Dados bancários para e-mail de cobrança',
+                    f'<form method="post" action="/financeiro/banco/salvar">{token}'
+                    +textarea('Dados bancários / Pix (texto livre)','dados_bancarios',banco_texto,rows=5)
+                    +'<button type="submit">Salvar meus dados bancários</button></form>')
+                dividas=[]
+                for item in pessoal['repassar_a_colegas']:
+                    devido=item['valor_centavos']-item['pago_centavos']
+                    acao=''
+                    if devido>0:
+                        acao=(f'<form method="post" action="/financeiro/repasse">{token}'
+                              +f'<input type="hidden" name="os_id" value="{int(item["os_id"])}">'
+                              +f'<input type="hidden" name="secundario_id" value="{int(item["tecnico_id"])}">'
+                              +campos_escuros('Valor pago manualmente (R$)','valor',f'{devido/100:.2f}',required=True)
+                              +'<button type="submit">Registrar repasse efetuado</button></form>')
+                    dividas.append((esc(item['numero_os']),esc(item['tecnico']),dinheiro(item['valor_centavos']/100),
+                                   dinheiro(item['pago_centavos']/100),dinheiro(devido/100),acao))
+                extras+=card('Repasses manuais a outros técnicos',
+                    tabela(['OS','Colega','Parcela','Já repassado','Restante','Ação'],dividas))
+                meus=[(esc(x['numero_os']),dinheiro(x['valor_centavos']/100),
+                       dinheiro(x['pago_centavos']/100),
+                       dinheiro((x['valor_centavos']-x['pago_centavos'])/100))
+                      for x in pessoal['receber_de_colegas']]
+                extras+=card('Valores a receber de outros técnicos',
+                    tabela(['OS','Valor','Já recebido (registrado)','Restante'],meus))
+                extras+=card('Líquido próprio após rateios',
+                    tabela(['OS','Cobrado da imobiliária','Repasses devidos','Minha parcela'],
+                        [(esc(x['numero_os']),dinheiro(x['valor']),dinheiro(x['partes_centavos']/100),
+                          dinheiro(float(x['valor'])-x['partes_centavos']/100))
+                          for x in pessoal['brutos_proprios']]))
                 recebidos=sum(float(x['valor'] or 0) for x in reg if x['status']=='Recebido')
                 pendentes=sum(float(x['valor'] or 0) for x in reg if x['status']=='Aguardando pagamento')
                 return self.pagina('Financeiro',f'<div class="kpis"><div class="kpi"><span>A receber</span><strong>{dinheiro(pendentes)}</strong></div>'
                     f'<div class="kpi"><span>Recebido</span><strong>{dinheiro(recebidos)}</strong></div></div>'
                     +'<p class="notice">A forma de pagamento PIX não comprova recebimento. Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
-                    +card('Lançamentos financeiros',tabela(['OS','Cliente','Valor','Forma','Status','Vencimento','Ação'],linhas)),s)
+                    +card('Lançamentos financeiros (bruto da imobiliária)',tabela(['OS','Cliente','Valor','Forma','Status','Vencimento','Ação'],linhas))+extras,s)
 
             def relatorios(self,s,tipo='relatorios'):
                 with ext.db(banco) as c:
@@ -717,6 +781,7 @@ class PortalPrestador:
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
 
             def documentos(self,s,oid,kind):
+                prod.controlar_pdf(banco,oid,s['pid'])
                 with ext.db(banco) as c:
                     o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
                     if not o: return self.erro('OS inexistente.',404,s)
@@ -741,7 +806,9 @@ class PortalPrestador:
 
             def anexo(self,s,aid):
                 with ext.db(banco) as c:
-                    x=c.execute('SELECT nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+                    x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+                    if x and not prod.participou(c,x['os_id'],s['pid']):
+                        raise PermissionError('Anexo restrito aos técnicos participantes.')
                 if not x:return self.erro('Anexo não encontrado.',404,s)
                 arq=Path(x['caminho']).resolve()
                 if not arq.is_relative_to(ext.ANEXOS.resolve()):
@@ -797,6 +864,11 @@ class PortalPrestador:
                         return self.cliente_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='os' and partes[1].isdigit():
                         return self.os_form(s,int(partes[1]))
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='rascunho':
+                        oid=int(partes[1])
+                        rascunho=prod.recuperar_rascunho(banco,oid,s['pid'])
+                        if not rascunho:return self.erro('Nenhum rascunho salvo para esta OS.',404,s)
+                        return self.os_form(s,oid,preenchimento=rascunho['dados'])
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','email','nota'):
                         return self.documentos(s,int(partes[1]),partes[2])
                     if len(partes)==3 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit():
@@ -892,10 +964,38 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             ok=c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',(aid,oid)).fetchone()
                         if not ok:raise ValueError('Anexo não pertence à OS.')
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=pid:
+                                raise PermissionError('Somente técnico responsável edita a legenda do anexo.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
                         return self.redir(f'/os/{oid}')
+                    if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
+                        oid=int(partes[1])
+                        prod.salvar_rascunho(banco,oid,pid,d)
+                        dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio')}
+                        ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                        sem_fechar = dict(d)
+                        sem_fechar['acao_status'] = 'salvar'
+                        neg.os_salvar(banco,sem_fechar,pid,oid)
+                        try:
+                            cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+                        except Exception:
+                            pass
+                        if str(d.get('relatorio_tecnico','')).strip():
+                            with ext.db(banco) as c:
+                                aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+                        imagens=[a for a in d.get('imagens_encerramento[]',[]) if isinstance(a,tuple) and a[0]]
+                        if len(imagens)>10:raise ValueError('Limite de 10 imagens por envio.')
+                        for nome,conteudo in imagens:
+                            ext.salvar_imagem(banco,oid,pid,nome,conteudo)
+                        return self.pagina('Rascunho salvo',card('Rascunho',
+                            '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
+                            +botao('Voltar à OS',f'/os/{oid}')),s)
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
+                        if acao=='rota':
+                            prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
+                            return self.redir(f'/os/{oid}')
                         if acao=='salvar':
                             if d.get('modo_envio') in ('rascunho','salvar'):
                                 try:
@@ -930,7 +1030,16 @@ class PortalPrestador:
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
                             if not str(d.get('relatorio_tecnico','')).strip():
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
+                            with ext.db(banco) as c:
+                                prod._os_ativa_responsavel(c,oid,pid)
+                            destinatarios=(prod.destinatarios_conclusao(banco,oid,str(d.get('email_adicional','')))
+                                           if str(d.get('acao_status',''))=='Concluída' else None)
                             neg.os_salvar(banco,d,pid,oid)
+                            prod.limpar_rota_ao_iniciar(banco,oid)
+                            if d.get('acao_status') in ('Pendente','Concluída'):
+                                prod.registrar_etapa(banco,oid,pid,str(d.get('acao_status')),d)
+                            if destinatarios:
+                                prod.registrar_envio(banco,oid,destinatarios)
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
                             if str(d.get('acao_status','')) in fluxo.FIM:
                                 try: fluxo.publicar_relatorio(banco,oid)
@@ -940,12 +1049,22 @@ class PortalPrestador:
                                         '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
                                         +f'<p class="bad">{esc(str(falha)[:400])}</p>'
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
+                                if destinatarios and os.environ.get('AUTOSEG_GMAIL_ENVIO')=='1':
+                                    try:
+                                        import gmail_service
+                                        arquivo=fluxo.validar_pdf_publicado(fluxo.ultimo_documento(banco,oid))
+                                        message_id=gmail_service.enviar_email_gmail(
+                                            destinatarios,f'AUTOSEG — Relatório OS {oid}',
+                                            '<p>Relatório técnico da ordem de serviço em anexo.</p>',
+                                            caminho_pdf_relatorio=arquivo)
+                                        prod.registrar_envio(banco,oid,destinatarios,'enviado',message_id)
+                                    except Exception as falha:
+                                        LOG.exception('Gmail: OS %s concluída, envio falhou',oid)
+                                        prod.registrar_envio(banco,oid,destinatarios,'falhou',erro=str(falha))
                         elif acao=='publicar':
                             fluxo.publicar_relatorio(banco,oid)
-                        elif acao=='atribuir':
-                            ext.atribuir(banco,oid,int(d['prestador_id']),ator=f'Prestador {s["nome"]}')
-                        elif acao=='liberar':
-                            ext.desatribuir(banco,oid,ator=f'Prestador {s["nome"]}')
+                        elif acao in ('atribuir','liberar'):
+                            raise PermissionError('Atribuição administrativa disponível apenas no desktop.')
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
                         elif acao=='em-rota':
@@ -954,9 +1073,20 @@ class PortalPrestador:
                             ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='iniciar':
                             aten.iniciar_assumindo(banco,oid,pid)
+                            prod.limpar_rota_ao_iniciar(banco,oid)
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'/os/{oid}')
+                    if path=='/financeiro/banco/salvar':
+                        prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
+                        return self.redir('/financeiro')
+                    if path=='/financeiro/repasse':
+                        prod.confirmar_repasse(banco,int(d['os_id']),pid,int(d['secundario_id']),str(d['valor']))
+                        return self.redir('/financeiro')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
+                        with ext.db(banco) as c:
+                            autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id
+                                WHERE f.id=? AND con.prestador_id=?''',(int(partes[1]),pid)).fetchone()
+                        if not autorizado:raise PermissionError('Financeiro restrito ao técnico finalizador.')
                         neg.financeiro_receber(banco,int(partes[1]),pid)
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
