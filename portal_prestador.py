@@ -515,7 +515,7 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     reg=c.execute('''SELECT f.*,o.numero_os,cl.nome cliente FROM financeiro f
                         JOIN ordens_servico o ON o.id=f.os_id JOIN clientes cl ON cl.id=f.cliente_id
-                        JOIN os_conclusoes con ON con.os_id=f.os_id AND con.prestador_id=?
+                        JOIN os_encerramentos con ON con.os_id=f.os_id AND con.prestador_id=?
                         ORDER BY f.id DESC''',(s['pid'],)).fetchall()
                 linhas=[]
                 for x in reg:
@@ -770,7 +770,7 @@ class PortalPrestador:
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
                         with ext.db(banco) as c:
-                            autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_conclusoes con ON con.os_id=f.os_id
+                            autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id
                                 WHERE f.id=? AND con.prestador_id=?''',(int(partes[1]),pid)).fetchone()
                         if not autorizado:raise PermissionError('Financeiro restrito ao técnico finalizador.')
                         neg.financeiro_receber(banco,int(partes[1]),pid)
