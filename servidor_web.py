@@ -42,6 +42,7 @@ from urllib.parse import parse_qs, urlparse
 from banco import BANCO, PASTA_APP, criar_banco
 import cadastros_v9 as cad
 import atendimento_os as aten
+import produtividade_os as prod
 import cliente_fluxo_v94 as fluxo_pf
 import fluxo_os as fluxo
 import portal_cliente_v94 as cliente
@@ -135,6 +136,7 @@ class ServidorPortal:
         fluxo.instalar(banco)
         cad.instalar(banco)
         aten.instalar(banco)
+        prod.instalar(banco)
         cad.sincronizar_solicitacoes_pendentes(banco)
 
         class Handler(BaseHTTPRequestHandler):
