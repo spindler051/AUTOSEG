@@ -39,11 +39,20 @@ def iniciar(banco,os_id,pid=None,ator='Administrador desktop'):
                 raise PermissionError('Assuma a OS antes de iniciar atendimento.')
             ator=p['nome']
         existente=c.execute('SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone()
-        if existente and existente['iniciado_em']:return False
+        if existente and existente['iniciado_em']:
+            try:
+                ext.finalizar_em_rota(c, os_id)
+            except Exception:
+                pass
+            return False
         c.execute('''INSERT INTO os_atendimentos(os_id,iniciado_em,iniciado_por,ator_inicio)
           VALUES(?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
           iniciado_em=excluded.iniciado_em,iniciado_por=excluded.iniciado_por,
           ator_inicio=excluded.ator_inicio''',(os_id,ext.agora(),pid,ator))
+        try:
+            ext.finalizar_em_rota(c, os_id)
+        except Exception:
+            pass
         ext.evento(c,os_id,'Atendimento iniciado','Início de execução registrado no local.',pid,ator)
         return True
 
@@ -77,6 +86,13 @@ def iniciar_assumindo(banco,os_id,pid):
             raise ValueError('Esta OS não está disponível para iniciar.')
         atual=ext.responsavel_atual(c,os_id)
         status=os_atual['status']
-    if atual != pid or status=='Pendente':
+    if atual is None:
         ext.assumir(banco,os_id,pid)
+    elif atual != pid:
+        raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
     return iniciar(banco,os_id,pid)
+
+
+def assumir_os(banco, os_id, pid):
+    import prestadores_ext as ext
+    return ext.assumir(banco, os_id, pid)

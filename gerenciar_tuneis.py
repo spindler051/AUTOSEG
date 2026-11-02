@@ -7,6 +7,8 @@ DIR=links.TUNEIS
 DIR.mkdir(exist_ok=True)
 
 def iniciar():
+    if os.environ.get("AUTOSEG_DEV") == "1":
+        raise RuntimeError("AUTOSEG DEV: publicação Cloudflare bloqueada.")
     exe=shutil.which('cloudflared') or '/usr/local/bin/cloudflared'
     if not Path(exe).is_file():raise RuntimeError('cloudflared não encontrado. Instale primeiro pelo Terminal.')
     atual=links.estado()

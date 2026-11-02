@@ -35,7 +35,7 @@ def cookie(h,tok,delete=False):
 def barra_links(pagina='cliente'):
     card,layout,campos,textarea,select,esc,botao,tabela=ui()
     d=links.estado_com_manuais()
-    porta = '8765' if pagina == 'cliente' else '8766'
+    porta = links.PORTAS[0] if pagina == 'cliente' else links.PORTAS[1]
     url=d.get(porta,{}).get('url','')
     return '<details class="card" style="margin-top:30px"><summary style="cursor:pointer;color:#bbb">Link público deste portal</summary>'+(
         '<p><a rel="noopener noreferrer" href="'+esc(url)+'">'+esc(url)+'</a></p><small>Link registrado pelo gerenciador de túneis, ativo enquanto o túnel funcionar.</small>'
@@ -77,19 +77,44 @@ def painel(h,banco,s):
                         FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id
                         WHERE v.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',(s['uid'],)).fetchall()
         avisos=c.execute('SELECT id,texto,criado_em FROM v9_notificacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 20',(s['uid'],)).fetchall()
-        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id
+        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id,h.organizacao_id,
+                         so.status status_os,COALESCE(des.em_rota,0) em_rota
                          FROM v9_chamados h JOIN v9_organizacoes o ON o.id=h.organizacao_id
+                         LEFT JOIN ordens_servico so ON so.id=h.os_id
+                         LEFT JOIN produtividade_deslocamentos des ON des.os_id=h.os_id
                          WHERE h.usuario_id=? ORDER BY h.id DESC LIMIT 100''',(s['uid'],)).fetchall()
+        nomeacoes=c.execute('SELECT organizacao_id,papel FROM v9_responsaveis WHERE usuario_id=?',(s['uid'],)).fetchall()
+    responsavel_ids={x['organizacao_id']:x['papel'] for x in nomeacoes}
     token=formulario_csrf(s)
     dados='Olá, <b>'+esc(s['nome'])+'</b>. '+botao('Abrir chamado para condomínio / empresa','/pj/organizacoes')+' '+botao('Cadastrar condomínio não encontrado','/pj/nova-organizacao')
     dados+=f'<form method="post" action="/pj/sair">{token}<button class="secondary">Sair</button></form>'
     orgs=[]
     for v in vs:
         acao=botao('Novo chamado',f'/pj/chamado/novo?org={v["organizacao_id"]}')
-        if v['papel'] in ('Síndico','Administrador') and v['situacao']=='Aprovado':acao+=' '+botao('Chamados do condomínio',f'/pj/sindico?org={v["organizacao_id"]}','secondary')
-        orgs.append((esc(v['nome']),esc(v['papel']),esc(v['situacao']),acao))
-    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(x['status']),esc(x['descricao'][:100]),esc(x['criado_em']),
-               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] else '—') for x in minhas]
+        if v['organizacao_id'] in responsavel_ids:
+            acao+=' '+botao('Histórico de todas as OS',f'/pj/sindico?org={v["organizacao_id"]}','secondary')
+        situacao=v['situacao']
+        if v['papel'] in ('Síndico','Administrador','Gestor') and v['organizacao_id'] not in responsavel_ids:
+            situacao='Aguardando nomeação administrativa'
+        orgs.append((esc(v['nome']),esc(v['papel']),esc(situacao),acao))
+    for orgid,role in responsavel_ids.items():
+        if not any(v['organizacao_id']==orgid for v in vs):
+            with ext.db(banco) as c:
+                o=c.execute('SELECT nome FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(orgid,)).fetchone()
+            if o:orgs.append((esc(o['nome']),esc(role),'Nomeado pela AUTOSEG',
+                botao('Histórico de todas as OS',f'/pj/sindico?org={orgid}','secondary')))
+    def _estado_chamado(x):
+        estado='OS '+str(x['status_os']) if x['status_os'] else x['status']
+        em_rota=bool(x['em_rota'])
+        if x['os_id']:
+            try:
+                with ext.db(banco) as c:
+                    em_rota=em_rota or ext.em_rota_atual(c,x['os_id'])
+            except Exception:
+                pass
+        return ('Técnico em rota · ' if em_rota else '')+estado
+    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(_estado_chamado(x)),esc(x['descricao'][:100]),esc(x['criado_em']),
+               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] and x['organizacao_id'] in responsavel_ids else 'Acompanhar status') for x in minhas]
     aviso_html=''.join('<p><small>'+esc(n['criado_em'])+'</small> · '+esc(n['texto'])+'</p>' for n in avisos) or '<p class="muted">Sem novas atualizações.</p>'
     return pagina(h,'Minha conta · PF / PJ',barra_links('cliente')+card('Minha conta pessoal',dados)+card('Notificações e atualizações',aviso_html)+card('Organizações vinculadas',tabela(['Organização','Meu papel','Vínculo','Ação'],orgs))+card('Meus chamados',tabela(['Nº','Condomínio / Empresa','Status','Descrição','Data','OS'],chamados)))
 
@@ -139,15 +164,16 @@ def chamado_form(h,banco,s,org):
 
 def sindico(h,banco,s,org):
     card,layout,campos,textarea,select,esc,botao,tabela=ui()
-    if not cad.vinculo_aprovado(banco,s['uid'],org,('Síndico','Administrador')):raise PermissionError('Acesso restrito ao síndico validado.')
-    with ext.db(banco) as c:
-        arr=c.execute('''SELECT h.*,u.nome solicitante FROM v9_chamados h JOIN v9_usuarios u ON u.id=h.usuario_id
-             WHERE h.organizacao_id=? ORDER BY h.id DESC LIMIT 200''',(org,)).fetchall()
+    dados=cad.listar_os_organizacao(banco,org,s['uid'])
     linhas=[]
-    for x in arr:
-        documento=botao('Relatório PDF',f'/pj/chamado/{x["id"]}/pdf','secondary') if x['os_id'] else '—'
-        linhas.append((f'#{x["id"]}',esc(x['solicitante']),esc(x['descricao']),esc(x['status']),esc(x['criado_em']),documento))
-    return pagina(h,'Chamados do condomínio',barra_links('cliente')+card('Solicitações de moradores e funcionários',tabela(['Nº','Solicitante','Descrição','Status','Data','Documento'],linhas))+botao('Meu painel','/pj/painel','secondary'))
+    for os_ in dados['os']:
+        linhas.append((esc(os_['numero_os'] or str(os_['id'])),esc(os_['descricao'] or ''),
+                       esc(os_['status']),esc(os_['solicitante'] or 'Prestador / desktop'),
+                       esc(os_['data_abertura'] or '')))
+    aviso='<p class="notice">Cadastro duplicado: OS de origem administrativa requerem revisão cadastral.</p>' if dados['cadastro_ambiguo'] else ''
+    return pagina(h,'OS da organização',card('Histórico completo — '+dados['organizacao']['nome'],
+         aviso+tabela(['OS','Serviço','Estado','Origem','Abertura'],linhas)),s)
+
 
 def administrar(h,banco,s):
     card,layout,campos,textarea,select,esc,botao,tabela=ui()
@@ -183,37 +209,87 @@ def administrar(h,banco,s):
         dados.append((f'#{r["id"]}',esc(r['org']),esc(r['solicitante']),esc(r['descricao']),esc(r['status']),acao))
     return pagina(h,'Análise de chamados',card('Caixa de entrada de acionamentos',tabela(['Nº','Organização','Solicitante','Descrição','Situação','Ações'],dados)),s)
 
+def administrar_responsaveis(h,banco,s):
+    """Atribuição EXCLUSIVAMENTE no portal autenticado do prestador."""
+    card,layout,campos,textarea,select,esc,botao,tabela=ui()
+    params=parse_qs(urlsplit(h.path).query)
+    org_q=str(params.get('org',[''])[0]).strip()[:100]
+    pf_q=str(params.get('pf',[''])[0]).strip()[:100]
+    with ext.db(banco) as c:
+        orgs=c.execute('''SELECT o.id,o.nome,o.tipo,o.cnpj,r.usuario_id,u.nome responsavel
+            FROM v9_organizacoes o LEFT JOIN v9_responsaveis r ON r.organizacao_id=o.id
+            LEFT JOIN v9_usuarios u ON u.id=r.usuario_id
+            WHERE o.mesclado_em IS NULL AND (?='' OR o.nome LIKE ? OR o.cnpj LIKE ?)
+            ORDER BY o.nome LIMIT 100''',(org_q,'%'+org_q+'%','%'+cad.digitos(org_q)+'%' if cad.digitos(org_q) else '\0')).fetchall()
+        pessoas=c.execute('''SELECT u.id,u.nome,u.cpf,u.cliente_pf_id
+            FROM v9_usuarios u WHERE u.ativo=1 AND
+            (?='' OR u.nome LIKE ? OR u.cpf LIKE ?) ORDER BY u.nome LIMIT 100''',
+            (pf_q,'%'+pf_q+'%','%'+cad.digitos(pf_q)+'%' if cad.digitos(pf_q) else '\0')).fetchall()
+    buscar=(f'<form method="get" action="/organizacoes/responsaveis">'
+         +campos('Buscar organização (nome ou CNPJ)','org',org_q)
+         +campos('Buscar pessoa física (nome ou CPF)','pf',pf_q)
+         +'<button>Pesquisar</button></form>')
+    token=formulario_csrf(s)
+    form=(f'<form method="post" action="/organizacoes/responsavel/atribuir" '
+          'data-confirm="Confirma esta nomeação? O responsável poderá ver todas as OS da organização.">'
+          +token+select('Condomínio / empresa','org_id',[(x['id'],
+             f'#{x["id"]} {x["nome"]} ({x["tipo"]})') for x in orgs],required=True)
+          +select('Pessoa física com login CPF ativo','usuario_id',[(x['id'],
+             f'#{x["id"]} {x["nome"]} — CPF final {x["cpf"][-4:]}') for x in pessoas],required=True)
+          +'<p class="notice">Somente contas PF com CPF e senha próprios podem receber acesso. '
+           'Solicitações feitas pelo cliente nunca concedem o papel automaticamente.</p>'
+          +'<button>Nomear síndico / gestor</button></form>')
+    linhas=[]
+    for x in orgs:
+        papel='Síndico' if x['tipo']=='Condomínio' else 'Gestor'
+        acao=(f'<form method="post" action="/organizacoes/responsavel/remover" '
+               'data-confirm="Revogar o acesso a TODAS as OS deste local?">'+token
+               +f'<input type="hidden" name="org_id" value="{x["id"]}">'
+               +'<button class="danger">Revogar acesso</button></form>') if x['usuario_id'] else '—'
+        linhas.append((str(x['id']),esc(x['nome']),esc(x['tipo']),esc(x['responsavel'] or 'Não atribuído'),
+                       papel,acao))
+    corpo=card('1. Pesquisar cadastros',buscar)+card('2. Designar uma PF',form)
+    corpo+=card('3. Acessos atuais — somente nomeações explícitas',
+               tabela(['ID','Condomínio / Empresa','Tipo','PF nomeada','Papel','Revogar'],linhas))
+    corpo+=botao('Voltar aos clientes','/clientes','secondary')
+    return pagina(h,'Responsáveis PF e PJ',corpo,s)
+
+
 def administrar_organizacoes(h,banco,s):
     card,layout,campos,textarea,select,esc,botao,tabela=ui()
     with ext.db(banco) as c:
         orgs=c.execute('SELECT * FROM v9_organizacoes WHERE mesclado_em IS NULL ORDER BY id DESC LIMIT 500').fetchall()
-        clientes=c.execute("SELECT id,nome FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
+        clientes=c.execute("SELECT id,nome,documento FROM clientes WHERE status!='Inativo' AND tipo_pessoa='Jurídica' ORDER BY nome").fetchall()
         vs=c.execute('''SELECT v.*,o.nome org,u.nome usuario FROM v9_vinculos v
                      JOIN v9_organizacoes o ON o.id=v.organizacao_id JOIN v9_usuarios u ON u.id=v.usuario_id
                      WHERE v.situacao='Pendente' ORDER BY v.id DESC''').fetchall()
     dados=[]
     for o in orgs:
-        form=f'<form method="post" action="/organizacoes/{o["id"]}/validar">{formulario_csrf(s)}'
+        form=f'<form method="post" action="/organizacoes/{o["id"]}/validar" data-confirm="Confirma a validação desta organização após conferir o CNPJ e o cliente?">{formulario_csrf(s)}'
         if o['cliente_id']:
             form+='Cliente vinculado #'+str(o['cliente_id'])
             if o['situacao']!='Validado':
                 form+=f'<input type="hidden" name="cliente_id" value="{o["cliente_id"]}"><button>Validar cadastro</button>'
         else:
-            form+=select('Cliente contratante','cliente_id',[(x['id'],f'#{x["id"]} - {x["nome"]}') for x in clientes],required=True)
+            form+=select('Cliente contratante','cliente_id',[(x['id'],f'#{x["id"]} - {x["nome"]} — CNPJ: {cad.digitos(x["documento"]) or "não informado"}') for x in clientes],required=True)
             form+='<button>Validar e vincular</button>'
         form+='</form>'
         form+=f'<form method="post" action="/organizacoes/{o["id"]}/sindico">{formulario_csrf(s)}'+campos('Nome do síndico','sindico_nome',o['sindico_nome'] or '')+campos('WhatsApp do síndico (DDD)','sindico_telefone',o['sindico_telefone'] or '')+'<button class="secondary">Salvar contato verificado</button></form>'
-        dados.append((f'#{o["id"]}',esc(o['nome']),esc(o['tipo']),esc(o['situacao']),form))
+        dados.append((f'#{o["id"]}',esc(o['nome']),esc(o['tipo']),esc(cad.digitos(o['cnpj']) or 'Não informado'),esc(o['situacao']),form))
     linhas=[]
     for x in vs:
         form=(f'<form method="post" action="/organizacoes/vinculos/{x["id"]}">{formulario_csrf(s)}'
               '<button name="decisao" value="aprovar">Validar</button><button name="decisao" value="recusar" class="danger">Recusar</button></form>')
         linhas.append((esc(x['org']),esc(x['usuario']),esc(x['papel']),form))
-    mescla=(f'<form method="post" action="/organizacoes/mesclar">{formulario_csrf(s)}'
+    mescla=(f'<form method="post" action="/organizacoes/mesclar" data-confirm="ATENÇÃO: a mesclagem altera os vínculos de duas organizações. Conferiu os dois IDs, os CNPJs e o histórico de OS?">{formulario_csrf(s)}'
             +select('Origem (desativar)','origem',[(x['id'],f'#{x["id"]} {x["nome"]}') for x in orgs])
             +select('Destino (principal)','destino',[(x['id'],f'#{x["id"]} {x["nome"]}') for x in orgs])
             +'<p class="notice">Mesclagem preserva chamados e vínculos, e é bloqueada quando CNPJs ou clientes históricos divergem.</p><button class="danger">Mesclar após conferência</button></form>')
-    return pagina(h,'Condomínios e vínculos',card('Vínculos pendentes',tabela(['Organização','Pessoa','Papel','Decisão'],linhas))+card('Organizações',tabela(['ID','Nome','Tipo','Situação','Vincular cliente'],dados))+card('Mesclagem controlada',mescla),s)
+    return pagina(h,'Condomínios e vínculos',
+        card('Responsáveis e acesso a todas as OS',
+             '<p>Somente prestador ou desktop atribuem síndico/gestor a uma conta PF existente.</p>'
+             +botao('Nomear / trocar síndico ou gestor','/organizacoes/responsaveis'))+
+        card('Vínculos pendentes',tabela(['Organização','Pessoa','Papel','Decisão'],linhas))+card('Organizações',tabela(['ID','Nome','Tipo','CNPJ informado','Situação','Vincular cliente'],dados))+card('Mesclagem controlada',mescla),s)
 
 def pdf_pj(h,banco,s,chamado_id):
     import fluxo_os as fluxo
@@ -221,8 +297,10 @@ def pdf_pj(h,banco,s,chamado_id):
     with ext.db(banco) as c:
         chamado=c.execute('SELECT organizacao_id,usuario_id,os_id FROM v9_chamados WHERE id=?',(chamado_id,)).fetchone()
         if not chamado:raise ValueError('Chamado não encontrado.')
-        if chamado['usuario_id']!=s['uid'] and not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],('Síndico','Administrador')):
-            raise PermissionError('Documento restrito ao solicitante ou síndico validado.')
+        org=c.execute('SELECT tipo FROM v9_organizacoes WHERE id=?',(chamado['organizacao_id'],)).fetchone()
+        papeis=('Síndico',) if org and org['tipo']=='Condomínio' else ('Síndico','Administrador','Gestor')
+        if not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],papeis):
+            raise PermissionError('PDF restrito ao síndico ou gestor autorizado. Morador acompanha apenas o status.')
         if not chamado['os_id']:raise ValueError('A solicitação ainda não foi convertida em OS.')
         registro=fluxo.ultimo_documento(banco,chamado['os_id'])
         if not registro:raise ValueError('Relatório ainda não publicado.')
@@ -240,7 +318,7 @@ def get(h,path,banco,prestador):
         parsed=urlsplit(h.path);params=parse_qs(parsed.query)
         if path=='/pj/painel':return painel(h,banco,s)
         if path=='/pj/organizacoes':return organizacoes(h,banco,s)
-        if path=='/pj/nova-organizacao':return nova_organizacao(h,banco,s)
+        if path=='/pj/nova-organizacao':return h.redir('/cliente/nova-organizacao')
         if path=='/pj/chamado/novo':return chamado_form(h,banco,s,int(params.get('org',['0'])[0]))
         if path=='/pj/sindico':return sindico(h,banco,s,int(params.get('org',['0'])[0]))
         partes=path.strip('/').split('/')
@@ -250,6 +328,7 @@ def get(h,path,banco,prestador):
     if not prestador:return h.login()
     if path=='/chamados':return administrar(h,banco,prestador)
     if path=='/organizacoes':return administrar_organizacoes(h,banco,prestador)
+    if path=='/organizacoes/responsaveis':return administrar_responsaveis(h,banco,prestador)
     return None
 
 def post(h,path,d,banco,prestador):
@@ -283,6 +362,7 @@ def post(h,path,d,banco,prestador):
         if path=='/pj/vincular':
             cad.vincular(banco,s['uid'],int(d['org_id']),d['papel']);return h.redir('/pj/painel')
         if path=='/pj/nova-organizacao':
+            raise ValueError('Use o formulário de cadastro e OS do Portal do Cliente.')
             cad.criar_organizacao(banco,s['uid'],str(d.get('nome','')),str(d.get('tipo','')),str(d.get('cnpj','')),str(d.get('cidade','')),str(d.get('bairro','')),str(d.get('papel','Morador')))
             return h.redir('/pj/painel')
         if path=='/pj/chamado/novo':
@@ -296,6 +376,13 @@ def post(h,path,d,banco,prestador):
     if not prestador:raise PermissionError('Área do prestador restrita.')
     verificar_csrf(prestador,d)
     partes=path.strip('/').split('/')
+    if path=='/organizacoes/responsavel/atribuir':
+        cad.atribuir_responsavel(banco,int(d['org_id']),int(d['usuario_id']),
+                                'Prestador '+prestador['nome'])
+        return h.redir('/organizacoes/responsaveis')
+    if path=='/organizacoes/responsavel/remover':
+        cad.remover_responsavel(banco,int(d['org_id']),'Prestador '+prestador['nome'])
+        return h.redir('/organizacoes/responsaveis')
     if len(partes)==3 and partes[0]=='chamados' and partes[1].isdigit():
         ch=int(partes[1]);cmd=partes[2]
         if cmd=='analisar':cad.analisar(banco,ch,prestador['nome'],str(d.get('decisao','')),str(d.get('observacao','')))

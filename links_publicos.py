@@ -4,7 +4,9 @@ from urllib.parse import urlsplit
 import json,os,re,subprocess
 
 BASE=Path(__file__).resolve().parent
-TUNEIS=BASE/'tuneis'
+DEV=os.environ.get('AUTOSEG_DEV')=='1'
+PORTAS=('8865','8866') if DEV else ('8765','8766')
+TUNEIS=BASE/('tuneis_dev' if DEV else 'tuneis')
 ARQUIVO=TUNEIS/'estado.json'
 URL_RE=re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com',re.I)
 
@@ -20,7 +22,7 @@ def estado():
     try: d=json.loads(ARQUIVO.read_text(encoding='utf8'))
     except (ValueError,OSError): d={}
     saida={}
-    for porta in ('8765','8766'):
+    for porta in PORTAS:
         item=d.get(porta) or {};pid=item.get('pid')
         if not vivo(pid):continue
         try: texto=(TUNEIS/f'{porta}.log').read_text(encoding='utf8')[-20000:]
@@ -32,13 +34,13 @@ def estado():
 def quadro_html():
     import html
     s=estado_com_manuais();parts=[]
-    for porta,nome in [('8765','Portal do Cliente'),('8766','Portal do Prestador')]:
+    for porta,nome in [(PORTAS[0],'Portal do Cliente'),(PORTAS[1],'Portal do Prestador')]:
         url=s.get(porta,{}).get('url','')
         link=(f'<a href="{html.escape(url,quote=True)}" rel="noopener noreferrer" target="_blank">{html.escape(url)}</a>'
               if url else '<span class="muted">Sem link público verificado</span>')
         parts.append(f'<div><b>{html.escape(nome)} · {porta}</b><p style="overflow-wrap:anywhere">{link}</p></div>')
     return ('<section class="card"><h2>Links públicos atuais</h2>'+''.join(parts)+
-        '<small>Os links são identificados nos logs do Cloudflare e conferidos por HTTPS. Links indisponíveis deixam de aparecer.</small></section>')
+        '<small>Os links são obtidos dos processos Cloudflare ativos. Em DEV, use somente dados fictícios; o login do AUTOSEG continua necessário.</small></section>')
 
 # URLs de túneis iniciados em outros Terminais podem ser informadas manualmente.
 # Só são exibidas como atuais após verificação HTTP recente, nunca por mera leitura de texto.
@@ -51,7 +53,8 @@ _CACHE={}
 _MUTEX=threading.Lock()
 
 def registrar_manual(porta,url):
-    if str(porta) not in ('8765','8766'):raise ValueError('Porta inválida.')
+    if DEV:raise ValueError('Registro manual desativado no ambiente DEV protegido.')
+    if str(porta) not in PORTAS:raise ValueError('Porta inválida.')
     parsed=urlsplit(str(url).strip())
     if parsed.scheme!='https' or not URL_RE.fullmatch(str(url).strip()) or parsed.username or parsed.password:
         raise ValueError('URL precisa ser um link HTTPS trycloudflare.com exato.')
@@ -81,14 +84,14 @@ def estado_com_manuais():
         with _MUTEX:achado=_CACHE.get(chave)
         if achado and achado[2]==url and agora-achado[0]<30:ok=achado[1]
         else:
-            ok=_verificar(url)
+            ok=True if DEV else _verificar(url)  # link DEV vem do processo do túnel
             with _MUTEX:_CACHE[chave]=(agora,ok,url)
-        if ok:data[porta]=info
+        if ok or DEV:data[porta]=info
     try:reg=json.loads(REGISTRO_MANUAL.read_text('utf8'))
     except (OSError,ValueError):return data
     agora=time.time()
     for porta,url in reg.items():
-        if porta not in ('8765','8766') or porta in data or not URL_RE.fullmatch(str(url)):continue
+        if DEV or porta not in PORTAS or porta in data or not URL_RE.fullmatch(str(url)):continue
         with _MUTEX:achado=_CACHE.get(porta)
         if achado and achado[2]==url and agora-achado[0]<60:ok=achado[1]
         else:

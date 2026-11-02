@@ -137,6 +137,9 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
             ext.evento(c,os_id,'Financeiro exige revisão',
                       'OS encerrada sem execução concluída, mas existe lançamento aguardando pagamento.',
                       prestador_id,ator)
+    # Cancelamento estorna os materiais que já haviam sido lançados.
+    import estoque_materiais as estoque
+    estoque.reconciliar_os_conexao(c,os_id,ator)
     return status
 
 

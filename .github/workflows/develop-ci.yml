@@ -1,0 +1,24 @@
+name: AUTOSEG DEV - qualidade e versionamento
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+  workflow_dispatch:
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+      - name: Verificar metadados de versao
+        run: python versionador.py verificar
+      - name: Compilar codigo Python principal
+        run: python -m py_compile versionador.py produtividade_os.py gmail_service.py prestadores_ext.py atendimento_os.py portal_prestador.py portal_v9.py servidor_web.py
+      - name: Testes sem banco de producao
+        run: python -m unittest -v test_versionador test_produtividade_rev07

@@ -58,11 +58,48 @@ def instalar(banco):
             os_id INTEGER PRIMARY KEY, prestador_id INTEGER NOT NULL,
             assumido_em TEXT NOT NULL,
             FOREIGN KEY(prestador_id) REFERENCES prestadores(id));
+        CREATE TABLE IF NOT EXISTS os_deslocamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            os_id INTEGER NOT NULL,
+            prestador_id INTEGER NOT NULL,
+            em_rota_em TEXT NOT NULL,
+            finalizado_em TEXT,
+            ator TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS os_rascunhos_web (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            os_id INTEGER NOT NULL,
+            prestador_id INTEGER,
+            dados_json TEXT NOT NULL,
+            atualizado_em TEXT NOT NULL,
+            UNIQUE(os_id, prestador_id)
+        );
         CREATE INDEX IF NOT EXISTS idx_os_prestadores_prestador ON os_prestadores(prestador_id,os_id);
         CREATE INDEX IF NOT EXISTS idx_os_responsaveis_prestador ON os_responsaveis(prestador_id);
         CREATE INDEX IF NOT EXISTS idx_eventos_os ON os_eventos(os_id,id);
         CREATE INDEX IF NOT EXISTS idx_anexos_os ON os_anexos(os_id);
+        CREATE TABLE IF NOT EXISTS prestadores_config (
+            prestador_id INTEGER PRIMARY KEY,
+            provedor_email TEXT DEFAULT '',
+            email_remetente TEXT DEFAULT '',
+            credencial_env TEXT DEFAULT '',
+            banco_nome TEXT DEFAULT '',
+            banco_titular TEXT DEFAULT '',
+            banco_agencia TEXT DEFAULT '',
+            banco_conta TEXT DEFAULT '',
+            chave_pix TEXT DEFAULT '',
+            dados_bancarios_texto TEXT NOT NULL DEFAULT '',
+            atualizado_em TEXT NOT NULL,
+            FOREIGN KEY(prestador_id) REFERENCES prestadores(id));
         ''')
+        # REV05: dados bancários/cadastrais em bloco livre por prestador.
+        col_conf={r[1] for r in c.execute('PRAGMA table_info(prestadores_config)').fetchall()}
+        if 'dados_bancarios_texto' not in col_conf:
+            c.execute("ALTER TABLE prestadores_config ADD COLUMN dados_bancarios_texto TEXT NOT NULL DEFAULT ''")
+        # REV05: exclusão lógica com preservação dos vínculos históricos.
+        colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
+        if 'excluido' not in colunas:
+            c.execute('ALTER TABLE prestadores ADD COLUMN excluido INTEGER NOT NULL DEFAULT 0')
         # Migração sem alterações destrutivas: atribuições antigas continuam disponíveis.
         # Escolhe a mais recente somente onde ainda não existe responsável atual.
         c.execute('''INSERT OR IGNORE INTO os_responsaveis(os_id, prestador_id, assumido_em)
@@ -95,6 +132,17 @@ def cadastrar(banco,nome,email,senha,telefone='',documento='',especialidade=''):
         cur=c.execute('INSERT INTO prestadores(nome,email,senha_hash,telefone,documento,especialidade,criado_em) VALUES(?,?,?,?,?,?,?)',
         (nome.strip(),email.strip().lower(),senha_hash(senha),telefone.strip(),documento.strip(),especialidade.strip(),agora()))
         return cur.lastrowid
+
+def redefinir_senha_prestador_desktop(banco,prestador_id,nova_senha):
+    """Somente uma ação administrativa local do desktop deve chamar esta função."""
+    if len(nova_senha)<10:raise ValueError('A nova senha deve ter pelo menos dez caracteres.')
+    with db(banco) as c:
+        p=c.execute('SELECT id FROM prestadores WHERE id=?',(prestador_id,)).fetchone()
+        if not p:raise ValueError('Prestador não encontrado.')
+        c.execute('UPDATE prestadores SET senha_hash=? WHERE id=?',
+                  (senha_hash(nova_senha),prestador_id))
+    return True
+
 
 def autenticar(banco,email,senha):
     with db(banco) as c:
@@ -134,11 +182,11 @@ def responsavel_atual(c, os_id):
     return x['prestador_id'] if x else None
 
 def pode_assumir(c,os_id,pid):
-    """OS pendente sempre pode ser retomada; aberta só se não tem responsável."""
+    """Somente OS ativa sem responsável pode ser assumida por outro prestador."""
     o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     p=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
     if not o or not p: return False
-    return (o['status']=='Pendente' or (o['status']=='Aberta' and responsavel_atual(c,os_id) is None))
+    return o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
 
 def atribuir(banco,os_id,prestador_id,ator='Administrador'):
     """Atribuição administrativa define responsável; preserva participantes históricos."""
@@ -155,12 +203,14 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
         c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
                   'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
                   (os_id,prestador_id,agora()))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Atribuição' if anterior is None else 'Transferência administrativa',
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
 
 def assumir(banco,os_id,pid):
-    """Assunção atômica; dois prestadores não conseguem assumir a mesma OS aberta."""
+    """Assunção atômica de OS aberta/pendente desatribuída, sem iniciar execução."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
@@ -168,10 +218,6 @@ def assumir(banco,os_id,pid):
         if not p or not o: raise PermissionError('Prestador ou OS inválida.')
         anterior=responsavel_atual(c,os_id)
         if anterior==pid:
-            if o['status']=='Pendente':
-                c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?", (os_id,))
-                evento(c,os_id,'Retomada',f'{p["nome"]} retomou o atendimento pendente.',pid,p['nome'])
-                return True
             return False
         if not pode_assumir(c,os_id,pid):
             raise PermissionError('OS em atendimento por outro prestador. Aguarde ficar pendente ou solicite transferência.')
@@ -180,9 +226,7 @@ def assumir(banco,os_id,pid):
         c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
                   'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
                   (os_id,pid,agora()))
-        # Uma retomada inicia atendimento; mantém o histórico da pendência anterior.
-        if o['status']=='Pendente':
-            c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=?",(os_id,))
+        # Assumir é diferente de iniciar; a OS pendente permanece pendente.
         evento(c,os_id,'Retomada' if anterior is not None else 'Assunção',
                f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
         return True
@@ -345,15 +389,65 @@ def gerar_pdf(banco,os_id):
         title=f'Relatório OS {o["numero_os"]}').build(partes,onFirstPage=rodape,onLaterPages=rodape)
     return str(caminho)
 
-def criar_email_rascunho(banco,os_id,pdf):
+CAMPOS_CONFIG = ('provedor_email','email_remetente','credencial_env','banco_nome',
+                 'banco_titular','banco_agencia','banco_conta','chave_pix','dados_bancarios_texto')
+
+
+def obter_config_prestador(banco,pid):
+    with db(banco) as c:
+        r=c.execute('SELECT * FROM prestadores_config WHERE prestador_id=?',(pid,)).fetchone()
+        return dict(r) if r else {k:'' for k in CAMPOS_CONFIG}
+
+
+def salvar_config_prestador(banco,pid,dados):
+    import re
+    vals={k:str(dados.get(k,'') or '').strip() for k in CAMPOS_CONFIG}
+    if any(len(v)>160 for k,v in vals.items() if k!='dados_bancarios_texto'):
+        raise ValueError('Campo de configuração muito longo.')
+    if len(vals['dados_bancarios_texto'])>4000:
+        raise ValueError('O texto bancário não pode exceder 4.000 caracteres.')
+    if vals['provedor_email'] not in ('','SMTP','Microsoft Graph','Gmail API','Outro'):
+        raise ValueError('Provedor de e-mail inválido.')
+    if vals['email_remetente'] and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',vals['email_remetente']):
+        raise ValueError('E-mail remetente inválido.')
+    if vals['credencial_env'] and not re.fullmatch(r'[A-Z_][A-Z0-9_]{2,100}',vals['credencial_env']):
+        raise ValueError('Informe apenas o NOME de uma variável de ambiente para a credencial.')
+    with db(banco) as c:
+        if not c.execute('SELECT 1 FROM prestadores WHERE id=?',(pid,)).fetchone():
+            raise ValueError('Prestador não encontrado.')
+        c.execute('''INSERT INTO prestadores_config (
+          prestador_id,provedor_email,email_remetente,credencial_env,banco_nome,
+          banco_titular,banco_agencia,banco_conta,chave_pix,dados_bancarios_texto,atualizado_em)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(prestador_id) DO UPDATE SET
+          provedor_email=excluded.provedor_email,email_remetente=excluded.email_remetente,
+          credencial_env=excluded.credencial_env,banco_nome=excluded.banco_nome,
+          banco_titular=excluded.banco_titular,banco_agencia=excluded.banco_agencia,
+          banco_conta=excluded.banco_conta,chave_pix=excluded.chave_pix,
+          dados_bancarios_texto=excluded.dados_bancarios_texto,atualizado_em=excluded.atualizado_em''',
+          (pid,*[vals[k] for k in CAMPOS_CONFIG],agora()))
+    return True
+
+
+def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     with db(banco) as c:
         r=c.execute('SELECT o.numero_os,c.email,c.nome FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
     if not r: raise ValueError('OS inválida.')
     if not r['email']: raise ValueError('Cadastre o e-mail do cliente antes de preparar a mensagem.')
+    config={}
+    if prestador_id is not None:
+        config=obter_config_prestador(banco,prestador_id)
     msg=EmailMessage();msg['To']=r['email'];msg['Subject']=f'AUTOSEG | Relatório de serviço {r["numero_os"]}'
-    msg.set_content(f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.\n\nAtenciosamente,\nAUTOSEG')
+    if config.get('email_remetente'):msg['From']=config['email_remetente']
+    pagamento=[]
+    for titulo,chave in (('Titular','banco_titular'),('Banco','banco_nome'),
+                         ('Agência','banco_agencia'),('Conta','banco_conta'),('Pix','chave_pix')):
+        if config.get(chave):pagamento.append(titulo+': '+config[chave])
+    corpo=f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.'
+    if pagamento:corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
+    corpo+='\n\nAtenciosamente,\n'+(config.get('banco_titular') or 'AUTOSEG')
+    msg.set_content(corpo)
     msg.add_attachment(Path(pdf).read_bytes(),maintype='application',subtype='pdf',filename=Path(pdf).name)
-    path=RASCUNHOS/f'email_os_{os_id}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
+    path=RASCUNHOS/f'email_os_{os_id}_p{prestador_id if prestador_id is not None else 0}_{secrets.token_hex(4)}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
 
 def criar_rascunho_fiscal(banco,os_id):
     with db(banco) as c:
@@ -374,5 +468,82 @@ def desatribuir(banco, os_id, ator='Administrador'):
         anterior = responsavel_atual(c, os_id)
         if anterior is None: return False
         c.execute('DELETE FROM os_responsaveis WHERE os_id=?',(os_id,))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Desatribuição',f'OS disponível para nova atribuição. Responsável anterior (ID): {anterior}.',ator=ator)
+        return True
+
+
+def em_rota_atual(c, os_id):
+    r = c.execute("SELECT id FROM os_deslocamentos WHERE os_id=? AND finalizado_em IS NULL ORDER BY id DESC LIMIT 1", (os_id,)).fetchone()
+    return r is not None
+
+
+def marcar_em_rota(banco, os_id, pid, ator=None):
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
+        o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
+        if not p or not o:
+            raise PermissionError('Prestador ou OS inválida.')
+        if o['status'] not in ATIVAS:
+            raise ValueError('Apenas OS abertas ou pendentes permitem marcar em rota.')
+        if responsavel_atual(c, os_id) != pid:
+            raise PermissionError('Somente o prestador responsável pode marcar em rota.')
+        if em_rota_atual(c, os_id):
+            return False
+        ator_nome = ator or p['nome']
+        c.execute('INSERT INTO os_deslocamentos(os_id, prestador_id, em_rota_em, ator) VALUES(?,?,?,?)',
+                  (os_id, pid, agora(), ator_nome))
+        evento(c, os_id, 'Em rota', f'{ator_nome} iniciou deslocamento para o local.', pid, ator_nome)
+        return True
+
+
+def finalizar_em_rota(c, os_id):
+    c.execute("UPDATE os_deslocamentos SET finalizado_em=? WHERE os_id=? AND finalizado_em IS NULL",
+              (agora(), os_id))
+
+
+def salvar_rascunho_web(banco, os_id, pid, dados):
+    import json
+    with db(banco) as c:
+        c.execute('''INSERT INTO os_rascunhos_web(os_id, prestador_id, dados_json, atualizado_em)
+                     VALUES(?,?,?,?) ON CONFLICT(os_id, prestador_id) DO UPDATE SET
+                     dados_json=excluded.dados_json, atualizado_em=excluded.atualizado_em''',
+                  (os_id, pid, json.dumps(dados, ensure_ascii=False), agora()))
+    return True
+
+
+def obter_rascunho_web(banco, os_id, pid=None):
+    import json
+    with db(banco) as c:
+        if pid is not None:
+            r = c.execute('SELECT dados_json, atualizado_em FROM os_rascunhos_web WHERE os_id=? AND prestador_id=?',
+                          (os_id, pid)).fetchone()
+        else:
+            r = c.execute('SELECT dados_json, atualizado_em FROM os_rascunhos_web WHERE os_id=? ORDER BY atualizado_em DESC LIMIT 1',
+                          (os_id,)).fetchone()
+        if not r:
+            return None
+        try:
+            dados = json.loads(r['dados_json'])
+        except Exception:
+            dados = {}
+        dados['_rascunho_atualizado_em'] = r['atualizado_em']
+        return dados
+
+
+def cancelar_em_rota(banco, os_id, pid, ator=None):
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
+        if not p:
+            raise PermissionError('Prestador inválido.')
+        if responsavel_atual(c, os_id) != pid:
+            raise PermissionError('Somente o prestador responsável pode cancelar o deslocamento.')
+        if not em_rota_atual(c, os_id):
+            return False
+        finalizar_em_rota(c, os_id)
+        ator_nome = ator or p['nome']
+        evento(c, os_id, 'Em rota cancelado', f'{ator_nome} cancelou o deslocamento.', pid, ator_nome)
         return True
