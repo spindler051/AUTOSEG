@@ -5,6 +5,17 @@ para macOS. O que muda fica nos lançadores e no empacotamento.
 
 ## Dependências
 
+O lançador detecta MacPorts ou Homebrew e procura o Python que já tenha
+PyGObject/GTK4.
+
+MacPorts (Intel):
+
+```bash
+sudo port install gtk4 +quartz libadwaita py-gobject3 adwaita-icon-theme
+```
+
+Homebrew (quando disponível para a arquitetura):
+
 ```bash
 brew install python3 gtk4 libadwaita pygobject3 adwaita-icon-theme
 ```
@@ -17,6 +28,8 @@ Depois:
 
 O lançador:
 
+- procura `/opt/local/bin/python3.14`, `python3.13` e Homebrew;
+- define `XDG_DATA_DIRS`/`GI_TYPELIB_PATH` para ícones e typelibs do MacPorts;
 - usa `AUTOSEG_BASE` (padrão `~/gestaoservicos_MAIN`);
 - cria `.venv-gtk` com `--system-site-packages` para enxergar o PyGObject do
   Homebrew;

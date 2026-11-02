@@ -143,11 +143,17 @@ O GTK4 e o libadwaita são multiplataforma. A mesma árvore e o mesmo
 `gtk_app.py` rodam no macOS; não há código de negócio específico de Linux.
 
 ```bash
+# MacPorts (Intel)
+sudo port install gtk4 +quartz libadwaita py-gobject3 adwaita-icon-theme
+# ou Homebrew, quando disponível para a arquitetura
 brew install python3 gtk4 libadwaita pygobject3 adwaita-icon-theme
-python3 -m venv --system-site-packages .venv-gtk
-.venv-gtk/bin/pip install 'reportlab>=4.2,<5' 'pillow>=10,<13' 'PyYAML>=6,<7'
+
 ./INICIAR_AUTOSEG_GTK.command
 ```
+
+O lançador encontra o Python com GTK4/PyGObject, cria `.venv-gtk`, instala
+reportlab/Pillow/PyYAML e configura `XDG_DATA_DIRS`/`GI_TYPELIB_PATH` para os
+prefixos do MacPorts/Homebrew.
 
 O lançador `.command` usa `AUTOSEG_BASE` (padrão `~/gestaoservicos_MAIN`) para
 que banco, PDFs, anexos e rascunhos fiquem fora do bundle e possam ser
