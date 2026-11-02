@@ -187,6 +187,38 @@ PyInstaller + AppImage; ele precisa ser validado em uma VM Ubuntu limpa,
 porque GTK4/libadwaita, typelibs, loaders do GdkPixbuf e bibliotecas nativas
 precisam ser incluídos no AppDir.
 
+## Aparência do sistema (fora do app)
+
+O app não tem seletor de tema claro/escuro nem de cor de destaque. Ele segue o
+sistema. No Linux/GTK4:
+
+```bash
+gsettings set org.gnome.desktop.interface icon-theme 'Adwaita'
+gsettings set org.gnome.desktop.interface gtk-theme 'Adwaita'
+gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+gsettings set org.gnome.desktop.interface accent-color 'purple'
+```
+
+Para remover as cores do Breeze/KDE que sobrescreviam o GTK4, o arquivo
+`~/.config/gtk-4.0/settings.ini` deve ter:
+
+```ini
+gtk-application-prefer-dark-theme=true
+gtk-icon-theme-name=Adwaita
+gtk-theme-name=Adwaita
+```
+
+E o `~/.config/gtk-4.0/gtk.css` do usuário pode fixar o roxo do GNOME quando o
+libadwaita da distribuição não aplica `accent-color` sozinho:
+
+```css
+@define-color accent_bg_color #9141ac;
+@define-color accent_fg_color #ffffff;
+@define-color accent_color #c061cb;
+```
+
+Isso é configuração de sistema/usuário, não do AUTOSEG.
+
 ## Normas GNOME
 
 A Human Interface Guidelines é baixada para `docs/gnome-hig/` (espelho
