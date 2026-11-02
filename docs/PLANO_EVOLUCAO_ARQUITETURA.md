@@ -488,7 +488,14 @@ de mídia.
 
 ---
 
-## 10. Referências
+## 10. Modo local e sincronização
+
+O plano detalhado de offline-first, sync LAN, P2P e conflitos está em
+`docs/PLANO_MODO_LOCAL_SYNC.md`. Resumo: SQLite local por dispositivo, log de
+mudanças, servidor autoritativo e Syncthing apenas para blobs — nunca para o
+banco ativo.
+
+## 11. Referências
 
 - Immich — arquitetura: <https://docs.immich.app/developer/architecture/>
 - Immich — jobs e workers: <https://docs.immich.app/administration/jobs-workers/>

@@ -11,6 +11,7 @@ regras do app Tkinter e dos portais. Não é um fork.
 - Rascunho de AppImage: `packaging/appimage/README.md`
 - Separação produção/teste: `docs/BANCO_TESTE_PRODUCAO.md`
 - Plano de evolução/modularização: `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
+- Plano de modo local/sincronização: `docs/PLANO_MODO_LOCAL_SYNC.md`
 
 Variáveis principais: `AUTOSEG_BASE`, `GESTAO_BANCO`, `CLIENTE_PORT`,
 `PRESTADOR_PORT`, `AUTOSEG_DEV`.
