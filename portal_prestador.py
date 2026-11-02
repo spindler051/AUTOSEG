@@ -27,6 +27,7 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import portal_v9 as v9
 import links_publicos as links9
+import produtividade_os as prod
 import socket
 
 LOG = logging.getLogger('autosseg.portal')
@@ -133,6 +134,7 @@ class PortalPrestador:
                 LOG.warning('Não foi possível iniciar log de arquivo: %s',exc)
         usar_https=os.environ.get('PRESTADOR_HTTPS')=='1' 
         ext.instalar(banco)
+        prod.instalar(banco)
         fluxo.instalar(banco)
         aten.instalar(banco)
         cad9.instalar(banco)
@@ -348,7 +350,7 @@ class PortalPrestador:
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
 
-            def os_form(self,s,oid=None):
+            def os_form(self,s,oid=None,preenchimento=None):
                 with ext.db(banco) as c:
                     cl=c.execute("SELECT id,nome FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
@@ -365,10 +367,26 @@ class PortalPrestador:
                         WHERE op.os_id=? ORDER BY p.nome''',(oid,)).fetchall() if oid else []
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
+                if preenchimento:
+                    for k in ('v9_diagnostico','v9_execucao','v9_resultado','relatorio_tecnico','tecnico','valor_mao_obra','valor_materiais_manual','valor_total_override','forma_pagamento'):
+                        if k in preenchimento:d[k]=preenchimento[k]
+                    itens=preenchimento.get('material_item[]',[])
+                    quantidades=preenchimento.get('material_qtd[]',[])
+                    unitarios=preenchimento.get('material_unit[]',[])
+                    if itens:
+                        mat=[dict(item=item,quantidade=quantidades[i] if i<len(quantidades) else '',valor_unitario=unitarios[i] if i<len(unitarios) else '')
+                             for i,item in enumerate(itens) if item]
                 token=self.hidden(s)
                 titulo=f'OS {d["numero_os"]}' if oid else 'Nova ordem de serviço'
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
                 corpo=botao('← Ordens de serviço','/os','secondary')
+                if oid and d['status'] in ext.ATIVAS and responsavel==s['pid']:
+                    corpo+=card('Rascunho persistente',botao('Recuperar rascunho',f'/os/{oid}/rascunho','secondary')
+                        +'<p class="muted">Dados salvos no servidor, independentemente da importação YAML.</p>')
+                    rota=prod.em_rota(banco,oid)
+                    corpo+=(f'<form method="post" action="/os/{oid}/rota">{token}'
+                            +f'<input type="hidden" name="ativo" value="{0 if rota["em_rota"] else 1}">'
+                            +f'<button class="secondary">{"Encerrar Em rota" if rota["em_rota"] else "Marcar Em rota"}</button></form>')
                 if oid:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     corpo+=f'<p><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b> · Participantes: {esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>'
@@ -420,10 +438,10 @@ class PortalPrestador:
                 corpo+='</div><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
                 corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
-                corpo+=textarea('Diagnóstico','v9_diagnostico',(detalhes['diagnostico'] if detalhes else '') or '',rows=3)
-                corpo+=textarea('Serviço executado','v9_execucao',(detalhes['execucao'] if detalhes else '') or '',rows=4)
-                corpo+=textarea('Resultado e testes','v9_resultado',(detalhes['resultado'] if detalhes else '') or '',rows=3)
-                corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',(andamento['rascunho'] if andamento else '') or '',rows=4)
+                corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
+                corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
+                corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
+                corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',d.get('relatorio_tecnico',(andamento['rascunho'] if andamento else '')) or '',rows=4)
                 if oid and d['status'] in ext.ATIVAS:
                     if andamento and andamento['iniciado_em']:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
@@ -436,14 +454,17 @@ class PortalPrestador:
                         [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
                         'Concluída',required=True)
                     corpo+='<div id="anexo-encerramento"><label>Fotos do relatório (até 10 imagens, 8 MB por foto)</label>'
-                    corpo+='<input type="file" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
-                    corpo+='<p class="muted">Selecione até 10 imagens de uma só vez (JPG/PNG/WEBP, máximo de 8 MB por imagem). As imagens entram no PDF após a conclusão.</p></div>'
+                    corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
+                    corpo+='<p class="muted">As fotos podem ser salvas no servidor antes da conclusão pelo botão Salvar rascunho.</p></div>'
+                    corpo+=campos_escuros('E-mail adicional ao concluir','email_adicional',kind='email')
                 corpo+='</fieldset><div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
                 else:
                     corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
                 if oid and d['status'] in ext.ATIVAS:
+                    if responsavel==s['pid']:
+                        corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">Salvar rascunho e fotos</button>'
                     corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                 corpo+='</div></form>'
                 if not oid:
@@ -461,7 +482,7 @@ class PortalPrestador:
                               +campos_escuros('Legenda para o PDF','legenda',vis.get('legenda',''))
                               +select('Incluir no PDF','visivel',[('1','Sim — incluir foto (padrão)'),('0','Não — ocultar por privacidade')],str(vis.get('visivel',1)))
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
-                        itens.append('<div class="card"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
+                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
                     corpo+=card('Fotos da OS','<p>As fotos anexadas entram automaticamente no PDF. Se houver informação particular, selecione Ocultar por privacidade. Após alterar uma OS encerrada, publique outra versão do relatório.</p>'+''.join(itens))
                 publicado=fluxo.ultimo_documento(banco,oid) if oid else None
                 if publicado:
