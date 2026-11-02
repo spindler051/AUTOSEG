@@ -457,6 +457,14 @@ class PortalPrestador:
                     corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
                     corpo+='<p class="muted">As fotos podem ser salvas no servidor antes da conclusão pelo botão Salvar rascunho.</p></div>'
                     corpo+=campos_escuros('E-mail adicional ao concluir','email_adicional',kind='email')
+                    if responsavel==s['pid']:
+                        corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
+                        corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
+                        opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
+                        for i in range(3):
+                            corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
+                            corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
+                        corpo+='</div>'
                 corpo+='</fieldset><div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
