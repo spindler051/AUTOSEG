@@ -12,6 +12,7 @@ BASE = Path(os.environ.get('AUTOSEG_BASE') or Path(__file__).resolve().parent)
 ANEXOS = BASE / 'anexos_os'
 RELATORIOS = BASE / 'relatorios_pdf'
 RASCUNHOS = BASE / 'rascunhos'
+NOTAS = BASE / 'notas_fiscais'
 for p in (ANEXOS, RELATORIOS, RASCUNHOS):
     try: p.mkdir(parents=True, exist_ok=True)
     except OSError: pass
@@ -113,6 +114,16 @@ def instalar(banco):
         c.execute('''CREATE TABLE IF NOT EXISTS v9_anexos_visiveis(
             anexo_id INTEGER PRIMARY KEY, visivel INTEGER NOT NULL DEFAULT 0,
             legenda TEXT DEFAULT '', autorizado_em TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS os_notas_fiscais(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            os_id INTEGER NOT NULL,
+            prestador_id INTEGER,
+            nome_original TEXT NOT NULL,
+            caminho TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            criado_em TEXT NOT NULL,
+            UNIQUE(os_id,sha256))''')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_notas_os ON os_notas_fiscais(os_id,id)')
         # Migração sem alterações destrutivas: atribuições antigas continuam disponíveis.
         # Escolhe a mais recente somente onde ainda não existe responsável atual.
         c.execute('''INSERT OR IGNORE INTO os_responsaveis(os_id, prestador_id, assumido_em)
@@ -614,3 +625,87 @@ def cancelar_em_rota(banco, os_id, pid, ator=None):
         ator_nome = ator or p['nome']
         evento(c, os_id, 'Em rota cancelado', f'{ator_nome} cancelou o deslocamento.', pid, ator_nome)
         return True
+
+
+def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
+    """Anexa um PDF de nota fiscal à OS, com deduplicação por SHA-256."""
+    if not isinstance(conteudo, bytes) or not conteudo.startswith(b'%PDF-'):
+        raise ValueError('A nota fiscal deve ser um arquivo PDF válido.')
+    if len(conteudo) > 20 * 1024 * 1024:
+        raise ValueError('A nota fiscal deve ter no máximo 20 MB.')
+    import hashlib
+    digest = hashlib.sha256(conteudo).hexdigest()
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
+        if not o:
+            raise ValueError('OS não encontrada.')
+        if pid is not None:
+            p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
+            if not p:
+                raise PermissionError('Prestador inativo.')
+            if responsavel_atual(c, os_id) != pid:
+                raise PermissionError('Somente o responsável pela OS pode anexar nota fiscal.')
+        existente = c.execute('SELECT id FROM os_notas_fiscais WHERE os_id=? AND sha256=?',
+                              (os_id, digest)).fetchone()
+        if existente:
+            return int(existente['id'])
+        NOTAS.mkdir(parents=True, exist_ok=True)
+        destino = NOTAS / (secrets.token_hex(16) + '.pdf')
+        destino.write_bytes(conteudo)
+        try:
+            cur = c.execute('''INSERT INTO os_notas_fiscais
+                (os_id,prestador_id,nome_original,caminho,sha256,criado_em)
+                VALUES(?,?,?,?,?,?)''',
+                (os_id, pid, Path(nome).name[:150], str(destino), digest, agora()))
+            ator = 'Administrador'
+            if pid is not None:
+                ator = c.execute('SELECT nome FROM prestadores WHERE id=?', (pid,)).fetchone()['nome']
+            evento(c, os_id, 'Nota fiscal anexada', Path(nome).name[:150], pid, ator)
+            return int(cur.lastrowid)
+        except Exception:
+            destino.unlink(missing_ok=True)
+            raise
+
+
+def listar_notas_fiscais(banco, os_id):
+    with db(banco) as c:
+        return [dict(x) for x in c.execute(
+            'SELECT id,os_id,nome_original,sha256,criado_em FROM os_notas_fiscais WHERE os_id=? ORDER BY id',
+            (os_id,)).fetchall()]
+
+
+def obter_nota_fiscal(banco, os_id, nota_id):
+    with db(banco) as c:
+        r = c.execute('SELECT * FROM os_notas_fiscais WHERE id=? AND os_id=?',
+                      (nota_id, os_id)).fetchone()
+    if not r:
+        raise ValueError('Nota fiscal não encontrada.')
+    caminho = Path(r['caminho']).resolve()
+    raiz = NOTAS.resolve()
+    if not caminho.is_relative_to(raiz) or not caminho.is_file():
+        raise ValueError('Arquivo da nota fiscal indisponível no servidor.')
+    if caminho.read_bytes()[:5] != b'%PDF-':
+        raise ValueError('Arquivo da nota fiscal não é um PDF válido.')
+    return dict(r), str(caminho)
+
+
+def ultima_nota_fiscal(banco, os_id):
+    with db(banco) as c:
+        r = c.execute('SELECT * FROM os_notas_fiscais WHERE os_id=? ORDER BY id DESC LIMIT 1',
+                      (os_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def obter_nota_fiscal_por_id(banco, nota_id):
+    with db(banco) as c:
+        r = c.execute('SELECT * FROM os_notas_fiscais WHERE id=?', (nota_id,)).fetchone()
+    if not r:
+        raise ValueError('Nota fiscal não encontrada.')
+    caminho = Path(r['caminho']).resolve()
+    raiz = NOTAS.resolve()
+    if not caminho.is_relative_to(raiz) or not caminho.is_file():
+        raise ValueError('Arquivo da nota fiscal indisponível no servidor.')
+    if caminho.read_bytes()[:5] != b'%PDF-':
+        raise ValueError('Arquivo da nota fiscal não é um PDF válido.')
+    return dict(r), str(caminho)

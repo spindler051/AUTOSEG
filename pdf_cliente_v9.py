@@ -4,6 +4,7 @@ from xml.sax.saxutils import escape
 from datetime import datetime
 import re
 import prestadores_ext as ext
+import pdf_identidade as identidade
 
 def data_br(valor):
     s=str(valor or '').strip()
@@ -42,8 +43,9 @@ def gerar(banco,os_id):
     P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
     linhas=[]
-    logo=Paragraph('<font color="#FFFFFF">AUTO</font><font color="#FFD400">SEG</font>',
+    logo_texto=Paragraph('<font color="#FFFFFF">AUTO</font><font color="#FFD400">SEG</font>',
         ParagraphStyle('LogoV9',fontName='Helvetica-Bold',fontSize=19,leading=21))
+    logo=identidade.logo_flowable(175,38) or logo_texto
     marca=Paragraph('<font color="#FFD400"><b>AUTOMAÇÃO E SEGURANÇA</b></font>',
         ParagraphStyle('TagV9',fontName='Helvetica-Bold',fontSize=8,alignment=TA_RIGHT))
     topo=Table([[logo,marca]],colWidths=[255,255])
@@ -98,6 +100,7 @@ def gerar(banco,os_id):
         cv.setFillColor(cinza);cv.setFont('Helvetica',8)
         cv.drawString(40,22,'AUTOSEG • Relatório técnico para o cliente')
         cv.drawRightString(A4[0]-40,22,'Página '+str(doc.page))
+        identidade.desenhar_selo(cv,doc)
     SimpleDocTemplate(str(destino),pagesize=A4,leftMargin=42,rightMargin=42,topMargin=35,bottomMargin=49,
         title='AUTOSEG - Relatório '+str(os_['numero_os'])).build(linhas,onFirstPage=rodape,onLaterPages=rodape)
     return str(destino)

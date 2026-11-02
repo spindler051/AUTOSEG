@@ -28,12 +28,13 @@ def main():
     sys.modules['banco']=m
     ext.instalar(db);fluxo_os.instalar(db);atendimento_os.instalar(db);cad.instalar(db)
     with ext.db(db) as c:
+        c.execute("UPDATE v9_organizacoes SET situacao='Validado'")
         org=c.execute('SELECT * FROM v9_organizacoes').fetchone()
         assert org['sindico_telefone']=='51987654321'
         orgid=org['id']
     u=cad.cadastrar_usuario(db,'Pessoa Física',cpf(456789123),'51999999999','Senhaforte-2026')
     assert cad.autenticar(db,cpf(456789123),'Senhaforte-2026')['id']==u
-    ch=cad.registrar_chamado(db,u,orgid,'Meu interfone parou de funcionar','Normal','Apt 203')
+    ch=cad.registrar_chamado(db,u,orgid,'Meu interfone parou de funcionar','Normal','Apt 203','Morador','Pessoa Teste','51999998888')
     with ext.db(db) as c:
         assert c.execute('SELECT COUNT(*) FROM v9_vinculos WHERE usuario_id=?',(u,)).fetchone()[0]==0
     link,destino=cad.url_whatsapp(db,ch,'https://teste.trycloudflare.com')

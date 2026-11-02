@@ -16,7 +16,7 @@ class Fluxo(unittest.TestCase):
         os.unlink(self.path)
     def _abrir(self):
         org=cad.criar_organizacao(self.path,self.uid,'Condomínio do Teste','Condomínio',endereco='Rua do Teste 100',unidade='Portaria')
-        ch=cad.registrar_chamado(self.path,self.uid,org,'Portão não abre','Alta','Porteiro','Funcionário','Pessoa de teste')
+        ch=cad.registrar_chamado(self.path,self.uid,org,'Portão não abre','Alta','Porteiro','Funcionário','Pessoa de teste','51999998888')
         return org,ch
     def test_os_imediata_sem_cnpj(self):
         org,ch=self._abrir()

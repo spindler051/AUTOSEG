@@ -22,7 +22,7 @@ import estoque_materiais as estoque
 from desktop_operacoes import DesktopOperacoesMixin
 from versao_app import versao_local
 
-VERSAO_APP = versao_local('9.6.0-dev.4')
+VERSAO_APP = versao_local('9.6.0-dev.6')
 
 
 # ============================================================

@@ -172,21 +172,49 @@ def _email_validado(s):
     return email.lower()
 
 
-def destinatarios_conclusao(banco,os_id,adicional=''):
+def contatos_email_os(banco,os_id):
+    """Contatos autorizados da OS, sem escolher automaticamente por ninguém."""
     with ext.db(banco) as c:
-        cl=c.execute("""SELECT cl.tipo_pessoa,cl.email,cl.sindico_email
+        cl=c.execute("""SELECT cl.tipo_pessoa,cl.email,cl.sindico_email,cl.administradora_email
             FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
             WHERE o.id=?""",(os_id,)).fetchone()
-        if not cl:raise ValueError('OS não encontrada.')
-        # Morador solicitante nunca é destinatário automático.
-        fontes=[cl['email']] if cl['tipo_pessoa']=='Física' else [cl['sindico_email'],cl['email']]
+    if not cl:raise ValueError('OS não encontrada.')
+    return {
+        'cliente': cl['email'] or '',
+        'sindico': cl['sindico_email'] or '',
+        'administradora': cl['administradora_email'] or '',
+        'tipo_pessoa': cl['tipo_pessoa'],
+    }
+
+
+def destinatarios_para_os(banco,os_id,selecionados=None,adicionais=''):
+    """Monta a lista final a partir das caixas marcadas + e-mails manuais.
+
+    Seleção explícita nunca é sobrescrita pelo síndico. Quando `selecionados`
+    é None (desktop legado), usa o comportamento anterior: cliente + síndico.
+    """
+    import re as _re
+    contatos=contatos_email_os(banco,os_id)
+    if selecionados is None:
+        chaves=['cliente'] if contatos['tipo_pessoa']=='Física' else ['sindico','cliente']
+    else:
+        if isinstance(selecionados,str):selecionados=[selecionados]
+        chaves=[str(x) for x in selecionados]
     resultado=[]
-    for valor in fontes+[adicional]:
+    for chave in chaves:
+        e=_email_validado(contatos.get(chave,''))
+        if e and e not in resultado:resultado.append(e)
+    for valor in _re.split(r'[,;\s]+',str(adicionais or '')):
         e=_email_validado(valor)
         if e and e not in resultado:resultado.append(e)
     if not resultado:
-        raise ValueError('Informe ao menos um e-mail para finalizar esta OS.')
+        raise ValueError('Selecione ao menos um destinatário válido para finalizar esta OS.')
     return resultado
+
+
+def destinatarios_conclusao(banco,os_id,adicional=''):
+    """Compatibilidade: cliente + síndico (desktop) + e-mail adicional."""
+    return destinatarios_para_os(banco,os_id,None,adicional)
 
 
 def participou(c,os_id,pid):

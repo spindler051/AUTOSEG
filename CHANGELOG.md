@@ -1,5 +1,18 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — REV12 — 2026-11-02 — develop
+
+- **Portal Cliente:** alteração da própria senha (senha atual, nova e confirmação; hash PBKDF2; invalidação das demais sessões).
+- **Chamados de condomínio:** nome completo e telefone do solicitante obrigatórios, normalizados e gravados no chamado e na OS; identificação conservadora (apenas a própria conta é reconhecida automaticamente; divergências seguem para análise da AUTOSEG).
+- **E-mail — múltiplos destinatários:** checkboxes para cliente, síndico e administradora/imobiliária, e-mails adicionais, deduplicação, registro da lista final e envio em BCC.
+- **PDFs:** logo.png no cabeçalho e icone.png como selo em todas as páginas do relatório técnico e do orçamento.
+- **Nota fiscal:** upload de PDF por OS, validação, deduplicação por SHA-256, download autorizado (prestador, síndico/gestor e cliente PF) e anexo no e-mail.
+- **E-mail:** dados bancários do prestador responsável (favorecido, banco, agência, conta, Pix e texto livre), sem dados fixos.
+- **Desktop GTK4:** botão “Atribuir síndico/gestor” na aba Clientes, reutilizando o mesmo núcleo do Portal Prestador (`cadastros_v9.atribuir_responsavel`).
+- Testes novos em `test_rev12_melhorias.py` e ampliação de `test_gmail_integracao.py`.
+
+Pendente: homologação manual no Mac, envio real de e-mail e promoção para main.
+
 ## 9.6.0-dev.5 — REV11 — 2026-11-02 — develop/main
 
 - **Interface GTK4/libadwaita** adotada como padrão (branch `feature/gtk4-libadwaita` mesclada): `gtk_app.py`, `gtk_comum.py`, `gtk_dialogos.py`, mesmo backend/banco/regras.

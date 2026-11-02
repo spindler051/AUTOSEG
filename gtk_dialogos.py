@@ -1442,3 +1442,103 @@ class DialogoHistoricoEstoque(Adw.Dialog):
         caixa.append(tabela.widget)
         toolbar.set_content(caixa)
         self.set_child(toolbar)
+
+
+class DialogoResponsavel(Adw.Dialog):
+    """Nomeia/remove síndico ou gestor usando o mesmo núcleo do Portal Prestador."""
+
+    def __init__(self, janela):
+        super().__init__()
+        self.janela = janela
+        with ext.db(BANCO) as c:
+            self.orgs = [dict(x) for x in c.execute(
+                """SELECT o.id,o.nome,o.tipo,o.cnpj,r.usuario_id,u.nome responsavel
+                   FROM v9_organizacoes o
+                   LEFT JOIN v9_responsaveis r ON r.organizacao_id=o.id
+                   LEFT JOIN v9_usuarios u ON u.id=r.usuario_id
+                   WHERE o.mesclado_em IS NULL ORDER BY o.nome""").fetchall()]
+            self.pessoas = [dict(x) for x in c.execute(
+                "SELECT id,nome,cpf FROM v9_usuarios WHERE ativo=1 ORDER BY nome").fetchall()]
+        if not self.orgs:
+            raise ValueError("Cadastre um condomínio ou empresa antes de nomear o responsável.")
+        if not self.pessoas:
+            raise ValueError("Nenhuma conta PF ativa. O síndico/gestor deve criar acesso por CPF antes.")
+        self.set_title("Atribuir síndico / gestor")
+        self.set_content_width(660)
+        self.set_content_height(430)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title="Síndico / gestor do condomínio"))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(
+            title="Nomeação administrativa",
+            description="A mesma nomeação aparece imediatamente no Portal Prestador e no Portal Cliente.")
+        pagina.add(grupo)
+        self.opcoes_org = [f"#{o['id']} {o['nome']} ({o['tipo']})" for o in self.orgs]
+        self.combo_org = ui.campo_combo(grupo, "Condomínio / empresa", self.opcoes_org, 0)
+        self.opcoes_pessoa = [f"#{p['id']} {p['nome']} — CPF final {p['cpf'][-4:]}"
+                              for p in self.pessoas]
+        self.combo_pessoa = ui.campo_combo(grupo, "Pessoa física com login CPF ativo",
+                                           self.opcoes_pessoa, 0)
+        self.linha_atual = Adw.ActionRow(title="Responsável atual", subtitle="—")
+        grupo.add(self.linha_atual)
+        self.linha_papel = Adw.ActionRow(title="Papel a atribuir", subtitle="—")
+        grupo.add(self.linha_papel)
+        self.combo_org.connect("notify::selected", lambda *_args: self._atualizar())
+        self._atualizar()
+        toolbar.set_content(pagina)
+        rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        rodape.set_margin_top(10)
+        rodape.set_margin_bottom(10)
+        rodape.set_margin_start(18)
+        rodape.set_margin_end(18)
+        rodape.append(ui.botao("Cancelar", self.close))
+        rodape.append(ui.botao("Remover responsável", self._remover,
+                               css="destructive-action"))
+        espaco = Gtk.Box()
+        espaco.set_hexpand(True)
+        rodape.append(espaco)
+        rodape.append(ui.botao("Nomear / trocar", self._salvar, css="suggested-action"))
+        toolbar.add_bottom_bar(rodape)
+        self.set_child(toolbar)
+
+    def _org(self):
+        indice = int(self.combo_org.get_selected())
+        return self.orgs[max(0, min(indice, len(self.orgs) - 1))]
+
+    def _pessoa(self):
+        indice = int(self.combo_pessoa.get_selected())
+        return self.pessoas[max(0, min(indice, len(self.pessoas) - 1))]
+
+    def _atualizar(self):
+        org = self._org()
+        self.linha_atual.set_subtitle(org.get("responsavel") or "Nenhum responsável nomeado")
+        self.linha_papel.set_subtitle("Síndico" if org["tipo"] == "Condomínio" else "Gestor")
+
+    def _salvar(self):
+        org = self._org()
+        pessoa = self._pessoa()
+        try:
+            papel = cad9.atribuir_responsavel(BANCO, org["id"], pessoa["id"],
+                                              "Desktop AUTOSEG")
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Nomeação não realizada", str(erro))
+            return
+        ui.toast(self.janela, f"{papel} nomeado(a): {pessoa['nome']}.")
+        self.close()
+        self.janela.carregar_clientes()
+
+    def _remover(self):
+        org = self._org()
+        if not org.get("usuario_id"):
+            ui.toast(self.janela, "Esta organização não tem responsável nomeado.")
+            return
+        try:
+            cad9.remover_responsavel(BANCO, org["id"], "Desktop AUTOSEG")
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Remoção não realizada", str(erro))
+            return
+        ui.toast(self.janela, "Responsável removido. O vínculo continua como morador.")
+        self.close()
+        self.janela.carregar_clientes()

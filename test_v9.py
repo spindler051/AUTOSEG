@@ -48,11 +48,9 @@ def main():
         cad.definir_admin(db,admin,True)
         sind=cad.cadastrar_usuario(db,'Sindico de Teste',cpf(123456789),'51999999999','Senha-de-teste-2026')
         mor=cad.cadastrar_usuario(db,'Morador de Teste',cpf(223456789),'51988888888','Senha-de-teste-2026')
-        cad.vincular(db,sind,org,'Síndico');cad.vincular(db,mor,org,'Morador')
-        with ext.db(db) as c:
-            ids=[r['id'] for r in c.execute('SELECT id FROM v9_vinculos')]
-        for x in ids:cad.alterar_vinculo(db,x,True,'Admin teste')
-        h=cad.registrar_chamado(db,mor,org,'Portão não abre pela manhã','Alta','Bloco A')
+        cad.vincular(db,mor,org,'Morador')
+        cad.atribuir_responsavel(db,org,sind,'Admin teste')
+        h=cad.registrar_chamado(db,mor,org,'Portão não abre pela manhã','Alta','Bloco A','Morador','Pessoa Teste','51999998888')
         cad.analisar(db,h,'Admin teste','Aguardando síndico')
         cad.confirmar(db,h,'Síndico de teste',True,uid=sind)
         oid=cad.gerar_os(db,h,'Admin teste')
@@ -63,7 +61,7 @@ def main():
         base='http://127.0.0.1:'+str(portal.servidor.server_port)
         try:
             opp=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-            status,login=get(opp,base,'/pj');assert status==200 and b'Acionamentos PF / PJ' in login
+            status,login=get(opp,base,'/pj');assert status==200 and b'PF / PJ' in login
             status,form=get(opp,base,'/pj/cadastro');assert status==200 and b'Nome completo' in form
             status,html=get(opp,base,'/pj/entrar',{'cpf':cpf(123456789),'senha':'Senha-de-teste-2026'})
             assert status==200 and b'Painel de acionamentos' in html,(status,html[:900])

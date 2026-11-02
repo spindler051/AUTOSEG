@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 from datetime import datetime
 import json
 import prestadores_ext as ext
+import pdf_identidade as marca
 
 
 def instalar(banco):
@@ -173,8 +174,15 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     styles=getSampleStyleSheet()
     normal=styles['BodyText']
     def par(s):return Paragraph(escape(str(s)),normal)
-    content=[Paragraph('AUTOSEG — Orçamento estimativo',styles['Title']),Spacer(1,14),
-             par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
+    logo=marca.logo_flowable(180,42)
+    titulo=Paragraph('Orçamento estimativo',styles['Title'])
+    if logo is not None:
+        cabecalho=Table([[logo,titulo]],colWidths=[200,300],hAlign='LEFT')
+        cabecalho.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                                       ('LEFTPADDING',(0,0),(-1,-1),0),
+                                       ('BOTTOMPADDING',(0,0),(-1,-1),8)]))
+        content=[cabecalho,Spacer(1,14),
+                 par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
              par('Solicitante: '+nome_cliente),Spacer(1,12),
              Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)]
     linhas=[[par('Item'),par('Qtde.'),par('Total')],
@@ -188,5 +196,13 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
                                 ('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.35,colors.grey),
                                 ('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
     content.extend([tabela,Spacer(1,18),par('Estimativa automática, não é nota fiscal nem proposta contratual. Valores sujeitos a vistoria, disponibilidade e confirmação do prestador.')])
-    doc.build(content)
+    def rodape(cv, doc):
+        cv.setStrokeColor(colors.HexColor('#E2B800'))
+        cv.line(45, 40, A4[0]-45, 40)
+        cv.setFillColor(colors.HexColor('#666666'))
+        cv.setFont('Helvetica', 8)
+        cv.drawString(45, 26, 'AUTOSEG — Orçamento estimativo')
+        cv.drawRightString(A4[0]-45, 26, 'Página '+str(doc.page))
+        marca.desenhar_selo(cv, doc)
+    doc.build(content, onFirstPage=rodape, onLaterPages=rodape)
     return bio.getvalue()

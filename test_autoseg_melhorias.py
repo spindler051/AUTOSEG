@@ -81,7 +81,7 @@ class AutoSegMelhorias(unittest.TestCase):
         cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Portal','12345678000195'),0)
         with ext.db(self.db) as c:
             org=c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()['id']
-        ch=cad.registrar_chamado(self.db,uid,org,'Interfone não está funcionando','Normal','Portaria','Funcionário','Teste Usuário')
+        ch=cad.registrar_chamado(self.db,uid,org,'Interfone não está funcionando','Normal','Portaria','Funcionário','Teste Usuário','51999998888')
         with ext.db(self.db) as c:
             chamada=c.execute('SELECT os_id FROM v9_chamados WHERE id=?',(ch,)).fetchone()
             self.assertTrue(chamada['os_id'])

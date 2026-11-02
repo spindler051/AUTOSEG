@@ -599,6 +599,8 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Pesquisar", self.carregar_clientes, icone="system-search-symbolic"),
             ui.botao("Importar YAML", self._importar_cliente_yaml),
             ui.botao("Modelo YAML", self._modelo_cliente_yaml),
+            ui.botao("Atribuir síndico/gestor", self._atribuir_responsavel,
+                     icone="system-users-symbolic"),
             ui.botao("Novo cliente", self.novo_cliente, icone="list-add-symbolic",
                      css="suggested-action"))
         pagina.append(topo)
@@ -623,6 +625,12 @@ class Janela(Adw.ApplicationWindow):
 
     def novo_cliente(self):
         dialogos.DialogoCliente(self).present(self)
+
+    def _atribuir_responsavel(self):
+        try:
+            dialogos.DialogoResponsavel(self).present(self)
+        except Exception as erro:
+            ui.aviso_erro(self, "Síndico / gestor", str(erro))
 
     def carregar_clientes(self):
         termo = self.busca_clientes.get_text().strip() if hasattr(self, "busca_clientes") else ""

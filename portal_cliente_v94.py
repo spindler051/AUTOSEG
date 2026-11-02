@@ -116,6 +116,31 @@ def _abrir_whatsapp_apos_gravar(url,ident):
     return ('<div id="whatsapp-automatico" data-id="'+escape(str(ident),quote=True)+'" data-url="'+escape(url,quote=True)+'"></div>'
             '<script src="/static/cliente_whatsapp.js" defer></script>')
 
+def nota_fiscal_cliente(h, banco, s, nota_id):
+    """Baixa NFS-e apenas do próprio cliente PF ou de síndico/gestor aprovado."""
+    from pathlib import Path
+    registro, caminho = ext.obter_nota_fiscal_por_id(banco, nota_id)
+    os_id = registro['os_id']
+    autorizado = bool(fluxo_pf.obter_os_pf(banco, s['uid'], os_id))
+    if not autorizado:
+        with ext.db(banco) as c:
+            orgs = c.execute(
+                'SELECT id FROM v9_organizacoes '
+                'WHERE cliente_id=(SELECT cliente_id FROM ordens_servico WHERE id=?) '
+                'AND mesclado_em IS NULL', (os_id,)).fetchall()
+        for org in orgs:
+            try:
+                cad.autorizar_pdf_os_organizacao(banco, org['id'], s['uid'], os_id)
+                autorizado = True
+                break
+            except Exception:
+                continue
+    if not autorizado:
+        raise PermissionError('Nota fiscal não autorizada para esta conta.')
+    return h.send_bytes(Path(caminho).read_bytes(), 'application/pdf',
+                        filename=registro['nome_original'])
+
+
 def os_detalhe(h,banco,s,oid):
     card,_,_,_,_,esc,botao,_=u()
     x=fluxo_pf.obter_os_pf(banco,s['uid'],oid)
@@ -130,6 +155,11 @@ def os_detalhe(h,banco,s,oid):
     corpo=card('Solicitação salva',
         '<p class="good">Sua OS particular foi registrada com o protocolo <b>'+esc(x['numero_os'] or '#'+str(x['id']))+'</b>.</p>'
         +'<p>'+esc(x['descricao'])+'</p><p><span class="tag">'+esc(status_txt)+'</span></p>')
+    notas = ext.listar_notas_fiscais(banco, x['id'])
+    if notas:
+        corpo += card('Notas fiscais',
+                      ''.join(f'<p><a href="/cliente/nota/{n["id"]}">Baixar {esc(n["nome_original"])}</a></p>'
+                              for n in notas))
     corpo+=card('Avisar a AUTOSEG pelo WhatsApp',
         '<p>O botão abaixo abre o WhatsApp com a mensagem pronta. O envio só acontece quando <b>você</b> confirmar no aplicativo. '
         'Sua OS já está salva e permanece válida mesmo que você não envie a mensagem.</p>'
@@ -181,7 +211,40 @@ def perfil(h,banco,s):
         card('Complete o perfil PF',
         '<p>Antes de abrir uma OS particular, informe telefone, e-mail e endereço. '
         'Para chamados de condomínios e empresas, basta entrar com CPF e senha.</p>'+form)
+        +botao('Alterar minha senha','/cliente/senha','secondary')
         +botao('Voltar ao painel','/cliente/painel','secondary'))
+
+
+def senha_form(h, banco, s, erro=''):
+    card, _, campos, _, _, esc, botao, _ = u()
+    form = f'<form method="post" action="/cliente/senha">{v9.formulario_csrf(s)}'
+    form += campos('Senha atual', 'senha_atual', required=True, kind='password')
+    form += campos('Nova senha (mínimo 10 caracteres, com letras e números)', 'nova_senha',
+                   required=True, kind='password')
+    form += campos('Confirmar nova senha', 'confirmar_senha', required=True, kind='password')
+    form += '<button>Alterar minha senha</button></form>'
+    aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+    return pagina(h, 'Alterar minha senha',
+                  card('Segurança da conta',
+                       '<p>Você só pode alterar a senha da própria conta. '
+                       'As demais sessões serão encerradas após a mudança.</p>'
+                       + aviso + form)
+                  + botao('Voltar ao painel', '/cliente/painel', 'secondary'))
+
+
+def _token_atual(h):
+    jar = SimpleCookie()
+    jar.load(h.headers.get('Cookie', ''))
+    return jar['autosseg_pj'].value if 'autosseg_pj' in jar else None
+
+
+def _invalidar_sessoes(uid, token_atual, novo_hash):
+    for tok in list(v9.SESSOES):
+        sess = v9.SESSOES.get(tok)
+        if sess and sess.get('uid') == uid and tok != token_atual:
+            v9.SESSOES.pop(tok, None)
+    if token_atual in v9.SESSOES:
+        v9.SESSOES[token_atual]['cred'] = novo_hash
 
 
 def painel(h,banco,s):
@@ -232,7 +295,7 @@ def painel(h,banco,s):
         abertura+=card('Acompanhe seus pedidos',tabela(['Local / OS','Serviço','Situação','Ação'],lista))
     else:
         abertura+=card('Seus pedidos','<p>Você ainda não fez solicitações por este acesso. Para começar, use um dos botões acima.</p>')
-    mais='<div class="acao-principal">'+botao('Editar meus dados','/cliente/perfil','secondary')
+    mais='<div class="acao-principal">'+botao('Editar meus dados','/cliente/perfil','secondary')+botao('Alterar minha senha','/cliente/senha','secondary')
     mais+='</div>'
     if orgs:
         linhas=[]
@@ -354,7 +417,8 @@ def formulario_org(h,s,administrador=False):
     form+=campos('Telefone de contato do local (DDD)','telefone',required=True,placeholder='(51) 99999-9999')
     form+=campos('CNPJ (opcional)','cnpj',placeholder='00.000.000/0000-00')
     form+=select('Você é','papel',[('Morador','Morador'),('Funcionário','Funcionário / porteiro')])
-    form+=campos('Seu nome para contato','solicitante_nome',s.get('nome',''),required=True)
+    form+=campos('Seu nome completo para contato','solicitante_nome',s.get('nome',''),required=True)
+    form+=campos('Seu telefone com DDD','solicitante_telefone',required=True,placeholder='(51) 99999-9999')
     form+=campos('Apartamento ou cargo','unidade',required=True,placeholder='Apartamento 203 ou Porteiro')
     form+=select('Urgência','urgencia',[(x,x) for x in ('Normal','Alta','Baixa')])
     form+=textarea('Descreva o serviço solicitado','descricao',required=True)
@@ -376,10 +440,13 @@ def chamado_form(h,banco,s):
     if not o:raise ValueError('Condomínio ou empresa inexistente.')
     p=fluxo_pf.obter_perfil(banco,s['uid'])
     nome_padrao=p['nome'] if fluxo_pf.perfil_pronto(p) else ''
+    telefone_padrao=p['telefone'] if p.get('telefone') else ''
     form=f'<form method="post" action="/cliente/chamado/novo">{v9.formulario_csrf(s)}<input type="hidden" name="org_id" value="{org}">'
     form+=select('Meu papel neste local','papel',[
         ('Morador','Morador'),('Funcionário','Funcionário / porteiro')])
-    form+=campos('Seu nome (para contato)','solicitante_nome',nome_padrao,required=True)
+    form+=campos('Seu nome completo (para contato)','solicitante_nome',nome_padrao,required=True)
+    form+=campos('Seu telefone com DDD (para contato)','solicitante_telefone',telefone_padrao,
+                 required=True,placeholder='(51) 99999-9999')
     form+=campos('Apartamento ou cargo / função','unidade',unidade,required=True,
                  placeholder='Ex.: Apartamento 203, Porteiro, Zelador, Recepcionista, Auxiliar administrativo')
     form+=select('Urgência','urgencia',[(x,x) for x in ('Normal','Alta','Baixa')])
@@ -436,9 +503,12 @@ def sindico(h,banco,s,org):
     linhas=[]
     for x in dados['os']:
         origem=x['solicitante'] or 'Abertura administrativa / prestador'
+        nota=ext.ultima_nota_fiscal(banco,x['id'])
+        docs=botao('Relatório PDF',f'/cliente/organizacao/{org}/os/{x["id"]}/pdf','secondary')
+        if nota:
+            docs+=botao('Nota fiscal',f'/cliente/nota/{nota["id"]}','secondary')
         linhas.append((esc(x['numero_os'] or '#'+str(x['id'])),esc(x['descricao'] or ''),
-            esc(x['status']),esc(origem),esc(x['data_abertura'] or ''),
-            botao('Relatório PDF',f'/cliente/organizacao/{org}/os/{x["id"]}/pdf','secondary')))
+            esc(x['status']),esc(origem),esc(x['data_abertura'] or ''),docs))
     aviso='<p class="notice">Há mais de uma organização para o mesmo cadastro. Por segurança, exibimos somente OS explicitamente vinculadas. Peça revisão cadastral à AUTOSEG.</p>' if dados['cadastro_ambiguo'] else ''
     corpo=card('Todas as ordens de serviço — '+esc(organizacao['nome']),
         '<p>Inclui solicitações do síndico, dos condôminos, dos funcionários e OS criadas pelo prestador.</p>'
@@ -489,6 +559,7 @@ def get(h,path,banco):
     if not s:return login(h,'Faça login para acessar essa área.' if path!='/cliente' else '')
     if path in ('/cliente','/cliente/painel'):return painel(h,banco,s)
     if path=='/cliente/perfil':return perfil(h,banco,s)
+    if path=='/cliente/senha':return senha_form(h,banco,s)
     if path=='/cliente/nova':return os_pf_form(h,banco,s)
     if path=='/cliente/organizacoes':return pesquisar(h,banco,s)
     if path=='/cliente/orcamento':return orcamento_form(h,banco,s)
@@ -503,6 +574,8 @@ def get(h,path,banco):
     if (len(parts)==6 and parts[0]=='cliente' and parts[1]=='organizacao'
             and parts[2].isdigit() and parts[3]=='os' and parts[4].isdigit() and parts[5]=='pdf'):
         return pdf_os_organizacao(h,banco,s,int(parts[2]),int(parts[4]))
+    if len(parts)==3 and parts[0]=='cliente' and parts[1]=='nota' and parts[2].isdigit():
+        return nota_fiscal_cliente(h,banco,s,int(parts[2]))
     if len(parts)==3 and parts[0]=='cliente' and parts[1]=='os' and parts[2].isdigit():
         return os_detalhe(h,banco,s,int(parts[2]))
     if len(parts)==3 and parts[0]=='cliente' and parts[1]=='chamado' and parts[2].isdigit():
@@ -547,6 +620,20 @@ def post(h,path,d,banco):
         p=fluxo_pf.atualizar_perfil(banco,uid,d)
         s['nome']=p['nome']
         return h.redir('/cliente/painel')
+    if path=='/cliente/senha':
+        try:
+            novo_hash=fluxo_pf.alterar_senha(banco,uid,d.get('senha_atual'),
+                                             d.get('nova_senha'),d.get('confirmar_senha'))
+        except PermissionError as erro:
+            return senha_form(h,banco,s,str(erro))
+        except ValueError as erro:
+            return senha_form(h,banco,s,str(erro))
+        _invalidar_sessoes(uid,_token_atual(h),novo_hash)
+        card_fn,_,_,_,_,_,botao_fn,_=v9.ui()
+        return pagina(h,'Senha alterada',card_fn('Senha alterada',
+            '<p class="good">Sua senha foi alterada com sucesso. As demais sessões foram encerradas.</p>'
+            '<p>Use a nova senha no próximo acesso.</p>')
+            +botao_fn('Voltar ao painel','/cliente/painel'))
     if path=='/cliente/os/nova':
         oid=fluxo_pf.registrar_os_pf(banco,uid,d.get('descricao',''),str(d.get('urgencia','Normal')))
         return h.redir('/cliente/os/'+str(oid)+'?whatsapp=1')

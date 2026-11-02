@@ -66,7 +66,7 @@ class PF_PJ(unittest.TestCase):
         org=self.orgs[0];sindico,morador,_=self.pfs
         cad.atribuir_responsavel(self.db,org,sindico,'desktop')
         cad.registrar_chamado(self.db,morador,org,'Portão de entrada apresentou defeito em teste.',
-                             'Normal','Apto 203','Morador','Morador')
+                             'Normal','Apto 203','Morador','Pessoa Teste','51999998888')
         regs=cad.listar_os_organizacao(self.db,org,sindico)['os']
         self.assertEqual(len(regs),2)
         self.assertTrue(any('prestador' in x['descricao'] for x in regs))

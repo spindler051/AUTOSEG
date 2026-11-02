@@ -60,8 +60,11 @@ class GmailIntegracao(unittest.TestCase):
         oid = self._concluir_com_pdf()
         original = gmail_service.enviar_email_gmail
         chamadas = []
+        detalhes = {}
         def fake_enviar(destinatario, assunto, corpo_html, cc=None,
-                        caminho_pdf_relatorio=None, caminho_pdf_nf=None):
+                        caminho_pdf_relatorio=None, caminho_pdf_nf=None, usar_bcc=False):
+            detalhes.update(destinatario=destinatario, corpo=corpo_html, nf=caminho_pdf_nf,
+                            bcc=usar_bcc)
             chamadas.append((destinatario, assunto, caminho_pdf_relatorio))
             return 'msg-fake-123'
         gmail_service.enviar_email_gmail = fake_enviar
@@ -127,6 +130,54 @@ class GmailIntegracao(unittest.TestCase):
             with ext.db(self.banco) as c:
                 r = c.execute('SELECT status FROM produtividade_email WHERE os_id=?', (oid,)).fetchone()
             self.assertEqual(r['status'], 'pendente')
+        finally:
+            gmail_service.enviar_email_gmail = original
+
+    def test_multiplos_destinatarios_nota_fiscal_e_dados_bancarios(self):
+        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
+        oid = self._concluir_com_pdf()
+        import produtividade_os as prod
+        with ext.db(self.banco) as c:
+            pid = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (oid,)).fetchone()['prestador_id']
+            c.execute('UPDATE clientes SET email=?,sindico_email=?,administradora_email=? WHERE id=(SELECT cliente_id FROM ordens_servico WHERE id=?)',
+                      ('cliente@example.org', 'sindico@example.org', 'adm@example.org', oid))
+        ext.salvar_config_prestador(self.banco, pid, {
+            'banco_titular': 'Favorecido Teste', 'banco_nome': 'Banco Exemplo',
+            'banco_agencia': '1234', 'banco_conta': '56789-0', 'chave_pix': 'pix-teste'})
+        nf = b'%PDF-1.4\n% nota fiscal ficticia\n%%EOF\n'
+        ext.salvar_nota_fiscal(self.banco, oid, pid, 'nf_teste.pdf', nf)
+        original = gmail_service.enviar_email_gmail
+        capturado = {}
+        def fake(destinatario, assunto, corpo_html, cc=None, caminho_pdf_relatorio=None,
+                 caminho_pdf_nf=None, usar_bcc=False):
+            capturado.update(destinatario=destinatario, corpo=corpo_html,
+                             nf=caminho_pdf_nf, bcc=usar_bcc)
+            return 'msg-multi-1'
+        gmail_service.enviar_email_gmail = fake
+        try:
+            destinatarios = prod.destinatarios_para_os(
+                self.banco, oid, ['cliente', 'sindico', 'administradora'], 'extra@example.org')
+            self.assertEqual(len(destinatarios), 4)
+            gmail_service.enviar_relatorio_os_concluida(self.banco, oid, destinatarios)
+            status = None
+            for _ in range(50):
+                with ext.db(self.banco) as c:
+                    r = c.execute('SELECT status,message_id,destinatarios_json FROM produtividade_email WHERE os_id=?',
+                                  (oid,)).fetchone()
+                if r and r['status'] in ('enviado', 'falhou'):
+                    status = r
+                    break
+                time.sleep(0.05)
+            self.assertEqual(status['status'], 'enviado')
+            self.assertEqual(status['message_id'], 'msg-multi-1')
+            for email in ('cliente@example.org', 'sindico@example.org',
+                          'adm@example.org', 'extra@example.org'):
+                self.assertIn(email, status['destinatarios_json'])
+            self.assertEqual(len(capturado['destinatario']), 4)
+            self.assertTrue(capturado['bcc'])
+            self.assertTrue(str(capturado['nf']).endswith('.pdf'))
+            self.assertIn('Favorecido Teste', capturado['corpo'])
+            self.assertIn('pix-teste', capturado['corpo'])
         finally:
             gmail_service.enviar_email_gmail = original
 

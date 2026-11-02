@@ -35,7 +35,7 @@ import socket
 from versao_app import versao_local
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = versao_local('9.6.0-dev.4')
+VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -463,6 +463,9 @@ class PortalPrestador:
                     andamento=c.execute('SELECT * FROM os_atendimentos WHERE os_id=?',(oid,)).fetchone() if oid else None
                     particip=c.execute('''SELECT p.nome FROM os_prestadores op JOIN prestadores p ON p.id=op.prestador_id
                         WHERE op.os_id=? ORDER BY p.nome''',(oid,)).fetchall() if oid else []
+                    notas_fiscais=c.execute('SELECT id,nome_original,criado_em FROM os_notas_fiscais WHERE os_id=? ORDER BY id',
+                                            (oid,)).fetchall() if oid else []
+                    contatos_os=prod.contatos_email_os(banco,oid) if oid else None
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
                 if preenchimento:
@@ -635,7 +638,16 @@ class PortalPrestador:
                     corpo+=select('Situação do atendimento','acao_status',
                         [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
                         'Concluída',required=True)
-                    corpo+=campos_escuros('E-mail adicional ao concluir','email_adicional',kind='email')
+                    if contatos_os:
+                        corpo+='<fieldset><legend>Destinatários do relatório</legend>'
+                        corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
+                        for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
+                            email=contatos_os.get(chave) or ''
+                            if email:
+                                marcado=' checked' if chave in ('cliente','sindico') else ''
+                                corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
+                        corpo+='<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" placeholder="financeiro@imobiliaria.com.br"></label>'
+                        corpo+='<p class="muted">A lista final é registrada no banco e enviada em BCC, evitando expor os endereços entre os destinatários.</p></fieldset>'
                     if responsavel==s['pid']:
                         corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
                         corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
@@ -728,7 +740,24 @@ class PortalPrestador:
                         docs+=botao('Preparar nota fiscal (.json)',f'/os/{oid}/nota')
                 else:
                     docs='<p class="muted">O PDF e o rascunho de e-mail serão liberados após a conclusão/cancelamento e publicação do relatório.</p>'
-                corpo+=card('Documentos e relatórios',docs+'<p class="muted">E-mail não é enviado e nota fiscal não é emitida enquanto as APIs não estiverem conectadas.</p>')
+                itens_notas=''
+                for nota in notas_fiscais:
+                    itens_notas+=(f'<p><a href="/os/{oid}/nota-fiscal/{nota["id"]}">Baixar {esc(nota["nome_original"])}</a>'
+                                  f' <small>{esc(nota["criado_em"])}</small></p>')
+                if not itens_notas:
+                    itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
+                pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
+                upload_nota=''
+                if pode_nota:
+                    upload_nota=(f'<form method="post" action="/os/{oid}/nota-fiscal" enctype="multipart/form-data">{token}'
+                                 '<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
+                                 '<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" accept="application/pdf" required>'
+                                 '<button type="submit" class="secondary">Anexar nota fiscal</button></form>')
+                corpo+=card('Notas fiscais da OS',
+                            itens_notas + upload_nota +
+                            '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão. '
+                            'O arquivo fica armazenado no servidor e só é liberado para usuários autorizados.</p>')
+                corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
                 corpo+=card('Histórico permanente', ''.join(f'<div class="card"><small>{esc(e["criado_em"])} · {esc(e["ator"])}</small><p><b>{esc(e["acao"])}</b> — {esc(e["descricao"])}</p></div>' for e in eventos) or '<p>Nenhum evento.</p>')
                 return self.pagina(titulo,card('Dados e execução da OS',corpo),s)
 
@@ -903,6 +932,14 @@ class PortalPrestador:
                         return self.os_form(s,oid,preenchimento=rascunho['dados'])
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','email','nota'):
                         return self.documentos(s,int(partes[1]),partes[2])
+                    if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit():
+                        oid=int(partes[1]);nid=int(partes[3])
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=s['pid'] and not cad9.prestador_admin(banco,s['pid']):
+                                raise PermissionError('Nota fiscal restrita ao responsável ou administrador.')
+                        registro,caminho=ext.obter_nota_fiscal(banco,oid,nid)
+                        return self.send_bytes(Path(caminho).read_bytes(),'application/pdf',
+                                               filename=registro['nome_original'])
                     if len(partes)==3 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit():
                         return self.anexo(s,int(partes[2]))
                     return self.erro('Página não encontrada.',404,s)
@@ -1019,6 +1056,16 @@ class PortalPrestador:
                         return self.pagina('Rascunho salvo',card('Rascunho',
                             '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
                             +botao('Voltar à OS',f'/os/{oid}')),s)
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal':
+                        oid=int(partes[1])
+                        arquivo=d.get('nota_fiscal')
+                        if not isinstance(arquivo,tuple) or not arquivo[0]:
+                            raise ValueError('Selecione um arquivo PDF de nota fiscal.')
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+                                raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
+                        ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
                         if acao=='rota':
@@ -1060,8 +1107,12 @@ class PortalPrestador:
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
                             with ext.db(banco) as c:
                                 prod._os_ativa_responsavel(c,oid,pid)
-                            destinatarios=(prod.destinatarios_conclusao(banco,oid,str(d.get('email_adicional','')))
-                                           if str(d.get('acao_status',''))=='Concluída' else None)
+                            if str(d.get('acao_status',''))=='Concluída':
+                                destinatarios=prod.destinatarios_para_os(
+                                    banco,oid,d.get('destinatario_sel[]'),
+                                    str(d.get('emails_adicionais','')))
+                            else:
+                                destinatarios=None
                             neg.os_salvar(banco,d,pid,oid)
                             prod.limpar_rota_ao_iniciar(banco,oid)
                             if d.get('acao_status') in ('Pendente','Concluída'):
@@ -1082,7 +1133,7 @@ class PortalPrestador:
                                     # nunca bloqueia a resposta da conclusão da OS.
                                     try:
                                         import gmail_service
-                                        gmail_service.enviar_relatorio_os_concluida(banco, oid)
+                                        gmail_service.enviar_relatorio_os_concluida(banco, oid, destinatarios)
                                     except Exception as falha:
                                         LOG.exception('Gmail: OS %s — falha ao agendar envio', oid)
                                         prod.registrar_envio(banco, oid, destinatarios, 'falhou', erro=str(falha))

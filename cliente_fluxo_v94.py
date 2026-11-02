@@ -181,7 +181,8 @@ def registrar_chamado_org(banco,uid,d):
     try:org=int(d.get('org_id','0'))
     except (TypeError,ValueError):raise ValueError('Selecione uma organização.')
     return cad.registrar_chamado(banco,uid,org,str(d.get('descricao','')),str(d.get('urgencia','Normal')),
-                                 unidade,papel,str(d.get('solicitante_nome','')))
+                                 unidade,papel,str(d.get('solicitante_nome','')),
+                                 str(d.get('solicitante_telefone','')))
 
 
 def obter_os_pf(banco,uid,os_id):
@@ -203,3 +204,46 @@ def obter_chamado(banco,uid,chamado_id):
                             LEFT JOIN ordens_servico os ON os.id=h.os_id
                             WHERE h.id=? AND h.usuario_id=?''',(chamado_id,uid)).fetchone()
 
+
+
+def validar_senha_forte(senha):
+    senha = str(senha or '')
+    if len(senha) < 10:
+        raise ValueError('A nova senha deve ter pelo menos 10 caracteres.')
+    if len(senha) > 200:
+        raise ValueError('A nova senha é longa demais.')
+    if not re.search(r'[A-Za-z]', senha) or not re.search(r'[0-9]', senha):
+        raise ValueError('A nova senha deve conter letras e números.')
+    return senha
+
+
+def alterar_senha(banco, uid, senha_atual, nova_senha, confirmar):
+    """Altera a senha do próprio usuário e retorna o novo hash.
+
+    O hash novo invalida automaticamente as sessões antigas, pois a sessão
+    guarda o hash vigente e é comparada a cada requisição em v9.sessao.
+    """
+    atual = str(senha_atual or '')
+    nova = validar_senha_forte(nova_senha)
+    if not atual:
+        raise ValueError('Informe a senha atual.')
+    if nova != str(confirmar or ''):
+        raise ValueError('A confirmação da nova senha não corresponde.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        u = c.execute('SELECT senha_hash FROM v9_usuarios WHERE id=? AND ativo=1', (uid,)).fetchone()
+        if not u:
+            raise PermissionError('Conta não encontrada ou inativa.')
+        if not ext.verificar_senha(atual, u['senha_hash']):
+            raise ValueError('Senha atual incorreta.')
+        if ext.verificar_senha(nova, u['senha_hash']):
+            raise ValueError('A nova senha deve ser diferente da senha atual.')
+        novo_hash = ext.senha_hash(nova)
+        c.execute('UPDATE v9_usuarios SET senha_hash=? WHERE id=?', (novo_hash, uid))
+        try:
+            c.execute('''INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em)
+                         VALUES(NULL,?,?,?,?,?)''',
+                      (uid, 'Senha alterada', 'Alteração feita pelo próprio cliente.', 'Conta PF', ext.agora()))
+        except Exception:
+            pass
+    return novo_hash

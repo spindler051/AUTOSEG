@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-def versao_local(padrao='9.6.0-dev.4'):
+def versao_local(padrao='9.6.0-dev.6'):
     candidatos = []
     base_env = os.environ.get('AUTOSEG_BASE')
     if base_env:

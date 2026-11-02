@@ -137,7 +137,7 @@ def executar():
             reg=c.execute('SELECT id FROM v9_chamados WHERE organizacao_id=? AND usuario_id=? AND descricao=?',
                           (pjs[org_i][1],pfs[pf_i][1],descricao)).fetchone()
         if not reg:
-            cad.registrar_chamado(str(caminho),pfs[pf_i][1],pjs[org_i][1],descricao,'Normal',unidade,papel,pfs[pf_i][2])
+            cad.registrar_chamado(str(caminho),pfs[pf_i][1],pjs[org_i][1],descricao,'Normal',unidade,papel,pfs[pf_i][2],'51999990000')
     with ext.db(str(caminho)) as c:
         cliente_id=pjs[0][0]
         existe=c.execute("SELECT id FROM ordens_servico WHERE cliente_id=? AND descricao=?",(cliente_id,

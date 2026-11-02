@@ -97,7 +97,8 @@ def enviar_email_gmail(
     corpo_html,
     cc=None,
     caminho_pdf_relatorio=None,
-    caminho_pdf_nf=None
+    caminho_pdf_nf=None,
+    usar_bcc=False
 ):
     Request, Credentials, build, HttpError = _google_libs()
     try:
@@ -107,16 +108,23 @@ def enviar_email_gmail(
         if not isinstance(assunto, str) or any(c in assunto for c in '\r\n'):
             raise ValueError('Assunto inválido.')
         if isinstance(destinatario, (list, tuple)):
-            para = ', '.join(_validar_email(e) for e in destinatario)
+            para_lista = [_validar_email(e) for e in destinatario]
         else:
-            para = ', '.join(_validar_email(e.strip()) for e in destinatario.split(','))
+            para_lista = [_validar_email(e.strip()) for e in destinatario.split(',') if e.strip()]
+        if not para_lista:
+            raise ValueError('Informe ao menos um destinatário.')
         copia = cc or []
         if isinstance(copia, str):
             copia = [x.strip() for x in copia.replace(';', ',').split(',') if x.strip()]
         copia = [_validar_email(e) for e in copia]
 
         message = MIMEMultipart()
-        message['To'] = para
+        if usar_bcc and len(para_lista) > 1:
+            # Evita expor os endereços entre os destinatários.
+            message['To'] = para_lista[0]
+            message['Bcc'] = ', '.join(para_lista[1:])
+        else:
+            message['To'] = ', '.join(para_lista)
         message['Subject'] = assunto
         if copia:
             message['Cc'] = ', '.join(copia)
@@ -154,14 +162,44 @@ def enviar_email_gmail(
         raise RuntimeError(f"[Gmail] Erro ao enviar mensagem: {e}") from e
 
 
-def _enviar_relatorio_os_concluida(banco, os_id):
+def _dados_pagamento_html(banco, os_id):
+    """Dados bancários do prestador responsável pela OS, sem usar dados fixos."""
+    import html as _html
+    import prestadores_ext as ext
+    with ext.db(banco) as c:
+        pid = ext.responsavel_atual(c, os_id)
+    if not pid:
+        return ''
+    config = ext.obter_config_prestador(banco, pid)
+    itens = []
+    for rotulo, chave in (('Favorecido', 'banco_titular'), ('Instituição', 'banco_nome'),
+                          ('Agência', 'banco_agencia'), ('Conta', 'banco_conta'),
+                          ('Chave Pix', 'chave_pix')):
+        valor = str(config.get(chave) or '').strip()
+        if valor:
+            itens.append(f'<li><b>{rotulo}:</b> {_html.escape(valor)}</li>')
+    texto = str(config.get('dados_bancarios_texto') or '').strip()
+    if texto:
+        itens.append('<li><b>Dados bancários:</b> '
+                     + _html.escape(texto).replace('\n', '<br>') + '</li>')
+    if not itens:
+        return '<h4>Dados para pagamento</h4><p>Dados bancários do prestador responsável ainda não cadastrados.</p>'
+    return '<h4>Dados para pagamento</h4><ul>' + ''.join(itens) + '</ul>'
+
+
+def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
     """Thread de envio: resolve destinatários, publica o PDF se necessário e envia."""
     import produtividade_os as prod
-    try:
-        destinatarios = prod.destinatarios_conclusao(banco, os_id)
-    except Exception:
-        # Sem e-mail válido cadastrado não há o que enviar.
-        return
+    if destinatarios is None:
+        try:
+            destinatarios = prod.destinatarios_conclusao(banco, os_id)
+        except Exception:
+            # Sem e-mail válido cadastrado não há o que enviar.
+            return
+    else:
+        destinatarios = [str(x) for x in destinatarios if str(x).strip()]
+        if not destinatarios:
+            return
     prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
     try:
         import fluxo_os as fluxo
@@ -179,10 +217,22 @@ def _enviar_relatorio_os_concluida(banco, os_id):
                 "JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?", (os_id,)).fetchone()
         numero = dados['numero_os'] if dados else f'#{os_id}'
         nome = (dados['nome'] or 'Cliente') if dados else 'Cliente'
+        nota = ext.ultima_nota_fiscal(banco, os_id)
+        caminho_nf = None
+        if nota:
+            try:
+                _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
+            except Exception:
+                caminho_nf = None
         assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
         corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
                  f"<p>Segue em anexo o relatório técnico do atendimento.</p>")
-        msg_id = enviar_email_gmail(destinatarios, assunto, corpo, caminho_pdf_relatorio=arquivo)
+        if caminho_nf:
+            corpo += '<p>A nota fiscal está anexada a este e-mail.</p>'
+        corpo += _dados_pagamento_html(banco, os_id)
+        msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
+                                    caminho_pdf_relatorio=arquivo,
+                                    caminho_pdf_nf=caminho_nf, usar_bcc=True)
         prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
     except Exception as erro:
         try:
@@ -192,7 +242,7 @@ def _enviar_relatorio_os_concluida(banco, os_id):
             pass
 
 
-def enviar_relatorio_os_concluida(banco, os_id):
+def enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
     """Dispara em segundo plano o e-mail do relatório de uma OS concluída.
 
     Nunca bloqueia a interface nem a resposta HTTP. Se AUTOSEG_GMAIL_DESATIVADO=1,
@@ -201,10 +251,11 @@ def enviar_relatorio_os_concluida(banco, os_id):
     if os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
         try:
             import produtividade_os as prod
-            destinatarios = prod.destinatarios_conclusao(banco, os_id)
+            if destinatarios is None:
+                destinatarios = prod.destinatarios_conclusao(banco, os_id)
             prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
         except Exception:
             pass
         return
-    threading.Thread(target=_enviar_relatorio_os_concluida, args=(banco, os_id),
+    threading.Thread(target=_enviar_relatorio_os_concluida, args=(banco, os_id, destinatarios),
                      daemon=True, name='AUTOSEG-Gmail').start()

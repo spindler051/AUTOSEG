@@ -174,6 +174,10 @@ def instalar(banco):
             c.execute("ALTER TABLE v9_chamados ADD COLUMN papel TEXT DEFAULT ''")
         if 'solicitante_nome' not in cols_ch:
             c.execute("ALTER TABLE v9_chamados ADD COLUMN solicitante_nome TEXT DEFAULT ''")
+        if 'solicitante_telefone' not in cols_ch:
+            c.execute("ALTER TABLE v9_chamados ADD COLUMN solicitante_telefone TEXT DEFAULT ''")
+        if 'solicitante_identificacao' not in cols_ch:
+            c.execute("ALTER TABLE v9_chamados ADD COLUMN solicitante_identificacao TEXT DEFAULT 'pendente'")
         # Importa cadastros PJ existentes, de modo idempotente, sem expor CNPJ ao público.
         cols={r['name'] for r in c.execute('PRAGMA table_info(clientes)')}
         if {'id','nome','tipo_pessoa','documento'}.issubset(cols):
@@ -419,7 +423,24 @@ def autorizar_pdf_os_organizacao(banco, organizacao_id, usuario_id, os_id):
         raise PermissionError('Relatório não pertence à organização sob sua responsabilidade.')
     return True
 
-def registrar_chamado(banco,uid,org,descricao,urgencia,unidade='',papel='',solicitante_nome=''):
+def identificar_solicitante(c, uid, nome, telefone):
+    """Identifica apenas a própria conta; nunca vincula outra pessoa por coincidência.
+
+    Retorna ('conta_propria'|'pendente'). Qualquer divergência segue para a
+    análise da AUTOSEG (status inicial Aguardando AUTOSEG), sem revelar dados.
+    """
+    nome_norm = ' '.join(str(nome or '').split()).casefold()
+    tel_norm = digitos(telefone)
+    conta = c.execute('SELECT nome,telefone FROM v9_usuarios WHERE id=? AND ativo=1', (uid,)).fetchone()
+    if conta:
+        mesmo_nome = ' '.join(str(conta['nome'] or '').split()).casefold() == nome_norm
+        mesmo_tel = digitos(conta['telefone']) == tel_norm
+        if mesmo_nome and mesmo_tel:
+            return 'conta_propria'
+    return 'pendente'
+
+
+def registrar_chamado(banco,uid,org,descricao,urgencia,unidade='',papel='',solicitante_nome='',solicitante_telefone=''):
     descricao=descricao.strip()
     if not 10<=len(descricao)<=2000:raise ValueError('Descreva o problema com 10 a 2.000 caracteres.')
     if urgencia not in ('Baixa','Normal','Alta'):raise ValueError('Urgência inválida.')
@@ -427,17 +448,23 @@ def registrar_chamado(banco,uid,org,descricao,urgencia,unidade='',papel='',solic
     if papel and papel not in PAPEIS:raise ValueError('Papel inválido. Informe morador, funcionário, porteiro ou cargo equivalente.')
     unidade=str(unidade or '').strip()[:100]
     if not 1<=len(unidade):raise ValueError('Informe o apartamento ou o cargo/função do solicitante.')
-    nome_sol=str(solicitante_nome or '').strip()[:120]
+    nome_sol=' '.join(str(solicitante_nome or '').split())[:120]
+    if not 3<=len(nome_sol):raise ValueError('Informe seu nome completo para contato.')
+    tel_sol=digitos(solicitante_telefone)
+    if not 10<=len(tel_sol)<=13:raise ValueError('Informe telefone de contato com DDD.')
     with ext.db(banco) as c:
         x=c.execute('SELECT id FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(org,)).fetchone()
         if not x:raise ValueError('Condomínio ou empresa não encontrado.')
         # Acionamento pode ser feito por qualquer usuário com CPF e senha válidos,
         # mesmo quando ainda não foi aprovado como morador/síndico.
         c.execute('BEGIN IMMEDIATE')
+        identificacao=identificar_solicitante(c,uid,nome_sol,tel_sol)
         cur=c.execute('''INSERT INTO v9_chamados(organizacao_id,usuario_id,descricao,urgencia,unidade,papel,
-                            solicitante_nome,criado_em) VALUES(?,?,?,?,?,?,?,?)''',
-                      (org,uid,descricao,urgencia,unidade,papel,nome_sol,ext.agora()))
-        evento(c,cur.lastrowid,'Solicitante','Chamado registrado',descricao[:200]+f' | {unidade} | {papel}'.rstrip(' |'))
+                            solicitante_nome,solicitante_telefone,solicitante_identificacao,criado_em)
+                         VALUES(?,?,?,?,?,?,?,?,?,?)''',
+                      (org,uid,descricao,urgencia,unidade,papel,nome_sol,tel_sol,identificacao,ext.agora()))
+        evento(c,cur.lastrowid,'Solicitante','Chamado registrado',
+               descricao[:200]+f' | {unidade} | {papel} | Contato: {nome_sol} / {tel_sol} | Identificação: {identificacao}')
         _criar_os_no_registro(c,cur.lastrowid,'Portal do Cliente')
         for si in c.execute('SELECT usuario_id FROM v9_responsaveis WHERE organizacao_id=?',(org,)).fetchall():
             notificar(c,si['usuario_id'],cur.lastrowid,'Novo chamado recebido no condomínio; aguarda análise AUTOSEG.')
@@ -513,7 +540,7 @@ def _criar_os_no_registro(c, chamado_id, ator):
     dados={'numero_os':numero,'cliente_id':cid,'data_abertura':ext.agora(),
            'descricao':ch['descricao'],'valor_mao_obra':0,'valor_materiais':0,'valor_total':0,
            'forma_pagamento':'PIX','status':'Pendente','origem':'Portal',
-           'observacoes':f'Solicitação #{chamado_id} | Apartamento/cargo: {ch["unidade"] or "Não informado"} | Papel: {ch["papel"] or "Solicitante"} | Execução não autorizada',
+           'observacoes':f'Solicitação #{chamado_id} | Solicitante: {ch["solicitante_nome"] or "Não informado"} | Telefone: {ch["solicitante_telefone"] or "Não informado"} | Identificação: {ch["solicitante_identificacao"] or "pendente"} | Apartamento/cargo: {ch["unidade"] or "Não informado"} | Papel: {ch["papel"] or "Solicitante"} | Execução não autorizada',
            'tecnico':'','criado_em':ext.agora(),'urgencia':ch['urgencia']}
     keys=[k for k in dados if k in cols]
     oid=c.execute('INSERT INTO ordens_servico('+','.join(keys)+') VALUES('+','.join('?' for _ in keys)+')',
@@ -801,7 +828,8 @@ def criar_organizacao_e_os(banco, usuario_id, dados):
     unidade = str(dados.get('unidade','')).strip()
     descricao = str(dados.get('descricao','')).strip()
     urgencia = str(dados.get('urgencia','Normal')).strip()
-    solicitante = str(dados.get('solicitante_nome','')).strip()
+    solicitante = ' '.join(str(dados.get('solicitante_nome','')).split())[:120]
+    solicitante_tel = digitos(dados.get('solicitante_telefone',''))
     if tipo not in ('Condomínio','Empresa'):raise ValueError('Escolha condomínio ou empresa.')
     if not 3 <= len(nome) <= 160:raise ValueError('Informe o nome do condomínio ou empresa.')
     if not 5 <= len(endereco) <= 240:raise ValueError('Informe o endereço do local.')
@@ -811,7 +839,8 @@ def criar_organizacao_e_os(banco, usuario_id, dados):
     if not 1 <= len(unidade) <= 100:raise ValueError('Informe apartamento ou função.')
     if not 10 <= len(descricao) <= 2000:raise ValueError('Descreva o problema (10 a 2.000 caracteres).')
     if urgencia not in ('Baixa','Normal','Alta'):raise ValueError('Urgência inválida.')
-    if len(solicitante) < 3:raise ValueError('Informe seu nome para contato.')
+    if len(solicitante) < 3:raise ValueError('Informe seu nome completo para contato.')
+    if not 10 <= len(solicitante_tel) <= 13:raise ValueError('Informe seu telefone de contato com DDD.')
     if any(len(x)>100 for x in (cidade,bairro)):raise ValueError('Cidade ou bairro muito longo.')
     aten.instalar(banco)
     with ext.db(banco) as c:
@@ -845,10 +874,11 @@ def criar_organizacao_e_os(banco, usuario_id, dados):
           (organizacao_id,usuario_id,papel,situacao,criado_em,unidade)
           VALUES(?,?,?,'Declarado',?,?)''',
           (org_id,usuario_id,papel,ext.agora(),unidade))
+        identificacao=identificar_solicitante(c,usuario_id,solicitante,solicitante_tel)
         ch=c.execute('''INSERT INTO v9_chamados
-          (organizacao_id,usuario_id,descricao,urgencia,unidade,papel,solicitante_nome,criado_em)
-          VALUES(?,?,?,?,?,?,?,?)''',
-          (org_id,usuario_id,descricao,urgencia,unidade,papel,solicitante[:120],ext.agora())).lastrowid
+          (organizacao_id,usuario_id,descricao,urgencia,unidade,papel,solicitante_nome,solicitante_telefone,solicitante_identificacao,criado_em)
+          VALUES(?,?,?,?,?,?,?,?,?,?)''',
+          (org_id,usuario_id,descricao,urgencia,unidade,papel,solicitante,solicitante_tel,identificacao,ext.agora())).lastrowid
         evento(c,ch,'Cliente','Solicitação registrada junto ao cadastro',descricao[:200])
         os_id=_criar_os_no_registro(c,ch,'Portal do Cliente')
         if not os_id:raise RuntimeError('Não foi possível registrar a OS.')

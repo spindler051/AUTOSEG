@@ -157,6 +157,8 @@ def chamado_form(h,banco,s,org):
     with ext.db(banco) as c:o=c.execute('SELECT nome FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(org,)).fetchone()
     if not o:raise ValueError('Organização não encontrada.')
     form=f'<form method="post" action="/pj/chamado/novo">{formulario_csrf(s)}<input type="hidden" name="org_id" value="{int(org)}">'
+    form+=campos('Seu nome completo para contato','solicitante_nome',s.get('nome',''),required=True)
+    form+=campos('Seu telefone com DDD','solicitante_telefone',required=True,placeholder='(51) 99999-9999')
     form+=campos('Bloco / unidade / setor (opcional)','unidade')+select('Urgência','urgencia',[(x,x) for x in ('Normal','Alta','Baixa')])
     form+=textarea('Problema e local do serviço','descricao',required=True)
     form+='<p class="notice">Qualquer pessoa identificada pode solicitar. A AUTOSEG contatará o síndico pelo WhatsApp para conferir o atendimento; você não precisa obter autorização antes de enviar.</p><button>Enviar chamado</button></form>'
@@ -366,7 +368,9 @@ def post(h,path,d,banco,prestador):
             cad.criar_organizacao(banco,s['uid'],str(d.get('nome','')),str(d.get('tipo','')),str(d.get('cnpj','')),str(d.get('cidade','')),str(d.get('bairro','')),str(d.get('papel','Morador')))
             return h.redir('/pj/painel')
         if path=='/pj/chamado/novo':
-            cad.registrar_chamado(banco,s['uid'],int(d['org_id']),str(d.get('descricao','')),str(d.get('urgencia','Normal')),str(d.get('unidade','')))
+            cad.registrar_chamado(banco,s['uid'],int(d['org_id']),str(d.get('descricao','')),
+                                  str(d.get('urgencia','Normal')),str(d.get('unidade','')),'',
+                                  str(d.get('solicitante_nome','')),str(d.get('solicitante_telefone','')))
             return h.redir('/pj/painel')
         partes=path.strip('/').split('/')
         if len(partes)==4 and partes[1]=='chamado' and partes[2].isdigit() and partes[3]=='confirmar':
