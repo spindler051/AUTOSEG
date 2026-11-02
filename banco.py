@@ -11,7 +11,7 @@ import sqlite3
 from datetime import datetime
 
 
-PASTA_APP = os.path.dirname(os.path.abspath(__file__))
+PASTA_APP = os.path.abspath(os.environ.get("AUTOSEG_BASE") or os.path.dirname(os.path.abspath(__file__)))
 BANCO = os.environ.get("GESTAO_BANCO", os.path.join(PASTA_APP, "dados.db"))
 
 
