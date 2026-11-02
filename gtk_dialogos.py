@@ -22,6 +22,7 @@ import estoque_materiais as estoque
 import catalogo_servicos as catalogo
 import importacao_yaml
 import completude
+import composicao
 from integracao import clientes as clientes_core
 
 
@@ -506,6 +507,9 @@ class DialogoOS(Adw.Dialog):
                                               ui.dinheiro_texto(base.get("valor_materiais", 0)))
         self.total = ui.campo_entry(grupo, "Valor total (R$)",
                                     ui.dinheiro_texto(base.get("valor_total", 0)))
+        self.tempo_horas = ui.campo_entry(
+            grupo, "Tempo de execução (horas; 0 usa o padrão)",
+            ui.quantidade_texto(base.get("tempo_horas", 0)))
         self.mao_obra.connect("notify::text", lambda *_args: self._recalcular())
         self.materiais_valor.connect("notify::text", lambda *_args: self._recalcular())
         self.total.connect("notify::text", lambda *_args: None)
@@ -580,6 +584,7 @@ class DialogoOS(Adw.Dialog):
         rodape.set_margin_start(18)
         rodape.set_margin_end(18)
         rodape.append(ui.botao("Cancelar", self.close))
+        rodape.append(ui.botao("Ver composição", self._ver_composicao))
         if self.os_id is not None and self.dados and self.dados.get("status") in ui.ATIVAS:
             if not (self.andamento and self.andamento["iniciado_em"]):
                 rodape.append(ui.botao("Iniciar atendimento", self._iniciar_atendimento))
@@ -624,6 +629,20 @@ class DialogoOS(Adw.Dialog):
             materiais = ui.numero(self.materiais_valor.get_text())
         total = mao + materiais
         self.total.set_text(ui.dinheiro_texto(total))
+
+    def _ver_composicao(self):
+        try:
+            mao = ui.numero(self.mao_obra.get_text())
+            materiais = sum(float(x.get("quantidade") or 0) * float(x.get("valor_unitario") or 0)
+                            for x in self.materiais)
+            if not self.materiais:
+                materiais = ui.numero(self.materiais_valor.get_text())
+            total = ui.numero(self.total.get_text()) or (mao + materiais)
+            DialogoComposicao(
+                self.janela, total_reais=total, materiais_reais=materiais,
+                horas=ui.numero(self.tempo_horas.get_text())).present(self.janela)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Composição do valor", str(erro))
 
     def _adicionar_material(self):
         DialogoMaterial(self.janela, self._inserir_material).present(self.janela)
@@ -774,6 +793,13 @@ class DialogoOS(Adw.Dialog):
         if not self.materiais:
             materiais = ui.numero(self.materiais_valor.get_text())
         total = ui.numero(self.total.get_text()) or (mao_obra + materiais)
+        tempo_horas = ui.numero(self.tempo_horas.get_text())
+        comp = composicao.calcular(
+            total_centavos=composicao.centavos_de_reais(total),
+            materiais_centavos=composicao.centavos_de_reais(materiais),
+            horas=tempo_horas)
+        comp_json = composicao.para_json(comp)
+        composicao.instalar_banco(BANCO)
         observacoes = self.observacoes.get_texto()
         dados_incompletos = 1 if completude.os_faltantes({
             "cliente_id": cliente_id,
@@ -828,12 +854,12 @@ class DialogoOS(Adw.Dialog):
                     """INSERT INTO ordens_servico
                     (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
                      valor_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
-                     dados_incompletos,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?)""",
+                     dados_incompletos,tempo_horas,composicao_json,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?)""",
                     (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
                      tecnico, descricao, mao_obra, materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
-                     datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                     tempo_horas, comp_json, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 os_salvo_id = cursor.lastrowid
                 aten.registrar_solicitacao(cursor, os_salvo_id, cliente_id, descricao,
                                            observacoes, "App")
@@ -841,9 +867,11 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
                     valor_mao_obra=?,valor_materiais=?,valor_total=?,forma_pagamento=?,
-                    urgencia=?,observacoes=?,dados_incompletos=?,atualizado_em=? WHERE id=?""",
+                    urgencia=?,observacoes=?,dados_incompletos=?,tempo_horas=?,
+                    composicao_json=?,atualizado_em=? WHERE id=?""",
                     (cliente_id, tecnico, descricao, mao_obra, materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
+                     tempo_horas, comp_json,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
                 os_salvo_id = self.os_id
 
@@ -871,11 +899,13 @@ class DialogoOS(Adw.Dialog):
                     "valor_total": float(anterior["valor_total"] or 0),
                     "forma_pagamento": anterior["forma_pagamento"] or "",
                     "observacoes": anterior["observacoes"] or "",
+                    "tempo_horas": float(anterior["tempo_horas"] or 0)
+                    if "tempo_horas" in anterior.keys() else 0.0,
                 }
                 depois = {"cliente_id": cliente_id, "tecnico": tecnico, "descricao": descricao,
                           "valor_mao_obra": mao_obra, "valor_materiais": materiais,
                           "valor_total": total, "forma_pagamento": pagamento,
-                          "observacoes": observacoes}
+                          "observacoes": observacoes, "tempo_horas": tempo_horas}
                 alteracoes = [f"{chave}: {antes[chave]!s} → {depois[chave]!s}"
                               for chave in antes if antes[chave] != depois[chave]]
                 if alteracoes:
@@ -1266,6 +1296,9 @@ class DialogoServico(Adw.Dialog):
         preco = info.get("preco_servico",
                          str((info.get("preco_servico_centavos") or 0) / 100).replace(".", ","))
         self.preco = ui.campo_entry(grupo, "Preço da mão de obra (R$)", preco)
+        self.tempo_horas = ui.campo_entry(
+            grupo, "Tempo estimado (horas; 0 usa o padrão)",
+            ui.quantidade_texto(info.get("tempo_horas", 0)))
         self.relatorio = ui.campo_texto(grupo, "Relatório técnico padrão",
                                         info.get("relatorio_padrao", ""), 100)
         if importado and isinstance(importado.get("materiais_lista"), list):
@@ -1294,15 +1327,32 @@ class DialogoServico(Adw.Dialog):
         rodape.set_margin_end(18)
         rodape.set_halign(Gtk.Align.END)
         rodape.append(ui.botao("Cancelar", self.close))
+        rodape.append(ui.botao("Ver composição", self._ver_composicao))
         rodape.append(ui.botao("Salvar serviço", self._salvar, css="suggested-action"))
         toolbar.add_bottom_bar(rodape)
         self.set_child(toolbar)
+
+    def _ver_composicao(self):
+        try:
+            materiais = catalogo.normalizar_materiais(self.materiais.get_texto())
+            total_materiais = sum(
+                int(float(m.get("quantidade") or 0) * int(m.get("preco_centavos") or 0))
+                for m in materiais)
+            total = composicao.centavos_de_reais(self.preco.get_text()) + total_materiais
+            DialogoComposicao(
+                self.janela, total_reais=total / 100,
+                materiais_reais=total_materiais / 100,
+                horas=ui.numero(self.tempo_horas.get_text()),
+                tipo_servico=self.nome.get_text().strip()).present(self.janela)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Composição do valor", str(erro))
 
     def _salvar(self):
         dados = {
             "nome": self.nome.get_text().strip(),
             "descricao": self.descricao.get_texto(),
             "preco_servico": self.preco.get_text().strip(),
+            "tempo_horas": self.tempo_horas.get_text().strip(),
             "relatorio_padrao": self.relatorio.get_texto(),
             "materiais": self.materiais.get_texto(),
         }
@@ -1632,3 +1682,180 @@ class DialogoOSRapida(Adw.Dialog):
         self.close()
         self.janela.carregar_os()
 
+
+
+class DialogoComponente(Adw.Dialog):
+    """Edição de um componente da composição configurável."""
+
+    def __init__(self, janela, componente=None, ids_existentes=None, ao_salvar=None):
+        super().__init__()
+        self.janela = janela
+        self.componente = dict(componente or {})
+        self.ids_existentes = set(ids_existentes or [])
+        self.ao_salvar = ao_salvar
+        titulo = "Editar componente" if componente else "Novo componente"
+        self.set_title(titulo)
+        self.set_content_width(680)
+        self.set_content_height(720)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title=titulo))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(title="Componente da composição")
+        pagina.add(grupo)
+        self.nome = ui.campo_entry(grupo, "Nome", self.componente.get("nome", ""))
+        self.descricao = ui.campo_texto(grupo, "Descrição",
+                                        self.componente.get("descricao", ""), 80)
+        modo = self.componente.get("modo", "percentual")
+        self.modo = ui.campo_combo(
+            grupo, "Modo de cálculo", composicao.MODOS_LABELS,
+            composicao.MODOS_CHAVES.index(modo) if modo in composicao.MODOS_CHAVES else 0)
+        valor = self.componente.get("valor", 0)
+        if modo == "percentual":
+            valor_texto = str(valor)
+        elif modo in ("fixo", "hora"):
+            valor_texto = ui.dinheiro_texto(float(valor or 0) / 100)
+        else:
+            valor_texto = ""
+        self.valor = ui.campo_entry(grupo, "Valor", valor_texto)
+        self.formula = ui.campo_entry(grupo, "Fórmula (use IDs de componentes anteriores)",
+                                      self.componente.get("formula", ""))
+        self.horas = ui.campo_entry(grupo, "Horas padrão",
+                                    ui.quantidade_texto(self.componente.get("horas_padrao", 0)))
+        self.aplicavel = ui.campo_entry(
+            grupo, "Aplicável a (nomes separados por vírgula; vazio = todos)",
+            ", ".join(self.componente.get("aplicavel_a") or []))
+        self.obrigatorio = Adw.SwitchRow(title="Obrigatório")
+        self.obrigatorio.set_active(bool(self.componente.get("obrigatorio", False)))
+        grupo.add(self.obrigatorio)
+        self.ativo = Adw.SwitchRow(title="Ativo")
+        self.ativo.set_active(bool(self.componente.get("ativo", True)))
+        grupo.add(self.ativo)
+        self.modo.connect("notify::selected", lambda *_args: self._atualizar_campos())
+        self._atualizar_campos()
+        toolbar.set_content(pagina)
+        rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        rodape.set_margin_top(10)
+        rodape.set_margin_bottom(10)
+        rodape.set_margin_start(18)
+        rodape.set_margin_end(18)
+        rodape.set_halign(Gtk.Align.END)
+        rodape.append(ui.botao("Cancelar", self.close))
+        rodape.append(ui.botao("Salvar componente", self._salvar, css="suggested-action"))
+        toolbar.add_bottom_bar(rodape)
+        self.set_child(toolbar)
+
+    def _modo(self):
+        indice = self.modo.get_selected()
+        if indice >= len(composicao.MODOS_CHAVES):
+            return "percentual"
+        return composicao.MODOS_CHAVES[indice]
+
+    def _atualizar_campos(self):
+        modo = self._modo()
+        self.valor.set_visible(modo in ("fixo", "hora", "percentual"))
+        self.formula.set_visible(modo == "formula")
+        self.horas.set_visible(modo == "hora")
+        self.valor.set_title(
+            "Percentual (%)" if modo == "percentual" else
+            "Valor da hora (R$)" if modo == "hora" else "Valor (R$)")
+
+    def _salvar(self):
+        nome = self.nome.get_text().strip()
+        modo = self._modo()
+        try:
+            if modo == "percentual":
+                valor = ui.numero(self.valor.get_text())
+            elif modo in ("fixo", "hora"):
+                valor = composicao.centavos_de_reais(self.valor.get_text())
+            else:
+                valor = 0
+            componente = dict(self.componente)
+            componente.update({
+                "id": self.componente.get("id") or composicao.novo_id(nome, self.ids_existentes),
+                "nome": nome,
+                "descricao": self.descricao.get_texto(),
+                "modo": modo,
+                "valor": valor,
+                "formula": self.formula.get_text().strip() if modo == "formula" else "",
+                "horas_padrao": ui.numero(self.horas.get_text()) if modo == "hora" else 0,
+                "aplicavel_a": [x.strip() for x in self.aplicavel.get_text().split(",") if x.strip()],
+                "obrigatorio": self.obrigatorio.get_active(),
+                "ativo": self.ativo.get_active(),
+            })
+            if not nome:
+                raise ValueError("Informe o nome do componente.")
+            if modo == "formula" and not componente["formula"]:
+                raise ValueError("Informe a fórmula do componente.")
+            if self.ao_salvar is not None:
+                self.ao_salvar(componente)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Componente inválido", str(erro))
+            return
+        self.close()
+
+
+class DialogoComposicao(Adw.Dialog):
+    """Visualização da composição e simulação com valores informados."""
+
+    def __init__(self, janela, total_reais=0, materiais_reais=0, horas=0,
+                 tipo_servico=""):
+        super().__init__()
+        self.janela = janela
+        self.set_title("Composição do valor")
+        self.set_content_width(760)
+        self.set_content_height(720)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title="Composição do valor"))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(title="Simulação")
+        pagina.add(grupo)
+        self.total = ui.campo_entry(grupo, "Valor final (R$)", ui.dinheiro_texto(total_reais))
+        self.materiais = ui.campo_entry(grupo, "Materiais (R$)", ui.dinheiro_texto(materiais_reais))
+        self.horas = ui.campo_entry(grupo, "Horas de execução", ui.quantidade_texto(horas))
+        self.tipo = ui.campo_entry(grupo, "Tipo de serviço (opcional)", tipo_servico)
+        botao = ui.botao("Calcular composição", self._calcular,
+                         icone="accessories-calculator-symbolic", css="suggested-action")
+        grupo.add(_linha_custom(botao))
+        self.tabela = ui.Tabela([
+            ("Componente", 0, True, 0.0),
+            ("Valor", 130, False, 0.5),
+            ("Participação", 110, False, 0.5),
+        ], altura=300)
+        self.aviso = ui.legenda("")
+        grupo_resultado = Adw.PreferencesGroup(title="Resultado")
+        pagina.add(grupo_resultado)
+        caixa_resultado = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        caixa_resultado.set_margin_top(8)
+        caixa_resultado.set_margin_bottom(8)
+        caixa_resultado.set_margin_start(10)
+        caixa_resultado.set_margin_end(10)
+        caixa_resultado.append(self.tabela.widget)
+        caixa_resultado.append(self.aviso)
+        grupo_resultado.add(_linha_custom(caixa_resultado))
+        toolbar.set_content(pagina)
+        self.set_child(toolbar)
+        self._calcular()
+
+    def _calcular(self):
+        try:
+            comp = composicao.calcular(
+                total_centavos=composicao.centavos_de_reais(self.total.get_text()),
+                materiais_centavos=composicao.centavos_de_reais(self.materiais.get_text()),
+                horas=ui.numero(self.horas.get_text()),
+                tipo_servico=self.tipo.get_text().strip())
+            linhas = [
+                (item["nome"], ui.brl(item["valor_centavos"] / 100),
+                 f"{item['percentual']:.2f}%".replace(".", ","))
+                for item in comp["componentes"]
+            ]
+            linhas.append(("TOTAL", ui.brl(comp["total_centavos"] / 100), "100,00%"))
+            self.tabela.definir_linhas(linhas)
+            self.aviso.set_text(comp.get("aviso") or
+                                "A soma dos componentes confere com o valor final.")
+        except Exception as erro:
+            self.tabela.limpar()
+            self.aviso.set_text(str(erro))

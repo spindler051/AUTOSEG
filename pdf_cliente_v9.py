@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 import prestadores_ext as ext
 import pdf_identidade as identidade
+import composicao
 
 def data_br(valor):
     s=str(valor or '').strip()
@@ -31,6 +32,15 @@ def gerar(banco,os_id):
         mats=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
+        comp=composicao.de_json(os_['composicao_json']) if 'composicao_json' in os_.keys() else None
+        if not comp or int(comp.get('total_centavos',0))!=composicao.centavos_de_reais(os_['valor_total']):
+            try:
+                comp=composicao.calcular(
+                    total_centavos=composicao.centavos_de_reais(os_['valor_total']),
+                    materiais_centavos=composicao.centavos_de_reais(os_['valor_materiais']),
+                    horas=os_['tempo_horas'] if 'tempo_horas' in os_.keys() else 0)
+            except Exception:
+                comp=None
         anexos=[]
         if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_anexos_visiveis'").fetchone():
             anexos=c.execute('''SELECT a.caminho,a.nome_original,COALESCE(v.legenda,'') AS legenda FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id WHERE a.os_id=? AND COALESCE(v.visivel,1)=1 ORDER BY a.id''',(os_id,)).fetchall()
@@ -72,10 +82,28 @@ def gerar(banco,os_id):
     tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
     tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
     linhas.append(tm)
-    linhas.append(S('04  VALORES E PAGAMENTO'))
-    valores=[['Mão de obra',brl(os_['valor_mao_obra'])],['Materiais',brl(os_['valor_materiais'])],['TOTAL',brl(os_['valor_total'])],
+    linhas.append(S('04  COMPOSIÇÃO DO VALOR'))
+    if comp:
+        linhas_comp=[[Paragraph('<b>Componente</b>',estilo['AutosegCorpoV9']),
+                      Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
+                      Paragraph('<b>%</b>',estilo['AutosegCorpoV9'])]]
+        for item in comp.get('componentes',[]):
+            linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
+                                P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
+        linhas_comp.append([P('<b>TOTAL</b>'),P('<b>'+brl(comp.get('total_centavos',0)/100)+'</b>'),P('<b>100,00%</b>')])
+        tc=Table(linhas_comp,colWidths=[300,100,60],repeatRows=1)
+        tc.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),
+            ('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
+            ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),('VALIGN',(0,0),(-1,-1),'TOP'),
+            ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+        linhas.append(tc)
+        if comp.get('aviso'):linhas.append(P(comp['aviso']))
+    else:
+        linhas.append(P('Composição não disponível para esta OS.'))
+    linhas.append(S('05  VALORES E PAGAMENTO'))
+    valores=[['TOTAL',brl(os_['valor_total'])],
             ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
-    tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,2),(-1,2),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,2),(-1,2),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
+    tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
     if anexos:
         primeira_foto=True
         for a in anexos:
@@ -87,7 +115,7 @@ def gerar(banco,os_id):
                     w,h=im.size
                 escala=min(400/w,265/h)
                 foto=PdfImage(buf,width=w*escala,height=h*escala)
-                bloco=([S('05  REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
+                bloco=([S('06  REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
                 linhas.append(KeepTogether(bloco))
                 primeira_foto=False
             except Exception:continue

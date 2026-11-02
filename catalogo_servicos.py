@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 from datetime import datetime
 import json
 import prestadores_ext as ext
+import composicao
 import pdf_identidade as marca
 
 
@@ -94,6 +95,17 @@ def salvar(banco,d,identificador=None):
     if len(desc)>1500 or len(relatorio)>5000:raise ValueError('Descrição ou relatório muito longo.')
     materiais=_materiais_entrada(d)
     preco=_centavos(d.get('preco_servico','0'),'Preço do serviço')
+    try:
+        tempo_horas=float(str(d.get('tempo_horas','0') or '0').replace(',','.'))
+    except ValueError:
+        raise ValueError('Tempo estimado inválido.') from None
+    if tempo_horas<0:raise ValueError('Tempo estimado não pode ser negativo.')
+    total_materiais=sum(int(Decimal(m['quantidade'])*m['preco_centavos']) for m in materiais)
+    comp=composicao.calcular(
+        total_centavos=preco+total_materiais, materiais_centavos=total_materiais,
+        horas=tempo_horas, tipo_servico=nome)
+    comp_json=composicao.para_json(comp)
+    composicao.instalar_banco(banco)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         # REV08: materiais de serviços entram no catálogo central, nunca no saldo.
@@ -111,14 +123,18 @@ def salvar(banco,d,identificador=None):
                      ext.agora(),ext.agora()))
         if identificador is None:
             return c.execute('''INSERT INTO catalogo_servicos
-              (nome,descricao,preco_servico_centavos,materiais_json,relatorio_padrao,criado_em,atualizado_em)
-              VALUES(?,?,?,?,?,?,?)''',
-              (nome,desc,preco,json.dumps(materiais,ensure_ascii=False),relatorio,ext.agora(),ext.agora())).lastrowid
+              (nome,descricao,preco_servico_centavos,materiais_json,relatorio_padrao,
+               tempo_horas,composicao_json,criado_em,atualizado_em)
+              VALUES(?,?,?,?,?,?,?,?,?)''',
+              (nome,desc,preco,json.dumps(materiais,ensure_ascii=False),relatorio,
+               tempo_horas,comp_json,ext.agora(),ext.agora())).lastrowid
         if not c.execute('SELECT 1 FROM catalogo_servicos WHERE id=?',(identificador,)).fetchone():
             raise ValueError('Serviço não encontrado.')
         c.execute('''UPDATE catalogo_servicos SET nome=?,descricao=?,preco_servico_centavos=?,
-          materiais_json=?,relatorio_padrao=?,atualizado_em=? WHERE id=?''',
-          (nome,desc,preco,json.dumps(materiais,ensure_ascii=False),relatorio,ext.agora(),identificador))
+          materiais_json=?,relatorio_padrao=?,tempo_horas=?,composicao_json=?,atualizado_em=?
+          WHERE id=?''',
+          (nome,desc,preco,json.dumps(materiais,ensure_ascii=False),relatorio,
+           tempo_horas,comp_json,ext.agora(),identificador))
         return identificador
 
 
@@ -153,10 +169,21 @@ def valores_orcamento(banco,identificador,quantidade=1):
     if not servico:raise ValueError('Serviço indisponível.')
     materiais=json.loads(servico['materiais_json'])
     materiais_total=sum(int(Decimal(m['quantidade'])*m['preco_centavos']) for m in materiais)
+    comp=composicao.de_json(servico.get('composicao_json'))
+    if not comp:
+        try:
+            comp=composicao.calcular(
+                total_centavos=servico['preco_servico_centavos']+materiais_total,
+                materiais_centavos=materiais_total,
+                horas=servico.get('tempo_horas') or 0,
+                tipo_servico=servico.get('nome') or '')
+        except Exception:
+            comp=None
     return {'servico':servico,'quantidade':quantidade,'materiais':materiais,
             'subtotal_servico':quantidade*servico['preco_servico_centavos'],
             'subtotal_materiais':quantidade*materiais_total,
-            'total':quantidade*(servico['preco_servico_centavos']+materiais_total)}
+            'total':quantidade*(servico['preco_servico_centavos']+materiais_total),
+            'composicao':comp}
 
 
 def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
@@ -176,15 +203,17 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     def par(s):return Paragraph(escape(str(s)),normal)
     logo=marca.logo_flowable(180,42)
     titulo=Paragraph('Orçamento estimativo',styles['Title'])
+    content=[]
     if logo is not None:
         cabecalho=Table([[logo,titulo]],colWidths=[200,300],hAlign='LEFT')
         cabecalho.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
                                        ('LEFTPADDING',(0,0),(-1,-1),0),
                                        ('BOTTOMPADDING',(0,0),(-1,-1),8)]))
-        content=[cabecalho,Spacer(1,14),
-                 par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
+        content.append(cabecalho)
+    content.extend([Spacer(1,14),
+             par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
              par('Solicitante: '+nome_cliente),Spacer(1,12),
-             Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)]
+             Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)])
     linhas=[[par('Item'),par('Qtde.'),par('Total')],
             [par('Mão de obra: '+servico['nome']),str(dados['quantidade']),reais(dados['subtotal_servico'])]]
     for m in dados['materiais']:
@@ -195,7 +224,30 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     tabela.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#eee8c9')),
                                 ('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.35,colors.grey),
                                 ('TOPPADDING',(0,0),(-1,-1),10),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
-    content.extend([tabela,Spacer(1,18),par('Estimativa automática, não é nota fiscal nem proposta contratual. Valores sujeitos a vistoria, disponibilidade e confirmação do prestador.')])
+    content.append(tabela)
+    comp=dados.get('composicao')
+    if comp:
+        comp=composicao.multiplicar(comp,dados['quantidade'])
+        if int(comp.get('total_centavos',0))!=int(dados['total']):
+            comp=composicao.calcular(
+                total_centavos=dados['total'],materiais_centavos=dados['subtotal_materiais'],
+                horas=(servico.get('tempo_horas') or 0)*dados['quantidade'],
+                tipo_servico=servico.get('nome') or '')
+        linhas_comp=[[par('Componente'),par('Valor'),par('%')]]
+        for item in comp.get('componentes',[]):
+            linhas_comp.append([par(item['nome']),par(reais(item['valor_centavos'])),
+                                par(f"{item['percentual']:.2f}%".replace('.',','))])
+        linhas_comp.append([par('TOTAL'),par(reais(comp['total_centavos'])),par('100,00%')])
+        tabela_comp=Table(linhas_comp,colWidths=[280,110,80],repeatRows=1,hAlign='LEFT')
+        tabela_comp.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#eee8c9')),
+            ('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.35,colors.grey),
+            ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),
+            ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+        content.extend([Spacer(1,14),Paragraph('Composição do valor',styles['Heading3']),tabela_comp])
+        if comp.get('aviso'):
+            content.append(Spacer(1,6))
+            content.append(par(comp['aviso']))
+    content.extend([Spacer(1,18),par('Estimativa automática, não é nota fiscal nem proposta contratual. Valores sujeitos a vistoria, disponibilidade e confirmação do prestador.')])
     def rodape(cv, doc):
         cv.setStrokeColor(colors.HexColor('#E2B800'))
         cv.line(45, 40, A4[0]-45, 40)

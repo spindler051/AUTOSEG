@@ -32,6 +32,7 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import completude
+import composicao
 from integracao import clientes as clientes_core
 
 if os.environ.get("AUTOSEG_DEV") == "1":
@@ -94,6 +95,8 @@ class Janela(Adw.ApplicationWindow):
             cad9.instalar(BANCO)
             estoque.instalar(BANCO)
             catalogo.instalar(BANCO)
+            composicao.instalar()
+            composicao.instalar_banco(BANCO)
             try:
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
@@ -176,6 +179,7 @@ class Janela(Adw.ApplicationWindow):
             ("portal", "Portal do cliente", "network-server-symbolic"),
             ("pj", "Condomínios e chamados", "view-grid-symbolic"),
             ("catalogo", "Serviços e valores", "view-list-symbolic"),
+            ("composicao", "Composição de valores", "emblem-important-symbolic"),
             ("estoque", "Materiais e estoque", "package-x-generic-symbolic"),
         ]
         for _nome, titulo_texto, icone in self.nav_itens:
@@ -231,6 +235,7 @@ class Janela(Adw.ApplicationWindow):
         self.stack.add_titled(self._pagina_portal(), "portal", "Portal do cliente")
         self.stack.add_titled(self._pagina_pj(), "pj", "Condomínios e chamados")
         self.stack.add_titled(self._pagina_catalogo(), "catalogo", "Serviços e valores")
+        self.stack.add_titled(self._pagina_composicao(), "composicao", "Composição de valores")
         self.stack.add_titled(self._pagina_estoque(), "estoque", "Materiais e estoque")
         self.toast_overlay = Adw.ToastOverlay(child=self.stack)
         toolbar.set_content(self.toast_overlay)
@@ -285,6 +290,7 @@ class Janela(Adw.ApplicationWindow):
                 "portal": self.carregar_portal,
                 "pj": self.carregar_pj,
                 "catalogo": self.carregar_catalogo,
+                "composicao": self.carregar_composicao,
                 "estoque": self.carregar_estoque,
             }[nome]()
         except Exception as erro:
@@ -292,7 +298,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _carregar_tudo(self):
         for nome in ("clientes", "os", "historico", "financeiro", "prestadores",
-                     "portal", "pj", "catalogo", "estoque"):
+                     "portal", "pj", "catalogo", "composicao", "estoque"):
             self._atualizar_pagina(nome)
         self._atualizar_inicio()
         self._atualizar_links_async()
@@ -1906,6 +1912,180 @@ class Janela(Adw.ApplicationWindow):
             ui.aviso_erro(self, "YAML inválido", str(erro))
             return
         dialogos.DialogoServico(self, importado=pre).present(self)
+
+    # ------------------------------------------------------------------
+    # Composição de valores
+    # ------------------------------------------------------------------
+
+    def _pagina_composicao(self):
+        pagina = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        pagina.append(ui.barra(ui.legenda(
+            "Componentes configuráveis em composicao.yaml. Nenhuma taxa é fixa "
+            "no código; a soma sempre fecha com o valor final do serviço.")))
+        pagina.append(ui.barra(
+            ui.botao("Novo componente", self._novo_componente,
+                     icone="list-add-symbolic", css="suggested-action"),
+            ui.botao("Editar", self._editar_componente),
+            ui.botao("Ativar / desativar", self._alternar_componente),
+            ui.botao("Subir", lambda: self._mover_componente(-1), icone="go-up-symbolic"),
+            ui.botao("Descer", lambda: self._mover_componente(1), icone="go-down-symbolic"),
+            ui.botao("Excluir", self._excluir_componente, css="destructive-action"),
+            ui.botao("Ver composição", self._ver_composicao_admin),
+            ui.botao("Recalcular", self._recalcular_composicoes)))
+        self.tabela_composicao = ui.Tabela([
+            ("Ordem", 70, False, 0.5),
+            ("Componente", 0, True, 0.0),
+            ("Modo", 180, False, 0.5),
+            ("Valor", 120, False, 0.5),
+            ("Ativo", 70, False, 0.5),
+            ("Obrigatório", 90, False, 0.5),
+            ("Aplicável a", 160, False, 0.5),
+        ], ao_ativar=self._editar_componente)
+        pagina.append(self.tabela_composicao.widget)
+        return pagina
+
+    def carregar_composicao(self):
+        try:
+            self._config_composicao = composicao.carregar()
+        except Exception as erro:
+            print("Composição de valores inválida:", erro)
+            self._config_composicao = {"versao": 1, "componentes": []}
+        self._componentes_composicao = sorted(
+            self._config_composicao.get("componentes", []),
+            key=lambda c: (c.get("ordem", 0), c.get("id", "")))
+        linhas = []
+        for componente in self._componentes_composicao:
+            modo = componente.get("modo", "")
+            if modo == "percentual":
+                valor = f"{float(componente.get('valor', 0)):g}%"
+            elif modo in ("fixo", "hora"):
+                valor = ui.brl(float(componente.get("valor", 0)) / 100)
+            elif modo == "formula":
+                valor = componente.get("formula", "")
+            else:
+                valor = "—"
+            linhas.append((
+                componente.get("ordem", 0), componente.get("nome", ""),
+                composicao.MODOS.get(modo, modo), valor,
+                "Sim" if componente.get("ativo", True) else "Não",
+                "Sim" if componente.get("obrigatorio") else "Não",
+                ", ".join(componente.get("aplicavel_a") or []) or "Todos"))
+        self.tabela_composicao.definir_linhas(linhas)
+
+    def _componente_selecionado(self):
+        indice = self.tabela_composicao.indice()
+        if indice is None or indice >= len(getattr(self, "_componentes_composicao", [])):
+            ui.aviso_erro(self, "Seleção", "Selecione um componente.")
+            return None
+        return self._componentes_composicao[indice]
+
+    def _salvar_config_composicao(self):
+        try:
+            composicao.salvar(self._config_composicao)
+            composicao.recalcular_tudo(BANCO)
+        except Exception as erro:
+            ui.aviso_erro(self, "Composição inválida", str(erro))
+            return False
+        self.carregar_composicao()
+        return True
+
+    def _novo_componente(self):
+        ids = [c.get("id") for c in self._componentes_composicao]
+
+        def salvar(componente):
+            ordem = max([c.get("ordem", 0) for c in self._config_composicao["componentes"]] + [0]) + 1
+            componente["ordem"] = ordem
+            self._config_composicao["componentes"].append(componente)
+            if self._salvar_config_composicao():
+                ui.toast(self, "Componente criado.")
+
+        dialogos.DialogoComponente(
+            self, ids_existentes=ids, ao_salvar=salvar).present(self)
+
+    def _editar_componente(self):
+        componente = self._componente_selecionado()
+        if componente is None:
+            return
+
+        def salvar(novo):
+            for indice, atual in enumerate(self._config_composicao["componentes"]):
+                if atual.get("id") == componente.get("id"):
+                    novo["ordem"] = atual.get("ordem", indice + 1)
+                    self._config_composicao["componentes"][indice] = novo
+                    break
+            if self._salvar_config_composicao():
+                ui.toast(self, "Componente atualizado.")
+
+        dialogos.DialogoComponente(
+            self, componente=componente,
+            ids_existentes=[c.get("id") for c in self._componentes_composicao],
+            ao_salvar=salvar).present(self)
+
+    def _alternar_componente(self):
+        componente = self._componente_selecionado()
+        if componente is None:
+            return
+        componente["ativo"] = not componente.get("ativo", True)
+        if self._salvar_config_composicao():
+            ui.toast(self, "Componente ativado." if componente["ativo"]
+                     else "Componente desativado.")
+
+    def _mover_componente(self, delta):
+        componente = self._componente_selecionado()
+        if componente is None:
+            return
+        lista = sorted(self._config_composicao["componentes"],
+                       key=lambda c: (c.get("ordem", 0), c.get("id", "")))
+        indice = next((i for i, c in enumerate(lista)
+                       if c.get("id") == componente.get("id")), None)
+        if indice is None:
+            return
+        alvo = indice + delta
+        if not 0 <= alvo < len(lista):
+            return
+        lista[indice], lista[alvo] = lista[alvo], lista[indice]
+        for posicao, item in enumerate(lista):
+            item["ordem"] = posicao + 1
+        self._config_composicao["componentes"] = lista
+        if self._salvar_config_composicao():
+            ui.toast(self, "Ordem atualizada.")
+
+    def _excluir_componente(self):
+        componente = self._componente_selecionado()
+        if componente is None:
+            return
+        if len(self._config_composicao["componentes"]) <= 1:
+            ui.aviso_erro(self, "Composição", "Mantenha pelo menos um componente.")
+            return
+        ui.alerta(
+            self, "Excluir componente",
+            f"Excluir “{componente.get('nome','')}” da composição?",
+            lambda: self._executar_exclusao_componente(componente.get("id")),
+            destrutivo=True, rotulo_ok="Excluir")
+
+    def _executar_exclusao_componente(self, componente_id):
+        self._config_composicao["componentes"] = [
+            c for c in self._config_composicao["componentes"]
+            if c.get("id") != componente_id]
+        for posicao, item in enumerate(sorted(
+                self._config_composicao["componentes"],
+                key=lambda c: (c.get("ordem", 0), c.get("id", "")))):
+            item["ordem"] = posicao + 1
+        if self._salvar_config_composicao():
+            ui.toast(self, "Componente excluído.")
+
+    def _ver_composicao_admin(self):
+        dialogos.DialogoComposicao(self).present(self)
+
+    def _recalcular_composicoes(self):
+        try:
+            totais = composicao.recalcular_tudo(BANCO)
+        except Exception as erro:
+            ui.aviso_erro(self, "Recalcular composições", str(erro))
+            return
+        self.carregar_composicao()
+        ui.toast(self, f"Composições atualizadas: {totais['servicos']} serviço(s), "
+                       f"{totais['os']} OS aberta(s).")
 
     # ------------------------------------------------------------------
     # Estoque de materiais

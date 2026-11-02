@@ -15,6 +15,9 @@ export GI_TYPELIB_PATH="/opt/local/lib/girepository-1.0:/usr/local/lib/gireposit
 if [ ! -f "$AUTOSEG_BASE/completude.yaml" ] && [ -f completude.yaml ]; then
     cp completude.yaml "$AUTOSEG_BASE/completude.yaml"
 fi
+if [ ! -f "$AUTOSEG_BASE/composicao.yaml" ] && [ -f composicao_padrao.yaml ]; then
+    cp composicao_padrao.yaml "$AUTOSEG_BASE/composicao.yaml"
+fi
 
 funciona_gtk() {
     "$1" -c 'import gi; gi.require_version("Gtk","4.0"); gi.require_version("Adw","1")' >/dev/null 2>&1

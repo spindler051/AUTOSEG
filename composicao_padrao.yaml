@@ -1,0 +1,89 @@
+# Composição do valor dos serviços — configuração editável em runtime.
+# Estes componentes são apenas o ponto de partida; o administrador pode
+# criar, editar, reordenar, desativar e excluir componentes pela tela
+# "Composição de valores" do GTK ou editando este arquivo.
+#
+# Tipos de cálculo:
+#   materiais  -> usa o custo real dos materiais
+#   fixo       -> valor fixo em centavos
+#   hora       -> horas x valor da hora em centavos
+#   percentual -> percentual do valor final
+#   formula    -> expressão com IDs de componentes anteriores
+#   residual   -> recebe o que sobrar para fechar o total
+#
+# `aplicavel_a` vazio significa "todos os serviços". Caso contrário, informe
+# nomes de serviços separados por vírgula.
+versao: 1
+moeda: BRL
+horas_padrao: 1.0
+componentes:
+  - id: materiais
+    nome: Materiais
+    descricao: Custo dos materiais efetivamente utilizados.
+    modo: materiais
+    valor: 0
+    ativo: true
+    obrigatorio: true
+    ordem: 1
+    aplicavel_a: []
+
+  - id: hora_tecnica
+    nome: Mão de obra / hora técnica
+    descricao: Horas de execução multiplicadas pelo valor da hora técnica.
+    modo: hora
+    valor: 10000
+    horas_padrao: 1.0
+    ativo: true
+    obrigatorio: true
+    ordem: 2
+    aplicavel_a: []
+
+  - id: visita
+    nome: Taxa mínima de visita
+    descricao: Deslocamento e atendimento mínimo.
+    modo: fixo
+    valor: 3000
+    ativo: true
+    obrigatorio: false
+    ordem: 3
+    aplicavel_a: []
+
+  - id: administrativo
+    nome: Custos administrativos
+    descricao: Atendimento, documentos, gestão e comunicação.
+    modo: percentual
+    valor: 10
+    ativo: true
+    obrigatorio: false
+    ordem: 4
+    aplicavel_a: []
+
+  - id: operacional
+    nome: Custos operacionais e tecnológicos
+    descricao: Software, infraestrutura, ferramentas e manutenção.
+    modo: percentual
+    valor: 10
+    ativo: true
+    obrigatorio: false
+    ordem: 5
+    aplicavel_a: []
+
+  - id: risco
+    nome: Margem de risco e contingência
+    descricao: Imprevistos, retrabalho e riscos da execução.
+    modo: percentual
+    valor: 5
+    ativo: true
+    obrigatorio: false
+    ordem: 6
+    aplicavel_a: []
+
+  - id: outros
+    nome: Outros custos e margem de contribuição
+    descricao: Fecha a diferença até o valor final informado.
+    modo: residual
+    valor: 0
+    ativo: true
+    obrigatorio: false
+    ordem: 7
+    aplicavel_a: []

@@ -11,6 +11,7 @@ import fluxo_os as fluxo
 import atendimento_os as aten
 import estoque_materiais as estoque
 import cadastros_v9 as cad
+import composicao
 
 CLIENTE_CAMPOS = (
     'tipo_pessoa documento nome nome_fantasia endereco numero complemento bairro cep '
@@ -181,6 +182,16 @@ def os_salvar(banco,d,pid,oid=None):
     soma=round(mao_obra+total_mat,2)
     override=texto(d,'valor_total_override',30)
     total=numero(override,'Total negociado') if override else soma
+    try:
+        tempo_horas=float(str(d.get('tempo_horas','0') or '0').replace(',','.'))
+    except ValueError:
+        raise ValueError('Tempo de execução inválido.') from None
+    if tempo_horas<0:raise ValueError('Tempo de execução não pode ser negativo.')
+    comp=composicao.calcular(
+        total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
+        horas=tempo_horas)
+    comp_json=composicao.para_json(comp)
+    composicao.instalar_banco(banco)
     # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.
     aten.instalar(banco)
     with ext.db(banco) as c:
@@ -193,10 +204,12 @@ def os_salvar(banco,d,pid,oid=None):
             n=proximo_numero_os(c.cursor())
             cur=c.execute('''INSERT INTO ordens_servico
                 (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                 valor_materiais,valor_total,forma_pagamento,status,observacoes,criado_em)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 valor_materiais,valor_total,forma_pagamento,status,observacoes,
+                 tempo_horas,composicao_json,criado_em)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
-                mao_obra,total_mat,total,forma,'Aberta',observacoes,ext.agora()))
+                mao_obra,total_mat,total,forma,'Aberta',observacoes,
+                tempo_horas,comp_json,ext.agora()))
             oid=cur.lastrowid
             aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
             ext.evento(c,oid,'OS criada via portal','Cadastro pelo portal web.',pid,'Prestador')
@@ -223,11 +236,13 @@ def os_salvar(banco,d,pid,oid=None):
             old_dict=dict(old)
             updated={'cliente_id':cliente_id,'tecnico':tecnico,'descricao':descricao,
                 'valor_mao_obra':mao_obra,'valor_materiais':total_mat,'valor_total':total,
-                'forma_pagamento':forma,'observacoes':observacoes}
+                'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas}
             diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
             c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
-                valor_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,atualizado_em=? WHERE id=?''',
-                (cliente_id,tecnico,descricao,mao_obra,total_mat,total,forma,observacoes,ext.agora(),oid))
+                valor_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
+                tempo_horas=?,composicao_json=?,atualizado_em=? WHERE id=?''',
+                (cliente_id,tecnico,descricao,mao_obra,total_mat,total,forma,observacoes,
+                 tempo_horas,comp_json,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
         old_mat=[(r['item'],float(r['quantidade']),float(r['valor_unitario'])) for r in

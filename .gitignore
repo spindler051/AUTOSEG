@@ -35,6 +35,7 @@ backup/
 *.log
 *.tmp
 .autoseg.lock
+composicao.yaml
 
 # Logs e dados operacionais
 logs/

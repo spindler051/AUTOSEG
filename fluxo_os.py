@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 import prestadores_ext as ext
+import composicao
 
 FIM = ('Concluída', 'Cancelada', 'Não realizada')
 FIM_TODOS = FIM
@@ -56,6 +57,7 @@ def instalar(banco):
             atualizado_em TEXT NOT NULL
         );
         ''')
+    composicao.instalar_banco(banco)
 
 
 def definir_senha_cliente(banco,cliente_id,senha=None):
@@ -117,6 +119,15 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
     ext.evento(c,os_id,'Encerramento: '+status,
               (('Motivo: '+motivo+' | ') if motivo else '')+'Relatório: '+relato,
               prestador_id,ator)
+    try:
+        comp=composicao.calcular(
+            total_centavos=composicao.centavos_de_reais(o['valor_total']),
+            materiais_centavos=composicao.centavos_de_reais(o['valor_materiais']),
+            horas=o['tempo_horas'] if 'tempo_horas' in o.keys() else 0)
+        c.execute('UPDATE ordens_servico SET composicao_json=? WHERE id=?',
+                  (composicao.para_json(comp),os_id))
+    except Exception as erro:
+        print('Aviso: composição do valor não calculada no encerramento:',erro)
     if status=='Concluída':
         f=c.execute('SELECT id,status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         titulo=f'OS {o["numero_os"]} - {(o["descricao"] or "Serviço")[:140]}'
