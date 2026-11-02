@@ -234,6 +234,7 @@ class Janela(Adw.ApplicationWindow):
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)
         self.lista_navegacao.select_row(self.lista_navegacao.get_row_at_index(0))
+        GLib.idle_add(self._selecionar_inicio)
         return pagina
 
     def _sobre(self):
@@ -247,6 +248,10 @@ class Janela(Adw.ApplicationWindow):
             website="https://github.com/spindler051/AUTOSEG",
         )
         sobre.present(self)
+
+    def _selecionar_inicio(self):
+        self._ir_para("inicio")
+        return False
 
     def _navegar(self, _lista, linha):
         if linha is None:
@@ -594,7 +599,7 @@ class Janela(Adw.ApplicationWindow):
                      css="suggested-action"))
         pagina.append(topo)
         self.tabela_clientes = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("Nome / Razão Social", 0, True, 0.0),
             ("CPF / CNPJ", 145, False, 0.5),
             ("Cidade", 140, False, 0.0),
@@ -715,7 +720,7 @@ class Janela(Adw.ApplicationWindow):
         pagina.append(ui.barra(ui.legenda(
             "A tela mostra apenas OS abertas e pendentes. O histórico fica em Histórico e relatórios.")))
         self.tabela_os = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("OS", 85, False, 0.5),
             ("Cliente", 0, True, 0.0),
             ("Abertura", 110, False, 0.5),
@@ -866,7 +871,7 @@ class Janela(Adw.ApplicationWindow):
         self.resumo_valores = ui.legenda("")
         pagina.append(ui.barra(self.resumo_valores))
         self.tabela_historico = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("OS", 85, False, 0.5),
             ("Cliente", 0, True, 0.0),
             ("Conclusão", 140, False, 0.5),
@@ -996,7 +1001,7 @@ class Janela(Adw.ApplicationWindow):
                                ui.botao("Pesquisar", self.carregar_financeiro,
                                         icone="system-search-symbolic")))
         self.tabela_financeiro = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("OS", 85, False, 0.5),
             ("Cliente", 0, True, 0.0),
             ("Valor", 110, False, 0.5),
@@ -1262,7 +1267,7 @@ class Janela(Adw.ApplicationWindow):
         pagina.append(grade)
         pagina.append(ui.barra(ui.titulo("Últimas solicitações pelo portal", "title-3")))
         self.tabela_portal = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("OS", 85, False, 0.5),
             ("Cliente", 0, True, 0.0),
             ("Abertura", 130, False, 0.5),
@@ -1411,7 +1416,7 @@ class Janela(Adw.ApplicationWindow):
         chamados.append(ui.barra(ui.legenda(
             "Chamados só viram OS após análise AUTOSEG, confirmação do síndico e vínculo com cliente.")))
         self.tabela_chamados = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("OS", 80, False, 0.5),
             ("Condomínio", 0, True, 0.0),
             ("Solicitante", 160, False, 0.0),
@@ -1427,7 +1432,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Recusar", self._recusar_chamado, css="destructive-action")))
         organizacoes = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.tabela_organizacoes = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("Nome", 0, True, 0.0),
             ("Tipo", 110, False, 0.5),
             ("Situação", 140, False, 0.5),
@@ -1708,7 +1713,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Importar YAML", self._importar_servico),
             ui.botao("Arquivar / reativar", self._arquivar_servico)))
         self.tabela_catalogo = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("Serviço", 0, True, 0.0),
             ("Mão de obra", 130, False, 0.5),
             ("Situação", 110, False, 0.5),
@@ -1807,7 +1812,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Histórico", self._historico_material),
             ui.botao("Importar YAML", self._importar_materiais)))
         self.tabela_estoque = ui.Tabela([
-            ("ID", 50, False, 0.5),
+            ("ID", 65, False, 0.5),
             ("Material", 0, True, 0.0),
             ("Código", 120, False, 0.0),
             ("Unid.", 55, False, 0.5),
