@@ -20,13 +20,16 @@ import cadastros_v9 as cad9
 import links_publicos as links9
 import estoque_materiais as estoque
 from desktop_operacoes import DesktopOperacoesMixin
+from versao_app import versao_local
+
+VERSAO_APP = versao_local('9.6.0-dev.4')
 
 
 # ============================================================
 # CONFIGURAÇÕES
 # ============================================================
 
-APP_TITLE = "Gestão de Serviços"
+APP_TITLE = "AUTOSEG — Gestão de Serviços"
 WINDOW_WIDTH = 1150
 WINDOW_HEIGHT = 720
 
@@ -589,6 +592,14 @@ class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
             fg=GREEN,
             bg=DARK
         ).pack(side="left", padx=12)
+
+        tk.Label(
+            status,
+            text=f"AUTOSEG {VERSAO_APP}",
+            font=("Arial", 10, "bold"),
+            fg=YELLOW,
+            bg=DARK
+        ).pack(side="left")
 
         tk.Label(
             status,
