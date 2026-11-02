@@ -551,6 +551,7 @@ class PortalPrestador:
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
 
             def documentos(self,s,oid,kind):
+                prod.controlar_pdf(banco,oid,s['pid'])
                 with ext.db(banco) as c:
                     o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
                     if not o: return self.erro('OS inexistente.',404,s)
@@ -575,7 +576,9 @@ class PortalPrestador:
 
             def anexo(self,s,aid):
                 with ext.db(banco) as c:
-                    x=c.execute('SELECT nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+                    x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+                    if x and not prod.participou(c,x['os_id'],s['pid']):
+                        raise PermissionError('Anexo restrito aos técnicos participantes.')
                 if not x:return self.erro('Anexo não encontrado.',404,s)
                 arq=Path(x['caminho']).resolve()
                 if not arq.is_relative_to(ext.ANEXOS.resolve()):
@@ -621,6 +624,11 @@ class PortalPrestador:
                         return self.cliente_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='os' and partes[1].isdigit():
                         return self.os_form(s,int(partes[1]))
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='rascunho':
+                        oid=int(partes[1])
+                        rascunho=prod.recuperar_rascunho(banco,oid,s['pid'])
+                        if not rascunho:return self.erro('Nenhum rascunho salvo para esta OS.',404,s)
+                        return self.os_form(s,oid,preenchimento=rascunho['dados'])
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','email','nota'):
                         return self.documentos(s,int(partes[1]),partes[2])
                     if len(partes)==3 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit():
@@ -686,8 +694,19 @@ class PortalPrestador:
                         if not ok:raise ValueError('Anexo não pertence à OS.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
                         return self.redir(f'/os/{oid}')
+                    if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
+                        oid=int(partes[1])
+                        prod.salvar_rascunho(banco,oid,pid,d)
+                        imagens=[a for a in d.get('imagens_encerramento[]',[]) if isinstance(a,tuple) and a[0]]
+                        if len(imagens)>10:raise ValueError('Limite de 10 imagens por envio.')
+                        for nome,conteudo in imagens:
+                            ext.salvar_imagem(banco,oid,pid,nome,conteudo)
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
+                        if acao=='rota':
+                            prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
+                            return self.redir(f'/os/{oid}')
                         if acao=='salvar':
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS. O botão de salvar progresso foi removido.')
                             # Só o botão de encerramento aplica o status escolhido.
@@ -695,7 +714,14 @@ class PortalPrestador:
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
                             if not str(d.get('relatorio_tecnico','')).strip():
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
+                            destinatarios=(prod.destinatarios_conclusao(banco,oid,str(d.get('email_adicional','')))
+                                           if str(d.get('acao_status',''))=='Concluída' else None)
                             neg.os_salvar(banco,d,pid,oid)
+                            prod.limpar_rota_ao_iniciar(banco,oid)
+                            if d.get('acao_status') in ('Pendente','Concluída'):
+                                prod.registrar_etapa(banco,oid,pid,str(d.get('acao_status')),d)
+                            if destinatarios:
+                                prod.registrar_envio(banco,oid,destinatarios)
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
                             if str(d.get('acao_status','')) in fluxo.FIM:
                                 try: fluxo.publicar_relatorio(banco,oid)
@@ -713,6 +739,7 @@ class PortalPrestador:
                             ext.assumir(banco,oid,pid)
                         elif acao=='iniciar':
                             aten.iniciar_assumindo(banco,oid,pid)
+                            prod.limpar_rota_ao_iniciar(banco,oid)
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
