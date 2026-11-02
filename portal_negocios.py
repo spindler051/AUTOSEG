@@ -217,6 +217,11 @@ def os_salvar(banco,d,pid,oid=None):
                 ext.registrar_imagem_transacao(c,oid,pid,imagem[0],imagem[1],permitir_colaboracao=True)
             fluxo.aplicar_encerramento(c,oid,acao,relato,motivo,
                  prestador_id=pid,ator=f'Prestador ID {pid}')
+            if acao=='Concluída':
+                # Rateio validado e persistido na MESMA transação do encerramento.
+                # Se a distribuição for inválida, toda conclusão é revertida.
+                import produtividade_os as prod
+                prod.registrar_rateios_na_transacao(c,oid,pid,total,d)
             audit(c,pid,'OS encerrada',oid,acao+(' | Motivo: '+motivo if motivo else ''))
         # Mantém financeiro Aguardando sincronizado após edição de OS já concluída.
         if acao=='salvar':
