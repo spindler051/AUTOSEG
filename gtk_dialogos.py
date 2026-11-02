@@ -19,6 +19,7 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import estoque_materiais as estoque
 import catalogo_servicos as catalogo
+import importacao_yaml
 
 
 def _linha_custom(widget):
@@ -28,23 +29,24 @@ def _linha_custom(widget):
 
 
 class DialogoCliente(Adw.Dialog):
-    def __init__(self, janela, cliente_id=None):
+    def __init__(self, janela, cliente_id=None, importado=None):
         super().__init__()
         self.janela = janela
         self.cliente_id = cliente_id
-        self.dados = {}
+        self.dados = dict(importado) if importado else {}
         if cliente_id is not None:
             with ext.db(BANCO) as c:
                 registro = c.execute("SELECT * FROM clientes WHERE id=?", (cliente_id,)).fetchone()
                 self.dados = dict(registro) if registro else {}
 
-        self.set_title("Editar cliente" if cliente_id else "Novo cliente")
+        titulo = "Editar cliente" if cliente_id else (
+            "Novo cliente (YAML)" if importado else "Novo cliente")
+        self.set_title(titulo)
         self.set_content_width(700)
         self.set_content_height(780)
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        header.set_title_widget(Adw.WindowTitle(
-            title="Editar cliente" if cliente_id else "Novo cliente"))
+        header.set_title_widget(Adw.WindowTitle(title=titulo))
         toolbar.add_top_bar(header)
 
         pagina = Adw.PreferencesPage()
@@ -384,12 +386,13 @@ class DialogoEstoqueOS(Adw.Dialog):
 
 
 class DialogoOS(Adw.Dialog):
-    def __init__(self, janela, os_id=None, modo=None, cliente_id=None):
+    def __init__(self, janela, os_id=None, modo=None, cliente_id=None, importado=None):
         super().__init__()
         self.janela = janela
         self.os_id = os_id
         self.modo = modo
-        self.cliente_inicial = cliente_id
+        self.importado = importado or {}
+        self.cliente_inicial = cliente_id or self.importado.get("cliente_id")
         self.materiais = []
         self.imagens = []
         self.dados = None
@@ -397,6 +400,8 @@ class DialogoOS(Adw.Dialog):
         self.andamento = None
         self.encerramento = None
         self._carregar()
+        if self.os_id is None and self.importado:
+            self.materiais = [dict(m) for m in self.importado.get("materiais", [])]
         self._construir()
 
     def _carregar(self):
@@ -451,6 +456,7 @@ class DialogoOS(Adw.Dialog):
 
         grupo = Adw.PreferencesGroup(title="Identificação")
         pagina.add(grupo)
+        base = self.dados or self.importado or {}
         self.opcoes_cliente = [f"{x['id']} - {x['nome']}" for x in self.clientes]
         indice = 0
         alvo = self.dados.get("cliente_id") if self.dados else self.cliente_inicial
@@ -461,16 +467,21 @@ class DialogoOS(Adw.Dialog):
                     break
         self.cliente = ui.campo_combo(grupo, "Cliente", self.opcoes_cliente or ["Nenhum cliente"], indice)
         self.tecnico = ui.campo_entry(grupo, "Atendido por (cliente no local)",
-                                      (self.dados or {}).get("tecnico", ""))
+                                      base.get("tecnico", ""))
         pagamentos = ["PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"]
-        pagamento = (self.dados or {}).get("forma_pagamento", "PIX")
+        pagamento = base.get("forma_pagamento", "PIX")
         self.pagamento = ui.campo_combo(
             grupo, "Forma de pagamento", pagamentos,
             pagamentos.index(pagamento) if pagamento in pagamentos else 0)
+        urgencias = ["Baixa", "Normal", "Alta"]
+        urgencia = base.get("urgencia", "Normal")
+        self.urgencia = ui.campo_combo(
+            grupo, "Urgência", urgencias,
+            urgencias.index(urgencia) if urgencia in urgencias else 1)
 
         grupo = Adw.PreferencesGroup(title="Serviço")
         pagina.add(grupo)
-        descricao = (self.dados or {}).get("descricao", "")
+        descricao = base.get("descricao", "")
         editavel = True
         if self.original_portal is not None:
             descricao = self.original_portal
@@ -494,6 +505,11 @@ class DialogoOS(Adw.Dialog):
         acoes_materiais = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         acoes_materiais.append(ui.botao("Adicionar", self._adicionar_material))
         acoes_materiais.append(ui.botao("Do estoque", self._do_estoque))
+        acoes_materiais.append(ui.botao("Materiais YAML", self._importar_materiais_yaml))
+        acoes_materiais.append(ui.botao(
+            "Modelo YAML",
+            lambda: self.janela._baixar_modelo_yaml(
+                "modelo_materiais_os.yaml", importacao_yaml.MODELO_MATERIAIS_OS_VAZIO)))
         acoes_materiais.append(ui.botao("Editar", self._editar_material))
         acoes_materiais.append(ui.botao("Remover", self._remover_material, css="destructive-action"))
         self.total_materiais = Gtk.Label(label="", xalign=1)
@@ -507,11 +523,11 @@ class DialogoOS(Adw.Dialog):
         grupo = Adw.PreferencesGroup(title="Valores")
         pagina.add(grupo)
         self.mao_obra = ui.campo_entry(grupo, "Mão de obra (R$)",
-                                       ui.dinheiro_texto((self.dados or {}).get("valor_mao_obra", 0)))
+                                       ui.dinheiro_texto(base.get("valor_mao_obra", base.get("mao_obra", 0))))
         self.materiais_valor = ui.campo_entry(grupo, "Materiais (R$)",
-                                              ui.dinheiro_texto((self.dados or {}).get("valor_materiais", 0)))
+                                              ui.dinheiro_texto(base.get("valor_materiais", 0)))
         self.total = ui.campo_entry(grupo, "Valor total (R$)",
-                                    ui.dinheiro_texto((self.dados or {}).get("valor_total", 0)))
+                                    ui.dinheiro_texto(base.get("valor_total", 0)))
         self.mao_obra.connect("notify::text", lambda *_args: self._recalcular())
         self.materiais_valor.connect("notify::text", lambda *_args: self._recalcular())
         self.total.connect("notify::text", lambda *_args: None)
@@ -522,7 +538,7 @@ class DialogoOS(Adw.Dialog):
         grupo = Adw.PreferencesGroup(title="Observações")
         pagina.add(grupo)
         self.observacoes = ui.campo_texto(
-            grupo, "", (self.dados or {}).get("observacoes", ""), 90)
+            grupo, "", base.get("observacoes", ""), 90)
 
         self.status = None
         self.relatorio = None
@@ -643,6 +659,29 @@ class DialogoOS(Adw.Dialog):
             ui.info(self.janela, "Estoque", "Nenhum produto cadastrado no estoque.")
             return
         DialogoEstoqueOS(self.janela, self._inserir_material).present(self.janela)
+
+    def _importar_materiais_yaml(self):
+        dialogo = Gtk.FileDialog(title="Importar materiais da OS em YAML")
+        filtro = Gtk.FileFilter()
+        filtro.set_name("YAML")
+        filtro.add_pattern("*.yaml")
+        filtro.add_pattern("*.yml")
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dialogo.set_filters(filtros)
+        dialogo.open(self.janela, None, self._materiais_yaml_escolhidos)
+
+    def _materiais_yaml_escolhidos(self, dialogo, resultado):
+        try:
+            arquivo = dialogo.open_finish(resultado)
+            caminho = Path(arquivo.get_path())
+            materiais = importacao_yaml.materiais_os(caminho.name, caminho.read_bytes())
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "YAML de materiais", str(erro))
+            return
+        self.materiais.extend(materiais)
+        self._atualizar_materiais()
+        ui.toast(self.janela, f"{len(materiais)} material(is) importado(s) do YAML.")
 
     def _editar_material(self):
         indice = self.tabela_materiais.indice()
@@ -800,10 +839,11 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """INSERT INTO ordens_servico
                     (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                     valor_materiais,valor_total,forma_pagamento,status,observacoes,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?)""",
+                     valor_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?)""",
                     (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
-                     tecnico, descricao, mao_obra, materiais, total, pagamento, observacoes,
+                     tecnico, descricao, mao_obra, materiais, total, pagamento,
+                     ui.valor_combo(self.urgencia), observacoes,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 os_salvo_id = cursor.lastrowid
                 aten.registrar_solicitacao(cursor, os_salvo_id, cliente_id, descricao,
@@ -812,9 +852,10 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
                     valor_mao_obra=?,valor_materiais=?,valor_total=?,forma_pagamento=?,
-                    observacoes=?,atualizado_em=? WHERE id=?""",
+                    urgencia=?,observacoes=?,atualizado_em=? WHERE id=?""",
                     (cliente_id, tecnico, descricao, mao_obra, materiais, total, pagamento,
-                     observacoes, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
+                     ui.valor_combo(self.urgencia), observacoes,
+                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
                 os_salvo_id = self.os_id
 
             anteriores = [(m["item"], float(m["quantidade"] or 0), float(m["valor_unitario"] or 0))

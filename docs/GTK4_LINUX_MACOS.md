@@ -206,6 +206,37 @@ Isso não confirma que o documento existe ou pertence à pessoa. CNPJ
 alfanumérico ainda não é suportado porque o campo/banco atuais trabalham com
 dígitos.
 
+## Importação e modelos YAML
+
+O GTK importa YAML para **pré-preencher** formulários; nada é gravado sem o
+botão de salvar e sem as validações normais.
+
+- **Clientes → Importar YAML**: abre o cadastro preenchido para revisão.
+- **Ordens de serviço → Importar YAML**: abre uma OS nova preenchida;
+  o cliente é localizado por `cliente_id` ou `cliente_documento`.
+- **Materiais e estoque → Importar YAML**: lote de produtos para revisão.
+- **OS → Materiais YAML**: adiciona itens à lista de materiais da OS.
+
+Cada tela tem **Modelo YAML**, que salva um arquivo vazio para preencher. O
+modelo de OS aceita:
+
+```yaml
+versao: 1
+ordem_servico:
+  cliente_id: 123
+  cliente_documento: ""
+  tecnico: ""
+  descricao: ""
+  forma_pagamento: PIX
+  mao_obra: 0
+  observacoes: ""
+  urgencia: Normal
+  materiais: []
+```
+
+Regras: `versao: 1`, UTF-8, até 64 KB, sem aliases/âncoras YAML. A importação
+não ignora CPF/CNPJ, duplicidade, limite de materiais nem validação de OS.
+
 ## Aparência do sistema (fora do app)
 
 O app não tem seletor de tema claro/escuro nem de cor de destaque. Ele segue o

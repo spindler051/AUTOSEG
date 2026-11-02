@@ -595,6 +595,8 @@ class Janela(Adw.ApplicationWindow):
         topo = ui.barra(
             self.busca_clientes,
             ui.botao("Pesquisar", self.carregar_clientes, icone="system-search-symbolic"),
+            ui.botao("Importar YAML", self._importar_cliente_yaml),
+            ui.botao("Modelo YAML", self._modelo_cliente_yaml),
             ui.botao("Novo cliente", self.novo_cliente, icone="list-add-symbolic",
                      css="suggested-action"))
         pagina.append(topo)
@@ -700,6 +702,59 @@ class Janela(Adw.ApplicationWindow):
         if valores:
             dialogos.DialogoSenhaCliente(self, valores[0], valores[1]).present(self)
 
+    def _escolher_yaml(self, titulo_texto, callback):
+        dialogo = Gtk.FileDialog(title=titulo_texto)
+        filtro = Gtk.FileFilter()
+        filtro.set_name("YAML")
+        filtro.add_pattern("*.yaml")
+        filtro.add_pattern("*.yml")
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dialogo.set_filters(filtros)
+        dialogo.open(self, None, callback)
+
+    def _importar_cliente_yaml(self):
+        self._escolher_yaml("Importar cliente YAML", self._cliente_yaml_escolhido)
+
+    def _cliente_yaml_escolhido(self, dialogo, resultado):
+        try:
+            arquivo = dialogo.open_finish(resultado)
+            caminho = Path(arquivo.get_path())
+            pre = importacao_yaml.cliente(caminho.name, caminho.read_bytes())
+        except Exception as erro:
+            ui.aviso_erro(self, "YAML de cliente", str(erro))
+            return
+        dialogos.DialogoCliente(self, importado=pre).present(self)
+
+    def _modelo_cliente_yaml(self):
+        self._baixar_modelo_yaml("modelo_cliente.yaml", importacao_yaml.MODELO_CLIENTE_VAZIO)
+
+    def _baixar_modelo_yaml(self, nome, conteudo):
+        dialogo = Gtk.FileDialog(title="Salvar modelo YAML", initial_name=nome)
+        filtro = Gtk.FileFilter()
+        filtro.set_name("YAML")
+        filtro.add_pattern("*.yaml")
+        filtro.add_pattern("*.yml")
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dialogo.set_filters(filtros)
+        dialogo.save(self, None, lambda d, r: self._modelo_salvo(d, r, conteudo))
+
+    def _modelo_salvo(self, dialogo, resultado, conteudo):
+        try:
+            arquivo = dialogo.save_finish(resultado)
+            destino = Path(arquivo.get_path())
+        except GLib.Error:
+            return
+        if destino.suffix.lower() not in (".yaml", ".yml"):
+            destino = destino.with_suffix(".yaml")
+        try:
+            destino.write_text(conteudo, encoding="utf-8")
+        except OSError as erro:
+            ui.aviso_erro(self, "Modelo YAML", str(erro))
+            return
+        ui.toast(self, f"Modelo salvo em {destino}")
+
     # ------------------------------------------------------------------
     # Ordens de serviço
     # ------------------------------------------------------------------
@@ -714,6 +769,8 @@ class Janela(Adw.ApplicationWindow):
             self.busca_os,
             ui.botao("Nova OS", lambda: self.nova_os(), icone="list-add-symbolic",
                      css="suggested-action"),
+            ui.botao("Importar YAML", self._importar_os_yaml),
+            ui.botao("Modelo YAML", self._modelo_os_yaml),
             ui.botao("Histórico / PDF", lambda: self._ir_para("historico")),
             ui.botao("Atribuir / transferir", self._atribuir_os_selecionada))
         pagina.append(topo)
@@ -800,6 +857,41 @@ class Janela(Adw.ApplicationWindow):
                 dialogos.DialogoAtribuicao(self, valores[0]).present(self)
             except Exception as erro:
                 ui.aviso_erro(self, "Atribuição", str(erro))
+
+    def _importar_os_yaml(self):
+        self._escolher_yaml("Importar ordem de serviço YAML", self._os_yaml_escolhido)
+
+    def _os_yaml_escolhido(self, dialogo, resultado):
+        try:
+            arquivo = dialogo.open_finish(resultado)
+            caminho = Path(arquivo.get_path())
+            pre = importacao_yaml.ordem_servico(caminho.name, caminho.read_bytes())
+            conexao = conectar_banco()
+            try:
+                if pre.get("cliente_id"):
+                    row = conexao.execute(
+                        "SELECT id,nome FROM clientes WHERE id=? AND status!='Inativo'",
+                        (pre["cliente_id"],)).fetchone()
+                else:
+                    doc = cad9.digitos(pre.get("cliente_documento", ""))
+                    row = conexao.execute(
+                        """SELECT id,nome FROM clientes
+                           WHERE status!='Inativo' AND replace(
+                               replace(replace(replace(documento,'.',''),'/',''),'-',''),' ','')=?
+                           LIMIT 1""", (doc,)).fetchone()
+            finally:
+                conexao.close()
+            if not row:
+                raise ValueError("Cliente do YAML não encontrado. Informe cliente_id ou "
+                                 "cliente_documento de um cliente ativo.")
+            pre["cliente_id"] = row["id"]
+        except Exception as erro:
+            ui.aviso_erro(self, "YAML de ordem de serviço", str(erro))
+            return
+        dialogos.DialogoOS(self, importado=pre).present(self)
+
+    def _modelo_os_yaml(self):
+        self._baixar_modelo_yaml("modelo_ordem_servico.yaml", importacao_yaml.MODELO_OS_VAZIO)
 
     def nova_os(self, cliente_id=None):
         conexao = conectar_banco()
@@ -1810,7 +1902,8 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Editar", self._editar_material),
             ui.botao("Entrada / ajuste", self._ajustar_material),
             ui.botao("Histórico", self._historico_material),
-            ui.botao("Importar YAML", self._importar_materiais)))
+            ui.botao("Importar YAML", self._importar_materiais),
+            ui.botao("Modelo YAML", self._modelo_materiais)))
         self.tabela_estoque = ui.Tabela([
             ("ID", 65, False, 0.5),
             ("Material", 0, True, 0.0),
@@ -1876,6 +1969,9 @@ class Janela(Adw.ApplicationWindow):
         valores = self.tabela_estoque.selecionado()
         dialogos.DialogoHistoricoEstoque(
             self, valores[0] if valores else None).present(self)
+
+    def _modelo_materiais(self):
+        self._baixar_modelo_yaml("modelo_materiais.yaml", importacao_yaml.MODELO_MATERIAIS_VAZIO)
 
     def _importar_materiais(self):
         dialogo = Gtk.FileDialog(title="Importar materiais YAML")
