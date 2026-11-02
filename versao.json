@@ -1,9 +1,9 @@
 {
   "produto": "AUTOSEG",
-  "versao": "9.6.0-dev.3",
-  "revisao": "REV09",
+  "versao": "9.6.0-dev.4",
+  "revisao": "REV10",
   "canal": "dev",
   "homologado": false,
-  "schema_banco": "aditivo (os_deslocamentos, os_rascunhos_web, produtividade)",
+  "schema_banco": "aditivo (os_deslocamentos, os_rascunhos_web, os_anexos.chave/sha256, legendas)",
   "data": "2026-11-02"
 }

@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.4 — REV10 — 2026-11-02 — develop
+
+- **SALVAR RASCUNHO** agora aparece em destaque no topo e no rodapé do formulário da OS no Portal Prestador, além do desktop. Salva diagnóstico, execução, resultado, relatório, materiais, valores, observações, fotos e legendas sem alterar o status.
+- **Legendas de fotos antes da finalização:** cada foto nova mostra prévia e campo “Legenda da foto”; fotos já salvas no rascunho reaparecem com a legenda editável.
+- `os_anexos` recebeu `chave` e `sha256`; reenvios do mesmo arquivo atualizam a legenda em vez de duplicar a foto no SQLite.
+- A legenda é associada à foto por chave/hash e incluída no PDF final (validado com extração de texto do PDF).
+- O rascunho persiste após reiniciar o servidor e é recuperado ao reabrir a OS; teste visual com Chrome/Playwright e teste HTTP automatizado.
+- Rodapé do Portal Prestador passa a exibir a versão em execução.
+
+Pendente: homologação manual do usuário e promoção para main.
+
 ## 9.6.0-dev.3 — REV09 — 2026-11-02 — develop (validação local)
 
 Fluxo de OS separado em ações independentes:
