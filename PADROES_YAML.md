@@ -65,3 +65,24 @@ O catálogo aceita até 30 materiais por serviço. Em branco: `materiais: []`. O
 - A importação de YAML não concede permissões de síndico e não envia e-mails.
 - Uma importação de modelo de serviço não gera orçamento nem OS até que alguém execute essas ações.
 - Não retire o `versao: 1`, não use tabulação para indentar e não ultrapasse o limite de tamanho.
+
+## Modelo de relatório REV12 (instruções + modelo + exemplo)
+
+O arquivo `modelo_relatorio_os.yaml` agora tem três partes:
+
+- `instrucoes`: objetivo, regras e descrição de cada campo.
+- `modelo.os`: estrutura vazia que deve ser preenchida.
+- `exemplo`: relato do técnico e saída esperada.
+
+Regras para preenchimento por IA ou pessoa:
+
+1. Usar exclusivamente o relato do técnico.
+2. Não inventar procedimentos, materiais, horários, resultados ou recomendações.
+3. Preservar os nomes e a estrutura dos campos.
+4. Omitir ou deixar vazio o que não foi informado.
+5. Corrigir apenas a redação, sem mudar o sentido.
+6. Devolver somente `versao` e `os` preenchidos; não devolver `instrucoes`, `modelo` ou `exemplo`.
+
+O backend valida a saída contra os campos permitidos (`diagnostico`, `execucao`,
+`resultado`, `relatorio_tecnico`, `materiais`) e rejeita campos desconhecidos,
+materiais inválidos e arquivos acima de 64 KB.

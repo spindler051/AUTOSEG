@@ -626,6 +626,12 @@ class Janela(Adw.ApplicationWindow):
     def novo_cliente(self):
         dialogos.DialogoCliente(self).present(self)
 
+    def nova_os_rapida(self):
+        try:
+            dialogos.DialogoOSRapida(self).present(self)
+        except Exception as erro:
+            ui.aviso_erro(self, "Nova OS rápida", str(erro))
+
     def _atribuir_responsavel(self):
         try:
             dialogos.DialogoResponsavel(self).present(self)
@@ -771,8 +777,9 @@ class Janela(Adw.ApplicationWindow):
         self.busca_os.connect("search-changed", lambda *_args: self.carregar_os())
         topo = ui.barra(
             self.busca_os,
-            ui.botao("Nova OS", lambda: self.nova_os(), icone="list-add-symbolic",
+            ui.botao("Nova OS rápida", self.nova_os_rapida, icone="list-add-symbolic",
                      css="suggested-action"),
+            ui.botao("Nova OS completa", lambda: self.nova_os()),
             ui.botao("Importar YAML", self._importar_os_yaml),
             ui.botao("Modelo YAML", self._modelo_os_yaml),
             ui.botao("Histórico / PDF", lambda: self._ir_para("historico")),

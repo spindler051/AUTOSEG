@@ -338,8 +338,9 @@ class ServidorPortal:
                             'background_color': '#0A0A0A',
                             'theme_color': '#FFD400',
                         }).encode(), 'application/manifest+json')
-                    if path in ('/icone.png', '/favicon.ico'):
-                        icone = pasta_app / 'icone.png'
+                    if path in ('/icone.png', '/favicon.ico', '/logo.png'):
+                        nome = 'logo.png' if path == '/logo.png' else 'icone.png'
+                        icone = pasta_app / nome
                         if icone.is_file():
                             mime = mimetypes.guess_type(icone.name)[0] or 'image/png'
                             return self.send_bytes(icone.read_bytes(), mime)

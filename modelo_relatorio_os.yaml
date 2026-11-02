@@ -1,8 +1,64 @@
-# Modelo reutilizável em qualquer OS aberta. A identificação já está no sistema.
+# Modelo reutilizável para preencher uma OS aberta.
+# Leia as instruções e use SOMENTE o que o técnico relatou.
+# A saída deve conter apenas a seção "os" preenchida (e "versao: 1").
 versao: 1
-os:
-  diagnostico: Inspeção do automatizador.
-  execucao: Ajuste e testes realizados.
-  resultado: Sistema funcionando normalmente.
-  relatorio_tecnico: Relatório revisado pelo prestador.
-  materiais: []
+
+instrucoes:
+  objetivo: >-
+    Preencher os campos da ordem de serviço com base exclusivamente
+    no relato fornecido pelo técnico.
+
+  regras:
+    - Não inventar informações, procedimentos, materiais ou resultados.
+    - Não deduzir informações que não foram explicitamente relatadas.
+    - Corrigir a redação e organizar o relato sem alterar seu significado.
+    - Manter os nomes e a estrutura dos campos do modelo.
+    - Se uma informação não foi fornecida, não a inventar.
+    - Não adicionar campos novos.
+    - Retornar somente o YAML preenchido, sem explicações.
+
+  campos:
+    diagnostico: >-
+      Descrever o problema identificado e sua causa, somente se informada.
+    execucao: >-
+      Descrever o que foi realizado durante o atendimento.
+    resultado: >-
+      Informar o resultado explicitamente relatado pelo técnico.
+    relatorio_tecnico: >-
+      Registrar recomendações ou observações fornecidas pelo técnico.
+    materiais: >-
+      Listar somente os materiais explicitamente informados.
+      Se nenhum material foi informado, manter uma lista vazia.
+
+modelo:
+  os:
+    diagnostico: ""
+    execucao: ""
+    resultado: ""
+    relatorio_tecnico: ""
+    materiais: []
+
+exemplo:
+  relato_tecnico: >-
+    Chegamos no local dia 2 de novembro de 2026, às 5h30.
+    O portão não fechava porque o sensor estava desalinhado.
+    Cobrimos o sensor e o relé não clicava. Alinhamos o sensor,
+    fizemos a obstrução e o sistema voltou a funcionar.
+    Se acontecer novamente, recomendamos fazer essa checagem.
+
+  saida:
+    os:
+      diagnostico: >-
+        Inspeção do automatizador. O portão não estava fechando
+        devido ao desalinhamento do sensor.
+      execucao: >-
+        Chegamos ao local em 02/11/2026 às 5h30. Realizamos análise
+        técnica e identificamos o desalinhamento do sensor por meio
+        de análise física. Ao cobrir o sensor, verificamos que o relé
+        não era ativado (não fazia clique). Alinhamos o sensor e
+        realizamos novamente o teste de obstrução.
+      resultado: Sistema funcionando normalmente.
+      relatorio_tecnico: >-
+        Caso o problema ocorra novamente, recomendamos realizar
+        essa checagem do sensor.
+      materiais: []

@@ -277,6 +277,68 @@ class MelhoriasRev12(unittest.TestCase):
             self.assertIsNone(c.execute('SELECT 1 FROM v9_responsaveis WHERE organizacao_id=?',
                                         (org,)).fetchone())
 
+    def test_os_rapida_cria_aberta_e_atribuicao_nao_muda_status(self):
+        from portal_prestador import PortalPrestador
+        pid = ext.cadastrar(self.db, 'Prestador Rápido', 'rapido@example.org', 'senha-bem-segura-2026')
+        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
+        dados.update(nome='Condomínio Rápido', tipo_pessoa='Jurídica', status='Ativo')
+        cid = neg.cliente_salvar(self.db, dados, pid)
+        servidor = PortalPrestador(self.db, '127.0.0.1', 0)
+        servidor.iniciar()
+        self.addCleanup(servidor.parar)
+        base = f'http://127.0.0.1:{servidor.servidor.server_port}'
+        prestador = browser()
+        status, html = req(prestador, base, '/login',
+                           {'email': 'rapido@example.org', 'senha': 'senha-bem-segura-2026'})
+        token = csrf(html)
+        status, html = req(prestador, base, '/os/rapida')
+        self.assertEqual(status, 200)
+        self.assertIn('Nova OS rápida', html)
+        status, html = req(prestador, base, '/os/rapida/salvar', {
+            'csrf': token, 'cliente_texto': f'{cid} — Condomínio Rápido',
+            'descricao': 'Solicitação criada pelo fluxo rápido', 'prestador_id': str(pid)})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            row = c.execute("SELECT id,status FROM ordens_servico WHERE descricao LIKE '%fluxo rápido%'").fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row['status'], 'Aberta')
+            self.assertEqual(c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?',
+                                       (row['id'],)).fetchone()['prestador_id'], pid)
+            # Atribuir novamente não muda o status.
+            ext.atribuir(self.db, row['id'], pid)
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                       (row['id'],)).fetchone()['status'], 'Aberta')
+
+    def test_logo_e_icone_nos_dois_portais(self):
+        from portal_prestador import PortalPrestador
+        from servidor_web import ServidorPortal
+        pid = ext.cadastrar(self.db, 'Prestador Logo', 'logo@example.org', 'senha-bem-segura-2026')
+        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
+        dados.update(nome='Cliente Logo', tipo_pessoa='Física', status='Ativo')
+        neg.cliente_salvar(self.db, dados, pid)
+        cs = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
+        cs.iniciar(); self.addCleanup(cs.parar)
+        ps = PortalPrestador(self.db, '127.0.0.1', 0)
+        ps.iniciar(); self.addCleanup(ps.parar)
+        for base in (f'http://127.0.0.1:{cs.porta}', f'http://127.0.0.1:{ps.servidor.server_port}'):
+            status, logo = req(browser(), base, '/logo.png', binary=True)
+            self.assertEqual(status, 200)
+            self.assertTrue(logo.startswith(b'\x89PNG'))
+            status, icone = req(browser(), base, '/icone.png', binary=True)
+            self.assertEqual(status, 200)
+            self.assertTrue(icone.startswith(b'\x89PNG'))
+
+    def test_yaml_modelo_com_instrucoes_e_saida_estrita(self):
+        import importacao_yaml as iy
+        modelo = (Path(__file__).with_name('modelo_relatorio_os.yaml')).read_bytes()
+        self.assertEqual(iy.relatorio('modelo_relatorio_os.yaml', modelo), {})
+        saida = ('versao: 1\nos:\n  diagnostico: Diagnóstico X\n  execucao: Execução Y\n'
+                 '  resultado: OK\n  relatorio_tecnico: Recomendação Z\n  materiais: []\n').encode('utf-8')
+        dados = iy.relatorio('saida.yaml', saida)
+        self.assertEqual(dados['v9_diagnostico'], 'Diagnóstico X')
+        with self.assertRaises(ValueError):
+            iy.relatorio('ruim.yaml', b'versao: 1\ninstrucoes: {}\nos: {}\n')
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

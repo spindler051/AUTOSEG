@@ -17,6 +17,7 @@ import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
+import portal_negocios as neg
 import estoque_materiais as estoque
 import catalogo_servicos as catalogo
 import importacao_yaml
@@ -1542,3 +1543,92 @@ class DialogoResponsavel(Adw.Dialog):
         ui.toast(self.janela, "Responsável removido. O vínculo continua como morador.")
         self.close()
         self.janela.carregar_clientes()
+
+class DialogoOSRapida(Adw.Dialog):
+    """Cria OS aberta com busca de condomínio/cliente e atribuição opcional."""
+
+    def __init__(self, janela):
+        super().__init__()
+        self.janela = janela
+        with ext.db(BANCO) as c:
+            self.clientes = [dict(x) for x in c.execute(
+                "SELECT id,nome,tipo_pessoa FROM clientes WHERE status!='Inativo' ORDER BY nome")]
+            self.prestadores = [dict(x) for x in c.execute(
+                "SELECT id,nome FROM prestadores WHERE ativo=1 ORDER BY nome")]
+        if not self.clientes:
+            raise ValueError("Cadastre um condomínio ou cliente antes de abrir a OS.")
+        self.set_title("Nova OS rápida")
+        self.set_content_width(680)
+        self.set_content_height(520)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title="Nova OS rápida"))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(
+            title="Condomínio, cliente e solicitação",
+            description="A OS é criada como Aberta, pronta para preenchimento e finalização.")
+        pagina.add(grupo)
+        self.filtro = Gtk.SearchEntry(placeholder_text="Buscar condomínio, empresa ou cliente")
+        self.filtro.connect("search-changed", lambda *_args: self._filtrar())
+        grupo.add(_linha_custom(self.filtro))
+        self.clientes_filtrados = list(self.clientes)
+        self.combo_cliente = ui.campo_combo(
+            grupo, "Cliente / condomínio",
+            [f"#{x['id']} {x['nome']} ({x['tipo_pessoa']})" for x in self.clientes_filtrados], 0)
+        self.solicitacao = ui.campo_texto(grupo, "Solicitação / descrição do serviço",
+                                          altura=110)
+        opcoes = ["Não atribuir agora"] + [f"#{p['id']} {p['nome']}" for p in self.prestadores]
+        self.combo_prestador = ui.campo_combo(grupo, "Atribuir prestador (opcional)", opcoes, 0)
+        toolbar.set_content(pagina)
+        rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        rodape.set_margin_top(10)
+        rodape.set_margin_bottom(10)
+        rodape.set_margin_start(18)
+        rodape.set_margin_end(18)
+        rodape.append(ui.botao("Cancelar", self.close))
+        espaco = Gtk.Box()
+        espaco.set_hexpand(True)
+        rodape.append(espaco)
+        rodape.append(ui.botao("Criar OS aberta", self._salvar, css="suggested-action"))
+        toolbar.add_bottom_bar(rodape)
+        self.set_child(toolbar)
+
+    def _filtrar(self):
+        termo = self.filtro.get_text().strip().casefold()
+        self.clientes_filtrados = [x for x in self.clientes
+                                   if not termo or termo in str(x["nome"]).casefold()
+                                   or termo in str(x["id"])]
+        if not self.clientes_filtrados:
+            self.clientes_filtrados = list(self.clientes)
+        self.combo_cliente.set_model(Gtk.StringList.new(
+            [f"#{x['id']} {x['nome']} ({x['tipo_pessoa']})" for x in self.clientes_filtrados]))
+        self.combo_cliente.set_selected(0)
+
+    def _salvar(self):
+        indice = int(self.combo_cliente.get_selected())
+        if not 0 <= indice < len(self.clientes_filtrados):
+            ui.aviso_erro(self.janela, "Cliente", "Selecione um cliente/condomínio válido.")
+            return
+        descricao = self.solicitacao.get_texto().strip()
+        if len(descricao) < 5:
+            ui.aviso_erro(self.janela, "Solicitação", "Descreva a solicitação com pelo menos 5 caracteres.")
+            return
+        cliente = self.clientes_filtrados[indice]
+        dados = {"cliente_id": str(cliente["id"]), "descricao": descricao, "tecnico": "",
+                 "forma_pagamento": "PIX", "valor_mao_obra": "0",
+                 "valor_materiais_manual": "0", "materiais_presentes": "1",
+                 "acao_status": "salvar"}
+        try:
+            oid = neg.os_salvar(BANCO, dados, 0)
+            escolhido = int(self.combo_prestador.get_selected())
+            if escolhido > 0 and self.prestadores:
+                ext.atribuir(BANCO, oid, self.prestadores[escolhido - 1]["id"],
+                             ator="Desktop AUTOSEG")
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Não foi possível criar a OS", str(erro))
+            return
+        ui.toast(self.janela, "OS aberta criada. Preencha e finalize quando necessário.")
+        self.close()
+        self.janela.carregar_os()
+

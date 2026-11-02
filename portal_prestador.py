@@ -86,11 +86,12 @@ def layout(titulo,corpo,usuario=None,nonce=None):
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
-    footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · Gmail envia pela API apenas com AUTOSEG_GMAIL_ENVIO=1 e OAuth configurado; NFS-e segue como rascunho.</footer>'''
+    ambiente='DEV (testes)' if os.environ.get('AUTOSEG_DEV')=='1' else 'produção'
+    footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(titulo)} · AUTOSEG</title><style>
+<title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:#fff;font:16px -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.45}}
 a{{color:var(--yellow)}}header{{background:#171717;border-bottom:3px solid var(--yellow)}}.top{{max-width:1240px;margin:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 18px}}
@@ -109,7 +110,7 @@ form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;ove
 fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-</style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/">AUTOSEG</a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
+</style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/" style="display:flex;align-items:center;gap:10px"><img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block"><span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
 
 
 class PortalPrestador:
@@ -289,7 +290,7 @@ class PortalPrestador:
                         esc(x.get('participantes') or 'Nenhum')))
                 return self.pagina('Ordens de serviço abertas e pendentes',
                     '<p class="muted">Todos os prestadores veem as OS abertas e pendentes, mesmo quando atribuídas a outros.</p>'
-                    +f'<p>{botao("+ Nova OS","/os/nova")}</p>'
+                    +f'<p>{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</p>'
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
             def inicio(self,s):
@@ -444,6 +445,33 @@ class PortalPrestador:
                     corpo+=f'<form method="post" action="/clientes/{cid}/desativar">{self.hidden(s)}<button class="secondary">Desativar (preservar histórico)</button></form>'
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
+
+            def os_rapida_form(self, s, erro=''):
+                with ext.db(banco) as c:
+                    clientes = c.execute("SELECT id,nome,tipo_pessoa FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
+                    prestadores = c.execute("SELECT id,nome FROM prestadores WHERE ativo=1 ORDER BY nome").fetchall()
+                if not clientes:
+                    return self.pagina('Nova OS rápida', card('Sem clientes',
+                        '<p>Cadastre um cliente ou condomínio antes de abrir a OS.</p>'
+                        + botao('Cadastrar cliente', '/clientes/novo')), s)
+                opcoes = ''.join(f'<option value="{int(x["id"])} — {esc(x["nome"])}"></option>' for x in clientes)
+                form = (f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
+                        '<label for="cliente-rapida">Buscar condomínio, empresa ou cliente</label>'
+                        f'<input id="cliente-rapida" name="cliente_texto" list="lista-clientes-rapida" required '
+                        'placeholder="Digite o nome e escolha a sugestão" autocomplete="off">'
+                        f'<datalist id="lista-clientes-rapida">{opcoes}</datalist>'
+                        '<p class="muted">Digite parte do nome; o navegador mostra os cadastros correspondentes. '
+                        'A OS será criada como <b>Aberta</b>, pronta para preenchimento e finalização.</p>'
+                        + textarea('Solicitação / descrição do serviço', 'descricao', required=True))
+                if prestadores:
+                    form += select('Atribuir prestador (opcional)', 'prestador_id',
+                                   [('', 'Não atribuir agora')] + [(x['id'], x['nome']) for x in prestadores])
+                else:
+                    form += '<p class="muted">Nenhum prestador ativo cadastrado; a OS ficará sem responsável.</p>'
+                form += '<button type="submit">Criar OS aberta</button></form>'
+                aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                return self.pagina('Nova OS rápida', card('Condomínio, cliente e solicitação', aviso + form)
+                                   + botao('Voltar às OS', '/os', 'secondary'), s)
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
@@ -888,6 +916,16 @@ class PortalPrestador:
                                           'login_prestador':'e-mail e senha',
                                           'cadastro_prestadores':'bloqueado no portal web'}).encode('utf-8')
                         return self.send_bytes(dados,'application/json; charset=utf-8')
+                    if path=='/static/portal.js':
+                        return self.send_bytes((Path(__file__).parent/'portal.js').read_bytes(),'application/javascript; charset=utf-8')
+                    if path in ('/logo.png','/icone.png','/favicon.ico'):
+                        nome={'/logo.png':'logo.png','/icone.png':'icone.png','/favicon.ico':'icone.png'}[path]
+                        arquivo=ext.BASE/nome
+                        if not arquivo.is_file():
+                            arquivo=Path(__file__).parent/nome
+                        if arquivo.is_file():
+                            return self.send_bytes(arquivo.read_bytes(),'image/png')
+                        return self.erro('Imagem não encontrada.',404,self.sessao())
                     if path=='/prestadores' or path.startswith('/prestadores/'):
                         return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop.',403,self.sessao())
                     if path in ('/cliente','/pj') or path.startswith('/cliente/') or path.startswith('/pj/'):
@@ -899,8 +937,6 @@ class PortalPrestador:
                         nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml'}[path]
                         arquivo=Path(__file__).parent/nome
                         return self.send_bytes(arquivo.read_bytes(),'application/x-yaml; charset=utf-8',filename=nome)
-                    if path=='/static/portal.js':
-                        return self.send_bytes((Path(__file__).parent/'portal.js').read_bytes(),'application/javascript; charset=utf-8')
                     if path in ('/chamados','/organizacoes'):
                         return self.redir('/os' if path=='/chamados' else '/clientes')
                     if path in ('/clientes/responsaveis','/organizacoes/responsaveis'):
@@ -910,6 +946,7 @@ class PortalPrestador:
                     if path=='/servicos':return self.servicos_lista(s)
                     if path=='/servicos/novo':return self.servico_form(s)
                     if path=='/historico':return self.os_lista(s,True)
+                    if path=='/os/rapida':return self.os_rapida_form(s)
                     if path=='/os/nova':return self.os_form(s)
                     if path=='/clientes':return self.clientes_lista(s)
                     if path=='/clientes/novo':return self.cliente_form(s)
@@ -1010,6 +1047,8 @@ class PortalPrestador:
                             raise ValueError('Somente OS abertas ou pendentes podem importar relatório.')
                         try:pre=yaml_import.relatorio(arq[0],arq[1])
                         except ValueError as erro:return self.os_form(s,oid,erro=str(erro))
+                        if not pre:
+                            return self.os_form(s,oid,erro='O YAML está em branco. Preencha a seção "os" antes de importar.')
                         pre['_substituir']=str(d.get('substituir',''))=='1'
                         return self.os_form(s,oid,preenchimento=pre)
                     if path=='/clientes/novo/salvar' or (len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='salvar'):
@@ -1025,6 +1064,23 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='excluir':
                         neg.cliente_excluir(banco,int(partes[1]),pid)
                         return self.redir('/clientes')
+                    if path=='/os/rapida/salvar':
+                        texto=str(d.get('cliente_texto','')).strip()
+                        try:
+                            cliente_id=int(texto.split('—',1)[0].strip())
+                        except (ValueError,TypeError):
+                            return self.os_rapida_form(s,'Selecione um cliente/condomínio válido na lista.')
+                        descricao=str(d.get('descricao','')).strip()
+                        if len(descricao)<5:
+                            return self.os_rapida_form(s,'Descreva a solicitação com pelo menos 5 caracteres.')
+                        dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
+                               'forma_pagamento':'PIX','valor_mao_obra':'0','valor_materiais_manual':'0',
+                               'materiais_presentes':'1','acao_status':'salvar'}
+                        oid=neg.os_salvar(banco,dados,pid)
+                        prestador_id=str(d.get('prestador_id','')).strip()
+                        if prestador_id:
+                            ext.atribuir(banco,oid,int(prestador_id),ator=f'Prestador {s["nome"]}')
+                        return self.redir(f'/os/{oid}')
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
                         return self.redir(f'/os/{oid}')
