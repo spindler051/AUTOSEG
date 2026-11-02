@@ -77,6 +77,8 @@ def iniciar_assumindo(banco,os_id,pid):
             raise ValueError('Esta OS não está disponível para iniciar.')
         atual=ext.responsavel_atual(c,os_id)
         status=os_atual['status']
-    if atual != pid or status=='Pendente':
+    if atual is None:
         ext.assumir(banco,os_id,pid)
+    elif atual != pid:
+        raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
     return iniciar(banco,os_id,pid)
