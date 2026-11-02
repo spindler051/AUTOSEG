@@ -1,0 +1,33 @@
+name: AUTOSEG main - validacao de estabilidade
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autosseg-main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Obter codigo
+        uses: actions/checkout@v4
+      - name: Configurar Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements.txt
+      - name: Compilar arquivos Python
+        run: python -m compileall -q .
+      - name: Testar fluxo v9.4.1 com banco temporario
+        run: python test_v94_correcoes.py
