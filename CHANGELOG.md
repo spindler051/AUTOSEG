@@ -1,5 +1,19 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.5 — REV11 — 2026-11-02 — develop/main
+
+- **Interface GTK4/libadwaita** adotada como padrão (branch `feature/gtk4-libadwaita` mesclada): `gtk_app.py`, `gtk_comum.py`, `gtk_dialogos.py`, mesmo backend/banco/regras.
+- **Envio automático e assíncrono do relatório por Gmail** ao concluir a OS:
+  - `gmail_service.enviar_relatorio_os_concluida` envia o PDF em thread separada e registra status/message_id em `produtividade_email`.
+  - Acionado no Portal Prestador e nos desktops GTK4 e Tkinter.
+  - Bibliotecas do Google importadas sob demanda; falhas não travam a interface e ficam registradas.
+  - `AUTOSEG_GMAIL_DESATIVADO=1` desliga o envio para testes sem rede.
+- Inicializadores GTK4 em `/Applications` (clique único): `AUTOSEG.app` (main) e `AUTOSEG DEV.app` (develop).
+- Testes: `test_gmail_integracao.py` (enviado, falhou, desativado) e smoke do app GTK4 no macOS.
+
+Pendente: homologação manual do envio real (destinatário válido) e liberação de versão estável.
+
+
 ## 9.6.0-dev.4 — REV10 — 2026-11-02 — develop
 
 - **SALVAR RASCUNHO** agora aparece em destaque no topo e no rodapé do formulário da OS no Portal Prestador, além do desktop. Salva diagnóstico, execução, resultado, relatório, materiais, valores, observações, fotos e legendas sem alterar o status.
