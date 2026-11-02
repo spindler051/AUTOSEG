@@ -89,7 +89,7 @@ def painel(h,banco,s):
         if v['papel'] in ('Síndico','Administrador') and v['situacao']=='Aprovado':acao+=' '+botao('Chamados do condomínio',f'/pj/sindico?org={v["organizacao_id"]}','secondary')
         orgs.append((esc(v['nome']),esc(v['papel']),esc(v['situacao']),acao))
     chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(x['status']),esc(x['descricao'][:100]),esc(x['criado_em']),
-               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] else '—') for x in minhas]
+               botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] and x['organizacao_id'] in responsavel_ids else 'Acompanhar status') for x in minhas]
     aviso_html=''.join('<p><small>'+esc(n['criado_em'])+'</small> · '+esc(n['texto'])+'</p>' for n in avisos) or '<p class="muted">Sem novas atualizações.</p>'
     return pagina(h,'Minha conta · PF / PJ',barra_links('cliente')+card('Minha conta pessoal',dados)+card('Notificações e atualizações',aviso_html)+card('Organizações vinculadas',tabela(['Organização','Meu papel','Vínculo','Ação'],orgs))+card('Meus chamados',tabela(['Nº','Condomínio / Empresa','Status','Descrição','Data','OS'],chamados)))
 
@@ -221,8 +221,12 @@ def pdf_pj(h,banco,s,chamado_id):
     with ext.db(banco) as c:
         chamado=c.execute('SELECT organizacao_id,usuario_id,os_id FROM v9_chamados WHERE id=?',(chamado_id,)).fetchone()
         if not chamado:raise ValueError('Chamado não encontrado.')
-        if chamado['usuario_id']!=s['uid'] and not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],('Síndico','Administrador')):
-            raise PermissionError('Documento restrito ao solicitante ou síndico validado.')
+        org=c.execute('SELECT tipo FROM v9_organizacoes WHERE id=?',(chamado['organizacao_id'],)).fetchone()
+        papel_permitido='Síndico' if org and org['tipo']=='Condomínio' else 'Gestor'
+        nomeado=c.execute('SELECT 1 FROM v9_responsaveis WHERE organizacao_id=? AND usuario_id=? AND papel=?',
+                         (chamado['organizacao_id'],s['uid'],papel_permitido)).fetchone()
+        if not nomeado:
+            raise PermissionError('PDF restrito ao síndico/gestor formalmente nomeado. Morador acompanha somente o status.')
         if not chamado['os_id']:raise ValueError('A solicitação ainda não foi convertida em OS.')
         registro=fluxo.ultimo_documento(banco,chamado['os_id'])
         if not registro:raise ValueError('Relatório ainda não publicado.')
