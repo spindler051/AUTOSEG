@@ -308,6 +308,8 @@ Plano de modularização e deploy (sem mudanças de código):
 ## Limitações conhecidas
 
 - O AppImage ainda não foi construído nem testado em máquina limpa.
+- O cursor de hardware de GPUs virtuais pode exigir `WLR_NO_HARDWARE_CURSORS=1`
+  (já aplicado em `ABRIR_NO_DRM.sh`).
 - O macOS não foi testado neste ambiente (sem hardware macOS).
 - O envio real de e-mail/nota fiscal continua fora do escopo: o desktop gera
   rascunhos, como no Tkinter.

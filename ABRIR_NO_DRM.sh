@@ -30,6 +30,9 @@ mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 export WLR_BACKENDS="drm,libinput"
 export WLR_DRM_DEVICES="$CARD"
+# virtio-gpu desta VM desenha o cursor de hardware invertido/deslocado;
+# o cursor de software usa a cena do compositor.
+export WLR_NO_HARDWARE_CURSORS=1
 # Não forçar GTK_USE_PORTAL=0: o libadwaita lê tema escuro/accent do
 # org.gnome.desktop.interface via xdg-desktop-portal nesta sessão dbus.
 
