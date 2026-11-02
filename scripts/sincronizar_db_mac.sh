@@ -16,4 +16,9 @@ ssh "$REMOTE" "rm -f '$TMP'"
 mv "$LOCAL.tmp" "$LOCAL"
 chmod 600 "$LOCAL"
 echo "Snapshot remoto: $LOCAL"
-sqlite3 "$LOCAL" "select 'clientes', count(*) from clientes union all select 'ordens', count(*) from ordens_servico;"
+python3 - "$LOCAL" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+for tabela in ("clientes", "ordens_servico"):
+    print(tabela, c.execute(f"select count(*) from {tabela}").fetchone()[0])
+PY
