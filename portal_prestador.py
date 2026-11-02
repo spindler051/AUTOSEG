@@ -124,7 +124,7 @@ class PortalPrestador:
         # Mantém erros consultáveis mesmo quando o app é iniciado por um .command.
         if not any(isinstance(h,RotatingFileHandler) for h in LOG.handlers):
             try:
-                pasta=Path(__file__).resolve().parent/'logs'
+                pasta=ext.BASE/'logs'
                 pasta.mkdir(parents=True,exist_ok=True)
                 arquivo=pasta/'portal_prestador.log'
                 arq_log=RotatingFileHandler(arquivo,maxBytes=2_000_000,backupCount=3,
