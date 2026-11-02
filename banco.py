@@ -131,6 +131,7 @@ def criar_banco(caminho=None):
     # Migração simples para bancos criados em versões anteriores.
     adicionar_coluna_se_nao_existir(cursor, "clientes", "tipo_pessoa", "TEXT NOT NULL DEFAULT 'Jurídica'")
     adicionar_coluna_se_nao_existir(cursor, "clientes", "status", "TEXT NOT NULL DEFAULT 'Ativo'")
+    adicionar_coluna_se_nao_existir(cursor, "clientes", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "forma_pagamento", "TEXT DEFAULT 'Outro'")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "data_conclusao", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "observacoes", "TEXT")

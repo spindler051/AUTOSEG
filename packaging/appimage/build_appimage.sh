@@ -39,6 +39,7 @@ ARGUMENTOS=(
     --add-data "$RAIZ/logo.png:."
     --add-data "$RAIZ/icone.png:."
     --add-data "$RAIZ/versao.json:."
+    --add-data "$RAIZ/completude.yaml:."
     --add-data "$RAIZ/web:web"
     --add-data "$RAIZ/portal.js:."
     --collect-all reportlab

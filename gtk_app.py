@@ -31,6 +31,7 @@ import catalogo_servicos as catalogo
 import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
+import completude
 
 if os.environ.get("AUTOSEG_DEV") == "1":
     import tuneis_dev as tuneis
@@ -607,6 +608,7 @@ class Janela(Adw.ApplicationWindow):
             ("Cidade", 140, False, 0.0),
             ("Telefone", 130, False, 0.5),
             ("Status", 95, False, 0.5),
+            ("Dados", 110, False, 0.5),
         ], ao_ativar=self._editar_cliente)
         pagina.append(self.tabela_clientes.widget)
         rodape = ui.barra(
@@ -627,19 +629,22 @@ class Janela(Adw.ApplicationWindow):
         try:
             if termo:
                 registros = conexao.execute(
-                    "SELECT id,nome,documento,cidade,telefone,status FROM clientes "
-                    "WHERE nome LIKE ? OR documento LIKE ? OR cidade LIKE ? ORDER BY nome",
+                    "SELECT * FROM clientes WHERE nome LIKE ? OR documento LIKE ? OR cidade LIKE ? "
+                    "ORDER BY nome",
                     (f"%{termo}%", f"%{termo}%", f"%{termo}%")).fetchall()
             else:
                 registros = conexao.execute(
-                    "SELECT id,nome,documento,cidade,telefone,status FROM clientes ORDER BY nome"
-                ).fetchall()
+                    "SELECT * FROM clientes ORDER BY nome").fetchall()
         finally:
             conexao.close()
-        self.tabela_clientes.definir_linhas([
-            (r["id"], r["nome"], cad9.formatar_documento(r["documento"]), r["cidade"] or "",
-             r["telefone"] or "", r["status"]) for r in registros
-        ])
+        linhas = []
+        for r in registros:
+            dados = dict(r)
+            linhas.append((
+                r["id"], r["nome"] or "(sem nome)", cad9.formatar_documento(r["documento"]),
+                r["cidade"] or "", r["telefone"] or "", r["status"],
+                "Incompletos" if completude.cliente_faltantes(dados) else "OK"))
+        self.tabela_clientes.definir_linhas(linhas)
 
     def _cliente_selecionado(self):
         valores = self.tabela_clientes.selecionado()
@@ -800,8 +805,8 @@ class Janela(Adw.ApplicationWindow):
         conexao = conectar_banco()
         try:
             registros = conexao.execute(
-                """SELECT os.id,os.numero_os,c.nome cliente,os.data_abertura,os.valor_total,
-                          os.forma_pagamento,os.origem,
+                """SELECT os.id,os.numero_os,os.cliente_id,c.nome cliente,os.data_abertura,os.valor_total,
+                          os.descricao,os.observacoes,os.forma_pagamento,os.urgencia,os.origem,
                           (SELECT GROUP_CONCAT(p.nome, ', ') FROM os_prestadores op
                              JOIN prestadores p ON p.id=op.prestador_id
                              WHERE op.os_id=os.id AND op.ativo=1) prestadores,
@@ -828,12 +833,14 @@ class Janela(Adw.ApplicationWindow):
                 responsavel += " | Equipe: " + r["prestadores"]
             elif r["tecnico_legado"]:
                 responsavel += " | Técnico: " + r["tecnico_legado"]
+            dados = dict(r)
+            dados["tecnico"] = r["tecnico_legado"]
             linhas.append((
                 r["id"], r["numero_os"], r["cliente"], r["data_abertura"],
                 ui.brl(r["valor_total"]), r["forma_pagamento"],
                 "Portal" if (r["origem"] or "App") == "Portal" else "App",
                 responsavel, r["status"],
-                "Incompletos" if r["dados_incompletos"] else "OK"))
+                "Incompletos" if completude.os_faltantes(dados) else "OK"))
         self.tabela_os.definir_linhas(linhas)
 
     def _os_selecionada(self):

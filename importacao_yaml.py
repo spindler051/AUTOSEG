@@ -55,8 +55,8 @@ def cliente(nome, conteudo):
         if len(valor)>(2500 if k=='observacoes' else 250):
             raise ValueError('Campo '+k+' excede o limite.')
         resultado[k]=valor
-    if not 3<=len(resultado.get('nome',''))<=250:
-        raise ValueError('Nome / Razão social deve ter pelo menos 3 caracteres.')
+    if len(resultado.get('nome',''))>250:
+        raise ValueError('Nome / Razão social excede 250 caracteres.')
     tipo=resultado.setdefault('tipo_pessoa','Jurídica')
     if tipo not in ('Jurídica','Física'):
         raise ValueError('Tipo de pessoa inválido.')

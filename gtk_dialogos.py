@@ -20,6 +20,7 @@ import cadastros_v9 as cad9
 import estoque_materiais as estoque
 import catalogo_servicos as catalogo
 import importacao_yaml
+import completude
 
 
 def _linha_custom(widget):
@@ -51,6 +52,14 @@ class DialogoCliente(Adw.Dialog):
 
         pagina = Adw.PreferencesPage()
         toolbar.set_content(pagina)
+
+        if self.cliente_id is not None and completude.cliente_faltantes(self.dados):
+            aviso = Adw.PreferencesGroup()
+            pagina.add(aviso)
+            aviso.add(Adw.ActionRow(
+                title="Dados incompletos",
+                subtitle="Complete os campos mínimos configurados em completude.yaml.",
+                icon_name="dialog-warning-symbolic"))
 
         grupo = Adw.PreferencesGroup(title="Dados principais")
         pagina.add(grupo)
@@ -249,9 +258,7 @@ class DialogoCliente(Adw.Dialog):
             "observacoes": self.observacoes.get_texto(),
             "status": ui.valor_combo(self.status),
         }
-        if not dados["nome"]:
-            ui.aviso_erro(self.janela, "Campo obrigatório", "Preencha Nome / Razão Social.")
-            return
+        dados["dados_incompletos"] = 1 if completude.cliente_faltantes(dados) else 0
         campos = list(dados)
         conexao = conectar_banco()
         try:
@@ -270,7 +277,8 @@ class DialogoCliente(Adw.Dialog):
                     [dados[campo] for campo in campos] + [self.cliente_id],
                 )
                 cliente_id = self.cliente_id
-            if dados["tipo_pessoa"] == "Jurídica" and dados["status"] != "Inativo":
+            if (dados["tipo_pessoa"] == "Jurídica" and dados["status"] != "Inativo"
+                    and dados["nome"].strip()):
                 cad9.sincronizar_cliente_pj(conexao, cliente_id)
             conexao.commit()
         except Exception as erro:
@@ -279,7 +287,8 @@ class DialogoCliente(Adw.Dialog):
             return
         finally:
             conexao.close()
-        ui.toast(self.janela, "Cliente salvo.")
+        ui.toast(self.janela, "Cliente salvo com dados incompletos."
+                 if dados["dados_incompletos"] else "Cliente salvo.")
         self.janela.carregar_clientes()
         self.close()
 
@@ -454,14 +463,14 @@ class DialogoOS(Adw.Dialog):
                 subtitle=f"Urgência: {urg} • Contato preferido: {contato}",
                 icon_name="network-transmit-receive-symbolic"))
 
-        if self.os_id is not None and (
-                (self.dados or {}).get("dados_incompletos")
-                or not ((self.dados or {}).get("descricao") or "").strip()):
+        if self.os_id is not None and completude.os_faltantes(self.dados or {}):
             aviso = Adw.PreferencesGroup()
             pagina.add(aviso)
+            faltantes = ", ".join(completude.os_faltantes(self.dados or {}))
             aviso.add(Adw.ActionRow(
                 title="Dados incompletos",
-                subtitle="Complete a descrição do serviço antes de encerrar esta OS.",
+                subtitle="Campos pendentes: " + faltantes
+                         + ". Ajuste o mínimo em completude.yaml.",
                 icon_name="dialog-warning-symbolic"))
 
         grupo = Adw.PreferencesGroup(title="Identificação")
@@ -798,11 +807,6 @@ class DialogoOS(Adw.Dialog):
             return
         cliente_id = self.clientes[indice]["id"]
         descricao = self.descricao.get_texto()
-        dados_incompletos = 0 if descricao.strip() else 1
-        if acao in ui.STATUS_FIM and dados_incompletos:
-            ui.aviso_erro(self.janela, "Dados incompletos",
-                          "Preencha a descrição do serviço antes de encerrar a OS.")
-            return
         tecnico = self.tecnico.get_text().strip()
         pagamento = ui.valor_combo(self.pagamento)
         mao_obra = ui.numero(self.mao_obra.get_text())
@@ -812,6 +816,19 @@ class DialogoOS(Adw.Dialog):
             materiais = ui.numero(self.materiais_valor.get_text())
         total = ui.numero(self.total.get_text()) or (mao_obra + materiais)
         observacoes = self.observacoes.get_texto()
+        dados_incompletos = 1 if completude.os_faltantes({
+            "cliente_id": cliente_id,
+            "descricao": descricao,
+            "tecnico": tecnico,
+            "forma_pagamento": pagamento,
+            "valor_total": total,
+            "urgencia": ui.valor_combo(self.urgencia),
+            "observacoes": observacoes,
+        }) else 0
+        if acao in ui.STATUS_FIM and dados_incompletos:
+            ui.aviso_erro(self.janela, "Dados incompletos",
+                          "Complete os campos mínimos antes de encerrar a OS.")
+            return
         relato = self.relatorio.get_texto() if self.relatorio is not None else ""
         motivo = self.motivo.get_texto() if self.motivo is not None else ""
         if acao in ("Cancelada", "Não realizada") and not motivo:

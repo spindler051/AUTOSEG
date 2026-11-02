@@ -10,6 +10,7 @@ regras do app Tkinter e dos portais. Não é um fork.
 - Normas GNOME baixadas: `docs/gnome-hig/index.html`
 - Rascunho de AppImage: `packaging/appimage/README.md`
 - Separação produção/teste: `docs/BANCO_TESTE_PRODUCAO.md`
+- Mínimo configurável de cliente/OS: `docs/COMPLETUDE.md` (`completude.yaml`)
 - Plano de evolução/modularização: `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
 - Plano de modo local/sincronização: `docs/PLANO_MODO_LOCAL_SYNC.md`
 

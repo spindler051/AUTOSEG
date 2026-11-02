@@ -206,6 +206,12 @@ Isso não confirma que o documento existe ou pertence à pessoa. CNPJ
 alfanumérico ainda não é suportado porque o campo/banco atuais trabalham com
 dígitos.
 
+## Mínimo configurável de cliente e OS
+
+O arquivo `completude.yaml` define os campos mínimos para um cliente ou OS
+não ser marcado como **Incompletos**. Ele é relido a cada salvamento; veja
+`docs/COMPLETUDE.md`.
+
 ## Importação e modelos YAML
 
 O GTK importa YAML para **pré-preencher** formulários; nada é gravado sem o
