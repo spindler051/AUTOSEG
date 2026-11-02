@@ -77,9 +77,12 @@ def painel(h,banco,s):
                         FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id
                         WHERE v.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',(s['uid'],)).fetchall()
         avisos=c.execute('SELECT id,texto,criado_em FROM v9_notificacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 20',(s['uid'],)).fetchall()
-        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id
+        minhas=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,o.nome organizacao,h.os_id,h.organizacao_id,so.status os_status,COALESCE(des.em_rota,0) em_rota
                          FROM v9_chamados h JOIN v9_organizacoes o ON o.id=h.organizacao_id
+                         LEFT JOIN ordens_servico so ON so.id=h.os_id
+                         LEFT JOIN produtividade_deslocamentos des ON des.os_id=h.os_id
                          WHERE h.usuario_id=? ORDER BY h.id DESC LIMIT 100''',(s['uid'],)).fetchall()
+    responsavel_ids={v['organizacao_id'] for v in vs if v['situacao']=='Aprovado' and v['papel'] in ('Síndico','Administrador','Gestor')}
     token=formulario_csrf(s)
     dados='Olá, <b>'+esc(s['nome'])+'</b>. '+botao('Abrir chamado para condomínio / empresa','/pj/organizacoes')+' '+botao('Cadastrar condomínio não encontrado','/pj/nova-organizacao')
     dados+=f'<form method="post" action="/pj/sair">{token}<button class="secondary">Sair</button></form>'
@@ -88,7 +91,7 @@ def painel(h,banco,s):
         acao=botao('Novo chamado',f'/pj/chamado/novo?org={v["organizacao_id"]}')
         if v['papel'] in ('Síndico','Administrador') and v['situacao']=='Aprovado':acao+=' '+botao('Chamados do condomínio',f'/pj/sindico?org={v["organizacao_id"]}','secondary')
         orgs.append((esc(v['nome']),esc(v['papel']),esc(v['situacao']),acao))
-    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(x['status']),esc(x['descricao'][:100]),esc(x['criado_em']),
+    chamados=[(f'#{x["id"]}',esc(x['organizacao']),esc(('Técnico em rota · ' if x['em_rota'] else '')+str(x['os_status'] or x['status'])),esc(x['descricao'][:100]),esc(x['criado_em']),
                botao('Ver relatório PDF',f'/pj/chamado/{x["id"]}/pdf') if x['os_id'] and x['organizacao_id'] in responsavel_ids else 'Acompanhar status') for x in minhas]
     aviso_html=''.join('<p><small>'+esc(n['criado_em'])+'</small> · '+esc(n['texto'])+'</p>' for n in avisos) or '<p class="muted">Sem novas atualizações.</p>'
     return pagina(h,'Minha conta · PF / PJ',barra_links('cliente')+card('Minha conta pessoal',dados)+card('Notificações e atualizações',aviso_html)+card('Organizações vinculadas',tabela(['Organização','Meu papel','Vínculo','Ação'],orgs))+card('Meus chamados',tabela(['Nº','Condomínio / Empresa','Status','Descrição','Data','OS'],chamados)))
@@ -222,11 +225,9 @@ def pdf_pj(h,banco,s,chamado_id):
         chamado=c.execute('SELECT organizacao_id,usuario_id,os_id FROM v9_chamados WHERE id=?',(chamado_id,)).fetchone()
         if not chamado:raise ValueError('Chamado não encontrado.')
         org=c.execute('SELECT tipo FROM v9_organizacoes WHERE id=?',(chamado['organizacao_id'],)).fetchone()
-        papel_permitido='Síndico' if org and org['tipo']=='Condomínio' else 'Gestor'
-        nomeado=c.execute('SELECT 1 FROM v9_responsaveis WHERE organizacao_id=? AND usuario_id=? AND papel=?',
-                         (chamado['organizacao_id'],s['uid'],papel_permitido)).fetchone()
-        if not nomeado:
-            raise PermissionError('PDF restrito ao síndico/gestor formalmente nomeado. Morador acompanha somente o status.')
+        papeis=('Síndico',) if org and org['tipo']=='Condomínio' else ('Síndico','Administrador','Gestor')
+        if not cad.vinculo_aprovado(banco,s['uid'],chamado['organizacao_id'],papeis):
+            raise PermissionError('PDF restrito ao síndico ou gestor autorizado. Morador acompanha apenas o status.')
         if not chamado['os_id']:raise ValueError('A solicitação ainda não foi convertida em OS.')
         registro=fluxo.ultimo_documento(banco,chamado['os_id'])
         if not registro:raise ValueError('Relatório ainda não publicado.')
