@@ -56,6 +56,14 @@ class DialogoCliente(Adw.Dialog):
                                          0 if self.dados.get("tipo_pessoa", "Jurídica") != "Física" else 1)
         self.documento = ui.campo_entry(grupo, "CPF / CNPJ",
                                         cad9.formatar_documento(self.dados.get("documento", "")))
+        self.documento_status = Gtk.Image()
+        self.documento_status.set_pixel_size(16)
+        self.documento_status.set_visible(False)
+        self.documento.add_suffix(self.documento_status)
+        self.tipo_pessoa.connect("notify::selected",
+                                 lambda *_args: self._atualizar_documento_ui())
+        self.documento.connect("notify::text",
+                               lambda *_args: self._atualizar_documento_ui())
         self.nome = ui.campo_entry(grupo, "Nome / Razão Social", self.dados.get("nome", ""))
         self.nome_fantasia = ui.campo_entry(grupo, "Nome fantasia", self.dados.get("nome_fantasia", ""))
         status_opcoes = ["Ativo", "Inativo", "Prospect"]
@@ -104,6 +112,8 @@ class DialogoCliente(Adw.Dialog):
         pagina.add(grupo)
         self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
 
+        self._atualizar_documento_ui()
+
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
         rodape.set_margin_bottom(10)
@@ -118,6 +128,35 @@ class DialogoCliente(Adw.Dialog):
         rodape.append(ui.botao("Salvar cliente", self._salvar, css="suggested-action"))
         toolbar.add_bottom_bar(rodape)
         self.set_child(toolbar)
+
+    def _atualizar_documento_ui(self):
+        tipo = ui.valor_combo(self.tipo_pessoa)
+        esperado = 11 if tipo == "Física" else 14
+        self.documento.set_title("CPF" if tipo == "Física" else "CNPJ")
+        doc = cad9.digitos(self.documento.get_text())
+        if not doc:
+            self.documento_status.set_visible(False)
+            self.documento.remove_css_class("error")
+            return
+        if len(doc) < esperado:
+            self.documento_status.set_from_icon_name("dialog-warning-symbolic")
+            self.documento_status.set_tooltip_text(
+                f"Faltam {esperado - len(doc)} dígito(s).")
+            self.documento_status.set_visible(True)
+            self.documento.remove_css_class("error")
+            return
+        try:
+            cad9.validar_documento(tipo, doc)
+        except ValueError as erro:
+            self.documento_status.set_from_icon_name("dialog-error-symbolic")
+            self.documento_status.set_tooltip_text(str(erro))
+            self.documento_status.set_visible(True)
+            self.documento.add_css_class("error")
+        else:
+            self.documento_status.set_from_icon_name("emblem-ok-symbolic")
+            self.documento_status.set_tooltip_text(f"{'CPF' if tipo == 'Física' else 'CNPJ'} válido.")
+            self.documento_status.set_visible(True)
+            self.documento.remove_css_class("error")
 
     def _nova_os(self):
         self.close()
@@ -164,9 +203,30 @@ class DialogoCliente(Adw.Dialog):
         return False
 
     def _salvar(self):
+        tipo_pessoa = ui.valor_combo(self.tipo_pessoa)
+        documento = cad9.digitos(self.documento.get_text())
+        documento_original = cad9.digitos(self.dados.get("documento", ""))
+        tipo_original = self.dados.get("tipo_pessoa", "Jurídica")
+        if (self.cliente_id is None or tipo_pessoa != tipo_original
+                or documento != documento_original):
+            try:
+                documento = cad9.validar_documento(tipo_pessoa, documento)
+            except ValueError as erro:
+                ui.aviso_erro(self.janela, "Documento inválido", str(erro))
+                return
+            if documento:
+                with ext.db(BANCO) as conexao:
+                    duplicado = cad9.buscar_documento_duplicado(
+                        conexao, documento, self.cliente_id)
+                if duplicado:
+                    ui.aviso_erro(
+                        self.janela, "Documento duplicado",
+                        f"CPF/CNPJ já cadastrado para {duplicado['nome']}.")
+                    return
+
         dados = {
-            "tipo_pessoa": ui.valor_combo(self.tipo_pessoa),
-            "documento": self.documento.get_text().strip(),
+            "tipo_pessoa": tipo_pessoa,
+            "documento": documento,
             "nome": self.nome.get_text().strip(),
             "nome_fantasia": self.nome_fantasia.get_text().strip(),
             "endereco": self.endereco.get_text().strip(),
@@ -1038,11 +1098,16 @@ class DialogoPrestador(Adw.Dialog):
 
     def _salvar(self):
         try:
+            documento = cad9.validar_documento_auto(self.documento.get_text())
+        except ValueError as erro:
+            ui.aviso_erro(self.janela, "Documento inválido", str(erro))
+            return
+        try:
             ext.cadastrar(BANCO, nome=self.nome.get_text().strip(),
                           email=self.email.get_text().strip(),
                           senha=self.senha.get_text(),
                           telefone=self.telefone.get_text().strip(),
-                          documento=self.documento.get_text().strip(),
+                          documento=documento,
                           especialidade=self.especialidade.get_text().strip())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Cadastro", str(erro))

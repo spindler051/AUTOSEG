@@ -29,6 +29,57 @@ def cnpj_valido(s):
         if (0 if z<2 else 11-z)!=int(s[n]):return False
     return True
 
+
+def validar_documento(tipo_pessoa, documento, obrigatorio=False):
+    """Valida CPF/CNPJ (estrutura e dígitos), sem consultar identidade externa."""
+    doc=digitos(documento)
+    if not doc:
+        if obrigatorio:
+            raise ValueError('Informe o CPF/CNPJ.')
+        return ''
+    if tipo_pessoa=='Física':
+        if len(doc)!=11:
+            raise ValueError('O CPF deve ter 11 dígitos.')
+        if doc==doc[0]*11:
+            raise ValueError('CPF inválido: sequência repetida.')
+        if not cpf_valido(doc):
+            raise ValueError('CPF inválido: dígitos verificadores não conferem.')
+    elif tipo_pessoa=='Jurídica':
+        if len(doc)!=14:
+            raise ValueError('O CNPJ deve ter 14 dígitos.')
+        if doc==doc[0]*14:
+            raise ValueError('CNPJ inválido: sequência repetida.')
+        if not cnpj_valido(doc):
+            raise ValueError('CNPJ inválido: dígitos verificadores não conferem.')
+    else:
+        raise ValueError('Tipo de pessoa inválido.')
+    return doc
+
+
+def validar_documento_auto(documento, obrigatorio=False):
+    """Valida CPF ou CNPJ pelo tamanho, para cadastros sem tipo_pessoa."""
+    doc=digitos(documento)
+    if not doc:
+        if obrigatorio:
+            raise ValueError('Informe CPF ou CNPJ.')
+        return ''
+    if len(doc)==11:
+        return validar_documento('Física',doc)
+    if len(doc)==14:
+        return validar_documento('Jurídica',doc)
+    raise ValueError('Informe CPF (11 dígitos) ou CNPJ (14 dígitos).')
+
+
+def buscar_documento_duplicado(c, documento, ignorar_id=None):
+    """Procura o mesmo CPF/CNPJ em outro cliente, comparando somente dígitos."""
+    doc=digitos(documento)
+    if not doc:
+        return None
+    row=c.execute('''SELECT id,nome FROM clientes
+        WHERE id<>? AND replace(replace(replace(replace(documento,'.',''),'/',''),'-',''),' ','')=?
+        LIMIT 1''',(int(ignorar_id or 0),doc)).fetchone()
+    return dict(row) if row else None
+
 def instalar(banco):
     with ext.db(banco) as c:
         c.executescript('''

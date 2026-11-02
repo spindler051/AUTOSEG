@@ -187,6 +187,25 @@ PyInstaller + AppImage; ele precisa ser validado em uma VM Ubuntu limpa,
 porque GTK4/libadwaita, typelibs, loaders do GdkPixbuf e bibliotecas nativas
 precisam ser incluídos no AppDir.
 
+## Validação de CPF/CNPJ
+
+A validação é local e matemática, sem serviço de identidade:
+
+- CPF: 11 dígitos, bloqueio de sequências repetidas e dois dígitos
+  verificadores;
+- CNPJ: 14 dígitos, mesmo bloqueio e dois verificadores;
+- o documento é salvo sem pontuação;
+- duplicidade de CPF/CNPJ em outro cliente é bloqueada;
+- o GTK mostra aviso em tempo real e o backend do portal também valida antes
+  de gravar;
+- cadastros antigos com documento inválido continuam editáveis enquanto o
+  documento não for alterado;
+- CPF/CNPJ vazio continua permitido no cadastro (validação só quando informado).
+
+Isso não confirma que o documento existe ou pertence à pessoa. CNPJ
+alfanumérico ainda não é suportado porque o campo/banco atuais trabalham com
+dígitos.
+
 ## Aparência do sistema (fora do app)
 
 O app não tem seletor de tema claro/escuro nem de cor de destaque. Ele segue o

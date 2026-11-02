@@ -10,6 +10,7 @@ import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
 import estoque_materiais as estoque
+import cadastros_v9 as cad
 
 CLIENTE_CAMPOS = (
     'tipo_pessoa documento nome nome_fantasia endereco numero complemento bairro cep '
@@ -80,6 +81,20 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
     if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        anterior=None
+        if cliente_id is not None:
+            anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+            if not anterior: raise ValueError('Cliente não encontrado.')
+        doc_novo=cad.digitos(values['documento'])
+        mudou_documento=(cliente_id is None or anterior['tipo_pessoa']!=values['tipo_pessoa']
+                         or cad.digitos(anterior['documento'])!=doc_novo)
+        if mudou_documento:
+            values['documento']=cad.validar_documento(values['tipo_pessoa'],doc_novo)
+            duplicado=cad.buscar_documento_duplicado(c,values['documento'],cliente_id)
+            if duplicado:
+                raise ValueError(f"CPF/CNPJ já cadastrado para {duplicado['nome']}.")
+        else:
+            values['documento']=doc_novo
         if cliente_id is None:
             cols=','.join(CLIENTE_CAMPOS)
             p=','.join('?' for _ in CLIENTE_CAMPOS)
@@ -88,8 +103,6 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
             cid=x.lastrowid
             audit(c,pid,'Cliente criado',cid,values['nome'])
         else:
-            anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
-            if not anterior: raise ValueError('Cliente não encontrado.')
             updates={k:f'{anterior[k]} → {values[k]}' for k in CLIENTE_CAMPOS if str(anterior[k] or '')!=values[k]}
             if updates:
                 c.execute('UPDATE clientes SET '+','.join(f'{k}=?' for k in CLIENTE_CAMPOS)+' WHERE id=?',
@@ -97,7 +110,6 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
                 audit(c,pid,'Cliente alterado',cliente_id,str(updates))
             cid=cliente_id
         if values['tipo_pessoa']=='Jurídica' and values['status']!='Inativo':
-            import cadastros_v9 as cad
             cad.sincronizar_cliente_pj(c,cid)
     return cid
 
