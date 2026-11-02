@@ -11,7 +11,7 @@ complexidade do Immich.
 ## Resumo executivo
 
 - Adotar **monolito modular**, não microserviços.
-- Congelar `app.py` (Tkinter) e evoluir apenas o GTK/backend.
+- Congelar `app.py` (**Tkinter legado**, não o GTK) e evoluir o frontend GTK.
 - Separar UI, casos de uso, repositórios e infraestrutura.
 - Centralizar configuração, caminhos e portas.
 - Criar migrações versionadas antes de pensar em Postgres.
@@ -34,7 +34,9 @@ complexidade do Immich.
    depois, se necessário.
 3. **Strangler Fig.** O `app.py` Tkinter não será reescrito de uma vez. O GTK é
    o novo frontend; novas funções entram nele. O Tkinter fica congelado até
-   paridade e testes, e depois é removido.
+   paridade e testes, e depois é removido. **O GTK não será removido nem
+   containerizado**: `gtk_app.py`, `gtk_dialogos.py` e `gtk_comum.py` são o
+   desktop nativo (macOS/Linux/AppImage).
 4. **SQLite é arquivo local, não servidor.** Não apontar para SSHFS, SMB ou NFS
    com escrita concorrente (ver referência oficial no fim). Um único processo
    escreve; leitores remotos usam API ou snapshot.
@@ -333,7 +335,9 @@ copiar arquivos manualmente.
 
 Separar **desktop** de **servidor**:
 
-- **desktop:** macOS/Windows/Linux nativo, AppImage; não containerizar GTK;
+- **desktop:** macOS/Windows/Linux nativo, AppImage; o GTK **não** é
+  containerizado (Wayland/DBus/GPU e empacotamento seriam complexidade sem
+  ganho de segurança);
 - **servidor:** portais + backend agora; API e worker nas fases 3 e 4.
 
 Preferência:
