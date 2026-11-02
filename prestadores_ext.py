@@ -12,7 +12,9 @@ BASE = Path(os.environ.get('AUTOSEG_BASE') or Path(__file__).resolve().parent)
 ANEXOS = BASE / 'anexos_os'
 RELATORIOS = BASE / 'relatorios_pdf'
 RASCUNHOS = BASE / 'rascunhos'
-for p in (ANEXOS, RELATORIOS, RASCUNHOS): p.mkdir(parents=True, exist_ok=True)
+for p in (ANEXOS, RELATORIOS, RASCUNHOS):
+    try: p.mkdir(parents=True, exist_ok=True)
+    except OSError: pass
 
 def agora(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

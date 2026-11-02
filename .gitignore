@@ -63,3 +63,17 @@ token.json
 
 # Rascunhos operacionais gerados pelo aplicativo (podem conter dados pessoais)
 rascunhos/
+
+# GTK4/libadwaita: dependências locais e artefatos de build
+.vendor/
+.venv-gtk/
+build/
+dist/
+*.AppImage
+*.spec
+
+# Documentação GNOME baixada localmente (reproduzir com docs/baixar_gnome_hig.sh)
+docs/gnome-hig/
+
+# Snapshot local do banco do macOS para leitura
+dados_remoto*.db

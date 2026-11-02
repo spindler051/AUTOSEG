@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AUTOSEG
+GenericName=Gestão de Serviços
+Comment=Ordens de serviço, clientes, financeiro e portais
+Exec=AUTOSEG
+Icon=autoseg
+Terminal=false
+Categories=Office;Finance;
+StartupNotify=true
