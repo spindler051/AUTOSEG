@@ -786,6 +786,7 @@ class Janela(Adw.ApplicationWindow):
             ("Origem", 80, False, 0.5),
             ("Prestadores", 220, False, 0.0),
             ("Status", 110, False, 0.5),
+            ("Dados", 110, False, 0.5),
         ], ao_ativar=self._editar_os)
         pagina.append(self.tabela_os.widget)
         pagina.append(ui.barra(
@@ -804,7 +805,8 @@ class Janela(Adw.ApplicationWindow):
                           (SELECT GROUP_CONCAT(p.nome, ', ') FROM os_prestadores op
                              JOIN prestadores p ON p.id=op.prestador_id
                              WHERE op.os_id=os.id AND op.ativo=1) prestadores,
-                          resp.nome responsavel_atual,os.tecnico tecnico_legado,os.status
+                          resp.nome responsavel_atual,os.tecnico tecnico_legado,os.status,
+                          os.dados_incompletos
                    FROM ordens_servico os
                    JOIN clientes c ON c.id=os.cliente_id
                    LEFT JOIN os_responsaveis r ON r.os_id=os.id
@@ -830,7 +832,8 @@ class Janela(Adw.ApplicationWindow):
                 r["id"], r["numero_os"], r["cliente"], r["data_abertura"],
                 ui.brl(r["valor_total"]), r["forma_pagamento"],
                 "Portal" if (r["origem"] or "App") == "Portal" else "App",
-                responsavel, r["status"]))
+                responsavel, r["status"],
+                "Incompletos" if r["dados_incompletos"] else "OK"))
         self.tabela_os.definir_linhas(linhas)
 
     def _os_selecionada(self):

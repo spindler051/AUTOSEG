@@ -237,6 +237,13 @@ ordem_servico:
 Regras: `versao: 1`, UTF-8, até 64 KB, sem aliases/âncoras YAML. A importação
 não ignora CPF/CNPJ, duplicidade, limite de materiais nem validação de OS.
 
+## OS com dados incompletos
+
+A OS pode ser salva sem a descrição do serviço. Nesse caso ela recebe
+`dados_incompletos=1`, aparece com a coluna **Dados = Incompletos** e não pode
+ser encerrada até a descrição ser preenchida. O banco recebe a coluna por
+migração aditiva (`banco.criar_banco`), sem apagar OS existentes.
+
 ## Aparência do sistema (fora do app)
 
 O app não tem seletor de tema claro/escuro nem de cor de destaque. Ele segue o

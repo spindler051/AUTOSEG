@@ -454,6 +454,16 @@ class DialogoOS(Adw.Dialog):
                 subtitle=f"Urgência: {urg} • Contato preferido: {contato}",
                 icon_name="network-transmit-receive-symbolic"))
 
+        if self.os_id is not None and (
+                (self.dados or {}).get("dados_incompletos")
+                or not ((self.dados or {}).get("descricao") or "").strip()):
+            aviso = Adw.PreferencesGroup()
+            pagina.add(aviso)
+            aviso.add(Adw.ActionRow(
+                title="Dados incompletos",
+                subtitle="Complete a descrição do serviço antes de encerrar esta OS.",
+                icon_name="dialog-warning-symbolic"))
+
         grupo = Adw.PreferencesGroup(title="Identificação")
         pagina.add(grupo)
         base = self.dados or self.importado or {}
@@ -788,8 +798,10 @@ class DialogoOS(Adw.Dialog):
             return
         cliente_id = self.clientes[indice]["id"]
         descricao = self.descricao.get_texto()
-        if not descricao:
-            ui.aviso_erro(self.janela, "Descrição", "Preencha a descrição do serviço.")
+        dados_incompletos = 0 if descricao.strip() else 1
+        if acao in ui.STATUS_FIM and dados_incompletos:
+            ui.aviso_erro(self.janela, "Dados incompletos",
+                          "Preencha a descrição do serviço antes de encerrar a OS.")
             return
         tecnico = self.tecnico.get_text().strip()
         pagamento = ui.valor_combo(self.pagamento)
@@ -839,11 +851,12 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """INSERT INTO ordens_servico
                     (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                     valor_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?)""",
+                     valor_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
+                     dados_incompletos,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?)""",
                     (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
                      tecnico, descricao, mao_obra, materiais, total, pagamento,
-                     ui.valor_combo(self.urgencia), observacoes,
+                     ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 os_salvo_id = cursor.lastrowid
                 aten.registrar_solicitacao(cursor, os_salvo_id, cliente_id, descricao,
@@ -852,9 +865,9 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
                     valor_mao_obra=?,valor_materiais=?,valor_total=?,forma_pagamento=?,
-                    urgencia=?,observacoes=?,atualizado_em=? WHERE id=?""",
+                    urgencia=?,observacoes=?,dados_incompletos=?,atualizado_em=? WHERE id=?""",
                     (cliente_id, tecnico, descricao, mao_obra, materiais, total, pagamento,
-                     ui.valor_combo(self.urgencia), observacoes,
+                     ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
                 os_salvo_id = self.os_id
 
@@ -949,7 +962,8 @@ class DialogoOS(Adw.Dialog):
             self.janela.carregar_historico()
             return
 
-        ui.toast(self.janela, "OS salva.")
+        ui.toast(self.janela, "OS salva com dados incompletos."
+                 if dados_incompletos else "OS salva.")
         self.close()
         self.janela.carregar_os()
         self.janela.carregar_clientes()
