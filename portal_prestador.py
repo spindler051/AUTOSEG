@@ -32,9 +32,10 @@ import portal_v9 as v9
 import links_publicos as links9
 import produtividade_os as prod
 import socket
+from versao_app import versao_local
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = '9.6.0-dev.3'
+VERSAO_PORTAL = versao_local('9.6.0-dev.3')
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()

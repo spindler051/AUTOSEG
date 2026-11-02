@@ -48,8 +48,9 @@ import cliente_fluxo_v94 as fluxo_pf
 import fluxo_os as fluxo
 import portal_cliente_v94 as cliente
 import prestadores_ext as ext
+from versao_app import versao_local
 
-VERSAO = '9.6.0'
+VERSAO = versao_local('9.6.0')
 PORTA_PADRAO = 8765
 PASTA_WEB = os.path.join(PASTA_APP, 'web')
 MAX_POST = 10 * 1024 * 1024
