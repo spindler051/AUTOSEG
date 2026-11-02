@@ -35,7 +35,7 @@ import socket
 from versao_app import versao_local
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = versao_local('9.6.0-dev.3')
+VERSAO_PORTAL = versao_local('9.6.0-dev.4')
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -86,7 +86,7 @@ def layout(titulo,corpo,usuario=None,nonce=None):
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
-    footer='''<footer>REV07 TESTE · Gmail envia pela API apenas com AUTOSEG_GMAIL_ENVIO=1 e OAuth configurado; NFS-e segue como rascunho.</footer>'''
+    footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · Gmail envia pela API apenas com AUTOSEG_GMAIL_ENVIO=1 e OAuth configurado; NFS-e segue como rascunho.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -451,7 +451,10 @@ class PortalPrestador:
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
-                    anexos=c.execute('SELECT id,nome_original,criado_em FROM os_anexos WHERE os_id=? ORDER BY id DESC',(oid,)).fetchall() if oid else []
+                    anexos=c.execute('''SELECT a.id,a.nome_original,a.criado_em,a.tipo,
+                        COALESCE(v.legenda,'') legenda,COALESCE(v.visivel,1) visivel
+                        FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id
+                        WHERE a.os_id=? ORDER BY a.id''',(oid,)).fetchall() if oid else []
                     responsavel=ext.responsavel_atual(c,oid) if oid else None
                     prestadores=c.execute('SELECT id,nome,email FROM prestadores WHERE ativo=1 ORDER BY nome').fetchall()
                     detalhes=c.execute('SELECT * FROM v9_detalhes_os WHERE os_id=?',(oid,)).fetchone() if oid else None
@@ -551,6 +554,8 @@ class PortalPrestador:
                 except Exception:
                     rasc_salvo = None
                 corpo+=f'<form method="post" action="{action}" id="form-os" enctype="multipart/form-data">{token}'
+                if oid and d['status'] in ext.ATIVAS and responsavel==s['pid']:
+                    corpo+=f'<p style="position:sticky;top:0;z-index:3;background:#111;padding:8px 0"><button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO</button> <span class="muted">Salva diagnóstico, materiais, fotos e legendas sem finalizar.</span></p>'
                 servicos_ativos=catalogo.listar(banco,ativos=True)
                 if servicos_ativos:
                     import json
@@ -630,10 +635,6 @@ class PortalPrestador:
                     corpo+=select('Situação do atendimento','acao_status',
                         [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
                         'Concluída',required=True)
-                    corpo+='<div id="anexo-encerramento"><label>Fotos do relatório (até 10 imagens, 8 MB por foto)</label>'
-                    corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
-                    corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div><button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
-                    corpo+='<p class="muted">Selecione até 10 imagens de uma só vez (JPG/PNG/WEBP, máximo de 8 MB por imagem). As imagens entram no PDF após a conclusão e podem ser salvas junto ao rascunho.</p></div>'
                     corpo+=campos_escuros('E-mail adicional ao concluir','email_adicional',kind='email')
                     if responsavel==s['pid']:
                         corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
@@ -643,7 +644,37 @@ class PortalPrestador:
                             corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
                             corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
                         corpo+='</div>'
-                corpo+='</fieldset><div class="actions">'
+                corpo+='</fieldset>'
+                if oid and d['status'] in ext.ATIVAS:
+                    pode_editar_fotos = (responsavel == s['pid'])
+                    corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
+                    corpo+='<p class="muted">Cada foto recebe uma legenda individual. A legenda é salva no SQLite, reaparece ao reabrir a OS e é incluída no PDF final.</p>'
+                    if anexos:
+                        corpo+='<div class="fotos-rascunho">'
+                        for a in anexos:
+                            legenda=esc(a['legenda'] or '')
+                            vis=esc(str(a['visivel'] if a['visivel'] is not None else 1))
+                            corpo+=('<div class="foto-rascunho" data-anexo-id="'+str(a['id'])+'" style="display:grid;grid-template-columns:150px 1fr;gap:12px;border:1px solid #3b3b3b;padding:10px;margin:10px 0;border-radius:8px">'
+                                +'<img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto da OS" loading="lazy" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
+                                +'<div>')
+                            if pode_editar_fotos:
+                                corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
+                                    +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
+                                    +select('Incluir no PDF','anexo_visivel[]',[('1','Sim — incluir no PDF'),('0','Não — ocultar por privacidade')],vis))
+                            else:
+                                corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
+                            corpo+='</div></div>'
+                        corpo+='</div>'
+                    if pode_editar_fotos:
+                        corpo+='<div id="anexo-encerramento"><label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
+                        corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
+                        corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
+                        corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
+                        corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>SALVAR RASCUNHO</b> para guardar fotos e legendas sem finalizar.</p></div>'
+                    else:
+                        corpo+='<p class="notice">Assuma a OS para adicionar fotos e editar as legendas.</p>'
+                    corpo+='</fieldset>'
+                corpo+='<div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
                 else:
@@ -664,7 +695,7 @@ class PortalPrestador:
                 if d['status'] in ext.ATIVAS:
                     corpo+=card('Atribuição',f'<p>Responsável atual: <b>{esc(next((p["nome"] for p in prestadores if p["id"]==responsavel),"Não atribuído"))}</b></p>'
                         '<p class="muted">Prestadores podem assumir apenas OS não atribuídas. Transferências são feitas no desktop.</p>')
-                if anexos:
+                if anexos and d['status'] not in ext.ATIVAS:
                     itens=[]
                     for a in anexos:
                         vis=imagens_v9.get(a['id'],{})
@@ -966,8 +997,8 @@ class PortalPrestador:
                             ok=c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',(aid,oid)).fetchone()
                         if not ok:raise ValueError('Anexo não pertence à OS.')
                         with ext.db(banco) as c:
-                            if ext.responsavel_atual(c,oid)!=pid:
-                                raise PermissionError('Somente técnico responsável edita a legenda do anexo.')
+                            if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+                                raise PermissionError('Somente o técnico responsável ou administrador edita a legenda do anexo.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
                         return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
@@ -985,10 +1016,6 @@ class PortalPrestador:
                         if str(d.get('relatorio_tecnico','')).strip():
                             with ext.db(banco) as c:
                                 aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
-                        imagens=[a for a in d.get('imagens_encerramento[]',[]) if isinstance(a,tuple) and a[0]]
-                        if len(imagens)>10:raise ValueError('Limite de 10 imagens por envio.')
-                        for nome,conteudo in imagens:
-                            ext.salvar_imagem(banco,oid,pid,nome,conteudo)
                         return self.pagina('Rascunho salvo',card('Rascunho',
                             '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
                             +botao('Voltar à OS',f'/os/{oid}')),s)

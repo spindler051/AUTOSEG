@@ -146,8 +146,19 @@ def os_salvar(banco,d,pid,oid=None):
     imagens=[x for x in d.get('imagens_encerramento[]',[]) if isinstance(x,tuple) and x[0]]
     imagem=d.get('imagem_encerramento')
     if imagem and isinstance(imagem,tuple) and imagem[0]:imagens.append(imagem)
-    if len(imagens)>10:raise ValueError('O limite é de 10 imagens por encerramento.')
-    if imagens and acao not in fluxo.FIM:raise ValueError('Fotos novas só podem ser enviadas no encerramento.')
+    if len(imagens)>10:raise ValueError('O limite é de 10 imagens por envio.')
+    chaves=list(d.get('foto_chave[]',[]) or [])
+    legendas_fotos=list(d.get('foto_legenda[]',[]) or [])
+    visiveis_fotos=list(d.get('foto_visivel[]',[]) or [])
+    anexo_ids=list(d.get('anexo_id[]',[]) or [])
+    anexo_legendas=list(d.get('anexo_legenda[]',[]) or [])
+    anexo_visiveis=list(d.get('anexo_visivel[]',[]) or [])
+    if isinstance(chaves,str):chaves=[chaves]
+    if isinstance(legendas_fotos,str):legendas_fotos=[legendas_fotos]
+    if isinstance(visiveis_fotos,str):visiveis_fotos=[visiveis_fotos]
+    if isinstance(anexo_ids,str):anexo_ids=[anexo_ids]
+    if isinstance(anexo_legendas,str):anexo_legendas=[anexo_legendas]
+    if isinstance(anexo_visiveis,str):anexo_visiveis=[anexo_visiveis]
     for item in imagens:
         if len(item[1])>8*1024*1024:raise ValueError('Cada imagem deve ter no máximo 8 MB.')
         ext.validar_imagem(item[1])
@@ -193,6 +204,8 @@ def os_salvar(banco,d,pid,oid=None):
                 if old['origem']=='Portal':
                     observacoes=old['observacoes'] or original['observacoes_originais']
             atual=ext.responsavel_atual(c,oid)
+            if atual not in (None,pid):
+                raise PermissionError('Assuma a OS antes de salvar rascunho, fotos ou alterar a situação.')
             if acao in ('Pendente','Concluída','Cancelada','Não realizada') and atual not in (None,pid):
                 raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
             old_dict=dict(old)
@@ -227,9 +240,20 @@ def os_salvar(banco,d,pid,oid=None):
             if c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Pendente')",(oid,)).rowcount!=1:
                 raise ValueError('OS não está ativa.')
             ext.evento(c,oid,'Pendência','Atendimento pendente conforme relatório técnico.',pid,'Prestador')
+        # Fotos e legendas valem tanto para rascunho quanto para encerramento.
+        for indice,item in enumerate(imagens):
+            chave=chaves[indice] if indice<len(chaves) else None
+            legenda=legendas_fotos[indice] if indice<len(legendas_fotos) else ''
+            visivel=str(visiveis_fotos[indice])!='0' if indice<len(visiveis_fotos) else True
+            ext.registrar_imagem_transacao(c,oid,pid,item[0],item[1],permitir_colaboracao=True,
+                                           chave=chave,legenda=legenda,visivel=visivel)
+        for indice,anexo_id in enumerate(anexo_ids):
+            try:anexo_id=int(anexo_id)
+            except (TypeError,ValueError):continue
+            legenda=anexo_legendas[indice] if indice<len(anexo_legendas) else ''
+            visivel=str(anexo_visiveis[indice])!='0' if indice<len(anexo_visiveis) else True
+            ext.definir_legenda_anexo_c(c,oid,anexo_id,legenda,visivel)
         if acao in fluxo.FIM:
-            for imagem in imagens:
-                ext.registrar_imagem_transacao(c,oid,pid,imagem[0],imagem[1],permitir_colaboracao=True)
             fluxo.aplicar_encerramento(c,oid,acao,relato,motivo,
                  prestador_id=pid,ator=f'Prestador ID {pid}')
             if acao=='Concluída':

@@ -100,6 +100,17 @@ def instalar(banco):
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
             c.execute('ALTER TABLE prestadores ADD COLUMN excluido INTEGER NOT NULL DEFAULT 0')
+        # REV10: chave estável e hash para não duplicar fotos ao salvar rascunho.
+        col_anexos={r[1] for r in c.execute('PRAGMA table_info(os_anexos)').fetchall()}
+        if 'chave' not in col_anexos:
+            c.execute('ALTER TABLE os_anexos ADD COLUMN chave TEXT')
+        if 'sha256' not in col_anexos:
+            c.execute('ALTER TABLE os_anexos ADD COLUMN sha256 TEXT')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_anexos_os_chave ON os_anexos(os_id,chave)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_anexos_os_sha ON os_anexos(os_id,sha256)')
+        c.execute('''CREATE TABLE IF NOT EXISTS v9_anexos_visiveis(
+            anexo_id INTEGER PRIMARY KEY, visivel INTEGER NOT NULL DEFAULT 0,
+            legenda TEXT DEFAULT '', autorizado_em TEXT)''')
         # Migração sem alterações destrutivas: atribuições antigas continuam disponíveis.
         # Escolhe a mais recente somente onde ainda não existe responsável atual.
         c.execute('''INSERT OR IGNORE INTO os_responsaveis(os_id, prestador_id, assumido_em)
@@ -272,8 +283,31 @@ def validar_imagem(conteudo):
     return formato, {'JPEG':'.jpg','PNG':'.png','WEBP':'.webp'}[formato]
 
 
-def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=False):
-    """Anexa ao banco na transação de encerramento, antes de gerar o PDF."""
+def _legenda_normalizada(texto):
+    return str(texto or '').strip()[:160]
+
+
+def definir_legenda_anexo_c(c, os_id, anexo_id, legenda, visivel=1, ator='Prestador'):
+    """Atualiza a legenda/visibilidade de uma foto existente na própria transação."""
+    a=c.execute('SELECT os_id FROM os_anexos WHERE id=? AND os_id=?',(anexo_id,os_id)).fetchone()
+    if not a:
+        raise ValueError('Foto não pertence a esta OS.')
+    c.execute('''INSERT INTO v9_anexos_visiveis(anexo_id,visivel,legenda,autorizado_em)
+                 VALUES(?,?,?,?) ON CONFLICT(anexo_id) DO UPDATE SET
+                 visivel=excluded.visivel,legenda=excluded.legenda,autorizado_em=excluded.autorizado_em''',
+              (int(anexo_id),1 if visivel else 0,_legenda_normalizada(legenda),agora()))
+    return True
+
+
+def atualizar_legenda_anexo(banco, os_id, anexo_id, legenda, visivel=1, ator='Prestador'):
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        return definir_legenda_anexo_c(c, os_id, anexo_id, legenda, visivel, ator)
+
+
+def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=False,
+                               chave=None,legenda='',visivel=1):
+    """Anexa ou atualiza uma foto sem duplicar; a legenda fica ligada à chave/hash."""
     formato,extensao=validar_imagem(conteudo)
     if pid is not None:
         prestador_ativo=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
@@ -284,12 +318,32 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
     if not o:raise ValueError('OS não existe.')
     if pid is not None and o['status'] not in ATIVAS:
         raise ValueError('OS encerrada: não é permitido anexar novas fotos.')
+    import hashlib
+    digest=hashlib.sha256(conteudo).hexdigest()
+    chave=str(chave or '').strip()[:80] or None
+    existente=None
+    if chave:
+        existente=c.execute('SELECT id,caminho FROM os_anexos WHERE os_id=? AND chave=?',(os_id,chave)).fetchone()
+    if not existente:
+        existente=c.execute('SELECT id,caminho FROM os_anexos WHERE os_id=? AND sha256=? ORDER BY id LIMIT 1',
+                            (os_id,digest)).fetchone()
+    if existente:
+        # Reenvio do mesmo arquivo: atualiza legenda e metadados, preservando o arquivo.
+        c.execute('UPDATE os_anexos SET chave=COALESCE(chave,?),sha256=?,nome_original=? WHERE id=?',
+                  (chave,digest,Path(nome).name[:150],existente['id']))
+        definir_legenda_anexo_c(c,os_id,existente['id'],legenda,visivel)
+        if chave:
+            evento(c,os_id,'Legenda de foto atualizada',_legenda_normalizada(legenda) or 'Sem legenda',pid,
+                   (c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome'] if pid else 'Administrador'))
+        return str(existente['caminho'])
     ANEXOS.mkdir(parents=True,exist_ok=True)
     destino=ANEXOS/(secrets.token_hex(16)+extensao)
     destino.write_bytes(conteudo)
     try:
-        c.execute('INSERT INTO os_anexos(os_id,prestador_id,nome_original,caminho,tipo,criado_em) VALUES(?,?,?,?,?,?)',
-                  (os_id,pid,Path(nome).name[:150],str(destino),formato,agora()))
+        cur=c.execute('''INSERT INTO os_anexos(os_id,prestador_id,nome_original,caminho,tipo,criado_em,chave,sha256)
+                         VALUES(?,?,?,?,?,?,?,?)''',
+                  (os_id,pid,Path(nome).name[:150],str(destino),formato,agora(),chave,digest))
+        definir_legenda_anexo_c(c,os_id,cur.lastrowid,legenda,visivel)
         ator='Administrador'
         if pid is not None:
             ator=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome']
@@ -299,10 +353,12 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
     return str(destino)
 
 
-def salvar_imagem(banco,os_id,pid,nome,conteudo,permitir_colaboracao=False):
+def salvar_imagem(banco,os_id,pid,nome,conteudo,permitir_colaboracao=False,
+                  chave=None,legenda='',visivel=1):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        return registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao)
+        return registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao,
+                                          chave=chave,legenda=legenda,visivel=visivel)
 
 def gerar_pdf(banco,os_id):
     from pdf_cliente_v9 import gerar
@@ -506,11 +562,17 @@ def finalizar_em_rota(c, os_id):
 
 def salvar_rascunho_web(banco, os_id, pid, dados):
     import json
+    limpos = {}
+    for chave, valor in dados.items():
+        # Arquivos não entram no JSON; são gravados em os_anexos com legenda própria.
+        if chave.startswith('imagens_') or isinstance(valor, (bytes, tuple)):
+            continue
+        limpos[chave] = valor
     with db(banco) as c:
         c.execute('''INSERT INTO os_rascunhos_web(os_id, prestador_id, dados_json, atualizado_em)
                      VALUES(?,?,?,?) ON CONFLICT(os_id, prestador_id) DO UPDATE SET
                      dados_json=excluded.dados_json, atualizado_em=excluded.atualizado_em''',
-                  (os_id, pid, json.dumps(dados, ensure_ascii=False), agora()))
+                  (os_id, pid, json.dumps(limpos, ensure_ascii=False), agora()))
     return True
 
 

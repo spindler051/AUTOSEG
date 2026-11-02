@@ -178,44 +178,99 @@
         else campoBuscaCliente.setCustomValidity('');
       });
     }
-    // Arquivos em memória no navegador: remover um item não envia o relatório nem recarrega a página.
+    // Fotos: prévia + legenda individual + chave estável por arquivo.
+    // A chave viaja junto com o arquivo para o servidor não duplicar fotos no rascunho.
     const campoFotos = document.getElementById('fotos-relatorio');
     const listaFotos = document.getElementById('lista-fotos-selecionadas');
     const limparFotos = document.getElementById('limpar-fotos');
+    const chavesFotos = new Map();
+    const legendasFotos = new Map();
+    const urlsPreview = [];
+    const chaveDoArquivo = (foto) => `${foto.name}|${foto.size}|${foto.lastModified}`;
+    const novaChave = () => (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID() : `foto-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if (campoFotos && listaFotos) {
       const mostrarFotos = () => {
+        urlsPreview.splice(0).forEach(url => URL.revokeObjectURL(url));
         listaFotos.replaceChildren();
         const fotos = Array.from(campoFotos.files || []);
+        let invalida = false;
         if (!fotos.length) {
-          listaFotos.textContent = 'Nenhuma foto selecionada.';
+          const vazio = document.createElement('p');
+          vazio.className = 'muted';
+          vazio.textContent = 'Nenhuma foto nova selecionada.';
+          listaFotos.appendChild(vazio);
         }
         fotos.forEach((foto, i) => {
+          const idArquivo = chaveDoArquivo(foto);
+          if (!chavesFotos.has(idArquivo)) chavesFotos.set(idArquivo, novaChave());
+          const chave = chavesFotos.get(idArquivo);
           const linha = document.createElement('div');
           linha.className = 'foto-selecionada';
-          const nome = document.createElement('span');
+          linha.dataset.chave = chave;
+          linha.style.cssText = 'display:grid;grid-template-columns:120px 1fr;gap:12px;border:1px solid #3b3b3b;padding:10px;margin:10px 0;border-radius:8px';
+          const preview = document.createElement('img');
+          const url = URL.createObjectURL(foto);
+          urlsPreview.push(url);
+          preview.src = url;
+          preview.alt = `Prévia de ${foto.name}`;
+          preview.style.cssText = 'width:120px;height:90px;object-fit:cover;border-radius:6px';
+          const direita = document.createElement('div');
+          const nome = document.createElement('p');
+          nome.style.margin = '0 0 6px';
           nome.textContent = `${foto.name} (${(foto.size/1024/1024).toFixed(1)} MB)`;
+          const legenda = document.createElement('label');
+          legenda.textContent = 'Legenda da foto';
+          const entrada = document.createElement('input');
+          entrada.type = 'text';
+          entrada.name = 'foto_legenda[]';
+          entrada.maxLength = 160;
+          entrada.placeholder = 'Ex.: Antes do reparo, detalhe do componente...';
+          entrada.value = legendasFotos.get(idArquivo) || '';
+          entrada.addEventListener('input', () => legendasFotos.set(idArquivo, entrada.value));
+          const ocultaChave = document.createElement('input');
+          ocultaChave.type = 'hidden';
+          ocultaChave.name = 'foto_chave[]';
+          ocultaChave.value = chave;
+          const ocultaVisivel = document.createElement('input');
+          ocultaVisivel.type = 'hidden';
+          ocultaVisivel.name = 'foto_visivel[]';
+          ocultaVisivel.value = '1';
           const remover = document.createElement('button');
           remover.type = 'button';
           remover.className = 'secondary';
           remover.textContent = 'Remover foto';
-          remover.setAttribute('aria-label',`Remover ${foto.name}`);
+          remover.setAttribute('aria-label', `Remover ${foto.name}`);
           remover.addEventListener('click', () => {
             try {
               const transfer = new DataTransfer();
               fotos.filter((_,j) => j !== i).forEach(f => transfer.items.add(f));
               campoFotos.files = transfer.files;
             } catch (_erro) {
-              campoFotos.value = ''; // Compatibilidade: limpar todas sem perder o formulário.
+              campoFotos.value = '';
             }
             mostrarFotos();
           });
-          linha.append(nome, remover);
+          if (foto.size > 8 * 1024 * 1024) {
+            invalida = true;
+            const aviso = document.createElement('p');
+            aviso.className = 'bad';
+            aviso.textContent = 'Esta foto ultrapassa 8 MB e não pode ser enviada.';
+            direita.append(nome, aviso);
+          } else {
+            direita.append(nome);
+          }
+          direita.append(legenda, entrada, ocultaChave, ocultaVisivel, remover);
+          linha.append(preview, direita);
           listaFotos.appendChild(linha);
         });
+        campoFotos.setCustomValidity(invalida ? 'Remova as fotos maiores que 8 MB.' : '');
         if (limparFotos) limparFotos.hidden = !fotos.length;
       };
       campoFotos.addEventListener('change', mostrarFotos);
-      if (limparFotos) limparFotos.addEventListener('click', () => {campoFotos.value='';mostrarFotos();});
+      if (limparFotos) limparFotos.addEventListener('click', () => {
+        campoFotos.value = ''; chavesFotos.clear(); legendasFotos.clear(); mostrarFotos();
+      });
       mostrarFotos();
     }
     const status = form.querySelector('[name="acao_status"]');
@@ -225,7 +280,7 @@
     const relato = form.querySelector('[name="relatorio_tecnico"]');
     function atualizarEncerramento() {
       if (!status) return;
-      if (fotoBox) fotoBox.hidden = !['Concluída', 'Cancelada'].includes(status.value);
+      if (fotoBox) fotoBox.hidden = false;
       if (motivo) motivo.required = status.value === 'Cancelada';
       if (rateioBox) rateioBox.hidden = status.value !== 'Concluída';
     }
