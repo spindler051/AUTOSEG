@@ -63,3 +63,6 @@ token.json
 
 # Rascunhos operacionais gerados pelo aplicativo (podem conter dados pessoais)
 rascunhos/
+
+# Trava de instancia unica dos aplicativos .app
+.autoseg.lock
