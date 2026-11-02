@@ -56,11 +56,13 @@
     const status = form.querySelector('[name="acao_status"]');
     const fotoBox = document.getElementById('anexo-encerramento');
     const motivo = form.querySelector('[name="motivo_encerramento"]');
+    const rateioBox = document.getElementById('rateio-conclusao');
     const relato = form.querySelector('[name="relatorio_tecnico"]');
     function atualizarEncerramento() {
       if (!status) return;
       if (fotoBox) fotoBox.hidden = !['Concluída', 'Cancelada'].includes(status.value);
       if (motivo) motivo.required = status.value === 'Cancelada';
+      if (rateioBox) rateioBox.hidden = status.value !== 'Concluída';
     }
     if (status) {status.addEventListener('change', atualizarEncerramento); atualizarEncerramento();}
     form.addEventListener('submit', e => {
