@@ -131,6 +131,9 @@ def criar_banco(caminho=None):
     # Migração simples para bancos criados em versões anteriores.
     adicionar_coluna_se_nao_existir(cursor, "clientes", "tipo_pessoa", "TEXT NOT NULL DEFAULT 'Jurídica'")
     adicionar_coluna_se_nao_existir(cursor, "clientes", "status", "TEXT NOT NULL DEFAULT 'Ativo'")
+    adicionar_coluna_se_nao_existir(cursor, "clientes", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
+    adicionar_coluna_se_nao_existir(cursor, "clientes", "versao", "INTEGER NOT NULL DEFAULT 1")
+    adicionar_coluna_se_nao_existir(cursor, "clientes", "atualizado_em", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "forma_pagamento", "TEXT DEFAULT 'Outro'")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "data_conclusao", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "observacoes", "TEXT")
@@ -138,6 +141,7 @@ def criar_banco(caminho=None):
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "urgencia", "TEXT DEFAULT 'Normal'")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "contato_preferido", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "atualizado_em", "TEXT")
+    adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_cliente ON ordens_servico(cliente_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status)")

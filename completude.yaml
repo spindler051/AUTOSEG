@@ -1,0 +1,17 @@
+# Mínimo para um registro ser considerado completo.
+# Edite este arquivo e salve; o app relê a cada validação, sem reiniciar.
+# Campos desconhecidos são ignorados; lista vazia significa "nada obrigatório".
+versao: 1
+
+# Campos possíveis: tipo_pessoa, documento, nome, nome_fantasia, endereco,
+# numero, complemento, bairro, cep, cidade, uf, telefone, email,
+# sindico_nome, sindico_telefone, sindico_email, administradora,
+# administradora_email, administradora_telefone, observacoes, status.
+cliente:
+  - nome
+
+# Campos possíveis: cliente_id, descricao, tecnico, forma_pagamento,
+# valor_total, urgencia, observacoes.
+ordem_servico:
+  - cliente_id
+  - descricao

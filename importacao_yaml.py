@@ -55,8 +55,8 @@ def cliente(nome, conteudo):
         if len(valor)>(2500 if k=='observacoes' else 250):
             raise ValueError('Campo '+k+' excede o limite.')
         resultado[k]=valor
-    if not 3<=len(resultado.get('nome',''))<=250:
-        raise ValueError('Nome / Razão social deve ter pelo menos 3 caracteres.')
+    if len(resultado.get('nome',''))>250:
+        raise ValueError('Nome / Razão social excede 250 caracteres.')
     tipo=resultado.setdefault('tipo_pessoa','Jurídica')
     if tipo not in ('Jurídica','Física'):
         raise ValueError('Tipo de pessoa inválido.')
@@ -66,6 +66,93 @@ def cliente(nome, conteudo):
     if doc and not (cad.cnpj_valido(doc) if tipo=='Jurídica' else cad.cpf_valido(doc)):
         raise ValueError('CPF/CNPJ inválido no arquivo.')
     return resultado
+
+
+def _numero_decimal(valor, rotulo, permitir_zero=True):
+    from decimal import Decimal, InvalidOperation
+    if isinstance(valor, bool) or not isinstance(valor, (str, int, float)):
+        raise ValueError(rotulo + ' inválido.')
+    try:
+        n = Decimal(str(valor).strip().replace(',', '.'))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(rotulo + ' inválido.') from exc
+    if not n.is_finite() or n < 0 or (n == 0 and not permitir_zero) or n > Decimal('1000000'):
+        raise ValueError(rotulo + ' fora do intervalo permitido.')
+    return n
+
+
+def _materiais_os_lista(materiais):
+    if not isinstance(materiais, list) or len(materiais) > 100:
+        raise ValueError('Materiais deve ser uma lista de até 100 itens.')
+    resposta = []
+    for material in materiais:
+        if (not isinstance(material, Mapping)
+                or set(material) - {'item', 'quantidade', 'valor_unitario'}):
+            raise ValueError('Material inválido: informe item, quantidade e valor_unitario.')
+        item = str(material.get('item', '')).strip()
+        if not 1 <= len(item) <= 180:
+            raise ValueError('Informe o nome do material.')
+        quantidade = _numero_decimal(material.get('quantidade', 1), 'Quantidade', False)
+        valor = _numero_decimal(material.get('valor_unitario', 0), 'Valor unitário')
+        resposta.append({
+            'item': item,
+            'quantidade': float(quantidade),
+            'valor_unitario': float(valor),
+            'valor_total': float(quantidade * valor),
+        })
+    return resposta
+
+
+def materiais_os(nome, conteudo):
+    """Valida uma lista de materiais para pré-preencher uma OS."""
+    d = carregar(nome, conteudo)
+    if set(d) != {'versao', 'materiais'}:
+        raise ValueError('Utilize versao: 1 e a lista materiais do modelo oficial.')
+    return _materiais_os_lista(d.get('materiais'))
+
+
+def ordem_servico(nome, conteudo):
+    """Valida uma OS para pré-preencher o formulário, sem gravar no banco."""
+    d = carregar(nome, conteudo)
+    if set(d) - {'versao', 'ordem_servico'} or not isinstance(d.get('ordem_servico'), Mapping):
+        raise ValueError('Utilize a seção ordem_servico do modelo oficial.')
+    entrada = d['ordem_servico']
+    aceitos = {'cliente_id', 'cliente_documento', 'tecnico', 'descricao',
+               'forma_pagamento', 'mao_obra', 'observacoes', 'urgencia', 'materiais'}
+    if set(entrada) - aceitos:
+        raise ValueError('Campo desconhecido na ordem de serviço: '
+                         + str(next(iter(set(entrada) - aceitos))))
+    descricao = str(entrada.get('descricao', '')).strip()
+    if not 3 <= len(descricao) <= 2000:
+        raise ValueError('Descrição da OS deve ter entre 3 e 2.000 caracteres.')
+    cliente_id = entrada.get('cliente_id')
+    documento = cad.digitos(entrada.get('cliente_documento', ''))
+    if cliente_id is not None:
+        try:
+            cliente_id = int(cliente_id)
+            if cliente_id <= 0:
+                raise ValueError()
+        except (TypeError, ValueError) as exc:
+            raise ValueError('cliente_id deve ser um número positivo.') from exc
+    if cliente_id is None and not documento:
+        raise ValueError('Informe cliente_id ou cliente_documento.')
+    pagamento = str(entrada.get('forma_pagamento', 'PIX')).strip() or 'PIX'
+    if pagamento not in ('PIX', 'Transferência', 'Dinheiro', 'Cartão', 'Boleto', 'Outro'):
+        raise ValueError('Forma de pagamento inválida.')
+    urgencia = str(entrada.get('urgencia', 'Normal')).strip() or 'Normal'
+    if urgencia not in ('Baixa', 'Normal', 'Alta'):
+        raise ValueError('Urgência inválida.')
+    return {
+        'cliente_id': cliente_id,
+        'cliente_documento': documento,
+        'tecnico': str(entrada.get('tecnico', '')).strip()[:250],
+        'descricao': descricao,
+        'forma_pagamento': pagamento,
+        'mao_obra': float(_numero_decimal(entrada.get('mao_obra', 0), 'Mão de obra')),
+        'observacoes': str(entrada.get('observacoes', '')).strip()[:2500],
+        'urgencia': urgencia,
+        'materiais': _materiais_os_lista(entrada.get('materiais', [])),
+    }
 
 
 def relatorio(nome, conteudo, numero_os=None):
@@ -188,3 +275,57 @@ def materiais(nome, conteudo):
         _valor_centavos(data['custo']);_valor_centavos(data['venda'])
         resposta.append(data)
     return resposta
+
+
+MODELO_CLIENTE_VAZIO = """# Modelo vazio de cliente — preencha e importe no AUTOSEG.
+versao: 1
+cliente:
+  tipo_pessoa: Jurídica
+  nome: ""
+  documento: ""
+  endereco: ""
+  numero: ""
+  complemento: ""
+  bairro: ""
+  cep: ""
+  cidade: ""
+  uf: ""
+  telefone: ""
+  email: ""
+  status: Prospect
+  observacoes: ""
+"""
+
+MODELO_OS_VAZIO = """# Modelo vazio de ordem de serviço — preencha e importe no AUTOSEG.
+# Informe cliente_id ou cliente_documento.
+versao: 1
+ordem_servico:
+  cliente_id:
+  cliente_documento: ""
+  tecnico: ""
+  descricao: ""
+  forma_pagamento: PIX
+  mao_obra: 0
+  observacoes: ""
+  urgencia: Normal
+  materiais: []
+"""
+
+MODELO_MATERIAIS_VAZIO = """# Modelo vazio de materiais de estoque.
+versao: 1
+materiais:
+  - nome: ""
+    sku: ""
+    unidade: un
+    custo: "0"
+    venda: "0"
+    minimo: 0
+"""
+
+MODELO_MATERIAIS_OS_VAZIO = """# Modelo vazio de materiais para uma OS.
+versao: 1
+materiais:
+  - item: ""
+    quantidade: 1
+    valor_unitario: 0
+"""

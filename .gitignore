@@ -34,6 +34,7 @@ backup/
 .DS_Store
 *.log
 *.tmp
+.autoseg.lock
 
 # Logs e dados operacionais
 logs/
@@ -64,5 +65,16 @@ token.json
 # Rascunhos operacionais gerados pelo aplicativo (podem conter dados pessoais)
 rascunhos/
 
-# Trava de instancia unica dos aplicativos .app
-.autoseg.lock
+# GTK4/libadwaita: dependências locais e artefatos de build
+.vendor/
+.venv-gtk/
+build/
+dist/
+*.AppImage
+*.spec
+
+# Documentação GNOME baixada localmente (reproduzir com docs/baixar_gnome_hig.sh)
+docs/gnome-hig/
+
+# Snapshot local do banco do macOS para leitura
+dados_remoto*.db

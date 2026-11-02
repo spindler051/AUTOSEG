@@ -1,4 +1,5 @@
 # DEMONSTRAÇÃO DECLARATIVA, NÃO É UMA IMPLEMENTAÇÃO FISCAL/OPERACIONAL VALIDADA.
+# A configuração real da integração fica em ../../../integracao/schema_autoseg.yaml.
 name: AUTOSEG_demo
 entities:
   cliente:

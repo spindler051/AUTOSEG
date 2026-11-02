@@ -12,7 +12,9 @@ BASE = Path(os.environ.get('AUTOSEG_BASE') or Path(__file__).resolve().parent)
 ANEXOS = BASE / 'anexos_os'
 RELATORIOS = BASE / 'relatorios_pdf'
 RASCUNHOS = BASE / 'rascunhos'
-for p in (ANEXOS, RELATORIOS, RASCUNHOS): p.mkdir(parents=True, exist_ok=True)
+for p in (ANEXOS, RELATORIOS, RASCUNHOS):
+    try: p.mkdir(parents=True, exist_ok=True)
+    except OSError: pass
 
 def agora(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -139,6 +141,9 @@ def verificar_senha(s, hash_):
 def cadastrar(banco,nome,email,senha,telefone='',documento='',especialidade=''):
     if not nome.strip() or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+',email.strip()):
         raise ValueError('Informe nome e e-mail válido.')
+    if documento:
+        import cadastros_v9 as cad
+        documento=cad.validar_documento_auto(documento)
     with db(banco) as c:
         cur=c.execute('INSERT INTO prestadores(nome,email,senha_hash,telefone,documento,especialidade,criado_em) VALUES(?,?,?,?,?,?,?)',
         (nome.strip(),email.strip().lower(),senha_hash(senha),telefone.strip(),documento.strip(),especialidade.strip(),agora()))
