@@ -700,6 +700,9 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             ok=c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',(aid,oid)).fetchone()
                         if not ok:raise ValueError('Anexo não pertence à OS.')
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=pid:
+                                raise PermissionError('Somente técnico responsável edita a legenda do anexo.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
                         return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
