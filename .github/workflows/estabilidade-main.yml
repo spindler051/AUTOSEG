@@ -1,4 +1,6 @@
-name: AUTOSEG main - validacao de estabilidade
+# Este workflow valida exclusivamente o codigo existente na main (baseline v9.4.1).
+# NAO homologa a REV06_DEV nem a REV07; essas revisoes alteram fluxos e exigem suites proprias.
+name: AUTOSEG main - validacao da v9.4.1
 
 on:
   push:
@@ -25,9 +27,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Instalar dependencias
+      - name: Instalar dependencias da main
         run: python -m pip install -r requirements.txt
-      - name: Compilar arquivos Python
+      - name: Compilar arquivos Python da main
         run: python -m compileall -q .
-      - name: Testar fluxo v9.4.1 com banco temporario
+      - name: Regressao da v9.4.1 (somente main, banco temporario)
         run: python test_v94_correcoes.py
