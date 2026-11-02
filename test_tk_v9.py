@@ -58,7 +58,20 @@ def main():
       assert a.fotos_encerramento_os.winfo_manager()=='pack'
       a.mostrar_gestao_pj_v9();a.update()
       a.mostrar_organizacoes_v9();a.update()
-      # Não salva nada nem abre popup; testa somente renderização e mudança de situação.
+      # SALVAR RASCUNHO no desktop: grava no SQLite temporário sem mudar o status.
+      from unittest.mock import patch
+      a.mostrar_formulario_os(os_id=1);a.update()
+      a.relatorio_tecnico_os.delete('1.0','end')
+      a.relatorio_tecnico_os.insert('1.0','RASCUNHO DESKTOP TESTE')
+      with patch.object(app.messagebox,'showinfo') as aviso, patch.object(app.messagebox,'showerror') as erro:
+        a.salvar_os(1);a.update()
+      assert aviso.called or erro.called, 'Ação SALVAR RASCUNHO não deu retorno ao usuário.'
+      with sqlite3.connect(dbpath) as con:
+        rascunho=con.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=1').fetchone()[0]
+        status=con.execute('SELECT status FROM ordens_servico WHERE id=1').fetchone()[0]
+      assert rascunho=='RASCUNHO DESKTOP TESTE', rascunho
+      assert status in ('Aberta','Pendente'), status
+      print('OK: SALVAR RASCUNHO do desktop persistiu no SQLite sem encerrar a OS.')
       print('OK: Tkinter histórico, PDF, estados e módulos PJ v9.')
     finally:a.ao_fechar()
 if __name__=='__main__':main()
