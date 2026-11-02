@@ -808,6 +808,12 @@ class PortalPrestador:
                             prod.limpar_rota_ao_iniciar(banco,oid)
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'/os/{oid}')
+                    if path=='/financeiro/banco/salvar':
+                        prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
+                        return self.redir('/financeiro')
+                    if path=='/financeiro/repasse':
+                        prod.confirmar_repasse(banco,int(d['os_id']),pid,int(d['secundario_id']),str(d['valor']))
+                        return self.redir('/financeiro')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
                         with ext.db(banco) as c:
                             autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id
