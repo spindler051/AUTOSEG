@@ -36,6 +36,27 @@ Variáveis úteis:
 | `GTK_USE_PORTAL=0` | evita a espera de ~25 s do portal XDG em ambientes sem sessão gráfica completa |
 | `AUTOSEG_SMOKE=1` | abre e fecha a janela em 3 s; usado em teste de fumaça |
 
+## Código compartilhado × específico de plataforma
+
+Prioridade: **um único frontend GTK** e um único backend. Nada de `if macOS`
+dentro das telas, validações, banco ou regras.
+
+| Compartilhado | Específico |
+|---|---|
+| `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | `INICIAR_AUTOSEG_GTK.command` (macOS) |
+| `completude.py`, validações, banco, PDF, e-mail | `ABRIR_NO_DRM.sh` (Linux/VM) |
+| `servidor_backend.py`, portais, scripts | `packaging/appimage/`, `packaging/macos/` |
+| temas, claro/escuro e ícones via libadwaita | instalação de dependências do SO |
+
+O app não define família de fonte. No macOS, o GTK usa a fonte padrão do
+sistema; no Linux, a fonte configurada no desktop. O `Adw.StyleManager` fica
+em `DEFAULT`, então claro/escuro segue o sistema. Os ícones são nomes
+simbólicos Adwaita resolvidos pelo tema; não há ícones KDE no código.
+
+O `INICIAR_AUTOSEG.command` antigo agora delega ao GTK. O Tkinter fica
+congelado como fallback em `INICIAR_AUTOSEG_TK.command` até a validação visual
+no Mac; depois pode ser removido.
+
 ## Trabalho em equipe Linux + macOS
 
 - O código é um só: `develop` (ou uma branch de feature no mesmo repositório).

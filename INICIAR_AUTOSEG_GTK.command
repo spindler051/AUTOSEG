@@ -6,6 +6,10 @@ cd "$(dirname "$0")"
 export AUTOSEG_BASE="${AUTOSEG_BASE:-$HOME/gestaoservicos_MAIN}"
 mkdir -p "$AUTOSEG_BASE"
 export GESTAO_BANCO="${GESTAO_BANCO:-$AUTOSEG_BASE/dados.db}"
+# Mantém o mínimo configurável no diretório de dados, se ainda não existir.
+if [ ! -f "$AUTOSEG_BASE/completude.yaml" ] && [ -f completude.yaml ]; then
+    cp completude.yaml "$AUTOSEG_BASE/completude.yaml"
+fi
 
 if [ ! -x .venv-gtk/bin/python ]; then
     if python3 -c 'import gi; gi.require_version("Gtk","4.0"); gi.require_version("Adw","1")' >/dev/null 2>&1; then
