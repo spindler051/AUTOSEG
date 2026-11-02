@@ -20,7 +20,7 @@ def main():
     sys.modules['banco']=fake
     serv=types.ModuleType('servidor_web')
     class ServidorPortal:
-      def __init__(self,*args):pass
+      def __init__(self,*args,**kwargs):pass
       def iniciar(self):pass
       def parar(self):pass
       def info(self):return {'ativo':False,'url_rede':'http://127.0.0.1:8765','url_local':'http://127.0.0.1:8765'}
@@ -39,6 +39,17 @@ def main():
       a.mostrar_historico_os();a.update()
       assert len(a.tabela_historico.get_children())>=1
       a.mostrar_formulario_os(os_id=1,modo_encerramento='Concluída');a.update()
+      def textos(widget):
+        encontrados=[]
+        for filho in widget.winfo_children():
+          try:
+            if 'text' in filho.keys(): encontrados.append(str(filho.cget('text')))
+          except Exception: pass
+          encontrados.extend(textos(filho))
+        return encontrados
+      botoes=textos(a)
+      assert any('SALVAR RASCUNHO' in t for t in botoes), 'Botão SALVAR RASCUNHO ausente no desktop'
+      print('OK: botão SALVAR RASCUNHO visível no desktop.')
       assert a.status_encerramento_os.get()=='Concluída'
       assert a.fotos_encerramento_os.winfo_manager()=='pack'
       a.status_encerramento_os.set('Pendente');a.atualizar_secao_encerramento_os()

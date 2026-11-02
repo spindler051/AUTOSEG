@@ -25,12 +25,15 @@ import portal_negocios as neg
 import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
+import importacao_yaml as yaml_import
+import catalogo_servicos as catalogo
+import estoque_materiais as estoque
 import portal_v9 as v9
 import links_publicos as links9
 import socket
 
 LOG = logging.getLogger('autosseg.portal')
-VERSAO_PORTAL = '9.6.0'
+VERSAO_PORTAL = '9.6.0-dev.2'
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -76,10 +79,10 @@ def tabela(headers, rows):
 
 
 def layout(titulo,corpo,usuario=None,nonce=None):
-    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/financeiro','Financeiro'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
-    nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:3])
+    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
+    nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
-         +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[3:])+'</details>') if usuario else ''
+         +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
     footer='''<footer>Relatórios PDF disponíveis para download. E-mail e NFS-e: rascunhos; sem transmissão por API.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
@@ -91,16 +94,17 @@ def layout(titulo,corpo,usuario=None,nonce=None):
 a{{color:var(--yellow)}}header{{background:#171717;border-bottom:3px solid var(--yellow)}}.top{{max-width:1240px;margin:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 18px}}
 .brand{{color:var(--yellow);font-size:26px;font-weight:900;letter-spacing:.3px;text-decoration:none}}.tagline{{color:#ddd;font-size:13px}}
 .nav{{display:flex;gap:6px;flex-wrap:wrap;max-width:1240px;margin:auto;padding:0 18px 13px}}.nav a{{color:#fff;text-decoration:none;border:1px solid #414141;padding:10px 13px;border-radius:8px;font-weight:650}}.nav a:hover{{background:var(--yellow);color:#101010}}.nav-more{{position:relative;z-index:2;border:1px solid #414141;border-radius:8px;padding:9px 13px}}.nav-more summary{{cursor:pointer;font-weight:650}}.nav-more[open]{{background:#232323}}.nav-more a{{display:block;margin:8px 0}}
-main{{max-width:1240px;margin:20px auto;padding:0 18px 50px}}h1{{font-size:clamp(22px,4vw,32px);margin:14px 0}}h2{{font-size:21px;margin:0 0 15px}}h3{{font-size:17px;margin:10px 0}}
+main{{max-width:1240px;margin:20px auto;padding:0 18px 50px;min-width:0}}h1{{font-size:clamp(22px,4vw,32px);margin:14px 0}}h2{{font-size:21px;margin:0 0 15px}}h3{{font-size:17px;margin:10px 0}}
 .card{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin:15px 0}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:13px}}.grid .card{{margin:0}}
 label{{display:block;margin:13px 0 5px;font-weight:650}}input,textarea,select{{width:100%;font:inherit;color:#fff;background:#090909;border:1.5px solid #989898;border-radius:7px;padding:10px;max-width:100%}}
 input:focus,textarea:focus,select:focus{{outline:2px solid var(--yellow)}}input[type=file]{{padding:12px}}input[type=checkbox]{{width:auto}}
-button,.btn{{display:inline-block;border-radius:8px;font:bold 15px Arial;padding:13px 16px;cursor:pointer;color:#161616;background:var(--yellow);border:1px solid var(--yellow);text-decoration:none;margin:4px 5px 4px 0;min-height:44px}}
+button,.btn{{display:inline-flex;align-items:center;justify-content:center;max-width:100%;overflow-wrap:anywhere;white-space:normal;text-align:center;vertical-align:middle;min-width:0;border-radius:8px;font:bold 15px Arial;padding:13px 16px;cursor:pointer;color:#161616;background:var(--yellow);border:1px solid var(--yellow);text-decoration:none;margin:4px 5px 4px 0;min-height:44px}}
 button.secondary,.btn.secondary{{background:#262626;border-color:#9b9b9b;color:#fff}}button.danger,.btn.danger{{background:#451b1b;color:#fff;border-color:#b75151}}button.subtle{{background:transparent;color:#fff;border:1px solid #777}}
 .usuario{{color:#ddd;font-size:13px}}.logout{{margin:0 0 0 auto}}.muted,small{{color:var(--muted)}}.good{{color:var(--green)}}.warn{{color:#ffce79}}.bad{{color:var(--red)}}.tag{{background:#4a400c;color:#ffe678;border-radius:6px;padding:4px 9px;font-size:13px;white-space:nowrap}}
-.table-scroll{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;min-width:640px}}th,td{{border-bottom:1px solid #414141;padding:12px 10px;text-align:left;vertical-align:top}}th{{color:var(--yellow);background:#222}}.col2{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px}}.actions{{display:flex;gap:8px;flex-wrap:wrap;align-items:center}}
+.table-scroll{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;min-width:640px}}th,td{{border-bottom:1px solid #414141;padding:12px 10px;text-align:left;vertical-align:top;overflow-wrap:normal;word-break:normal}}th{{color:var(--yellow);background:#222}}td:nth-child(3){{min-width:125px}}td:nth-child(3),td:nth-child(4),td:nth-child(5){{overflow-wrap:normal;word-break:normal}} .material-row button{{min-width:90px}}.col2{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px}}.actions{{display:flex;gap:8px;flex-wrap:wrap;align-items:center}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.kpi{{background:#171717;border:1px solid #444;padding:17px;border-radius:10px}}.kpi strong{{display:block;font-size:26px;color:var(--yellow)}}.kpi span{{font-size:13px;color:var(--muted)}}
-fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(130px,3fr) minmax(85px,1fr) minmax(110px,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
+form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;overflow-wrap:anywhere}}.nav-more{{max-width:100%}}
+fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
 </style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/">AUTOSEG</a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
@@ -136,6 +140,13 @@ class PortalPrestador:
         fluxo.instalar(banco)
         aten.instalar(banco)
         cad9.instalar(banco)
+        catalogo.instalar(banco)
+        estoque.instalar(banco)
+        # Repara chamados antigos que não receberam OS após falha/interrupção,
+        # inclusive quando apenas o Portal do Prestador é iniciado.
+        recuperadas=cad9.sincronizar_solicitacoes_pendentes(banco)
+        if recuperadas:
+            LOG.warning('Solicitações antigas vinculadas a OS pendentes: %d',recuperadas)
         try:
             importados=fluxo.recuperar_relatorios_antigos(banco)
             if importados:
@@ -196,8 +207,8 @@ class PortalPrestador:
                 if not s or s['exp']<time.time():
                     SESSOES.pop(tok,None);return None
                 with ext.db(banco) as c:
-                    p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(s['pid'],)).fetchone()
-                if not p:
+                    p=c.execute('SELECT nome,senha_hash FROM prestadores WHERE id=? AND ativo=1',(s['pid'],)).fetchone()
+                if not p or not secrets.compare_digest(s.get('cred',''),p['senha_hash']):
                     SESSOES.pop(tok,None);return None
                 s['admin']=cad9.prestador_admin(banco,s['pid'])
                 return s
@@ -264,12 +275,18 @@ class PortalPrestador:
                 lista=ext.listar_os_compartilhadas(banco)
                 rows=[]
                 for x in lista:
+                    estado=x['status']
+                    try:
+                        with ext.db(banco) as c:
+                            if ext.em_rota_atual(c, x['id']): estado='Em rota'
+                    except Exception:
+                        pass
                     rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
-                        f'<span class="tag">{esc(x["status"])}</span>',esc(x.get('responsavel') or 'Não atribuído'),
+                        f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
                 return self.pagina('Ordens de serviço abertas e pendentes',
                     '<p class="muted">Todos os prestadores veem as OS abertas e pendentes, mesmo quando atribuídas a outros.</p>'
-                    +f'<p>{botao("+ Nova OS","/os/nova")} {botao("Chamados aguardando análise","/chamados","secondary")}</p>'
+                    +f'<p>{botao("+ Nova OS","/os/nova")}</p>'
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
             def inicio(self,s):
@@ -285,11 +302,76 @@ class PortalPrestador:
                        ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',cl['total'])]
                 k='<div class="kpis">'+''.join(f'<div class="kpi"><span>{esc(n)}</span><strong>{esc(v)}</strong></div>' for n,v in indic)+'</div>'
                 corpo=f'<p>Olá, <b>{esc(s["nome"])}</b>. Acesso completo às funcionalidades operacionais, com auditoria.</p>{k}'
-                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Financeiro','/financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
+                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
                 corpo+=card('Acesso rápido',''.join(botao(t,url) for t,url in atalhos))
                 corpo+=v9.barra_links('prestador')
                 corpo+='<div class="notice">As alterações são registradas com o prestador autenticado. E-mails e notas fiscais ainda dependem das APIs externas.</div>'
                 return self.pagina('Painel principal',corpo,s)
+
+            def servicos_lista(self,s):
+                termo=str(parse_qs(urlparse(self.path).query).get('q',[''])[0]).strip()[:100].casefold()
+                rows=[]
+                for serv in catalogo.listar(banco):
+                    if termo and termo not in (serv['nome']+' '+serv['descricao']).casefold():continue
+                    valor=catalogo.valores_orcamento(banco,serv['id']) if serv['ativo'] else None
+                    rows.append((esc(serv['nome']),esc(serv['descricao'][:100]),
+                        catalogo.reais(valor['total']) if valor else 'Arquivado',
+                        botao('Editar',f'/servicos/{serv["id"]}/editar','secondary')))
+                return self.pagina('Serviços e valores',
+                    '<p>Catálogo para propostas e preenchimento de relatórios. Os preços são editados somente por prestadores.</p>'
+                    +botao('+ Novo serviço','/servicos/novo')
+                    +'<form method="get" action="/servicos">'+campos_escuros('Buscar serviço por nome ou descrição','q',termo)+'<button>Pesquisar</button></form>'
+                    +card('Serviços cadastrados',tabela(['Serviço','Descrição','Preço estimado','Ação'],rows)),s)
+
+            def servico_form(self,s,identificador=None,preenchimento=None,erro=None):
+                atual=catalogo.obter(banco,identificador) if identificador else None
+                if identificador and not atual:return self.erro('Serviço não encontrado.',404,s)
+                dados=preenchimento if preenchimento is not None else (atual or {})
+                import json
+                if 'materiais_lista' in dados:
+                    itens=dados['materiais_lista']
+                elif 'material_nome[]' in dados:
+                    def normal(x):return x if isinstance(x,list) else [x]
+                    itens=[{'nome':n,'quantidade':q,'valor_unitario':v} for n,q,v in zip(normal(dados.get('material_nome[]',[])),normal(dados.get('material_qtd[]',[])),normal(dados.get('material_valor[]',[])))]
+                else:
+                    itens=json.loads(dados.get('materiais_json') or '[]')
+                form=(f'<form method="post" action="/servicos/salvar" id="form-servico">{self.hidden(s)}'
+                   +f'<input type="hidden" name="servico_id" value="{identificador or ""}">'
+                   +campos_escuros('Nome do serviço','nome',dados.get('nome') or '',required=True)
+                   +textarea('Descrição para o cliente','descricao',dados.get('descricao') or '')
+                   +campos_escuros('Preço base da mão de obra (R$)','preco_servico',
+                       dados.get('preco_servico',str((dados.get('preco_servico_centavos') or 0)/100).replace('.',',')),required=True)
+                   +'<fieldset><legend>Materiais — opcionais</legend><p class="muted">Preencha os três campos, sem usar barras ou separadores. Remova linhas que não precisar.</p>'
+                   +'<div id="lista-materiais-servico">')
+                for x in itens:
+                    valor=x.get('valor_unitario',str(x.get('preco_centavos',0)/100).replace('.',','))
+                    form+=('<div class="material-row">'
+                           +f'<label>Material<input name="material_nome[]" value="{esc(x.get("nome",""))}" placeholder="Controle remoto"></label>'
+                           +f'<label>Quantidade<input name="material_qtd[]" value="{esc(x.get("quantidade",""))}" placeholder="1"></label>'
+                           +f'<label>Valor unitário (R$)<input name="material_valor[]" value="{esc(valor)}" placeholder="75,00"></label>'
+                           +'<button type="button" class="secondary remover-material-servico">Remover</button></div>')
+                form+=("""</div><button type="button" class="secondary" id="adicionar-material-servico">+ Adicionar material</button>
+                    <template id="modelo-material-servico"><div class="material-row"><label>Material<input name="material_nome[]" placeholder="Nome"></label>
+                    <label>Quantidade<input name="material_qtd[]" placeholder="1"></label><label>Valor unitário (R$)<input name="material_valor[]" placeholder="0,00"></label>
+                    <button type="button" class="secondary remover-material-servico">Remover</button></div></template></fieldset>""")
+                form+=(textarea('Modelo de relatório técnico do serviço','relatorio_padrao',dados.get('relatorio_padrao') or '',rows=6)
+                   +'<p class="muted">Modelo é sugestão editável; não substitui o relatório próprio de cada atendimento.</p>'
+                   +'<button type="submit">Salvar serviço</button></form>')
+                if identificador and not dados.get('ativo',True):
+                    form+=(f'<form method="post" action="/servicos/{identificador}/reativar">'
+                           +self.hidden(s)+'<button>Reativar serviço</button></form>')
+                if identificador and dados.get('ativo',True):
+                    form+=(f'<form method="post" action="/servicos/{identificador}/arquivar" '
+                           'data-confirm="Arquivar este serviço do catálogo?">'+self.hidden(s)
+                           +'<button type="submit" class="danger">Arquivar serviço</button></form>')
+                importar=(f'<form method="post" enctype="multipart/form-data" action="/servicos/yaml">{self.hidden(s)}'
+                           '<label for="yaml-servico">Preencher serviço a partir de YAML (até 64 KB)</label>'
+                           '<input type="file" id="yaml-servico" name="yaml" accept=".yaml,.yml" required>'
+                           '<button type="submit" class="secondary">Pré-visualizar YAML de serviço</button></form>'
+                           '<p class="muted"><a href="/modelos/servico.yaml">Baixar modelo YAML oficial</a> · Apenas pré-preenche; confira antes de salvar.</p>')
+                aviso=card('Verifique os dados',f'<p class="bad">{esc(erro)}</p>') if erro else ''
+                return self.pagina('Editar serviço' if identificador else 'Novo serviço',
+                    botao('← Catálogo','/servicos','secondary')+aviso+card('Importação rápida',importar)+card('Valores e relatório padrão',form),s,400 if erro else 200)
 
             def clientes_lista(self,s):
                 """Busca e paginação: evita lista imensa após a importação Asaas."""
@@ -298,31 +380,34 @@ class PortalPrestador:
                 try:pagina=max(1,min(10000,int(qs.get('pagina',['1'])[0])))
                 except (ValueError,TypeError):pagina=1
                 limite=40;offset=(pagina-1)*limite
-                filtro=" WHERE nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!'" if busca else ''
+                filtro=(" WHERE nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
+                       "OR replace(replace(replace(documento,'.',''),'/',''),'-','') LIKE ? ESCAPE '!' ") if busca else ''
                 params=[]
                 if busca:
                     termo='%'+busca.replace('!','!!').replace('%','!%').replace('_','!_')+'%'
-                    params=[termo]*4
+                    docs=cad9.digitos(busca)
+                    params=[termo]*4+['%'+docs+'%' if docs else 'documento_nunca_corresponde']
                 with ext.db(banco) as c:
                     total=c.execute('SELECT COUNT(*) FROM clientes'+filtro,params).fetchone()[0]
                     rows=c.execute('SELECT id,nome,documento,cidade,telefone,email,status FROM clientes'+filtro+' ORDER BY nome LIMIT ? OFFSET ?',params+[limite,offset]).fetchall()
                 linhas=[]
                 for r in rows:
-                    linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(r['documento']),esc(r['cidade']),
+                    linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(cad9.formatar_documento(r['documento'])),esc(r['cidade']),
                         esc(r['telefone']),esc(r['email']),esc(r['status'])))
                 pesquisa='<form method="get" action="/clientes">'+campos_escuros('Buscar por nome, CPF/CNPJ, cidade ou e-mail','q',busca)+'<button>Buscar cliente</button></form>'
                 navegacao=f'<p class="muted">{total} cliente(s) encontrado(s). Página {pagina}.</p>'
                 if pagina>1:navegacao+=botao('Anterior','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina-1}),'secondary')
                 if offset+len(rows)<total:navegacao+=botao('Próximos clientes','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina+1}),'secondary')
-                return self.pagina('Clientes',botao('+ Novo cliente','/clientes/novo')+botao('Condomínios, empresas e vínculos','/organizacoes','secondary')
+                return self.pagina('Clientes',botao('+ Novo cliente','/clientes/novo')+botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')
                     +card('Pesquisar clientes',pesquisa)
                     +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
 
-            def cliente_form(self,s,cid=None):
+            def cliente_form(self,s,cid=None,preenchimento=None):
                 with ext.db(banco) as c:
                     x=c.execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone() if cid else None
                 if cid and not x: return self.erro('Cliente não encontrado.',404,s)
                 d=dict(x) if x else {}
+                if cid is None and preenchimento:d.update(preenchimento)
                 fields=[]
                 campos=[('nome','Nome / Razão social'),('documento','CPF / CNPJ'),('nome_fantasia','Nome fantasia'),
                     ('endereco','Logradouro'),('numero','Número'),('complemento','Complemento'),('bairro','Bairro'),
@@ -331,24 +416,33 @@ class PortalPrestador:
                     ('administradora','Administradora / imobiliária'),('administradora_telefone','Telefone da administradora'),
                     ('administradora_email','E-mail da imobiliária / administradora')]
                 for k,t in campos:
-                    fields.append(campos_escuros(t,k,d.get(k,'') or '',required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
+                    fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
                 corpo=(f'<p>{botao("← Clientes","/clientes","secondary")}</p>'
                     f'<form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
-                    '<div class="col2">'
+                    '<div class="col2"><div>'
                     +select('Tipo de pessoa','tipo_pessoa',[(z,z) for z in ('Jurídica','Física')],d.get('tipo_pessoa') or 'Jurídica')
-                    +select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
-                    +'</div><div class="col2">'+''.join(f'<div>{f}</div>' for f in fields)+'</div>'
+                    +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
+                    +'</div></div><div class="col2">'+''.join(f'<div>{f}</div>' for f in fields)+'</div>'
                     +textarea('Observações','observacoes',d.get('observacoes') or '')
                     +'<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Use somente quando houver necessidade de acesso legado por ID. Senhas de contas pessoais são criadas pelo próprio usuário.</p>'
                     +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
                     +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>'
                     +'<button type="submit">Salvar cliente</button></form>')
+                if not cid:
+                    importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data">{self.hidden(s)}'
+                       '<label for="importar-cliente-yaml">Preencher cadastro com arquivo YAML (até 64 KB)</label>'
+                       '<input type="file" id="importar-cliente-yaml" name="yaml" accept=".yaml,.yml" required>'
+                       '<button type="submit" class="secondary">Pré-visualizar cadastro YAML</button></form>'
+                       '<p class="muted">Use o modelo pronto: <a href="/modelos/cadastro.yaml">Baixar YAML de cliente</a>. Revise antes de salvar.</p>')
+                    corpo=card('Importação assistida — apenas prestador',importar)+corpo
+                    if preenchimento:
+                        corpo='<p class="notice">Dados importados para revisão. Confira nome, documento, vínculos e endereço antes de salvar.</p>'+corpo
                 if cid:
                     corpo+=f'<form method="post" action="/clientes/{cid}/desativar">{self.hidden(s)}<button class="secondary">Desativar (preservar histórico)</button></form>'
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
 
-            def os_form(self,s,oid=None):
+            def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
                     cl=c.execute("SELECT id,nome FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
@@ -365,25 +459,94 @@ class PortalPrestador:
                         WHERE op.os_id=? ORDER BY p.nome''',(oid,)).fetchall() if oid else []
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
+                if preenchimento:
+                    # YAML é um modelo: preenche apenas campos vazios por padrão.
+                    # A escolha explícita "substituir" é necessária para sobrescrever.
+                    substituir=bool(preenchimento.get('_substituir'))
+                    if detalhes:
+                        for chave in ('diagnostico','execucao','resultado'):
+                            d.setdefault('v9_'+chave,detalhes[chave] or '')
+                    if andamento:d.setdefault('relatorio_tecnico',andamento['rascunho'] or '')
+                    for k,v in preenchimento.items():
+                        if k.startswith('v9_') or k=='relatorio_tecnico':
+                            if substituir or not str(d.get(k,'')).strip():d[k]=v
+                    if 'material_yaml' in preenchimento and (substituir or not mat):
+                        mat=preenchimento['material_yaml']
                 token=self.hidden(s)
                 titulo=f'OS {d["numero_os"]}' if oid else 'Nova ordem de serviço'
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
                 corpo=botao('← Ordens de serviço','/os','secondary')
+                if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
+                if preenchimento:
+                    corpo+=('<p class="notice" id="yaml-importado-rev08" data-yaml-importado="1">'
+                        'Prévia importada. Seus campos já digitados podem ser restaurados; '
+                        'revise as informações antes de confirmar a OS.</p>'
+                        '<button class="secondary" type="button" id="desfazer-yaml-rev08">'
+                        'Desfazer importação YAML</button>')
+                if oid and d['status'] in ext.ATIVAS:
+                    importar=(f'<form method="post" action="/os/{oid}/yaml" enctype="multipart/form-data">{token}'
+                      '<label for="importar-relatorio-yaml">Preencher relatório com arquivo YAML (até 64 KB)</label>'
+                      '<input type="file" id="importar-relatorio-yaml" name="yaml" accept=".yaml,.yml" required>'
+                      '<label><input type="checkbox" name="substituir" value="1"> Substituir campos e materiais já preenchidos</label>'
+                      '<button type="submit" class="secondary">Pré-visualizar relatório YAML</button></form>'
+                      '<p class="muted">Modelo pronto: <a href="/modelos/relatorio.yaml">Baixar YAML de relatório</a>. Reutilizável em qualquer OS; sem número obrigatório. Nada será salvo sem confirmação.</p>')
+                    corpo+=card('Importação rápida de relatório',importar)
                 if oid:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     corpo+=f'<p><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b> · Participantes: {esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>'
                     if d['status'] in ext.ATIVAS:
-                        pode_iniciar = (responsavel in (None,s['pid']) or d['status']=='Pendente')
-                        if pode_iniciar and (d['status']=='Pendente' or not (andamento and andamento['iniciado_em'])):
-                            corpo+=f'<form method="post" action="/os/{oid}/iniciar">{token}<button type="submit" class="iniciar-atendimento">▶ INICIAR OS — ASSUMIR AUTOMATICAMENTE</button></form>'
-                            corpo+='<p class="muted">Registra a responsabilidade e o início no local em uma única ação. Se estiver pendente, registra a retomada.</p>'
-                        elif not pode_iniciar:
-                            corpo+='<p class="notice">OS em atendimento por outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>'
+                        em_rota = False
+                        try:
+                            with ext.db(banco) as c:
+                                em_rota = ext.em_rota_atual(c, oid)
+                        except Exception:
+                            em_rota = False
+                        iniciado = bool(andamento and andamento['iniciado_em'])
+                        if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente'):
+                            corpo+=f'<form method="post" action="/os/{oid}/assumir">{token}<button type="submit" class="secondary">ASSUMIR OS</button></form>'
+                            corpo+='<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>'
+                        if responsavel in (None, s['pid']) and not iniciado:
+                            if em_rota:
+                                corpo+='<p class="notice">🚗 EM ROTA — deslocamento iniciado.</p>'
+                                corpo+=f'<form method="post" action="/os/{oid}/cancelar-rota">{token}<button type="submit" class="secondary">CANCELAR EM ROTA</button></form>'
+                            else:
+                                corpo+=f'<form method="post" action="/os/{oid}/em-rota">{token}<button type="submit" class="secondary">EM ROTA</button></form>'
+                            corpo+=f'<form method="post" action="/os/{oid}/iniciar">{token}<button type="submit" class="iniciar-atendimento">INICIAR OS</button></form>'
+                            corpo+='<p class="muted">INICIAR OS registra o início efetivo do atendimento e encerra o deslocamento. Ao iniciar uma OS sem responsável, ela será atribuída a você com registro explícito.</p>'
+                        elif iniciado:
+                            corpo+='<p class="good">Atendimento iniciado em '+esc(andamento['iniciado_em'])+' por '+esc(andamento['ator_inicio'])+'.</p>'
+                        elif responsavel is not None and responsavel != s['pid']:
+                            corpo+='<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>'
                 if not cl:
                     corpo+='<p class="notice">Cadastre primeiro um cliente.</p>'
                     return self.pagina(titulo,corpo,s)
                 dados_cliente=[(x['id'],f'{x["nome"]} — ID {x["id"]}') for x in cl]
+                # Carregar rascunho salvo pelo prestador se existir
+                try:
+                    rasc_salvo = ext.obter_rascunho_web(banco, oid, pid) if oid else None
+                    if rasc_salvo:
+                        for k,v in rasc_salvo.items():
+                            if k.startswith('_'):
+                                continue
+                            if isinstance(v,str) and k not in d:
+                                d[k]=v
+                except Exception:
+                    rasc_salvo = None
                 corpo+=f'<form method="post" action="{action}" id="form-os" enctype="multipart/form-data">{token}'
+                servicos_ativos=catalogo.listar(banco,ativos=True)
+                if servicos_ativos:
+                    import json
+                    js_json=json.dumps([{'id':v['id'],'nome':v['nome'],
+                        'preco':str(v['preco_servico_centavos']/100),
+                        'relatorio':v['relatorio_padrao'],
+                        'materiais':json.loads(v['materiais_json'])} for v in servicos_ativos],ensure_ascii=False).replace('<','\\u003c')
+                    corpo+=(card('Serviço pré-cadastrado — opcional',
+                       '<p>Selecione um modelo de serviço:</p>'
+                       +select('Modelo','modelo_servico_id',[('', 'Não utilizar modelo')]+[(v['id'],v['nome']) for v in servicos_ativos])
+                       +'<button id="aplicar-modelo-servico" type="button" class="secondary">Preencher dados a partir do modelo</button>'
+                       +'<p class="muted">Só é aplicado quando você clicar. Verifique e ajuste os valores e o relatório.</p>')
+                       +f'<script type="application/json" id="catalogo-os-json">{js_json}</script>')
+                corpo+='<input type="hidden" name="materiais_presentes" value="1">'
                 if oid:
                     corpo+=f'<input type="hidden" name="_versao_os" value="{esc(d.get("atualizado_em") or "") }">'
                 corpo+='<fieldset><legend>Identificação e serviço</legend><div class="col2"><div>'
@@ -391,6 +554,7 @@ class PortalPrestador:
                     corpo+=f'<p class="notice"><strong>Solicitação original — somente leitura</strong><br>Cliente ID {solicitacao["cliente_id"]} · {esc(solicitacao["criado_em"])}<br>{esc(solicitacao["descricao_original"])}</p>'
                     corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
                 else:
+                    corpo+='<label for="busca-cliente-os">Buscar cliente ou condomínio</label><input type="search" id="busca-cliente-os" placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
                     corpo+=select('Cliente','cliente_id',dados_cliente,d.get('cliente_id',cl[0]['id']),required=True)
                 corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
                 corpo+='</div><div>'+select('Forma de pagamento','forma_pagamento',[(z,z) for z in neg.OS_FORMAS],d.get('forma_pagamento') or 'PIX')
@@ -409,21 +573,34 @@ class PortalPrestador:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total é calculado por mão de obra + materiais; o total negociado, quando informado, prevalece. Materiais detalhados prevalecem sobre o campo de materiais sem itens.</p>'
-                linhas=list(mat)+[{} for _ in range(max(1,4-len(mat)))]
+                linhas=list(mat)
                 corpo+='<div id="lista-materiais">'
                 for i,m in enumerate(linhas):
+                    item=m['item'] if 'item' in m.keys() else ''
+                    qtd=m['quantidade'] if 'quantidade' in m.keys() else ''
+                    unit=m['valor_unitario'] if 'valor_unitario' in m.keys() else ''
                     corpo+='<div class="material-row">'
-                    corpo+=f'<div>{campos_escuros("Material", "material_item[]", m['item'] if 'item' in m.keys() else '',placeholder="Cabo, câmera, fonte...")}</div>'
-                    corpo+=f'<div>{campos_escuros("Quantidade", "material_qtd[]", m['quantidade'] if 'quantidade' in m.keys() else '',placeholder="1")}</div>'
-                    corpo+=f'<div>{campos_escuros("Valor unitário (R$)", "material_unit[]", m['valor_unitario'] if 'valor_unitario' in m.keys() else '',placeholder="0,00")}</div>'
+                    corpo+=f'<div><label>Material<input name="material_item[]" value="{esc(item)}" placeholder="Cabo, câmera, fonte..."></label></div>'
+                    corpo+=f'<div><label>Quantidade<input name="material_qtd[]" value="{esc(qtd)}" placeholder="1"></label></div>'
+                    corpo+=f'<div><label>Valor unitário (R$)<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
                     corpo+='<button type="button" class="secondary remover-material" title="Remover material">Remover</button></div>'
-                corpo+='</div><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
+                corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
+                corpo+='''<template id="modelo-material"><div class="material-row"><div><label>Material<input name="material_item[]" placeholder="Cabo, câmera, fonte..."></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="1"></label></div><div><label>Valor unitário (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
+                corpo+='<button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
+                produtos=estoque.listar(banco,ativos=True)
+                if produtos:
+                    import json as _jm
+                    catalogo_json=_jm.dumps([{'nome':x['nome'],'valor':x['venda_centavos']/100} for x in produtos],ensure_ascii=False).replace('<','\\u003c')
+                    corpo+='<label for="material-estoque-selecionar">Usar material cadastrado no estoque</label>'
+                    corpo+='<select id="material-estoque-selecionar">'+''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))+'</select>'
+                    corpo+='<button class="secondary" id="adicionar-do-estoque" type="button">+ Adicionar do estoque</button>'
+                    corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
                 corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
-                corpo+=textarea('Diagnóstico','v9_diagnostico',(detalhes['diagnostico'] if detalhes else '') or '',rows=3)
-                corpo+=textarea('Serviço executado','v9_execucao',(detalhes['execucao'] if detalhes else '') or '',rows=4)
-                corpo+=textarea('Resultado e testes','v9_resultado',(detalhes['resultado'] if detalhes else '') or '',rows=3)
-                corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',(andamento['rascunho'] if andamento else '') or '',rows=4)
+                corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
+                corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
+                corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
+                corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',d.get('relatorio_tecnico',(andamento['rascunho'] if andamento else '')) or '',rows=4)
                 if oid and d['status'] in ext.ATIVAS:
                     if andamento and andamento['iniciado_em']:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
@@ -436,13 +613,17 @@ class PortalPrestador:
                         [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
                         'Concluída',required=True)
                     corpo+='<div id="anexo-encerramento"><label>Fotos do relatório (até 10 imagens, 8 MB por foto)</label>'
-                    corpo+='<input type="file" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
+                    corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
+                    corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div><button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                     corpo+='<p class="muted">Selecione até 10 imagens de uma só vez (JPG/PNG/WEBP, máximo de 8 MB por imagem). As imagens entram no PDF após a conclusão.</p></div>'
                 corpo+='</fieldset><div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
                 else:
-                    corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
+                    if d['status'] in ext.ATIVAS:
+                        corpo+='<button class="secondary" name="modo_envio" value="rascunho" type="submit">SALVAR RASCUNHO</button>'
+                    else:
+                        corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
                 if oid and d['status'] in ext.ATIVAS:
                     corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                 corpo+='</div></form>'
@@ -525,7 +706,7 @@ class PortalPrestador:
                 return self.pagina(title,f'<p class="muted">{esc(explanation)}</p>{resumo}'+card('Ordens disponíveis',tabela(['OS','Cliente','Status','Valor','Ação'],rows)),s)
 
             def portal_cliente(self,s):
-                url_cliente='http://127.0.0.1:8765/'
+                url_cliente='http://127.0.0.1:'+os.environ.get('CLIENTE_PORT','8765')+'/'
                 info=botao('Abrir Portal do Cliente (8765)',url_cliente)
                 info+=('<p class="muted">O Portal do Cliente é um site separado, na porta 8765. '
                        'O login dele é por CPF e senha e não se mistura com o login do prestador. '
@@ -550,7 +731,7 @@ class PortalPrestador:
                     if kind=='pdf':
                         arq=pdf;mime='application/pdf'
                     elif kind=='email':
-                        arq=ext.criar_email_rascunho(banco,oid,pdf);mime='message/rfc822'
+                        arq=ext.criar_email_rascunho(banco,oid,pdf,prestador_id=s['pid']);mime='message/rfc822'
                     elif kind=='nota':
                         arq=ext.criar_rascunho_fiscal(banco,oid);mime='application/json; charset=utf-8'
                     else:return self.erro('Arquivo inválido.',404,s)
@@ -586,12 +767,20 @@ class PortalPrestador:
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
                     s=self.sessao()
                     if not s:return self.login()
+                    if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml'):
+                        nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml'}[path]
+                        arquivo=Path(__file__).parent/nome
+                        return self.send_bytes(arquivo.read_bytes(),'application/x-yaml; charset=utf-8',filename=nome)
                     if path=='/static/portal.js':
                         return self.send_bytes((Path(__file__).parent/'portal.js').read_bytes(),'application/javascript; charset=utf-8')
                     if path in ('/chamados','/organizacoes'):
-                        return v9.get(self,path,banco,s)
+                        return self.redir('/os' if path=='/chamados' else '/clientes')
+                    if path in ('/clientes/responsaveis','/organizacoes/responsaveis'):
+                        return v9.get(self,'/organizacoes/responsaveis',banco,s)
                     if path=='/':return self.inicio(s)
                     if path=='/os':return self.os_lista(s)
+                    if path=='/servicos':return self.servicos_lista(s)
+                    if path=='/servicos/novo':return self.servico_form(s)
                     if path=='/historico':return self.os_lista(s,True)
                     if path=='/os/nova':return self.os_form(s)
                     if path=='/clientes':return self.clientes_lista(s)
@@ -602,6 +791,8 @@ class PortalPrestador:
                     if path=='/notas':return self.relatorios(s,'notas')
                     if path=='/portal-cliente':return self.portal_cliente(s)
                     partes=path.strip('/').split('/')
+                    if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='editar':
+                        return self.servico_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='clientes' and partes[1].isdigit():
                         return self.cliente_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='os' and partes[1].isdigit():
@@ -636,7 +827,8 @@ class PortalPrestador:
                             return self.erro('Usuário ou senha incorretos.',401)
                         with LOCK_LOGIN:TENTATIVAS.pop(ip,None)
                         tok=secrets.token_urlsafe(36)
-                        SESSOES[tok]={'pid':p['id'],'nome':p['nome'],'csrf':secrets.token_urlsafe(32),'exp':time.time()+28800}
+                        SESSOES[tok]={'pid':p['id'],'nome':p['nome'],'cred':p['senha_hash'],
+                                      'csrf':secrets.token_urlsafe(32),'exp':time.time()+28800}
                         return self.redir('/',self.cookie(tok))
                     s=self.sessao()
                     self.csrf(s,d)
@@ -648,6 +840,37 @@ class PortalPrestador:
                     if path.startswith('/chamados/') or path.startswith('/organizacoes/') or path=='/organizacoes/mesclar' or (path.startswith('/clientes/') and path.endswith('/desativar')):
                         return v9.post(self,path,d,banco,s)
                     partes=path.strip('/').split('/')
+                    if path=='/servicos/yaml':
+                        arq=d.get('yaml')
+                        if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML de serviço.')
+                        return self.servico_form(s,preenchimento=yaml_import.servico(arq[0],arq[1]))
+                    if path=='/servicos/salvar':
+                        sid=str(d.get('servico_id','')).strip()
+                        try:catalogo.salvar(banco,d,int(sid) if sid else None)
+                        except ValueError as e:return self.servico_form(s,int(sid) if sid else None,preenchimento=d,erro=str(e))
+                        return self.redir('/servicos')
+                    if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='arquivar':
+                        catalogo.arquivar(banco,int(partes[1]))
+                        return self.redir('/servicos')
+                    if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='reativar':
+                        catalogo.reativar(banco,int(partes[1]))
+                        return self.redir('/servicos')
+                    if path=='/clientes/yaml':
+                        arq=d.get('yaml')
+                        if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
+                        pre=yaml_import.cliente(arq[0],arq[1])
+                        return self.cliente_form(s,preenchimento=pre)
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='yaml':
+                        oid=int(partes[1]);arq=d.get('yaml')
+                        if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
+                        with ext.db(banco) as c:
+                            os_atual=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+                        if not os_atual or os_atual['status'] not in ext.ATIVAS:
+                            raise ValueError('Somente OS abertas ou pendentes podem importar relatório.')
+                        try:pre=yaml_import.relatorio(arq[0],arq[1])
+                        except ValueError as erro:return self.os_form(s,oid,erro=str(erro))
+                        pre['_substituir']=str(d.get('substituir',''))=='1'
+                        return self.os_form(s,oid,preenchimento=pre)
                     if path=='/clientes/novo/salvar' or (len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='salvar'):
                         senha_nova=str(d.get('senha_cliente',''))
                         confirmar=str(d.get('confirmar_senha_cliente',''))
@@ -674,7 +897,34 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
                         if acao=='salvar':
-                            if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS. O botão de salvar progresso foi removido.')
+                            if d.get('modo_envio') in ('rascunho','salvar'):
+                                try:
+                                    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio')}
+                                    ext.salvar_rascunho_web(banco, oid, pid, dados_rasc)
+                                    d2 = dict(d)
+                                    d2['acao_status'] = 'salvar'
+                                    try:
+                                        neg.os_salvar(banco,d2,pid,oid)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+                                    except Exception:
+                                        pass
+                                    if d.get('relatorio_tecnico'):
+                                        try:
+                                            with ext.db(banco) as c:
+                                                aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')) or '', f'Prestador {s["nome"]}')
+                                        except Exception:
+                                            pass
+                                    return self.pagina('Rascunho salvo',card('Rascunho',
+                                        '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'/os/{oid}')),s)
+                                except Exception as e:
+                                    return self.erro(str(e),400,s)
+                            acao_status = str(d.get('acao_status',''))
+                            if acao_status in fluxo.FIM and not d.get('modo_envio'):
+                                d = dict(d); d['modo_envio'] = 'encerrar'
+                            if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
                             # Só o botão de encerramento aplica o status escolhido.
                             if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
@@ -698,6 +948,10 @@ class PortalPrestador:
                             ext.desatribuir(banco,oid,ator=f'Prestador {s["nome"]}')
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
+                        elif acao=='em-rota':
+                            ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
+                        elif acao=='cancelar-rota':
+                            ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='iniciar':
                             aten.iniciar_assumindo(banco,oid,pid)
                         else:return self.erro('Operação desconhecida.',404,s)

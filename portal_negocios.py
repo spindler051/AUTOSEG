@@ -9,6 +9,7 @@ from datetime import datetime
 import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
+import estoque_materiais as estoque
 
 CLIENTE_CAMPOS = (
     'tipo_pessoa documento nome nome_fantasia endereco numero complemento bairro cep '
@@ -95,6 +96,9 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
                           [values[k] for k in CLIENTE_CAMPOS]+[cliente_id])
                 audit(c,pid,'Cliente alterado',cliente_id,str(updates))
             cid=cliente_id
+        if values['tipo_pessoa']=='Jurídica' and values['status']!='Inativo':
+            import cadastros_v9 as cad
+            cad.sincronizar_cliente_pj(c,cid)
     return cid
 
 
@@ -105,6 +109,17 @@ def cliente_excluir(banco,cid,pid):
         if not row: raise ValueError('Cliente inexistente.')
         if c.execute('SELECT 1 FROM ordens_servico WHERE cliente_id=?',(cid,)).fetchone():
             raise ValueError('Cliente possui OS vinculada. Marque-o como Inativo.')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_usuarios'").fetchone():
+            if c.execute('SELECT 1 FROM v9_usuarios WHERE cliente_pf_id=?',(cid,)).fetchone():
+                raise ValueError('Cliente possui conta no portal. Desative o cadastro.')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_organizacoes'").fetchone():
+            orgs=c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchall()
+            for org in orgs:
+                if (c.execute('SELECT 1 FROM v9_chamados WHERE organizacao_id=?',(org['id'],)).fetchone()
+                    or c.execute('SELECT 1 FROM v9_vinculos WHERE organizacao_id=?',(org['id'],)).fetchone()):
+                    raise ValueError('Condomínio possui chamados ou vínculos. Desative em vez de excluir.')
+            for org in orgs:
+                c.execute('DELETE FROM v9_organizacoes WHERE id=?',(org['id'],))
         audit(c,pid,'Cliente excluído',cid,row['nome'])
         c.execute('DELETE FROM clientes WHERE id=?',(cid,))
 
@@ -192,7 +207,7 @@ def os_salvar(banco,d,pid,oid=None):
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
         old_mat=[(r['item'],float(r['quantidade']),float(r['valor_unitario'])) for r in
                  c.execute('SELECT item,quantidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id',(oid,))]
-        if oid is not None and 'material_item[]' not in d and old_mat:
+        if oid is not None and 'material_item[]' not in d and old_mat and not d.get('materiais_presentes'):
             materiais=[dict(item=r[0],quantidade=r[1],valor_unitario=r[2],valor_total=round(r[1]*r[2],2)) for r in old_mat]
             new_mat=list(old_mat)
         else:
@@ -218,6 +233,8 @@ def os_salvar(banco,d,pid,oid=None):
             fluxo.aplicar_encerramento(c,oid,acao,relato,motivo,
                  prestador_id=pid,ator=f'Prestador ID {pid}')
             audit(c,pid,'OS encerrada',oid,acao+(' | Motivo: '+motivo if motivo else ''))
+        # Estoque: lançamento/estorno transacional e idempotente, sem expor administração na web.
+        estoque.reconciliar_os_conexao(c,oid,f'Prestador #{pid}')
         # Mantém financeiro Aguardando sincronizado após edição de OS já concluída.
         if acao=='salvar':
             f=c.execute('SELECT id,status FROM financeiro WHERE os_id=? ORDER BY id LIMIT 1',(oid,)).fetchone()

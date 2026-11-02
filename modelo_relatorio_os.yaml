@@ -1,0 +1,8 @@
+# Modelo reutilizável em qualquer OS aberta. A identificação já está no sistema.
+versao: 1
+os:
+  diagnostico: Inspeção do automatizador.
+  execucao: Ajuste e testes realizados.
+  resultado: Sistema funcionando normalmente.
+  relatorio_tecnico: Relatório revisado pelo prestador.
+  materiais: []

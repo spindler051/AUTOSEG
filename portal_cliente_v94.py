@@ -12,9 +12,10 @@ import cadastros_v9 as cad
 import cliente_fluxo_v94 as fluxo_pf
 import portal_v9 as v9
 import prestadores_ext as ext
+import catalogo_servicos as catalogo
 
 VERSAO_PORTAL = '9.6.0'
-_CSS_ACESSIVEL = '\n/* AUTOSEG 9.6 — Cliente: legibilidade e navegação inclusiva */\nbody{font-size:18px;line-height:1.65}\nmain{max-width:880px;margin:18px auto;padding:0 17px 65px}\nmain h1{font-size:clamp(24px,5vw,35px);line-height:1.2;margin:18px 0 24px}\n.card{padding:clamp(19px,4vw,30px);margin:19px 0;border-radius:16px}\n.card h2{font-size:clamp(20px,4vw,26px);line-height:1.35}\nlabel{font-size:18px;margin-top:18px}\ninput,textarea,select{min-height:54px;font-size:18px;border:2px solid #aaa;border-radius:11px;padding:13px}\nbutton,.btn{min-height:54px;min-width:150px;font-size:17px;padding:13px 20px;border-radius:11px;line-height:1.35}\nbutton:focus-visible,.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:4px solid #fff;outline-offset:4px}\ninput:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}\n.acao-principal .btn,.acao-principal button{display:block;text-align:center;width:100%;margin:12px 0}\n.passo{color:#ffe577;font-weight:800;letter-spacing:.01em;margin-bottom:6px}\n.ajuda{background:#242424;border:1px solid #777;border-radius:12px;padding:16px 19px;margin:16px 0}\n.ajuda summary{font-size:18px;font-weight:750;cursor:pointer}\n.ajuda p{margin-bottom:0}\n.resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}\n.resultado-organizacao h3{margin:0 0 5px;font-size:21px}\n.resultado-organizacao p{margin:4px 0 12px;color:#ddd}\n.resultado-organizacao .btn{width:100%;text-align:center;margin:0}\n.aviso-claro{border-left:5px solid var(--yellow);padding:15px 18px;background:#2a2617;border-radius:8px}\n.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}\n.skip-to-content{position:absolute;top:-120px;left:12px;padding:13px;background:var(--yellow);color:#000;z-index:9000;font-weight:bold}\n.skip-to-content:focus{top:12px}\n.table-scroll{overflow-x:auto;max-width:100%}\n.table-scroll table{min-width:540px}\n@media(max-width:630px){main{padding:0 14px 65px} .top{padding:10px 16px} .brand{font-size:25px} .tagline{font-size:12px} .card{padding:18px} .btn,button{width:100%;margin:7px 0} .nav{display:none} input,textarea,select{font-size:18px}}\n@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}\n'
+_CSS_ACESSIVEL = '\n/* AUTOSEG 9.6 — Cliente: legibilidade e navegação inclusiva */\nbody{font-size:18px;line-height:1.65}\nmain{max-width:880px;margin:18px auto;padding:0 17px 65px}\nmain h1{font-size:clamp(24px,5vw,35px);line-height:1.2;margin:18px 0 24px}\n.card{padding:clamp(19px,4vw,30px);margin:19px 0;border-radius:16px}\n.card h2{font-size:clamp(20px,4vw,26px);line-height:1.35}\nlabel{font-size:18px;margin-top:18px}\ninput,textarea,select{min-height:54px;font-size:18px;border:2px solid #aaa;border-radius:11px;padding:13px}\nbutton,.btn{min-height:54px;min-width:150px;font-size:17px;padding:13px 20px;border-radius:11px;line-height:1.35}\nbutton:focus-visible,.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:4px solid #fff;outline-offset:4px}\ninput:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}\n.acao-principal .btn,.acao-principal button{display:block;text-align:center;width:100%;margin:12px 0}\n.passo{color:#ffe577;font-weight:800;letter-spacing:.01em;margin-bottom:6px}\n.ajuda{background:#242424;border:1px solid #777;border-radius:12px;padding:16px 19px;margin:16px 0}\n.ajuda summary{font-size:18px;font-weight:750;cursor:pointer}\n.ajuda p{margin-bottom:0}\n.resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}\n.resultado-organizacao h3{margin:0 0 5px;font-size:21px}\n.resultado-organizacao p{margin:4px 0 12px;color:#ddd}\n.resultado-organizacao .btn{width:100%;text-align:center;margin:0}\n.aviso-claro{border-left:5px solid var(--yellow);padding:15px 18px;background:#2a2617;border-radius:8px}\n.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}\n.skip-to-content{position:absolute;top:-120px;left:12px;padding:13px;background:var(--yellow);color:#000;z-index:9000;font-weight:bold}\n.skip-to-content:focus{top:12px}\n.table-scroll{overflow-x:auto;max-width:100%}\n.table-scroll table{min-width:640px} .table-scroll td:nth-child(3){min-width:160px;word-break:normal;overflow-wrap:normal} .table-scroll th:nth-child(3){min-width:160px}\n@media(max-width:630px){main{padding:0 14px 65px} .top{padding:10px 16px} .brand{font-size:25px} .tagline{font-size:12px} .card{padding:18px} .btn,button{width:100%;margin:7px 0} .nav{display:none} input,textarea,select{font-size:18px}}\n@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}\n'
 FUNCOES_RESPONSAVEL = ('Síndico', 'Proprietário', 'Representante legal', 'Administrador')
 
 
@@ -120,9 +121,15 @@ def os_detalhe(h,banco,s,oid):
     x=fluxo_pf.obter_os_pf(banco,s['uid'],oid)
     if not x:
         return pagina(h,'OS não encontrada','<p>Esta ordem de serviço não pertence à sua conta.</p>',404)
+    status_txt = x['status']
+    try:
+        with ext.db(banco) as c:
+            if ext.em_rota_atual(c, x['id']): status_txt = 'Em rota'
+    except Exception:
+        pass
     corpo=card('Solicitação salva',
         '<p class="good">Sua OS particular foi registrada com o protocolo <b>'+esc(x['numero_os'] or '#'+str(x['id']))+'</b>.</p>'
-        +'<p>'+esc(x['descricao'])+'</p><p><span class="tag">'+esc(x['status'])+'</span></p>')
+        +'<p>'+esc(x['descricao'])+'</p><p><span class="tag">'+esc(status_txt)+'</span></p>')
     corpo+=card('Avisar a AUTOSEG pelo WhatsApp',
         '<p>O botão abaixo abre o WhatsApp com a mensagem pronta. O envio só acontece quando <b>você</b> confirmar no aplicativo. '
         'Sua OS já está salva e permanece válida mesmo que você não envie a mensagem.</p>'
@@ -137,10 +144,17 @@ def chamado_detalhe(h,banco,s,chamado_id):
     if not ch:
         return pagina(h,'Chamado não encontrado','<p>Este chamado não pertence à sua conta.</p>',404)
     protocolo=('OS '+str(ch['numero_os'])) if ch['numero_os'] else ('Chamado #'+str(ch['id']))
+    status_txt = ch['status']
+    try:
+        if ch['os_id']:
+            with ext.db(banco) as c:
+                if ext.em_rota_atual(c, ch['os_id']): status_txt = 'Em rota'
+    except Exception:
+        pass
     corpo=card('Chamado salvo',
         '<p class="good">Sua solicitação foi registrada com o protocolo <b>'+esc(protocolo)+'</b>.</p>'
         f'<p><b>{esc(ch["organizacao"])}</b> · {esc(ch["unidade"])} · {esc(ch["papel"] or "Solicitante")}</p>'
-        +'<p>'+esc(ch['descricao'])+'</p><p><span class="tag">'+esc(ch['status'])+'</span></p>')
+        +'<p>'+esc(ch['descricao'])+'</p><p><span class="tag">'+esc(status_txt)+'</span></p>')
     corpo+=card('Avisar a AUTOSEG pelo WhatsApp',
         '<p>O botão abaixo abre o WhatsApp com a mensagem pronta. O envio só acontece quando <b>você</b> confirmar no aplicativo. '
         'O chamado já está salvo e continua valendo mesmo que você não envie a mensagem.</p>'
@@ -179,37 +193,65 @@ def painel(h,banco,s):
         '<div class="acao-principal">'
         +botao('Pedir serviço para condomínio ou empresa','/cliente/organizacoes')
         +botao('Pedir serviço particular','/cliente/nova','secondary')
+        +botao('Orçamento estimativo em PDF','/cliente/orcamento','secondary')
         +'</div>')
     with ext.db(banco) as c:
-        chamados=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,h.os_id,o.nome organizacao
+        chamados=c.execute('''SELECT h.id,h.status,h.descricao,h.criado_em,h.os_id,o.nome organizacao,
+            so.status status_os
             FROM v9_chamados h JOIN v9_organizacoes o ON o.id=h.organizacao_id
+            LEFT JOIN ordens_servico so ON so.id=h.os_id
             WHERE h.usuario_id=? ORDER BY h.id DESC LIMIT 30''',(s['uid'],)).fetchall()
         orgs=c.execute('''SELECT o.id,o.nome,o.tipo,v.papel,v.situacao
            FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id
            WHERE v.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',(s['uid'],)).fetchall()
+        responsaveis=c.execute('''SELECT o.id,o.nome,o.tipo,r.papel
+             FROM v9_responsaveis r JOIN v9_organizacoes o ON o.id=r.organizacao_id
+             WHERE r.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',(s['uid'],)).fetchall()
     particulares=fluxo_pf.listar_os_pf(banco,s['uid'])
     lista=[]
     for x in chamados:
-        lista.append((esc(x['organizacao']),esc(x['descricao'][:100]),esc(x['status']),
+        st = 'OS '+str(x['status_os']) if x['status_os'] else x['status']
+        try:
+            if x['status_os']:
+                with ext.db(banco) as c:
+                    if ext.em_rota_atual(c, x['os_id']): st = 'Em rota'
+        except Exception:
+            pass
+        lista.append((esc(x['organizacao']),esc(x['descricao'][:100]),esc(st),
                      botao('Acompanhar',f'/cliente/chamado/{x["id"]}','secondary')))
     for x in particulares:
-        lista.append((esc(x['numero_os']),esc(x['descricao'][:100]),esc(x['status']),
+        st = x['status']
+        try:
+            with ext.db(banco) as c:
+                if ext.em_rota_atual(c, x['id']): st = 'Em rota'
+        except Exception:
+            pass
+        lista.append((esc(x['numero_os']),esc(x['descricao'][:100]),esc(st),
                      botao('Acompanhar',f'/cliente/os/{x["id"]}','secondary')))
     if lista:
         abertura+=card('Acompanhe seus pedidos',tabela(['Local / OS','Serviço','Situação','Ação'],lista))
     else:
         abertura+=card('Seus pedidos','<p>Você ainda não fez solicitações por este acesso. Para começar, use um dos botões acima.</p>')
     mais='<div class="acao-principal">'+botao('Editar meus dados','/cliente/perfil','secondary')
-    mais+=botao('Solicitar acesso de síndico / responsável','/cliente/administrar-organizacao','secondary')+'</div>'
+    mais+='</div>'
     if orgs:
         linhas=[]
         for o in orgs:
             ac=botao('Solicitar serviço',f'/cliente/chamado/novo?org={o["id"]}','secondary')
-            if o['papel'] in ('Síndico','Administrador') and o['situacao']=='Aprovado':
-                ac+=botao('Ver pedidos do condomínio',f'/cliente/sindico?org={o["id"]}','secondary')
-            linhas.append((esc(o['nome']),esc(o['situacao']),ac))
+            if any(r['id']==o['id'] for r in responsaveis):
+                ac+=botao('Ver todas as OS da organização',f'/cliente/sindico?org={o["id"]}','secondary')
+            estado=o['situacao']
+            if o['papel'] in ('Síndico','Administrador','Gestor') and not any(r['id']==o['id'] for r in responsaveis):
+                estado='Aguardando nomeação da AUTOSEG (sem acesso geral)'
+            linhas.append((esc(o['nome']),esc(estado),ac))
         mais+=tabela(['Organização','Vínculo','Ações'],linhas)
     abertura+='<details class="ajuda"><summary>Meus dados e opções de responsável</summary>'+mais+'</details>'
+    if responsaveis:
+        linhas=[(esc(r['nome']),esc(r['tipo']),esc(r['papel']),
+                 botao('Consultar todas as OS',f'/cliente/sindico?org={r["id"]}')) for r in responsaveis]
+        abertura+=card('Organizações sob sua responsabilidade',
+            '<p>Você tem acesso ao histórico de OS destes locais, inclusive pedidos abertos por moradores, funcionários ou prestadores.</p>'
+            +tabela(['Organização','Tipo','Atribuição','Ação'],linhas))
     abertura+=f'<form method="post" action="/cliente/sair-pf">{v9.formulario_csrf(s)}<button class="secondary" type="submit">Sair da minha conta</button></form>'
     return pagina(h,'Meu painel', '<p class="muted">'+esc(apelido)+'</p>'+abertura)
 
@@ -273,10 +315,8 @@ def pesquisar(h,banco,s):
         card('1. Encontre o local',
           '<p>Procure pelo nome. Não é preciso saber o CNPJ ou ser síndico.</p>'+busca)
         +card('2. Escolha e peça o atendimento',paginacao+resultados)
-        +'<div class="acao-principal">'+botao('Não encontrei meu condomínio','/cliente/nova-organizacao','secondary')+'</div>'
-        +'<details class="ajuda"><summary>Sou síndico ou responsável pelo condomínio</summary>'
-        +'<p>O acesso administrativo é liberado somente após validação da AUTOSEG.</p>'
-        +botao('Solicitar acesso de responsável','/cliente/administrar-organizacao','secondary')+'</details>')
+        +'<div class="acao-principal">'+botao('Cadastrar local e solicitar OS','/cliente/nova-organizacao','secondary')+'</div>'
+        +'<p class="muted">Para administrar todas as OS da empresa ou condomínio, peça a nomeação ao prestador.</p>')
 
 
 def solicitar_vinculo_form(h,banco,s):
@@ -300,26 +340,29 @@ def solicitar_vinculo_form(h,banco,s):
 
 
 def formulario_org(h,s,administrador=False):
-    card,_,campos,_,select,_,botao,_=u()
-    titulo='Cadastrar CNPJ como responsável' if administrador else 'Pré-cadastro de condomínio / empresa'
-    destino='/cliente/administrar-organizacao' if administrador else '/cliente/nova-organizacao'
-    form=f'<form method="post" action="{destino}">{v9.formulario_csrf(s)}'
-    form+=select('Tipo de organização','tipo',[(v,v) for v in ('Condomínio','Empresa')])
-    form+=campos('Nome do condomínio ou empresa','nome',required=True)
-    form+=campos('Endereço completo da organização','endereco',required=True)
-    form+=campos('Cidade (opcional)','cidade')+campos('Bairro (opcional)','bairro')
-    form+=campos('CNPJ'+('' if administrador else ' (opcional, se souber)'),'cnpj',required=administrador)
+    card,_,campos,textarea,select,esc,botao,_=u()
     if administrador:
-        form+=select('Minha função na organização','funcao',[(v,v) for v in FUNCOES_RESPONSAVEL])
-        form+=('<p class="notice">O CPF e a senha já pertencem à sua conta pessoal. '
-               'Cadastrar o CNPJ não dá permissão administrativa imediata: '
-               'a AUTOSEG deverá verificar seu vínculo como síndico ou proprietário.</p>')
-    else:
-        form+=select('Eu sou','papel',[('Morador','Morador do condomínio'),('Funcionário','Funcionário / porteiro')])
-        form+=campos('Apartamento ou cargo / função','unidade',required=True,
-                     placeholder='Ex.: Apartamento 203, Porteiro, Zelador, Recepcionista, Auxiliar administrativo')
-    form+='<button>'+('Solicitar cadastro como responsável' if administrador else 'Criar pré-cadastro e continuar o chamado')+'</button></form>'
-    return pagina(h,titulo,card('Dados da organização',form)+botao('Voltar','/cliente/organizacoes','secondary'))
+        return pagina(h,'Solicitação de gestão',card('Acesso como síndico ou gestor',
+            '<p>O síndico ou gestor é nomeado somente pelo prestador ou pelo desktop, a partir de uma conta PF existente.</p>'
+            +botao('Voltar ao painel','/cliente/painel','secondary')))
+    form=f'<form method="post" action="/cliente/nova-organizacao">{v9.formulario_csrf(s)}'
+    form+='<p class="passo">Cadastro e solicitação em uma única página</p>'
+    form+=select('Tipo de local','tipo',[(v,v) for v in ('Condomínio','Empresa')])
+    form+=campos('Nome do condomínio ou empresa','nome',required=True)
+    form+=campos('Endereço completo','endereco',required=True)
+    form+=campos('Cidade','cidade',required=True)+campos('Bairro','bairro')
+    form+=campos('Telefone de contato do local (DDD)','telefone',required=True,placeholder='(51) 99999-9999')
+    form+=campos('CNPJ (opcional)','cnpj',placeholder='00.000.000/0000-00')
+    form+=select('Você é','papel',[('Morador','Morador'),('Funcionário','Funcionário / porteiro')])
+    form+=campos('Seu nome para contato','solicitante_nome',s.get('nome',''),required=True)
+    form+=campos('Apartamento ou cargo','unidade',required=True,placeholder='Apartamento 203 ou Porteiro')
+    form+=select('Urgência','urgencia',[(x,x) for x in ('Normal','Alta','Baixa')])
+    form+=textarea('Descreva o serviço solicitado','descricao',required=True)
+    form+=('<p class="notice">Ao enviar, o condomínio entra na lista principal de clientes e a OS aparece em Pendentes. '
+           'O cadastro poderá ser complementado pelo prestador. Isso não concede acesso de síndico.</p>'
+           '<button type="submit" style="width:100%;white-space:normal">Cadastrar local e solicitar OS</button></form>')
+    return pagina(h,'Cadastrar local e solicitar OS',card('Condomínio ou empresa',form)
+                  +botao('Voltar','/cliente/organizacoes','secondary'))
 
 
 def chamado_form(h,banco,s):
@@ -344,8 +387,29 @@ def chamado_form(h,banco,s):
     form+=('<p class="notice">Você pode solicitar mesmo sem ser síndico ou administrador. '
            'A AUTOSEG entrará em contato com o responsável para confirmar os detalhes.</p>'
            '<button type="submit" style="width:100%">Enviar pedido de atendimento</button></form>')
-    return pagina(h,'Solicitar serviço — '+o['nome'],card('Etapa final: descreva o problema', '<p class="passo">Seu pedido será registrado imediatamente e ficará aguardando análise da AUTOSEG.</p>'+form)
+    return pagina(h,'Solicitar serviço — '+o['nome'],card('Etapa final: descreva o problema', '<p class="passo">Seu pedido será registrado como OS pendente para atendimento.</p>'+form)
                   +botao('Voltar às organizações','/cliente/organizacoes','secondary'))
+
+
+def orcamento_form(h,banco,s):
+    card,_,campos,_,select,esc,botao,_=u()
+    servicos=catalogo.listar(banco,ativos=True)
+    if not servicos:
+        return pagina(h,'Solicitar orçamento',card('Serviços disponíveis',
+            '<p>Ainda não há serviços com valores cadastrados. Consulte a AUTOSEG.</p>'
+            +botao('Voltar','/cliente/painel','secondary')))
+    detalhes=[]
+    for x in servicos:
+        v=catalogo.valores_orcamento(banco,x['id'])
+        detalhes.append('<li>'+esc(x['nome'])+' — '+esc(catalogo.reais(v['total']))+' (estimado por unidade)</li>')
+    form=(f'<form method="post" action="/cliente/orcamento/pdf">{v9.formulario_csrf(s)}'
+          +select('Serviço','servico_id',[(x['id'],x['nome']) for x in servicos],required=True)
+          +campos('Quantidade (de 1 a 20)','quantidade','1',required=True)
+          +'<p class="muted">O valor é calculado com base no catálogo e pode mudar após vistoria.</p>'
+          +'<button>Gerar orçamento em PDF</button></form>')
+    return pagina(h,'Orçamento estimativo',card('Serviços e valores',
+        '<ul>'+''.join(detalhes)+'</ul>'+form)
+        +botao('Voltar ao painel','/cliente/painel','secondary'))
 
 
 def pdf_pf(h,banco,s,oid):
@@ -365,24 +429,36 @@ def pdf_pf(h,banco,s,oid):
 
 
 def sindico(h,banco,s,org):
-    """Lista os chamados de uma organização para o síndico/administrador VALIDADO."""
+    """Histórico de OS da empresa/condomínio — apenas PF explicitamente nomeada."""
     card,_,_,_,_,esc,botao,tabela=u()
-    if not cad.vinculo_aprovado(banco,s['uid'],org,('Síndico','Administrador')):
-        raise PermissionError('Acesso restrito ao síndico validado pela AUTOSEG.')
-    with ext.db(banco) as c:
-        arr=c.execute('''SELECT h.*,u.nome solicitante FROM v9_chamados h
-                         JOIN v9_usuarios u ON u.id=h.usuario_id
-                         WHERE h.organizacao_id=? ORDER BY h.id DESC LIMIT 200''',(org,)).fetchall()
+    dados=cad.listar_os_organizacao(banco,org,s['uid'])
+    organizacao=dados['organizacao']
     linhas=[]
-    for x in arr:
-        documento=(botao('Relatório PDF',f'/cliente/chamado/{x["id"]}/pdf','secondary')
-                   if x['os_id'] else '—')
-        linhas.append((f'#{x["id"]}',esc(x['solicitante']),esc(x['descricao']),
-                       esc(x['status']),esc(x['criado_em']),documento))
-    return pagina(h,'Chamados do condomínio',
-                  card('Solicitações de moradores e funcionários',
-                       tabela(['Nº','Solicitante','Descrição','Status','Data','Documento'],linhas))
-                  +botao('Meu painel','/cliente/painel','secondary'))
+    for x in dados['os']:
+        origem=x['solicitante'] or 'Abertura administrativa / prestador'
+        linhas.append((esc(x['numero_os'] or '#'+str(x['id'])),esc(x['descricao'] or ''),
+            esc(x['status']),esc(origem),esc(x['data_abertura'] or ''),
+            botao('Relatório PDF',f'/cliente/organizacao/{org}/os/{x["id"]}/pdf','secondary')))
+    aviso='<p class="notice">Há mais de uma organização para o mesmo cadastro. Por segurança, exibimos somente OS explicitamente vinculadas. Peça revisão cadastral à AUTOSEG.</p>' if dados['cadastro_ambiguo'] else ''
+    corpo=card('Todas as ordens de serviço — '+esc(organizacao['nome']),
+        '<p>Inclui solicitações do síndico, dos condôminos, dos funcionários e OS criadas pelo prestador.</p>'
+        +aviso+tabela(['OS','Descrição','Situação','Solicitante / Origem','Abertura','PDF'],linhas))
+    return pagina(h,'Histórico do '+organização_rotulo(organizacao['tipo']),corpo+
+                  botao('Voltar ao meu painel','/cliente/painel','secondary'))
+
+
+def organização_rotulo(tipo):
+    return 'condomínio' if tipo=='Condomínio' else 'empresa'
+
+
+def pdf_os_organizacao(h,banco,s,org,oid):
+    from pathlib import Path
+    import fluxo_os as fluxo
+    cad.autorizar_pdf_os_organizacao(banco,org,s['uid'],oid)
+    registro=fluxo.ultimo_documento(banco,oid)
+    if not registro:raise ValueError('Ainda não há relatório PDF publicado para esta OS.')
+    arquivo=Path(fluxo.validar_pdf_publicado(registro))
+    return h.send_bytes(arquivo.read_bytes(),'application/pdf',filename=arquivo.name)
 
 
 def pdf_chamado(h,banco,s,chamado_id):
@@ -415,6 +491,7 @@ def get(h,path,banco):
     if path=='/cliente/perfil':return perfil(h,banco,s)
     if path=='/cliente/nova':return os_pf_form(h,banco,s)
     if path=='/cliente/organizacoes':return pesquisar(h,banco,s)
+    if path=='/cliente/orcamento':return orcamento_form(h,banco,s)
     if path=='/cliente/nova-organizacao':return formulario_org(h,s)
     if path=='/cliente/administrar-organizacao':return formulario_org(h,s,administrador=True)
     if path=='/cliente/vinculo/novo':return solicitar_vinculo_form(h,banco,s)
@@ -423,6 +500,9 @@ def get(h,path,banco):
         qs=parse_qs(urlsplit(h.path).query)
         return sindico(h,banco,s,int(qs.get('org',['0'])[0]))
     parts=path.strip('/').split('/')
+    if (len(parts)==6 and parts[0]=='cliente' and parts[1]=='organizacao'
+            and parts[2].isdigit() and parts[3]=='os' and parts[4].isdigit() and parts[5]=='pdf'):
+        return pdf_os_organizacao(h,banco,s,int(parts[2]),int(parts[4]))
     if len(parts)==3 and parts[0]=='cliente' and parts[1]=='os' and parts[2].isdigit():
         return os_detalhe(h,banco,s,int(parts[2]))
     if len(parts)==3 and parts[0]=='cliente' and parts[1]=='chamado' and parts[2].isdigit():
@@ -470,23 +550,20 @@ def post(h,path,d,banco):
     if path=='/cliente/os/nova':
         oid=fluxo_pf.registrar_os_pf(banco,uid,d.get('descricao',''),str(d.get('urgencia','Normal')))
         return h.redir('/cliente/os/'+str(oid)+'?whatsapp=1')
+    if path=='/cliente/orcamento/pdf':
+        perfil=fluxo_pf.obter_perfil(banco,uid)
+        nome=perfil['nome'] if perfil and perfil.get('nome') else 'Cliente'
+        pdf=catalogo.pdf_orcamento(banco,int(d.get('servico_id','0')),d.get('quantidade','1'),nome)
+        return h.send_bytes(pdf,'application/pdf',filename='AUTOSEG_orcamento_estimativo.pdf')
     if path=='/cliente/nova-organizacao':
-        nome=str(d.get('nome','')).strip();endereco=str(d.get('endereco','')).strip()
-        unidade=str(d.get('unidade','')).strip()
-        papel=str(d.get('papel',''))
-        if len(endereco)<5:raise ValueError('Informe o endereço completo do condomínio ou empresa.')
-        if not 1<=len(unidade)<=100:raise ValueError('Informe seu apartamento ou cargo/função.')
-        if papel not in ('Morador','Funcionário'):raise ValueError('Perfil inválido.')
-        org=cad.criar_organizacao(banco,uid,nome,str(d.get('tipo','')),
-            str(d.get('cnpj','')),str(d.get('cidade','')),str(d.get('bairro','')),
-            papel,endereco,unidade)
-        return h.redir('/cliente/chamado/novo?'+urlencode({'org':org,'unidade':unidade}))
+        resultado=cad.criar_organizacao_e_os(banco,uid,d)
+        return h.redir('/cliente/chamado/'+str(resultado['chamado_id'])+'?whatsapp=1')
     if path=='/cliente/vinculo/novo':
         fluxo_pf.solicitar_administracao(banco,uid,int(d.get('org_id','0')),str(d.get('cnpj','')),
                                          str(d.get('funcao','')))
         return h.redir('/cliente/painel')
     if path=='/cliente/administrar-organizacao':
-        fluxo_pf.cadastrar_organizacao_responsavel(banco,uid,d)
+        raise PermissionError('A nomeação de síndico/gestor só pode ser feita pelo prestador ou desktop.')
         return h.redir('/cliente/painel')
     if path=='/cliente/chamado/novo':
         chid=fluxo_pf.registrar_chamado_org(banco,uid,d)

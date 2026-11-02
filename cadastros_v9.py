@@ -49,6 +49,17 @@ def instalar(banco):
           papel TEXT NOT NULL, situacao TEXT NOT NULL DEFAULT 'Pendente',
           criado_em TEXT NOT NULL, aprovado_em TEXT,
           UNIQUE(organizacao_id,usuario_id));
+        -- Nomeação explícita feita somente por operador desktop / prestador autenticado.
+        -- v9_vinculos representa relações declaradas e NÃO concede privilégio administrativo.
+        CREATE TABLE IF NOT EXISTS v9_responsaveis(
+          organizacao_id INTEGER PRIMARY KEY,
+          usuario_id INTEGER NOT NULL,
+          papel TEXT NOT NULL CHECK(papel IN ('Síndico','Gestor')),
+          atribuido_por TEXT NOT NULL,
+          atribuido_em TEXT NOT NULL,
+          FOREIGN KEY(organizacao_id) REFERENCES v9_organizacoes(id),
+          FOREIGN KEY(usuario_id) REFERENCES v9_usuarios(id));
+        CREATE INDEX IF NOT EXISTS idx_v9_responsaveis_pf ON v9_responsaveis(usuario_id);
         CREATE TABLE IF NOT EXISTS v9_chamados(
           id INTEGER PRIMARY KEY, organizacao_id INTEGER NOT NULL,
           usuario_id INTEGER NOT NULL, descricao TEXT NOT NULL, urgencia TEXT NOT NULL,
@@ -82,6 +93,8 @@ def instalar(banco):
         cols_org={r['name'] for r in c.execute('PRAGMA table_info(v9_organizacoes)')}
         if 'sindico_telefone' not in cols_org:
             c.execute("ALTER TABLE v9_organizacoes ADD COLUMN sindico_telefone TEXT DEFAULT ''")
+        if 'telefone' not in cols_org:
+            c.execute("ALTER TABLE v9_organizacoes ADD COLUMN telefone TEXT DEFAULT ''")
         if 'sindico_nome' not in cols_org:
             c.execute("ALTER TABLE v9_organizacoes ADD COLUMN sindico_nome TEXT DEFAULT ''")
         # v9.4: conta pessoal mínima (CPF/senha), perfil PF progressivo e
@@ -240,10 +253,120 @@ def vincular(banco,usuario_id,org_id,papel):
         c.execute('INSERT OR IGNORE INTO v9_vinculos(organizacao_id,usuario_id,papel,criado_em) VALUES(?,?,?,?)',
                   (org_id,usuario_id,papel,ext.agora()))
 
+def responsavel_ativo(c, uid, org):
+    """Única autoridade para ler as OS de toda uma organização."""
+    return c.execute('''SELECT r.papel FROM v9_responsaveis r
+        JOIN v9_usuarios u ON u.id=r.usuario_id AND u.ativo=1
+        JOIN v9_organizacoes o ON o.id=r.organizacao_id AND o.mesclado_em IS NULL
+        WHERE r.usuario_id=? AND r.organizacao_id=?''',(uid,org)).fetchone()
+
+
 def vinculo_aprovado(banco,uid,org,papel=None):
     with ext.db(banco) as c:
-        r=c.execute('SELECT papel FROM v9_vinculos WHERE usuario_id=? AND organizacao_id=? AND situacao=?',(uid,org,'Aprovado')).fetchone()
-        return bool(r and (not papel or r['papel'] in papel))
+        # Síndico / Gestor / Administrador nunca vêm de declaração do próprio usuário,
+        # aprovação genérica de vínculo ou cadastros históricos: só nomeação explícita.
+        if papel and any(x in papel for x in ('Síndico','Administrador','Gestor')):
+            if responsavel_ativo(c,uid,org):
+                return True
+            if all(x in ('Síndico','Administrador','Gestor') for x in papel):
+                return False
+        r=c.execute('''SELECT papel FROM v9_vinculos WHERE usuario_id=? AND organizacao_id=?
+                       AND situacao='Aprovado' ''',(uid,org)).fetchone()
+        return bool(r and (not papel or r['papel'] in papel and r['papel'] not in ('Síndico','Administrador','Gestor')))
+
+
+def atribuir_responsavel(banco, organizacao_id, usuario_id, autor):
+    """Nomeia uma PF com conta CPF existente; nunca chamada por rotas do cliente."""
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        org=c.execute('SELECT id,tipo,nome FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
+        pf=c.execute('SELECT id,nome,cpf,telefone FROM v9_usuarios WHERE id=? AND ativo=1',(usuario_id,)).fetchone()
+        if not org:raise ValueError('Condomínio/empresa inexistente ou mesclado.')
+        if not pf:raise ValueError('Pessoa física sem conta ativa. Ela deve criar acesso por CPF antes da nomeação.')
+        if not cpf_valido(pf['cpf']):raise ValueError('O CPF da conta precisa ser válido.')
+        papel='Síndico' if org['tipo']=='Condomínio' else 'Gestor'
+        anterior=c.execute('SELECT usuario_id FROM v9_responsaveis WHERE organizacao_id=?',(organizacao_id,)).fetchone()
+        c.execute('''INSERT INTO v9_responsaveis(organizacao_id,usuario_id,papel,atribuido_por,atribuido_em)
+            VALUES(?,?,?,?,?) ON CONFLICT(organizacao_id) DO UPDATE SET
+            usuario_id=excluded.usuario_id,papel=excluded.papel,
+            atribuido_por=excluded.atribuido_por,atribuido_em=excluded.atribuido_em''',
+            (organizacao_id,usuario_id,papel,str(autor)[:120],ext.agora()))
+        # Impede que o vínculo anterior mostre incorretamente outro síndico/gestor.
+        if anterior and anterior['usuario_id']!=usuario_id:
+            c.execute('''UPDATE v9_vinculos SET papel='Morador'
+                WHERE organizacao_id=? AND usuario_id=? AND papel IN ('Síndico','Administrador','Gestor')''',
+                (organizacao_id,anterior['usuario_id']))
+        c.execute('''INSERT INTO v9_vinculos(organizacao_id,usuario_id,papel,situacao,criado_em,aprovado_em)
+                VALUES(?,?,?,'Aprovado',?,?)
+                ON CONFLICT(organizacao_id,usuario_id) DO UPDATE SET papel=excluded.papel,
+                    situacao='Aprovado',aprovado_em=excluded.aprovado_em''',
+                (organizacao_id,usuario_id,papel,ext.agora(),ext.agora()))
+        # Nomeação e contato WhatsApp são campos distintos: nunca substituir
+        # automaticamente um telefone verificado por dados autodeclarados no perfil PF.
+        c.execute('''INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em)
+            VALUES(NULL,?,?,?,?,?)''',(organizacao_id,'Responsável nomeado',
+                f'{papel} PF #{usuario_id}; anterior: '+str(anterior['usuario_id'] if anterior else 'nenhum'),str(autor)[:120],ext.agora()))
+        notificar(c,usuario_id,None,f'Você foi designado(a) como {papel} de {org["nome"]}.')
+        return papel
+
+
+def remover_responsavel(banco, organizacao_id, autor):
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        ant=c.execute('SELECT * FROM v9_responsaveis WHERE organizacao_id=?',(organizacao_id,)).fetchone()
+        if not ant:raise ValueError('Não existe responsável nomeado para essa organização.')
+        c.execute('DELETE FROM v9_responsaveis WHERE organizacao_id=?',(organizacao_id,))
+        c.execute('''UPDATE v9_vinculos SET papel='Morador' WHERE organizacao_id=? AND usuario_id=?
+            AND papel IN ('Síndico','Administrador','Gestor')''',(organizacao_id,ant['usuario_id']))
+        c.execute('''INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em)
+            VALUES(NULL,?,?,?,?,?)''',(organizacao_id,'Responsável removido',f'PF #{ant["usuario_id"]}',str(autor)[:120],ext.agora()))
+        notificar(c,ant['usuario_id'],None,'Seu acesso como responsável foi revogado pela AUTOSEG.')
+
+
+def listar_os_organizacao(banco, organizacao_id, usuario_id):
+    """Mostra TODAS as OS da PJ, inclusive as criadas no desktop/prestador.
+
+    Se o banco legado associa duas organizações ao mesmo cliente, não compartilha
+    cegamente OS: restringe a chamados explicitamente vinculados até reconciliação.
+    """
+    with ext.db(banco) as c:
+        if not responsavel_ativo(c,usuario_id,organizacao_id):
+            raise PermissionError('Apenas o responsável nomeado pela AUTOSEG pode consultar as OS do local.')
+        org=c.execute('SELECT id,cliente_id,nome,tipo FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
+        if not org:raise ValueError('Organização não encontrada.')
+        n=0
+        compat=True
+        if org['cliente_id'] is not None:
+            n=c.execute('''SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=? AND mesclado_em IS NULL''',
+                        (org['cliente_id'],)).fetchone()[0]
+            cliente=c.execute('SELECT tipo_pessoa,nome,documento FROM clientes WHERE id=?',
+                              (org['cliente_id'],)).fetchone()
+            doc_org=digitos(c.execute('SELECT cnpj FROM v9_organizacoes WHERE id=?',
+                                     (organizacao_id,)).fetchone()['cnpj'])
+            doc_cliente=digitos(cliente['documento']) if cliente else ''
+            compat=bool(cliente and cliente['tipo_pessoa']=='Jurídica' and (
+                (len(doc_org)==14 and len(doc_cliente)==14 and doc_org==doc_cliente) or
+                (not doc_org and not doc_cliente and
+                 org['nome'].strip().casefold()==cliente['nome'].strip().casefold())))
+        usar_cliente=bool(org['cliente_id'] is not None and n==1 and compat)
+        registros=c.execute('''SELECT os.id,os.numero_os,os.status,os.descricao,os.data_abertura,
+            ch.id chamado_id,ch.usuario_id,u.nome solicitante
+            FROM ordens_servico os
+            LEFT JOIN v9_chamados ch ON ch.os_id=os.id AND ch.organizacao_id=?
+            LEFT JOIN v9_usuarios u ON u.id=ch.usuario_id
+            WHERE ch.id IS NOT NULL OR (?=1 AND os.cliente_id=?)
+            ORDER BY os.id DESC''',
+            (organizacao_id,int(usar_cliente),org['cliente_id'] if org['cliente_id'] is not None else -1)).fetchall()
+        return {'organizacao':dict(org),'os':[dict(r) for r in registros],
+                'cadastro_ambiguo':bool(org['cliente_id'] is not None and (n>1 or not compat))}
+
+
+def autorizar_pdf_os_organizacao(banco, organizacao_id, usuario_id, os_id):
+    dados=listar_os_organizacao(banco,organizacao_id,usuario_id)
+    # Mesma regra de titularidade da listagem, NÃO basta conhecer ID da OS.
+    if not any(x['id']==os_id for x in dados['os']):
+        raise PermissionError('Relatório não pertence à organização sob sua responsabilidade.')
+    return True
 
 def registrar_chamado(banco,uid,org,descricao,urgencia,unidade='',papel='',solicitante_nome=''):
     descricao=descricao.strip()
@@ -265,7 +388,7 @@ def registrar_chamado(banco,uid,org,descricao,urgencia,unidade='',papel='',solic
                       (org,uid,descricao,urgencia,unidade,papel,nome_sol,ext.agora()))
         evento(c,cur.lastrowid,'Solicitante','Chamado registrado',descricao[:200]+f' | {unidade} | {papel}'.rstrip(' |'))
         _criar_os_no_registro(c,cur.lastrowid,'Portal do Cliente')
-        for si in c.execute("SELECT usuario_id FROM v9_vinculos WHERE organizacao_id=? AND situacao='Aprovado' AND papel IN ('Síndico','Administrador')",(org,)).fetchall():
+        for si in c.execute('SELECT usuario_id FROM v9_responsaveis WHERE organizacao_id=?',(org,)).fetchall():
             notificar(c,si['usuario_id'],cur.lastrowid,'Novo chamado recebido no condomínio; aguarda análise AUTOSEG.')
         return cur.lastrowid
 
@@ -296,7 +419,7 @@ def confirmar(banco,chamado_id,ator,aprovar,uid=None):
         x=c.execute('SELECT * FROM v9_chamados WHERE id=?',(chamado_id,)).fetchone()
         if not x or x['status']!='Aguardando síndico':raise ValueError('Chamado não aguarda confirmação.')
         if uid is not None:
-            v=c.execute("SELECT 1 FROM v9_vinculos WHERE organizacao_id=? AND usuario_id=? AND situacao='Aprovado' AND papel IN ('Síndico','Administrador')",(x['organizacao_id'],uid)).fetchone()
+            v=responsavel_ativo(c,uid,x['organizacao_id'])
             if not v:raise PermissionError('Somente síndico autorizado pode confirmar.')
         status='Autorizado' if aprovar else 'Recusado'
         c.execute('UPDATE v9_chamados SET status=?,confirmado_em=?,confirmado_por=? WHERE id=?',
@@ -402,17 +525,70 @@ def alterar_vinculo(banco,vinculo_id,aprovar,administrador):
         c.execute('BEGIN IMMEDIATE')
         v=c.execute('SELECT * FROM v9_vinculos WHERE id=?',(vinculo_id,)).fetchone()
         if not v:raise ValueError('Vínculo inexistente.')
+        if aprovar and v['papel'] in ('Síndico','Administrador','Gestor'):
+            raise ValueError('Para liberar acesso de síndico/gestor, use Nomear responsável e selecione uma conta PF existente. Vínculo declarado não concede acesso administrativo.')
         situacao='Aprovado' if aprovar else 'Recusado'
         c.execute('UPDATE v9_vinculos SET situacao=?,aprovado_em=? WHERE id=?',(situacao,ext.agora(),vinculo_id))
         c.execute('INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em) VALUES(NULL,?,?,?,?,?)',
                   (v['organizacao_id'],'Vínculo '+situacao,'Vínculo '+str(vinculo_id),administrador,ext.agora()))
 
+def sincronizar_cliente_pj(c, cliente_id):
+    # Atualiza o índice de organizações no MESMO SQLite e na mesma transação.
+
+    # Sem CNPJ verificável não há mesclagem automática por nome.
+    if not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_organizacoes'").fetchone():
+        return None  # Instalação antiga ainda sem módulo v9.
+    cl=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+    if not cl or cl['tipo_pessoa']!='Jurídica':
+        return None
+    doc=digitos(cl['documento'])
+    valido=doc if cnpj_valido(doc) else None
+    vinculada=c.execute('''SELECT id,cnpj FROM v9_organizacoes
+          WHERE cliente_id=? AND mesclado_em IS NULL ORDER BY id LIMIT 1''',(cliente_id,)).fetchone()
+    if valido:
+        outra=c.execute('''SELECT id,cliente_id FROM v9_organizacoes
+          WHERE cnpj=? AND mesclado_em IS NULL''',(valido,)).fetchone()
+        if outra and outra['cliente_id'] not in (None,cliente_id):
+            raise ValueError('CNPJ já vinculado ao cliente #'+str(outra['cliente_id'])+
+                             '. Revise a duplicidade antes de salvar.')
+        if outra and vinculada and outra['id']!=vinculada['id']:
+            raise ValueError('CNPJ localizado em outra organização; revise antes de mesclar.')
+    if vinculada:
+        # Nome e localização do cadastro administrativo são a referência.
+        c.execute('''UPDATE v9_organizacoes SET nome=?,cidade=?,bairro=?,endereco=?,telefone=?,
+          cnpj=CASE WHEN ? IS NOT NULL THEN ? ELSE cnpj END WHERE id=?''',
+          (cl['nome'],cl['cidade'] or '',cl['bairro'] or '',cl['endereco'] or '',cl['telefone'] or '',
+           valido,valido,vinculada['id']))
+        return vinculada['id']
+    if valido:
+        existente=c.execute('SELECT id,cliente_id FROM v9_organizacoes WHERE cnpj=? AND mesclado_em IS NULL',
+                            (valido,)).fetchone()
+        if existente:
+            c.execute('''UPDATE v9_organizacoes SET cliente_id=?,situacao='Importado - revisar'
+                        WHERE id=? AND cliente_id IS NULL''',(cliente_id,existente['id']))
+            return existente['id']
+    tipo='Condomínio' if 'condom' in (cl['nome'] or '').lower() else 'Empresa'
+    cur=c.execute('''INSERT INTO v9_organizacoes
+      (cliente_id,nome,tipo,cnpj,cidade,bairro,endereco,telefone,situacao,criado_em)
+      VALUES(?,?,?,?,?,?,?,?,'Cadastrado',?)''',
+      (cliente_id,cl['nome'],tipo,valido,cl['cidade'] or '',cl['bairro'] or '',
+       cl['endereco'] or '',cl['telefone'] or '',ext.agora()))
+    return cur.lastrowid
+
+
 def validar_organizacao(banco,org_id,cliente_id,administrador):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         x=c.execute('SELECT * FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(org_id,)).fetchone()
-        cl=c.execute('SELECT id FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+        cl=c.execute('SELECT id,nome,documento,tipo_pessoa FROM clientes WHERE id=?',(cliente_id,)).fetchone()
         if not x or not cl:raise ValueError('Organização ou cliente inexistente.')
+        if cl['tipo_pessoa']!='Jurídica':
+            raise ValueError('Condomínio/empresa deve ser vinculado a cliente pessoa jurídica.')
+        doc_org=digitos(x['cnpj']); doc_cl=digitos(cl['documento'])
+        if len(doc_org)==14 and len(doc_cl)==14 and doc_org!=doc_cl:
+            raise ValueError('CNPJs diferentes: associação bloqueada para evitar mesclar cadastros incorretos.')
+        if doc_org and doc_cl and len(doc_cl) not in (0,14):
+            raise ValueError('Documento do cliente inconsistente. Corrija antes de vincular.')
         if c.execute('SELECT 1 FROM v9_organizacoes WHERE cliente_id=? AND id!=? AND mesclado_em IS NULL',(cliente_id,org_id)).fetchone():
             raise ValueError('Este cliente já está associado a outra organização. Use mesclagem.')
         c.execute("UPDATE v9_organizacoes SET cliente_id=?,situacao='Validado' WHERE id=?",(cliente_id,org_id))
@@ -434,6 +610,14 @@ def mesclar_organizacoes(banco,origem,destino,autor):
             c.execute("UPDATE v9_organizacoes SET cliente_id=?,situacao='Validado' WHERE id=?",(a['cliente_id'],destino))
         if not b['cnpj'] and a['cnpj']:
             c.execute('UPDATE v9_organizacoes SET cnpj=? WHERE id=?',(a['cnpj'],destino))
+        resp_a=c.execute('SELECT usuario_id FROM v9_responsaveis WHERE organizacao_id=?',(origem,)).fetchone()
+        resp_b=c.execute('SELECT usuario_id FROM v9_responsaveis WHERE organizacao_id=?',(destino,)).fetchone()
+        if resp_a and resp_b and resp_a['usuario_id']!=resp_b['usuario_id']:
+            raise ValueError('Síndicos/gestores distintos. Revise e remova uma nomeação antes de mesclar.')
+        if resp_a and not resp_b:
+            c.execute('UPDATE v9_responsaveis SET organizacao_id=? WHERE organizacao_id=?',(destino,origem))
+        elif resp_a:
+            c.execute('DELETE FROM v9_responsaveis WHERE organizacao_id=?',(origem,))
         c.execute('UPDATE v9_chamados SET organizacao_id=? WHERE organizacao_id=?',(destino,origem))
         for v in c.execute('SELECT * FROM v9_vinculos WHERE organizacao_id=?',(origem,)).fetchall():
             if not c.execute('SELECT 1 FROM v9_vinculos WHERE organizacao_id=? AND usuario_id=?',(destino,v['usuario_id'])).fetchone():
@@ -546,3 +730,83 @@ def atualizar_sindico(banco, organizacao_id, nome, telefone, ator):
         c.execute('UPDATE v9_organizacoes SET sindico_nome=?,sindico_telefone=? WHERE id=?',(str(nome).strip()[:120],numero,organizacao_id))
         c.execute('INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em) VALUES(NULL,?,?,?,?,?)',
                   (organizacao_id,'Contato síndico atualizado','Contato validado pela AUTOSEG.',ator,ext.agora()))
+
+
+def criar_organizacao_e_os(banco, usuario_id, dados):
+    '''Cadastro PJ e solicitação de OS atômicos: sem etapa de validação cadastral.
+
+    A pessoa que solicita NÃO vira síndica/gestora. Nomeação administrativa
+    continua exclusivamente em v9_responsaveis.
+    '''
+    import atendimento_os as aten
+    nome = str(dados.get('nome','')).strip()
+    tipo = str(dados.get('tipo','')).strip()
+    endereco = str(dados.get('endereco','')).strip()
+    cidade = str(dados.get('cidade','')).strip()
+    bairro = str(dados.get('bairro','')).strip()
+    telefone = digitos(dados.get('telefone',''))
+    cnpj = digitos(dados.get('cnpj',''))
+    papel = str(dados.get('papel','')).strip()
+    unidade = str(dados.get('unidade','')).strip()
+    descricao = str(dados.get('descricao','')).strip()
+    urgencia = str(dados.get('urgencia','Normal')).strip()
+    solicitante = str(dados.get('solicitante_nome','')).strip()
+    if tipo not in ('Condomínio','Empresa'):raise ValueError('Escolha condomínio ou empresa.')
+    if not 3 <= len(nome) <= 160:raise ValueError('Informe o nome do condomínio ou empresa.')
+    if not 5 <= len(endereco) <= 240:raise ValueError('Informe o endereço do local.')
+    if not 10 <= len(telefone) <= 13:raise ValueError('Informe telefone com DDD para contato com o local.')
+    if cnpj and not cnpj_valido(cnpj):raise ValueError('CNPJ inválido. Corrija ou deixe em branco.')
+    if papel not in ('Morador','Funcionário'):raise ValueError('Escolha seu papel no local.')
+    if not 1 <= len(unidade) <= 100:raise ValueError('Informe apartamento ou função.')
+    if not 10 <= len(descricao) <= 2000:raise ValueError('Descreva o problema (10 a 2.000 caracteres).')
+    if urgencia not in ('Baixa','Normal','Alta'):raise ValueError('Urgência inválida.')
+    if len(solicitante) < 3:raise ValueError('Informe seu nome para contato.')
+    if any(len(x)>100 for x in (cidade,bairro)):raise ValueError('Cidade ou bairro muito longo.')
+    aten.instalar(banco)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        if not c.execute('SELECT 1 FROM v9_usuarios WHERE id=? AND ativo=1',(usuario_id,)).fetchone():
+            raise PermissionError('Faça login para solicitar atendimento.')
+        if cnpj:
+            existe=c.execute('SELECT id FROM v9_organizacoes WHERE cnpj=? AND mesclado_em IS NULL',(cnpj,)).fetchone()
+            if existe:raise ValueError('Este CNPJ já está cadastrado. Pesquise o condomínio na lista para solicitar sua OS.')
+            existe=c.execute("SELECT id FROM clientes WHERE tipo_pessoa='Jurídica' AND replace(replace(replace(documento,'.',''),'/',''),'-','')=? AND status!='Inativo'",(cnpj,)).fetchone()
+            if existe:raise ValueError('Este CNPJ já existe nos clientes. Pesquise o condomínio para evitar duplicações.')
+        else:
+            existe=c.execute('''SELECT id FROM v9_organizacoes WHERE mesclado_em IS NULL
+                AND lower(trim(nome))=? AND lower(trim(COALESCE(cidade,'')))=?''',(nome.casefold(),cidade.casefold())).fetchone()
+            if existe:raise ValueError('Já existe organização com este nome e cidade. Pesquise antes de criar outra.')
+        cols={r['name'] for r in c.execute('PRAGMA table_info(clientes)')}
+        valores={'tipo_pessoa':'Jurídica','nome':nome,'documento':cnpj,'telefone':telefone,
+                 'endereco':endereco,'bairro':bairro,'cidade':cidade,'status':'Ativo',
+                 'observacoes':'Criado pelo Portal do Cliente; dados cadastrais editáveis pelo prestador.',
+                 'criado_em':ext.agora()}
+        ks=[k for k in valores if k in cols]
+        cid=c.execute('INSERT INTO clientes('+','.join(ks)+') VALUES('+','.join('?' for _ in ks)+')',
+                      [valores[k] for k in ks]).lastrowid
+        cur=c.execute('''INSERT INTO v9_organizacoes
+          (cliente_id,nome,tipo,cnpj,cidade,bairro,endereco,telefone,situacao,criado_em,criado_por)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+          (cid,nome,tipo,cnpj or None,cidade,bairro,endereco,telefone,'Cadastrado',ext.agora(),usuario_id))
+        org_id=cur.lastrowid
+        # Vínculo informativo não autoriza leitura de outras OS.
+        c.execute('''INSERT INTO v9_vinculos
+          (organizacao_id,usuario_id,papel,situacao,criado_em,unidade)
+          VALUES(?,?,?,'Declarado',?,?)''',
+          (org_id,usuario_id,papel,ext.agora(),unidade))
+        ch=c.execute('''INSERT INTO v9_chamados
+          (organizacao_id,usuario_id,descricao,urgencia,unidade,papel,solicitante_nome,criado_em)
+          VALUES(?,?,?,?,?,?,?,?)''',
+          (org_id,usuario_id,descricao,urgencia,unidade,papel,solicitante[:120],ext.agora())).lastrowid
+        evento(c,ch,'Cliente','Solicitação registrada junto ao cadastro',descricao[:200])
+        os_id=_criar_os_no_registro(c,ch,'Portal do Cliente')
+        if not os_id:raise RuntimeError('Não foi possível registrar a OS.')
+        return {'cliente_id':cid,'organizacao_id':org_id,'chamado_id':ch,'os_id':os_id}
+
+
+def formatar_documento(documento):
+    '''Máscara visual; mantém o CPF/CNPJ canônico sem pontuação no SQLite.'''
+    v=digitos(documento)
+    if len(v)==11:return f'{v[:3]}.{v[3:6]}.{v[6:9]}-{v[9:]}'
+    if len(v)==14:return f'{v[:2]}.{v[2:5]}.{v[5:8]}/{v[8:12]}-{v[12:]}'
+    return str(documento or '')

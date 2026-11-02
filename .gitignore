@@ -47,3 +47,16 @@ credentials.json
 
 # Dados locais de desenvolvimento
 dados_teste/
+
+# REV05: acesso remoto privado de desenvolvimento e OAuth
+tuneis_dev/
+token.json
+**/client_secret_*.json
+
+# REV06: segredos e arquivos de execução
+**/*secret*.json
+**/*token*.json
+**/*oauth*.json
+*.p8
+*.pfx
+*.log.*

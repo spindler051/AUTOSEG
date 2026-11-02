@@ -18,6 +18,8 @@ from portal_prestador import PortalPrestador
 from desktop_v9 import DesktopV9Mixin
 import cadastros_v9 as cad9
 import links_publicos as links9
+import estoque_materiais as estoque
+from desktop_operacoes import DesktopOperacoesMixin
 
 
 # ============================================================
@@ -46,7 +48,7 @@ LOGO = os.path.join(PASTA_APP, "logo.png")
 # APLICAÇÃO
 # ============================================================
 
-class App(DesktopV9Mixin,tk.Tk):
+class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
 
     def __init__(self):
         super().__init__()
@@ -61,6 +63,7 @@ class App(DesktopV9Mixin,tk.Tk):
         fluxo.instalar(BANCO)
         aten.instalar(BANCO)
         cad9.instalar(BANCO)
+        estoque.instalar(BANCO)
         self.BANCO_V9=BANCO
         try:
             importados = fluxo.recuperar_relatorios_antigos(BANCO)
@@ -117,7 +120,10 @@ class App(DesktopV9Mixin,tk.Tk):
 
     def ao_fechar(self):
         try:
-            import gerenciar_tuneis as ger
+            if os.environ.get('AUTOSEG_DEV')=='1':
+                import tuneis_dev as ger
+            else:
+                import gerenciar_tuneis as ger
             ger.parar() # apenas túneis iniciados/gerenciados pela aplicação
         except Exception as erro:
             print('Não foi possível encerrar túnel gerenciado:',erro)
@@ -261,7 +267,7 @@ class App(DesktopV9Mixin,tk.Tk):
         elif frente == ORANGE: estilo = 'Auto.Warning.TButton'
         else: estilo = 'Auto.Secondary.TButton'
         botao = ttk.Button(parent, text=texto, command=comando,
-                           style=estilo, width=largura, takefocus=True)
+                           style=estilo, width=max(largura,len(texto)+2), takefocus=True)
         return botao
 
     def criar_titulo_secao(self, parent, texto):
@@ -456,6 +462,8 @@ class App(DesktopV9Mixin,tk.Tk):
             ("E-MAILS", self.menu_emails),
             ("HISTÓRICO E RELATÓRIOS", self.abrir_historico_os),
             ("PRESTADORES", self.mostrar_prestadores),
+            ("SERVIÇOS E VALORES", self.abrir_catalogo_servicos),
+            ("MATERIAIS E ESTOQUE", self.abrir_estoque_desktop),
         ]
 
         # Menu em duas colunas, sem links redundantes aos portais.
@@ -471,6 +479,26 @@ class App(DesktopV9Mixin,tk.Tk):
                 columnspan=2 if ultimo_sozinho else 1,
                 padx=9, pady=6, sticky='ew'
             )
+
+        visor=tk.Frame(self,bg=DARK,highlightbackground='#353535',highlightthickness=1)
+        visor.pack(fill='x',padx=55,pady=(0,8))
+        tk.Label(visor,text='LINKS EXTERNOS ATUAIS · CLOUDFLARE',bg=DARK,fg=YELLOW,
+                 font=('Arial',10,'bold')).pack(anchor='w',padx=12,pady=(7,2))
+        self.v9_links={}
+        for porta in links9.PORTAS:
+            rot=tk.Label(visor,text=f'{porta}: não detectado',bg=DARK,fg=GRAY,
+                         wraplength=920,anchor='w',justify='left',cursor='hand2',font=('Arial',10))
+            rot.pack(fill='x',padx=12,pady=2)
+            rot.bind('<Button-1>',lambda ev,p=porta:self.abrir_link_publico_v9(p))
+            self.v9_links[porta]=rot
+        self.atualizar_links_v9()
+        barra_tuneis=tk.Frame(visor,bg=DARK)
+        barra_tuneis.pack(fill='x',padx=10,pady=(1,8))
+        self.criar_botao(barra_tuneis,'INICIAR / RECONECTAR TÚNEIS',lambda:self.iniciar_tuneis_v91()).pack(side='left',padx=4)
+        if os.environ.get('AUTOSEG_DEV')!='1':
+            self.criar_botao(barra_tuneis,'CONFIGURAR INÍCIO AUTOMÁTICO',self.ativar_automatico_v91).pack(side='left',padx=4)
+        else:
+            self.criar_botao(barra_tuneis,'PARAR TÚNEIS DEV',self.parar_tuneis_dev).pack(side='left',padx=4)
 
         conexao = conectar_banco()
         cursor = conexao.cursor()
@@ -573,10 +601,10 @@ class App(DesktopV9Mixin,tk.Tk):
         info_portal = self.servidor_portal.info()
 
         if info_portal["ativo"]:
-            texto_portal = "Portal do cliente (8765): " + info_portal["url_rede"]
+            texto_portal = f"Portal do cliente ({links9.PORTAS[0]}): " + info_portal["url_rede"]
             cor_portal = GREEN
         else:
-            texto_portal = "Portal do cliente (8765): desligado"
+            texto_portal = f"Portal do cliente ({links9.PORTAS[0]}): desligado"
             cor_portal = RED
 
         rotulo_portal = tk.Label(
@@ -593,22 +621,6 @@ class App(DesktopV9Mixin,tk.Tk):
             lambda _event: self.abrir_portal_cliente()
         )
 
-        visor=tk.Frame(self,bg=DARK,highlightbackground='#353535',highlightthickness=1)
-        visor.pack(fill='x',padx=55,pady=(0,8))
-        tk.Label(visor,text='LINKS EXTERNOS ATUAIS · CLOUDFLARE',bg=DARK,fg=YELLOW,
-                 font=('Arial',10,'bold')).pack(anchor='w',padx=12,pady=(7,2))
-        self.v9_links={}
-        for porta in ('8765','8766'):
-            rot=tk.Label(visor,text=f'{porta}: não detectado',bg=DARK,fg=GRAY,
-                         wraplength=920,anchor='w',justify='left',cursor='hand2',font=('Arial',10))
-            rot.pack(fill='x',padx=12,pady=2)
-            rot.bind('<Button-1>',lambda ev,p=porta:self.abrir_link_publico_v9(p))
-            self.v9_links[porta]=rot
-        self.atualizar_links_v9()
-        barra_tuneis=tk.Frame(visor,bg=DARK)
-        barra_tuneis.pack(fill='x',padx=10,pady=(1,8))
-        self.criar_botao(barra_tuneis,'INICIAR / RECONECTAR TÚNEIS',lambda:self.iniciar_tuneis_v91()).pack(side='left',padx=4)
-        self.criar_botao(barra_tuneis,'CONFIGURAR INÍCIO AUTOMÁTICO',self.ativar_automatico_v91).pack(side='left',padx=4)
 
     # ========================================================
     # CLIENTES
@@ -724,7 +736,7 @@ class App(DesktopV9Mixin,tk.Tk):
 
         self.criar_botao(botoes,'ACESSO WEB / SENHA',self.configurar_acesso_cliente,
                          largura=20,fundo=YELLOW,frente=BLACK).pack(side='left',padx=8)
-        self.criar_botao(self,'CADASTROS PJ / CHAMADOS / APROVAÇÕES',self.mostrar_gestao_pj_v9,largura=39).pack(anchor='w',padx=30,pady=4)
+        # Gestão PF/PJ integrada neste cadastro; menu legado removido da navegação.
         self.criar_botao(self, '🌐 ABRIR PORTAL DO CLIENTE',
                          self.abrir_area_cliente_documentos, largura=30).pack(
                              anchor='w', padx=30, pady=(0,8))
@@ -763,7 +775,7 @@ class App(DesktopV9Mixin,tk.Tk):
                 values=(
                     cliente["id"],
                     cliente["nome"],
-                    cliente["documento"] or "",
+                    cad9.formatar_documento(cliente["documento"]),
                     cliente["cidade"] or "",
                     cliente["telefone"] or "",
                     cliente["status"]
@@ -851,16 +863,12 @@ class App(DesktopV9Mixin,tk.Tk):
         if not confirmar:
             return
 
-        conexao = conectar_banco()
-        cursor = conexao.cursor()
-        cursor.execute(
-            "DELETE FROM clientes WHERE id = ?",
-            (cliente_id,)
-        )
-        conexao.commit()
-        conexao.close()
-
-        self.carregar_clientes()
+        try:
+            import portal_negocios as neg
+            neg.cliente_excluir(BANCO,cliente_id,0)  # Prestador 0 = aplicativo desktop.
+            self.carregar_clientes()
+        except Exception as erro:
+            messagebox.showerror('Exclusão bloqueada',str(erro))
 
     # ========================================================
     # FORMULÁRIO DE CLIENTE
@@ -943,7 +951,7 @@ class App(DesktopV9Mixin,tk.Tk):
             formulario,
             "CPF / CNPJ:",
             "documento",
-            dados.get("documento", "")
+            cad9.formatar_documento(dados.get("documento", ""))
         )
 
         self.campos_cliente["nome"] = self.criar_campo(
@@ -1315,6 +1323,7 @@ class App(DesktopV9Mixin,tk.Tk):
                 """,
                 valores + [datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
             )
+            cliente_id = cursor.lastrowid
             mensagem = "Cliente cadastrado com sucesso."
         else:
             cursor.execute(
@@ -1327,8 +1336,16 @@ class App(DesktopV9Mixin,tk.Tk):
             )
             mensagem = "Cliente atualizado com sucesso."
 
-        conexao.commit()
-        conexao.close()
+        try:
+            if dados['tipo_pessoa']=='Jurídica' and dados['status']!='Inativo':
+                cad9.sincronizar_cliente_pj(conexao,cliente_id)
+            conexao.commit()
+        except Exception as erro:
+            conexao.rollback()
+            messagebox.showerror('Cadastro não salvo',str(erro))
+            return
+        finally:
+            conexao.close()
 
         messagebox.showinfo("Sucesso", mensagem)
         self.voltar()
@@ -1374,6 +1391,12 @@ class App(DesktopV9Mixin,tk.Tk):
             fg=GRAY,
             bg=BLACK
         ).pack(side="right")
+
+        tk.Label(self,text='Pesquisar OS, cliente, prestador ou situação:',bg=BLACK,fg=GRAY).pack(anchor='w',padx=30)
+        self.pesquisa_os=tk.StringVar()
+        entrada_os=tk.Entry(self,textvariable=self.pesquisa_os,bg=DARK,fg=WHITE,insertbackground=WHITE)
+        entrada_os.pack(fill='x',padx=30,ipady=5,pady=(0,8))
+        self.pesquisa_os.trace_add('write',lambda *_:self.carregar_os_ativas())
 
         tabela_frame = tk.Frame(self, bg=BLACK)
         tabela_frame.pack(fill="both", expand=True, padx=30)
@@ -1490,7 +1513,11 @@ class App(DesktopV9Mixin,tk.Tk):
         registros = cursor.fetchall()
         conexao.close()
 
+        busca=getattr(self,'pesquisa_os',None)
+        termo=busca.get().casefold().strip() if busca else ''
         for registro in registros:
+            texto=' '.join(str(registro[k] or '') for k in ('numero_os','cliente','prestadores','responsavel_atual','status','forma_pagamento','tecnico_legado')).casefold()
+            if termo and termo not in texto:continue
             icone, _cor = self.status_visual(registro["status"])
             origem = registro["origem"] or "App"
 
@@ -1840,6 +1867,12 @@ class App(DesktopV9Mixin,tk.Tk):
             self.adicionar_material_os,
             largura=17
         ).pack(side="left")
+        self.criar_botao(
+            barra_materiais,
+            "DO ESTOQUE",
+            self.adicionar_material_do_estoque_os,
+            largura=16
+        ).pack(side="left",padx=7)
 
         self.criar_botao(
             barra_materiais,
@@ -1977,6 +2010,9 @@ class App(DesktopV9Mixin,tk.Tk):
                 self.criar_botao(self.fotos_encerramento_os,"+ ANEXAR IMAGENS AO RELATÓRIO",
                                  lambda:self.anexar_imagens_formulario(os_id),largura=32,
                                  fundo=YELLOW,frente=BLACK).pack(side="left")
+                self.criar_botao(self.fotos_encerramento_os,"REMOVER FOTO SELECIONADA",
+                                 lambda:self.remover_imagens_pendentes_os(os_id),largura=29,
+                                 fundo=DARK,frente=WHITE).pack(side="left",padx=8)
                 self.label_anexos_os=tk.Label(self.fotos_encerramento_os,bg=BLACK,fg=GRAY,
                                               font=("Arial",10),anchor="w")
                 self.label_anexos_os.pack(fill="x",pady=(6,0))
@@ -1999,9 +2035,9 @@ class App(DesktopV9Mixin,tk.Tk):
 
         self.criar_botao(
             botoes,
-            "SALVAR PROGRESSO" if os_id is not None else "SALVAR OS",
+            "SALVAR RASCUNHO" if os_id is not None else "SALVAR OS",
             lambda: self.salvar_os(os_id),
-            largura=17,
+            largura=18,
             fundo=YELLOW,
             frente=BLACK
         ).pack(side="right")
@@ -2472,6 +2508,8 @@ class App(DesktopV9Mixin,tk.Tk):
                 )
             )
 
+        # Consumo/estorno de materiais na mesma transação da OS.
+        estoque.reconciliar_os_conexao(cursor,os_salvo_id,'Desktop')
         # Auditoria de alterações administrativas: não apaga o histórico anterior.
         if anterior_os is not None:
             antes = {
@@ -2605,6 +2643,30 @@ class App(DesktopV9Mixin,tk.Tk):
         if falhas:messagebox.showwarning('Imagens não selecionadas','\n'.join(falhas[:6]))
         elif aprovadas:messagebox.showinfo('Imagens selecionadas',
             f'{len(aprovadas)} imagem(ns) selecionada(s). Serão anexadas ao confirmar o encerramento.')
+
+    def remover_imagens_pendentes_os(self,os_id):
+        """Remove fotos ainda não enviadas sem perder o relatório preenchido."""
+        fotos=getattr(self,'imagens_pendentes_os',[])
+        if not fotos:
+            return messagebox.showinfo('Fotos','Nenhuma foto aguardando envio.')
+        janela=tk.Toplevel(self);janela.title('Remover fotos antes do envio')
+        janela.configure(bg=BLACK);janela.geometry('560x350');janela.transient(self);janela.grab_set()
+        tk.Label(janela,text='Escolha a foto para remover. O relatório preenchido será preservado.',
+                 bg=BLACK,fg=WHITE,wraplength=510).pack(pady=12)
+        lista=tk.Listbox(janela,bg=DARK,fg=WHITE,selectbackground=YELLOW,
+                         selectforeground=BLACK,font=('Arial',11))
+        lista.pack(fill='both',expand=True,padx=16,pady=6)
+        def recarregar():
+            lista.delete(0,'end')
+            for caminho in self.imagens_pendentes_os:
+                lista.insert('end',os.path.basename(caminho))
+        def remover():
+            indices=lista.curselection()
+            if not indices:return
+            self.imagens_pendentes_os.pop(indices[0])
+            recarregar();self.atualizar_label_anexos_os(os_id)
+        recarregar()
+        self.criar_botao(janela,'REMOVER FOTO',remover).pack(pady=10)
 
     def abrir_pdf_da_os(self, os_id):
         try:
@@ -2903,6 +2965,12 @@ class App(DesktopV9Mixin,tk.Tk):
             bg=BLACK
         ).pack(anchor="w", padx=30, pady=(0, 8))
 
+        tk.Label(self,text='Pesquisar por OS, cliente, pagamento ou situação:',bg=BLACK,fg=GRAY).pack(anchor='w',padx=30)
+        self.pesquisa_financeiro=tk.StringVar()
+        entrada_fin=tk.Entry(self,textvariable=self.pesquisa_financeiro,bg=DARK,fg=WHITE,insertbackground=WHITE)
+        entrada_fin.pack(fill='x',padx=30,ipady=5,pady=(0,8))
+        self.pesquisa_financeiro.trace_add('write',lambda *_:self.carregar_financeiro())
+
         tabela_frame = tk.Frame(self, bg=BLACK)
         tabela_frame.pack(fill="both", expand=True, padx=30)
 
@@ -2993,7 +3061,11 @@ class App(DesktopV9Mixin,tk.Tk):
         registros = cursor.fetchall()
         conexao.close()
 
+        busca=getattr(self,'pesquisa_financeiro',None)
+        termo=busca.get().casefold().strip() if busca else ''
         for registro in registros:
+            texto=' '.join(str(registro[k] or '') for k in ('numero_os','cliente','forma_pagamento','status','vencimento')).casefold()
+            if termo and termo not in texto:continue
             icone, _cor = self.status_visual(registro["status"])
 
             self.tabela_financeiro.insert(
@@ -3838,6 +3910,10 @@ class App(DesktopV9Mixin,tk.Tk):
             'Login novo: CPF e senha no Portal do Cliente (porta 8765).\n\n'
             'Por segurança, a senha não será exibida novamente.')
 
+    def abrir_catalogo_servicos(self):
+        """Editor nativo Tkinter do catálogo (não requer navegador ou servidor HTTP)."""
+        return self.abrir_catalogo_desktop()
+
     def abrir_portal_prestador(self):
         if not self.url_prestador:
             messagebox.showwarning('Portal','Servidor do prestador indisponível. Verifique a porta 8766.')
@@ -3851,22 +3927,41 @@ class App(DesktopV9Mixin,tk.Tk):
             rede=self.portal_prestador.url_rede()
             info_cli=self.servidor_portal.info()
             rede_cli=(info_cli.get('url_rede') or 'http://127.0.0.1:8765').rstrip('/')
-            tk.Label(self,text=f'ACESSO NA MESMA REDE  •  Prestador: {rede}/  •  Cliente: {rede_cli}/',
+            tk.Label(self,text=f'PORTAIS DO AMBIENTE ATUAL  •  Prestador: {self.url_prestador}/  •  Cliente: {info_cli.get("url_local") or rede_cli}/',
                      bg=BLACK,fg=YELLOW,font=('Arial',11,'bold'),wraplength=1050).pack(padx=20,pady=7)
         barra=tk.Frame(self,bg=BLACK);barra.pack(fill='x',padx=30,pady=10)
-        self.criar_botao(barra,'+ CADASTRAR PRESTADOR',self.cadastrar_prestador).pack(side='left')
+        self.criar_botao(barra,'+ PRESTADOR',self.cadastrar_prestador,largura=16).pack(side='left')
         self.criar_botao(barra,'ATRIBUIR OS',self.atribuir_prestador).pack(side='left',padx=8)
         self.criar_botao(barra,'ABRIR PORTAL',self.abrir_portal_prestador).pack(side='left')
-        self.criar_botao(barra,'GESTÃO PJ',self.mostrar_gestao_pj_v9).pack(side='left',padx=8)
+        self.criar_botao(barra,'CLIENTES PF/PJ',self.mostrar_clientes,largura=20).pack(side='left',padx=8)
+        campo_busca=tk.Frame(self,bg=BLACK);campo_busca.pack(fill='x',padx=30,pady=5)
+        tk.Label(campo_busca,text='Pesquisar prestador:',bg=BLACK,fg=GRAY).pack(side='left')
+        pesquisa=tk.StringVar()
+        tk.Entry(campo_busca,textvariable=pesquisa,bg=DARK,fg=WHITE,insertbackground=WHITE).pack(side='left',padx=10,fill='x',expand=True,ipady=5)
+        acoes=tk.Frame(self,bg=BLACK);acoes.pack(fill='x',padx=30,pady=4)
         tk.Label(self,text='Prestadores ativos • cada OS pode ter vários responsáveis e histórico permanente',bg=BLACK,fg=GRAY).pack(anchor='w',padx=30,pady=10)
+        self.criar_botao(acoes,'Ativar / desativar',lambda:self.alternar_prestador(tb),largura=22,frente=RED).grid(row=0,column=0,padx=5,pady=3,sticky='ew')
+        self.criar_botao(acoes,'Permissão de administrador',lambda:self.administrador_prestador_v9(tb),largura=29).grid(row=0,column=1,padx=5,pady=3,sticky='ew')
+        self.criar_botao(acoes,'E-mail e dados bancários',lambda:self.configurar_integracoes_prestador(tb),largura=29).grid(row=1,column=0,padx=5,pady=3,sticky='ew')
+        self.criar_botao(acoes,'Redefinir senha',lambda:self.redefinir_senha_prestador(tb),largura=29).grid(row=1,column=1,padx=5,pady=3,sticky='ew')
+        self.criar_botao(acoes,'Excluir da lista',lambda:self.excluir_prestador(tb),largura=29,frente=RED).grid(row=2,column=0,padx=5,pady=3,sticky='ew')
+        acoes.grid_columnconfigure(0,weight=1)
+        acoes.grid_columnconfigure(1,weight=1)
         col=('id','nome','email','especialidade','ativo')
         tb=ttk.Treeview(self,columns=col,show='headings')
         for x,w in [('id',60),('nome',240),('email',260),('especialidade',200),('ativo',90)]:tb.heading(x,text=x.upper());tb.column(x,width=w)
         tb.pack(fill='both',expand=True,padx=30,pady=10)
-        with ext.db(BANCO) as c: registros=c.execute('SELECT id,nome,email,especialidade,ativo FROM prestadores ORDER BY nome').fetchall()
-        for p in registros:tb.insert('', 'end', values=(p['id'],p['nome'],p['email'],p['especialidade'],'Sim' if p['ativo'] else 'Não'))
-        self.criar_botao(self,'ATIVAR / DESATIVAR SELECIONADO',lambda:self.alternar_prestador(tb),frente=RED).pack(pady=8)
-        self.criar_botao(self,'CONCEDER / REVOGAR ADMINISTRADOR',lambda:self.administrador_prestador_v9(tb),largura=38).pack(pady=5)
+        with ext.db(BANCO) as c: registros=c.execute('SELECT id,nome,email,especialidade,ativo FROM prestadores WHERE excluido=0 ORDER BY nome').fetchall()
+        def preencher(*_):
+            termo=pesquisa.get().strip().casefold()
+            tb.delete(*tb.get_children())
+            for pr in registros:
+                if termo and termo not in (pr['nome']+' '+pr['email']+' '+(pr['especialidade'] or '')).casefold():continue
+                tb.insert('', 'end', values=(pr['id'],pr['nome'],pr['email'],pr['especialidade'],'Sim' if pr['ativo'] else 'Não'))
+        pesquisa.trace_add('write',preencher)
+        preencher()
+        # Controles posicionados ACIMA da tabela para não ficarem fora da janela.
+
 
     def cadastrar_prestador(self):
         janela=tk.Toplevel(self);janela.title('Cadastrar prestador');janela.configure(bg=BLACK);janela.geometry('560x485');janela.transient(self);janela.grab_set()
@@ -3880,6 +3975,77 @@ class App(DesktopV9Mixin,tk.Tk):
                 janela.destroy();self.mostrar_prestadores();messagebox.showinfo('Prestador','Cadastro realizado.')
             except Exception as e:messagebox.showerror('Cadastro',str(e),parent=janela)
         self.criar_botao(janela,'SALVAR PRESTADOR',salvar,fundo=YELLOW,frente=BLACK).pack(pady=18)
+
+    def redefinir_senha_prestador(self,tabela):
+        selecao=tabela.selection()
+        if not selecao:return messagebox.showwarning('Prestador','Selecione o prestador na lista.')
+        pid=int(tabela.item(selecao[0])['values'][0])
+        nome=str(tabela.item(selecao[0])['values'][1])
+        janela=tk.Toplevel(self);janela.title('Redefinir senha — '+nome)
+        janela.configure(bg=BLACK);janela.geometry('540x290');janela.transient(self);janela.grab_set()
+        tk.Label(janela,text='Nova senha para '+nome,bg=BLACK,fg=YELLOW,
+                 font=('Arial',14,'bold'),wraplength=480).pack(pady=12)
+        entradas=[]
+        for rotulo in ('Nova senha (mínimo 10 caracteres)','Confirmar nova senha'):
+            tk.Label(janela,text=rotulo,bg=BLACK,fg=WHITE).pack(anchor='w',padx=22,pady=3)
+            ent=tk.Entry(janela,show='*',bg=DARK,fg=WHITE,insertbackground=WHITE)
+            ent.pack(fill='x',padx=22,ipady=6);entradas.append(ent)
+        def salvar():
+            a,b=[e.get() for e in entradas]
+            if a!=b:return messagebox.showerror('Senhas','As duas senhas são diferentes.',parent=janela)
+            if not messagebox.askyesno('Confirmar','Redefinir o login de '+nome+'? As sessões abertas podem exigir novo login.',parent=janela):return
+            try:
+                ext.redefinir_senha_prestador_desktop(BANCO,pid,a)
+                janela.destroy();messagebox.showinfo('Senha','Senha atualizada. Entre novamente no portal com esta senha.')
+            except Exception as exc:messagebox.showerror('Senha',str(exc),parent=janela)
+        self.criar_botao(janela,'SALVAR NOVA SENHA',salvar).pack(pady=12)
+
+    def configurar_integracoes_prestador(self,tabela):
+        """Configuração administrativa: nunca armazena tokens ou senhas de API."""
+        selecionados=tabela.selection()
+        if not selecionados:
+            return messagebox.showwarning('Prestador','Selecione um prestador na lista.')
+        pid=int(tabela.item(selecionados[0])['values'][0])
+        config=ext.obter_config_prestador(BANCO,pid)
+        janela=tk.Toplevel(self);janela.title('Integrações e pagamentos — prestador '+str(pid))
+        janela.configure(bg=BLACK);janela.geometry('630x760');janela.transient(self);janela.grab_set()
+        legenda=tk.Label(janela,text='Dados para rascunhos de e-mail e futura integração por API.\nNão cole senhas nem tokens aqui.',
+                          bg=BLACK,fg=YELLOW,justify='left',wraplength=570)
+        legenda.pack(anchor='w',padx=20,pady=12)
+        campos={}
+        for titulo,chave in [('Provedor de envio (Gmail API)','provedor_email'),('E-mail remetente','email_remetente')]:
+            tk.Label(janela,text=titulo,bg=BLACK,fg=WHITE).pack(anchor='w',padx=20,pady=(8,1))
+            campo=tk.Entry(janela,bg=DARK,fg=WHITE,insertbackground=WHITE,font=('Arial',11))
+            campo.insert(0,config.get(chave,'') or '');campo.pack(fill='x',padx=20,ipady=6)
+            campos[chave]=campo
+        tk.Label(janela,text='Dados bancários e cadastrais (texto simples para copiar e colar no e-mail)',
+            bg=BLACK,fg=YELLOW,wraplength=570,justify='left').pack(anchor='w',padx=20,pady=(15,6))
+        dados_texto=tk.Text(janela,height=11,wrap='word',bg=DARK,fg=WHITE,insertbackground=WHITE,font=('Arial',11))
+        dados_texto.pack(fill='both',expand=True,padx=20,pady=(0,10))
+        dados_texto.insert('1.0',config.get('dados_bancarios_texto','') or '')
+        def salvar():
+            try:
+                atual={**config,**{k:e.get() for k,e in campos.items()}}
+                atual['dados_bancarios_texto']=dados_texto.get('1.0','end').strip()
+                ext.salvar_config_prestador(BANCO,pid,atual)
+                janela.destroy()
+                messagebox.showinfo('Prestador','Dados do prestador salvos.')
+            except Exception as erro:
+                messagebox.showerror('Configuração inválida',str(erro),parent=janela)
+        self.criar_botao(janela,'SALVAR CONFIGURAÇÕES',salvar).pack(pady=15)
+
+    def excluir_prestador(self,tabela):
+        """Oculta o cadastro sem apagar vínculos com OS ou documentos históricos."""
+        selecao=tabela.selection()
+        if not selecao:return messagebox.showwarning('Seleção','Selecione um prestador.')
+        pid=int(tabela.item(selecao[0])['values'][0])
+        if not messagebox.askyesno('Excluir prestador',
+            'Excluir este prestador da lista e bloquear seu login?\n'
+            'O cadastro será arquivado para preservar OS, relatórios e auditoria.'):
+            return
+        with ext.db(BANCO) as c:
+            c.execute('UPDATE prestadores SET ativo=0,excluido=1 WHERE id=?',(pid,))
+        self.mostrar_prestadores()
 
     def alternar_prestador(self,tabela):
         sel=tabela.selection()

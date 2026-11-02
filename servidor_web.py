@@ -41,6 +41,7 @@ from urllib.parse import parse_qs, urlparse
 
 from banco import BANCO, PASTA_APP, criar_banco
 import cadastros_v9 as cad
+import catalogo_servicos as catalogo
 import atendimento_os as aten
 import cliente_fluxo_v94 as fluxo_pf
 import fluxo_os as fluxo
@@ -134,6 +135,7 @@ class ServidorPortal:
         ext.instalar(banco)
         fluxo.instalar(banco)
         cad.instalar(banco)
+        catalogo.instalar(banco)
         aten.instalar(banco)
         cad.sincronizar_solicitacoes_pendentes(banco)
 
@@ -300,6 +302,9 @@ class ServidorPortal:
             def do_GET(self):
                 path = urlparse(self.path).path.rstrip('/') or '/'
                 try:
+                    if path == '/static/portal.js':
+                        js = pasta_app / 'portal.js'
+                        return self.send_bytes(js.read_bytes(), 'application/javascript; charset=utf-8') if js.is_file() else self.erro('Recurso não encontrado.', 404)
                     if path == '/static/cliente_whatsapp.js':
                         js = (pasta_app / 'web' / 'cliente_whatsapp.js')
                         return self.send_bytes(js.read_bytes(), 'application/javascript; charset=utf-8') if js.is_file() else self.erro('Recurso não encontrado.', 404)
