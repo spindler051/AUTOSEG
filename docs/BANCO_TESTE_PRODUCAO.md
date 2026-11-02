@@ -16,7 +16,7 @@ reais com registros de teste. A separação foi feita em arquivos distintos.
 
 ```bash
 AUTOSEG_DEV=1 \
-GESTAO_BANCO="$PWD/dados_teste/autoseg_teste_limpo.db" \
+GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db" \
 CLIENTE_PORT=8865 PRESTADOR_PORT=8866 \
 python3 gtk_app.py
 ```
