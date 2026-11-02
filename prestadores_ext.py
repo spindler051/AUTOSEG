@@ -155,6 +155,8 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
         c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) VALUES(?,?,?) '
                   'ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id, assumido_em=excluded.assumido_em',
                   (os_id,prestador_id,agora()))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Atribuição' if anterior is None else 'Transferência administrativa',
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
@@ -368,5 +370,7 @@ def desatribuir(banco, os_id, ator='Administrador'):
         anterior = responsavel_atual(c, os_id)
         if anterior is None: return False
         c.execute('DELETE FROM os_responsaveis WHERE os_id=?',(os_id,))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_deslocamentos'").fetchone():
+            c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(os_id,))
         evento(c,os_id,'Desatribuição',f'OS disponível para nova atribuição. Responsável anterior (ID): {anterior}.',ator=ator)
         return True
