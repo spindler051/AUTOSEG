@@ -10,6 +10,7 @@ regras do app Tkinter e dos portais. Não é um fork.
 - Normas GNOME baixadas: `docs/gnome-hig/index.html`
 - Rascunho de AppImage: `packaging/appimage/README.md`
 - Separação produção/teste: `docs/BANCO_TESTE_PRODUCAO.md`
+- Plano de evolução/modularização: `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
 
 Variáveis principais: `AUTOSEG_BASE`, `GESTAO_BANCO`, `CLIENTE_PORT`,
 `PRESTADOR_PORT`, `AUTOSEG_DEV`.

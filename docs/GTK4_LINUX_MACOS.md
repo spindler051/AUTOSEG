@@ -269,6 +269,11 @@ Não foi recriado o tema preto/amarelo do Tkinter: o app usa as cores do
 libadwaita, o modo claro/escuro do sistema e as classes de status
 (`.success`, `.warning`, `.error`, `.accent`).
 
+## Evolução futura
+
+Plano de modularização e deploy (sem mudanças de código):
+`docs/PLANO_EVOLUCAO_ARQUITETURA.md`.
+
 ## Limitações conhecidas
 
 - O AppImage ainda não foi construído nem testado em máquina limpa.
