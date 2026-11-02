@@ -484,6 +484,14 @@ class PortalPrestador:
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
                         itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
                     corpo+=card('Fotos da OS','<p>As fotos anexadas entram automaticamente no PDF. Se houver informação particular, selecione Ocultar por privacidade. Após alterar uma OS encerrada, publique outra versão do relatório.</p>'+''.join(itens))
+                if oid:
+                    with ext.db(banco) as c:
+                        email_log=c.execute('SELECT status,erro FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
+                    if email_log:
+                        corpo+=card('Envio de e-mail',
+                            '<p class="'+('good' if email_log['status']=='enviado' else 'warn')+'">Status: '
+                            +esc(email_log['status'])+'</p>'
+                            +('<p>'+esc(email_log['erro'])+'</p>' if email_log['erro'] else ''))
                 publicado=fluxo.ultimo_documento(banco,oid) if oid else None
                 if publicado:
                     corpo+=card('Documento liberado ao cliente',
@@ -731,6 +739,18 @@ class PortalPrestador:
                                         '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
                                         +f'<p class="bad">{esc(str(falha)[:400])}</p>'
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
+                                if destinatarios:
+                                    try:
+                                        import gmail_service
+                                        arquivo=fluxo.validar_pdf_publicado(fluxo.ultimo_documento(banco,oid))
+                                        message_id=gmail_service.enviar_email_gmail(
+                                            destinatarios,f'AUTOSEG — Relatório OS {oid}',
+                                            '<p>Relatório técnico da ordem de serviço em anexo.</p>',
+                                            caminho_pdf_relatorio=arquivo)
+                                        prod.registrar_envio(banco,oid,destinatarios,'enviado',message_id)
+                                    except Exception as falha:
+                                        LOG.exception('Gmail: OS %s concluída, envio falhou',oid)
+                                        prod.registrar_envio(banco,oid,destinatarios,'falhou',erro=str(falha))
                         elif acao=='publicar':
                             fluxo.publicar_relatorio(banco,oid)
                         elif acao in ('atribuir','liberar'):
