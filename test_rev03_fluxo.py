@@ -20,7 +20,7 @@ class Rev03Test(unittest.TestCase):
         self.form={'nome':'Residencial Aurora Fictício','tipo':'Condomínio','cnpj':'','cidade':'Porto Alegre',
                    'bairro':'Centro','endereco':'Rua das Flores 123','telefone':'(51) 99999-0000',
                    'papel':'Morador','unidade':'Apartamento 201','descricao':'Portão não abre pelo controle remoto.',
-                   'urgencia':'Normal','solicitante_nome':'Usuário de Teste'}
+                   'urgencia':'Normal','solicitante_nome':'Usuário de Teste','solicitante_telefone':'51999998888'}
     def tearDown(self):self.tmp.cleanup()
 
     def test_acao_unica_cadastra_cliente_organizacao_e_os(self):
@@ -37,7 +37,7 @@ class Rev03Test(unittest.TestCase):
             self.assertEqual(org['telefone'],cl['telefone'])
             self.assertEqual(ch['os_id'],os_['id'])
             self.assertEqual(os_['cliente_id'],cl['id'])
-            self.assertEqual(os_['status'],'Pendente')
+            self.assertEqual(os_['status'],'Aberta')
             self.assertEqual(len(cad.listar_os_organizacao(self.db,res['organizacao_id'],self.uid)['os']) if cad.responsavel_ativo(c,self.uid,org['id']) else 0,0)
             self.assertIsNone(cad.responsavel_ativo(c,self.uid,org['id']))
 

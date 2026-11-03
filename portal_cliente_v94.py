@@ -14,16 +14,47 @@ import portal_v9 as v9
 import solicitacoes_pj as pj_publico
 import prestadores_ext as ext
 import catalogo_servicos as catalogo
+from versao_app import versao_local
 
-VERSAO_PORTAL = '9.6.0'
-_CSS_ACESSIVEL = '\n/* AUTOSEG 9.6 — Cliente: legibilidade e navegação inclusiva */\nbody{font-size:18px;line-height:1.65}\nmain{max-width:880px;margin:18px auto;padding:0 17px 65px}\nmain h1{font-size:clamp(24px,5vw,35px);line-height:1.2;margin:18px 0 24px}\n.card{padding:clamp(19px,4vw,30px);margin:19px 0;border-radius:16px}\n.card h2{font-size:clamp(20px,4vw,26px);line-height:1.35}\nlabel{font-size:18px;margin-top:18px}\ninput,textarea,select{min-height:54px;font-size:18px;border:2px solid #aaa;border-radius:11px;padding:13px}\nbutton,.btn{min-height:54px;min-width:150px;font-size:17px;padding:13px 20px;border-radius:11px;line-height:1.35}\nbutton:focus-visible,.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:4px solid #fff;outline-offset:4px}\ninput:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}\n.acao-principal .btn,.acao-principal button{display:block;text-align:center;width:100%;margin:12px 0}\n.passo{color:#ffe577;font-weight:800;letter-spacing:.01em;margin-bottom:6px}\n.ajuda{background:#242424;border:1px solid #777;border-radius:12px;padding:16px 19px;margin:16px 0}\n.ajuda summary{font-size:18px;font-weight:750;cursor:pointer}\n.ajuda p{margin-bottom:0}\n.resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}\n.resultado-organizacao h3{margin:0 0 5px;font-size:21px}\n.resultado-organizacao p{margin:4px 0 12px;color:#ddd}\n.resultado-organizacao .btn{width:100%;text-align:center;margin:0}\n.aviso-claro{border-left:5px solid var(--yellow);padding:15px 18px;background:#2a2617;border-radius:8px}\n.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}\n.skip-to-content{position:absolute;top:-120px;left:12px;padding:13px;background:var(--yellow);color:#000;z-index:9000;font-weight:bold}\n.skip-to-content:focus{top:12px}\n.table-scroll{overflow-x:auto;max-width:100%}\n.table-scroll table{min-width:640px} .table-scroll td:nth-child(3){min-width:160px;word-break:normal;overflow-wrap:normal} .table-scroll th:nth-child(3){min-width:160px}\n@media(max-width:630px){main{padding:0 14px 65px} .top{padding:10px 16px} .brand{font-size:25px} .tagline{font-size:12px} .card{padding:18px} .btn,button{width:100%;margin:7px 0} .nav{display:none} input,textarea,select{font-size:18px}}\n@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}\n'
-FUNCOES_RESPONSAVEL = ('Síndico', 'Proprietário', 'Representante legal', 'Administrador')
+VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 
 
 def u():
     return v9.ui()
 
-
+_CSS_ACESSIVEL = """
+/* AUTOSEG 9.6 — Cliente: legibilidade e navegação inclusiva */
+body{font-size:18px;line-height:1.65}
+main{max-width:880px;margin:18px auto;padding:0 17px 65px}
+main h1{font-size:clamp(24px,5vw,35px);line-height:1.2;margin:18px 0 24px}
+.card{padding:clamp(19px,4vw,30px);margin:19px 0;border-radius:16px}
+.card h2{font-size:clamp(20px,4vw,26px);line-height:1.35}
+label{font-size:18px;margin-top:18px}
+input,textarea,select{min-height:54px;font-size:18px;border:2px solid #aaa;border-radius:11px;padding:13px}
+button,.btn{min-height:54px;min-width:150px;font-size:17px;padding:13px 20px;border-radius:11px;line-height:1.35}
+button:focus-visible,.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:4px solid #fff;outline-offset:4px}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.acao-principal .btn,.acao-principal button{display:block;text-align:center;width:100%;margin:12px 0}
+.passo{color:#ffe577;font-weight:800;letter-spacing:.01em;margin-bottom:6px}
+.ajuda{background:#242424;border:1px solid #777;border-radius:12px;padding:16px 19px;margin:16px 0}
+.ajuda summary{font-size:18px;font-weight:750;cursor:pointer}
+.ajuda p{margin-bottom:0}
+.resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}
+.resultado-organizacao h3{margin:0 0 5px;font-size:21px}
+.resultado-organizacao p{margin:4px 0 12px;color:#ddd}
+.resultado-organizacao .btn{width:100%;text-align:center;margin:0}
+.aviso-claro{border-left:5px solid var(--yellow);padding:15px 18px;background:#2a2617;border-radius:8px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.skip-to-content{position:absolute;top:-120px;left:12px;padding:13px;background:var(--yellow);color:#000;z-index:9000;font-weight:bold}
+.skip-to-content:focus{top:12px}
+.table-scroll{overflow-x:auto;max-width:100%}
+.table-scroll table{min-width:640px}
+.table-scroll td:nth-child(3){min-width:160px;word-break:normal;overflow-wrap:normal}
+.table-scroll th:nth-child(3){min-width:160px}
+@media(max-width:630px){main{padding:0 14px 65px}.top{padding:10px 16px}.brand{font-size:25px}.tagline{font-size:12px}.card{padding:18px}.btn,button{width:100%;margin:7px 0}.nav{display:flex;flex-wrap:wrap}input,textarea,select{font-size:18px}}
+@media(max-width:760px){.table-scroll{overflow-x:visible!important}.table-scroll table{min-width:0!important}thead{display:none}tbody tr{display:block;border:1px solid #3d3d3d;border-radius:10px;margin:10px 0;padding:8px}tbody td{display:block;border:0;padding:6px 8px;min-width:0!important;white-space:normal;overflow-wrap:anywhere}tbody td::before{content:attr(data-label) ": ";color:#ffd400;font-weight:700}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+"""
 def cabecalho():
     return ''  # Link público exibido discretamente no rodapé, após o login.
 
@@ -42,37 +73,69 @@ def pagina(h,titulo,corpo,status=200):
     return h.responder(pagina_texto(titulo,corpo),status)
 
 
-def pj_rapido_form(h, banco, erro=''):
+def pj_rapido_form(h, banco, erro='', q='', org_id=None):
     card, _, campos, textarea, select, esc, botao, _ = u()
     with ext.db(banco) as c:
-        orgs = c.execute(
-            "SELECT id,nome,tipo,cidade FROM v9_organizacoes "
-            "WHERE mesclado_em IS NULL ORDER BY nome LIMIT 500").fetchall()
-    if not orgs:
-        return pagina(h, 'Chamado PJ rápido', card(
-            'Nenhum local cadastrado',
-            '<p>Ainda não há condomínios ou empresas disponíveis para solicitação.</p>'
-            + botao('Voltar ao portal', '/cliente', 'secondary')))
-    opcoes = ''.join(
-        f'<option value="{o["id"]} — {esc(o["nome"])} ({esc(o["tipo"])})"></option>'
-        for o in orgs)
-    form = ('<form method="post" action="/pj-rapido/enviar">'
-            '<label for="org-pj-rapido">Condomínio ou empresa</label>'
-            '<input id="org-pj-rapido" name="organizacao_texto" list="lista-org-pj-rapido" '
-            'required placeholder="Digite o nome e escolha a sugestão" autocomplete="off">'
-            f'<datalist id="lista-org-pj-rapido">{opcoes}</datalist>'
-            + campos('Seu nome completo', 'nome', required=True)
-            + campos('Seu telefone com DDD', 'telefone', required=True,
-                     placeholder='(51) 99999-9999')
-            + select('Urgência', 'urgencia', [(x, x) for x in ('Normal', 'Alta', 'Baixa')])
-            + textarea('Descreva a solicitação', 'descricao', required=True)
-            + '<input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">'
-            + '<p class="notice">Este chamado será verificado pela AUTOSEG antes de virar uma OS. '
-              'Após enviar, você recebe um protocolo e pode avisar pelo WhatsApp.</p>'
-            + '<button type="submit" style="width:100%">Enviar solicitação PJ</button></form>')
+        if org_id:
+            org = c.execute(
+                "SELECT id,nome,tipo,cidade,bairro FROM v9_organizacoes "
+                "WHERE id=? AND mesclado_em IS NULL", (int(org_id),)).fetchone()
+            if not org:
+                return pagina(h, 'Chamado PJ rápido', card(
+                    'Local não encontrado',
+                    '<p>O condomínio ou empresa selecionado não está disponível.</p>'
+                    + botao('Voltar à busca', '/pj-rapido', 'secondary')))
+            form = ('<form method="post" action="/pj-rapido/enviar">'
+                    f'<input type="hidden" name="org_id" value="{org["id"]}">'
+                    f'<p class="passo">{esc(org["nome"])} · {esc(org["tipo"])}'
+                    + (f' · {esc(org["cidade"])}' if org['cidade'] else '') + '</p>'
+                    + campos('Seu nome completo', 'nome', required=True)
+                    + campos('Seu telefone com DDD', 'telefone', required=True,
+                             placeholder='(51) 99999-9999')
+                    + select('Urgência', 'urgencia', [(x, x) for x in ('Normal', 'Alta', 'Baixa')])
+                    + textarea('Descreva a solicitação', 'descricao', required=True)
+                    + '<input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">'
+                    + '<p class="notice">A AUTOSEG vai verificar o pedido antes de abrir a OS. '
+                      'Você recebe um protocolo e pode avisar pelo WhatsApp.</p>'
+                    + '<button type="submit" style="width:100%">Enviar solicitação PJ</button></form>')
+            aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+            return pagina(h, 'Chamado rápido — ' + org['nome'],
+                          card('Solicitação para ' + org['nome'], aviso + form)
+                          + botao('← Voltar e escolher outro local', '/pj-rapido', 'secondary'))
+        termo = str(q or '').strip()[:120]
+        if termo:
+            like = '%' + termo.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+            orgs = c.execute(
+                "SELECT id,nome,tipo,cidade,bairro FROM v9_organizacoes "
+                "WHERE mesclado_em IS NULL AND nome LIKE ? ESCAPE '!' "
+                "ORDER BY nome LIMIT 100", (like,)).fetchall()
+        else:
+            orgs = c.execute(
+                "SELECT id,nome,tipo,cidade,bairro FROM v9_organizacoes "
+                "WHERE mesclado_em IS NULL ORDER BY nome LIMIT 100").fetchall()
+    busca = ('<form method="get" action="/pj-rapido" class="busca-pj">'
+             '<label for="q-pj">Buscar condomínio ou empresa</label>'
+             '<div class="busca-linha">'
+             f'<input id="q-pj" name="q" type="search" value="{esc(termo)}" '
+             'placeholder="Digite o nome do condomínio ou empresa" autocomplete="off">'
+             '<button type="submit">Buscar</button></div></form>')
+    cards = []
+    for o in orgs:
+        local = ' · '.join(x for x in (o['tipo'], o['bairro'], o['cidade']) if x)
+        cards.append(
+            '<article class="resultado-organizacao">'
+            f'<h3>{esc(o["nome"])}</h3><p>{esc(local)}</p>'
+            f'<a class="btn" href="/pj-rapido?org={o["id"]}">Pedir serviço neste local</a>'
+            '</article>')
+    lista = ''.join(cards) or (
+        '<p class="aviso-claro">Nenhum condomínio ou empresa encontrado. '
+        'Tente outro nome ou cadastre o local no portal.</p>')
     aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
     return pagina(h, 'Chamado rápido para condomínio/empresa',
-                  card('Abertura de OS para PJ sem cadastro PF', aviso + form)
+                  card('Abertura de OS para PJ sem cadastro PF',
+                       '<p>Escolha o condomínio ou empresa abaixo. Você não precisa de login nem de CPF. '
+                       'A AUTOSEG verifica o pedido antes de abrir a OS.</p>'
+                       + aviso + busca + '<div class="lista-organizacoes-pj">' + lista + '</div>')
                   + botao('Entrar com CPF e senha', '/cliente', 'secondary'))
 
 
@@ -83,18 +146,21 @@ def login(h,aviso=''):
           +campos('Seu CPF (somente números ou com pontos)','cpf',required=True)
           +campos('Sua senha','senha',kind='password',required=True)
           +'<button type="submit" style="width:100%">Entrar no portal</button></form>')
+    destaque=card('Chamado rápido para condomínio/empresa',
+        '<p>Precisa abrir uma solicitação para um condomínio ou empresa? '
+        'Não precisa de login nem de CPF. Escolha o local, informe seu nome, telefone e o problema.</p>'
+        +'<div class="acao-principal">'+botao('Abrir chamado rápido (sem login)','/pj-rapido')+'</div>')
     corpo=card('Entre na sua conta',
         '<p>Use seu CPF e sua senha para solicitar um serviço ou acompanhar um pedido.</p>'
         +mensagem+form+'<p>Primeira vez aqui?</p>'
-        +'<div class="acao-principal">'+botao('Criar minha conta','/cliente/cadastro','secondary')+'</div>'
-        +'<div class="acao-principal">'+botao('Chamado rápido para condomínio/empresa (sem login)','/pj-rapido','secondary')+'</div>')
+        +'<div class="acao-principal">'+botao('Criar minha conta','/cliente/cadastro','secondary')+'</div>')
     corpo+='<details class="ajuda"><summary>Preciso de ajuda para entrar</summary>'
     corpo+='<p>Se esqueceu a senha, fale com a AUTOSEG. Nunca informe sua senha no WhatsApp.</p>'
     corpo+=botao('Pedir ajuda pelo WhatsApp','https://wa.me/'+cad.WHATSAPP_AUTOSEG,'secondary')
     corpo+='</details>'
     corpo+='<details class="ajuda"><summary>Sou morador ou porteiro. Posso solicitar serviço?</summary>'
     corpo+='<p>Sim. Crie uma conta com seu CPF. Depois procure seu condomínio pelo nome e descreva o problema. Não precisa ter o CNPJ ou ser síndico.</p></details>'
-    return pagina(h,'Portal do Cliente',corpo)
+    return pagina(h,'Portal do Cliente',destaque+corpo)
 
 
 def cadastro(h):
@@ -290,6 +356,7 @@ def painel(h,banco,s):
     abertura=card('O que você precisa fazer?',
         '<p>Bem-vindo(a)! Escolha uma opção:</p>'
         '<div class="acao-principal">'
+        +botao('Chamado rápido para condomínio/empresa','/pj-rapido')
         +botao('Pedir serviço para condomínio ou empresa','/cliente/organizacoes')
         +botao('Pedir serviço particular','/cliente/nova','secondary')
         +botao('Orçamento estimativo em PDF','/cliente/orcamento','secondary')
@@ -590,7 +657,12 @@ def pdf_chamado(h,banco,s,chamado_id):
 
 def get(h,path,banco):
     if path=='/cliente/cadastro':return cadastro(h)
-    if path in ('/pj-rapido','/cliente/pj-rapido'):return pj_rapido_form(h,banco)
+    if path in ('/pj-rapido','/cliente/pj-rapido'):
+        qs=parse_qs(urlsplit(h.path).query)
+        q=qs.get('q',[''])[0][:120]
+        try:org_pj=int(qs.get('org',['0'])[0]) or None
+        except (ValueError,TypeError):org_pj=None
+        return pj_rapido_form(h,banco,q=q,org_id=org_pj)
     s=v9.sessao(h,banco)
     if path=='/cliente/cadastro-pj':return cadastro_pj(h,s)
     if not s:return login(h,'Faça login para acessar essa área.' if path!='/cliente' else '')
@@ -655,9 +727,10 @@ def post(h,path,d,banco):
         if str(d.get('website','')).strip():
             raise ValueError('Solicitação inválida.')
         try:
-            org=int(str(d.get('organizacao_texto','')).split('—',1)[0].strip())
+            texto_org=str(d.get('org_id','')).strip() or str(d.get('organizacao_texto','')).split('—',1)[0].strip()
+            org=int(texto_org)
         except (ValueError,TypeError):
-            return pj_rapido_form(h,banco,'Selecione um condomínio/empresa na lista.')
+            return pj_rapido_form(h,banco,erro='Selecione um condomínio/empresa na lista.')
         sol=pj_publico.criar(banco,org,d.get('nome',''),d.get('telefone',''),
                              d.get('descricao',''),str(d.get('urgencia','Normal')))
         link=pj_publico.link_whatsapp(sol)

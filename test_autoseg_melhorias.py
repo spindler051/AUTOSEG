@@ -87,7 +87,7 @@ class AutoSegMelhorias(unittest.TestCase):
             self.assertTrue(chamada['os_id'])
             oid=chamada['os_id']
             os_=c.execute('SELECT status,cliente_id,origem FROM ordens_servico WHERE id=?',(oid,)).fetchone()
-            self.assertEqual(os_['status'],'Pendente')
+            self.assertEqual(os_['status'],'Aberta')
             self.assertEqual(os_['cliente_id'],cid)
             self.assertEqual(os_['origem'],'Portal')
         self.assertIn(oid,[x['id'] for x in ext.listar_os_compartilhadas(self.db)])

@@ -15,21 +15,21 @@ class Http(unittest.TestCase):
   req=urllib.request.Request(self.url+path,urllib.parse.urlencode(params).encode('utf8'))
   with self.op.open(req,timeout=5) as r:return r.geturl(),r.read().decode('utf8')
  def test_pessoa_portaria_os_whatsapp(self):
-  homepage=self.get('/');self.assertIn('Login principal',homepage);self.assertLess(homepage.index('Login principal'),homepage.index('Link público deste portal'))
+  homepage=self.get('/');self.assertIn('Entre na sua conta',homepage);self.assertLess(homepage.index('Entre na sua conta'),homepage.index('Link público deste portal'))
   self.assertNotIn('href="//cadastro',homepage)
   _,page=self.post('/cadastrar',{'cpf':'52998224725','senha':'senha-muito-forte-123','confirmar_senha':'senha-muito-forte-123'})
-  self.assertIn('Minha conta',page)
+  self.assertIn('Meu painel',page)
   csrf=re.search(r'name="csrf" value="([^"]+)',page).group(1)
-  url,page=self.post('/nova-organizacao',{'csrf':csrf,'tipo':'Condomínio','nome':'Residencial Sol', 'endereco':'Rua das Rosas 100','cidade':'Porto Alegre','bairro':'Centro','cnpj':'','unidade':'Porteiro','papel':'Funcionário'})
-  self.assertIn('/chamado/novo',url)
-  import urllib.parse as up
-  org=up.parse_qs(up.urlsplit(url).query)['org'][0]
-  url,page=self.post('/chamado/novo',{'csrf':csrf,'org_id':org,'unidade':'Porteiro','papel':'Funcionário','descricao':'Portão quebrado','urgencia':'Normal','solicitante_nome':'Pessoa da portaria'})
+  url,page=self.post('/nova-organizacao',{'csrf':csrf,'tipo':'Condomínio','nome':'Residencial Sol', 'endereco':'Rua das Rosas 100','cidade':'Porto Alegre','bairro':'Centro','cnpj':'','telefone':'51999998888','unidade':'Porteiro','papel':'Funcionário','solicitante_nome':'Pessoa da portaria','solicitante_telefone':'51999998888','descricao':'Portão quebrado no acesso principal','urgencia':'Normal'})
+  self.assertIn('whatsapp=1',url)
+  with ext.db(self.path) as c:
+   org=c.execute('SELECT id FROM v9_organizacoes ORDER BY id DESC LIMIT 1').fetchone()['id']
+  url,page=self.post('/chamado/novo',{'csrf':csrf,'org_id':str(org),'unidade':'Porteiro','papel':'Funcionário','descricao':'Portão quebrado','urgencia':'Normal','solicitante_nome':'Pessoa da portaria','solicitante_telefone':'51999998888'})
   self.assertIn('whatsapp=1',url);self.assertIn('Avisar AUTOSEG pelo WhatsApp',page)
   self.assertIn('wa.me/5551992692007',page)
   self.assertIn('/static/cliente_whatsapp.js',page)
   with ext.db(self.path) as c:
    ch=c.execute('SELECT os_id FROM v9_chamados ORDER BY id DESC LIMIT 1').fetchone()
    self.assertTrue(ch['os_id']);o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(ch['os_id'],)).fetchone()
-   self.assertEqual(o['status'],'Pendente')
+   self.assertEqual(o['status'],'Aberta')
 if __name__=='__main__':unittest.main()

@@ -37,6 +37,39 @@ from versao_app import versao_local
 
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
+
+
+CSS_MOBILE = """
+.lista-organizacoes-pj{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.lista-organizacoes-pj .resultado-organizacao{margin:0}
+@media (max-width: 760px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+  .top { gap: 10px; padding: 10px 14px; }
+  .brand img { height: 28px !important; }
+  .nav { display: flex !important; flex-wrap: wrap; gap: 6px; }
+  .nav a { font-size: 13px; padding: 9px 10px; }
+  main { padding: 0 12px 40px; }
+  .card { padding: 16px; }
+  .table-scroll { overflow-x: visible; }
+  table { min-width: 0 !important; width: 100%; }
+  thead { display: none; }
+  tbody tr { display: block; border: 1px solid #3d3d3d; border-radius: 10px; margin: 10px 0; padding: 8px; }
+  tbody td { display: block; border: 0; padding: 6px 8px; min-width: 0 !important; white-space: normal; overflow-wrap: anywhere; }
+  tbody td::before { content: attr(data-label) ": "; color: #ffd400; font-weight: 700; }
+  .col2 { grid-template-columns: 1fr; }
+  .material-row { grid-template-columns: 1fr 1fr; }
+  .material-row > div:first-child { grid-column: 1 / -1; }
+  .actions button, .actions .btn, .stack button, .stack .btn { width: 100%; margin: 6px 0; }
+  .foto-rascunho { grid-template-columns: 1fr !important; }
+  .foto-rascunho img { width: 100% !important; height: auto !important; }
+  img { max-width: 100%; height: auto; }
+  input, select, textarea { font-size: 16px; }
+  .busca-pj .busca-linha { display: flex; flex-direction: column; gap: 8px; }
+  .busca-pj button { width: 100%; }
+  .lista-organizacoes-pj { grid-template-columns: 1fr; }
+}
+"""
+
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -78,7 +111,13 @@ def card(titulo,conteudo):
 def tabela(headers, rows):
     if not rows:
         return '<p class="muted">Nenhum registro encontrado.</p>'
-    return '<div class="table-scroll"><table><thead><tr>'+''.join(f'<th>{esc(h)}</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+''.join(f'<td>{x}</td>' for x in cells)+'</tr>' for cells in rows)+'</tbody></table></div>'
+    def linha(cells):
+        saida=''
+        for i,x in enumerate(cells):
+            rotulo=esc(headers[i] if i<len(headers) else '')
+            saida+=f'<td data-label="{rotulo}">{x}</td>'
+        return saida
+    return '<div class="table-scroll"><table><thead><tr>'+''.join(f'<th>{esc(h)}</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+linha(cells)+'</tr>' for cells in rows)+'</tbody></table></div>'
 
 
 def layout(titulo,corpo,usuario=None,nonce=None):
@@ -111,7 +150,7 @@ form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;ove
 fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-</style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/" style="display:flex;align-items:center;gap:10px"><img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block"><span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
+{CSS_MOBILE}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/" style="display:flex;align-items:center;gap:10px"><img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block"><span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
 
 
 class PortalPrestador:

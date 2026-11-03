@@ -23,7 +23,7 @@ class Fluxo(unittest.TestCase):
         with ext.db(self.path) as c:
             reg=c.execute('SELECT os_id FROM v9_chamados WHERE id=?',(ch,)).fetchone();self.assertIsNotNone(reg['os_id'])
             os_=c.execute('SELECT status,numero_os FROM ordens_servico WHERE id=?',(reg['os_id'],)).fetchone()
-            self.assertEqual(os_['status'],'Pendente');self.assertTrue(os_['numero_os'])
+            self.assertEqual(os_['status'],'Aberta');self.assertTrue(os_['numero_os'])
             org_=c.execute('SELECT situacao FROM v9_organizacoes WHERE id=?',(org,)).fetchone()
             self.assertEqual(org_['situacao'],'Pendente')
     def test_idempotencia_e_cancelamento(self):

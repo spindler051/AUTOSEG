@@ -191,6 +191,23 @@ def _dados_pagamento_html(banco, os_id):
     return '<h4>Dados para pagamento</h4><ul>' + ''.join(itens) + '</ul>'
 
 
+def email_teste_dev():
+    """Em DEV, centraliza os envios em um endereço de teste (evita example.com)."""
+    if os.environ.get('AUTOSEG_DEV') != '1':
+        return ''
+    escolhido = os.environ.get('AUTOSEG_EMAIL_TESTE', '').strip()
+    if escolhido:
+        return escolhido
+    try:
+        import prestadores_ext as ext
+        arquivo = ext.BASE / 'dados_teste' / 'email_teste.txt'
+        if arquivo.is_file():
+            return arquivo.read_text(encoding='utf-8').strip().splitlines()[0].strip()
+    except Exception:
+        pass
+    return ''
+
+
 def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
     """Thread de envio: resolve destinatários, publica o PDF se necessário e envia."""
     import produtividade_os as prod
@@ -204,6 +221,10 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         destinatarios = [str(x) for x in destinatarios if str(x).strip()]
         if not destinatarios:
             return
+    teste = email_teste_dev()
+    if teste:
+        # Em desenvolvimento, nunca dispara para example.com/.invalid.
+        destinatarios = [teste]
     prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
     try:
         import fluxo_os as fluxo
@@ -258,6 +279,9 @@ def enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
             import produtividade_os as prod
             if destinatarios is None:
                 destinatarios = prod.destinatarios_conclusao(banco, os_id)
+            teste = email_teste_dev()
+            if teste:
+                destinatarios = [teste]
             prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
         except Exception:
             pass

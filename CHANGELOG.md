@@ -1,5 +1,17 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — ajustes de interface e status — 2026-11-03 — develop
+
+- Chamado PJ rápido sem login com busca e cartões de condomínios/empresas (mesmo padrão da página com cadastro).
+- Botão de chamado rápido em destaque na página inicial do Portal Cliente.
+- OS de chamado de cliente nasce **Aberta**; só fica **Pendente** ao ser iniciada e encerrada como pendente.
+- Portais mobile-first: tabelas empilhadas, sem rolagem horizontal, navegação e formulários verticais.
+- Rascunho único no Portal Prestador; upload de NFS-e abaixo das fotos.
+- NFS-e anexada no e-mail automático e no `.eml`; botão de reenvio com anexos.
+- Em DEV, envios automáticos são centralizados em `dados_teste/email_teste.txt` (evita example.com).
+- Logins DEV restaurados com os 8 usuários/senhas fornecidos.
+
+
 ## 9.6.0-dev.6 — REV12 — 2026-11-02 — develop
 
 - **Portal Cliente:** alteração da própria senha (senha atual, nova e confirmação; hash PBKDF2; invalidação das demais sessões).
