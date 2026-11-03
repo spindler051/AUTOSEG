@@ -419,6 +419,53 @@ class CorrecoesRev12(unittest.TestCase):
         rasc = ext.obter_rascunho_web(self.db, oid, pid)
         self.assertEqual(rasc.get('v9_execucao'), 'exec')
 
+    def test_reenvio_inclui_nota_fiscal_apos_conclusao(self):
+        import time
+        import os
+        import gmail_service
+        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        conclusao = dict(dados)
+        conclusao.update(acao_status='Concluída', v9_execucao='exec',
+                         relatorio_tecnico='Relatório técnico final.')
+        neg.os_salvar(self.db, conclusao, pid, oid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        # Anexa a NF DEPOIS da conclusão (a OS já está encerrada).
+        status, html = multipart(cliente, base, f'/os/{oid}/nota-fiscal',
+                                 [('csrf', token)],
+                                 [('nota_fiscal', 'nf.pdf', PDF_MINIMO, 'application/pdf')])
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(ext.ultima_nota_fiscal(self.db, oid))
+        # Reenvia e verifica que a NF é anexada ao e-mail.
+        capturado = {}
+        def fake(destinatario, assunto, corpo, cc=None, caminho_pdf_relatorio=None,
+                 caminho_pdf_nf=None, **kw):
+            capturado['nf'] = caminho_pdf_nf
+            return 'msg-ok'
+        original = gmail_service.enviar_email_gmail
+        gmail_service.enviar_email_gmail = fake
+        try:
+            status, html = req(cliente, base, f'/os/{oid}/reenviar-email', {'csrf': token})
+            self.assertEqual(status, 200)
+            for _ in range(50):
+                with ext.db(self.db) as c:
+                    r = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
+                                  (oid,)).fetchone()
+                if r and r['status'] in ('enviado', 'falhou'):
+                    break
+                time.sleep(0.05)
+            self.assertTrue(str(capturado.get('nf', '')).endswith('.pdf'))
+        finally:
+            gmail_service.enviar_email_gmail = original
+
 
 if __name__ == '__main__':
     unittest.main()

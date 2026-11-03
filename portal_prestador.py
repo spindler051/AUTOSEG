@@ -935,10 +935,18 @@ class PortalPrestador:
                                   f' <small>{esc(nota["criado_em"])}</small></p>')
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
+                upload_nf=''
+                if responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid']):
+                    upload_nf=(f'<form method="post" action="/os/{oid}/nota-fiscal" enctype="multipart/form-data" style="margin-top:10px">'
+                               f'{token}'
+                               '<label for="nota-fiscal-concluida">Anexar / atualizar nota fiscal (PDF, até 20 MB)</label>'
+                               '<input type="file" id="nota-fiscal-concluida" name="nota_fiscal" accept="application/pdf" required>'
+                               '<button type="submit" class="secondary">Anexar nota fiscal</button></form>')
                 corpo+=card('Notas fiscais da OS',
                             itens_notas +
-                            '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão. '
-                            'O arquivo fica armazenado no servidor e só é liberado para usuários autorizados.</p>')
+                            '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão e em cada reenvio. '
+                            'O arquivo fica armazenado no servidor e só é liberado para usuários autorizados.</p>'
+                            +upload_nf)
                 corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
                 corpo+=card('Histórico permanente', ''.join(f'<div class="card"><small>{esc(e["criado_em"])} · {esc(e["ator"])}</small><p><b>{esc(e["acao"])}</b> — {esc(e["descricao"])}</p></div>' for e in eventos) or '<p>Nenhum evento.</p>')
                 return self.pagina(titulo,card('Dados e execução da OS',corpo),s)
@@ -1417,6 +1425,11 @@ class PortalPrestador:
                             if registro and registro['destinatarios_json']:
                                 try:destinatarios=json.loads(registro['destinatarios_json'])
                                 except Exception:destinatarios=None
+                            # Republica o PDF com as imagens/legendas atuais antes de reenviar.
+                            try:
+                                fluxo.publicar_relatorio(banco,oid)
+                            except Exception:
+                                pass
                             import gmail_service
                             gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
                         else:return self.erro('Operação desconhecida.',404,s)

@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — nota fiscal e imagens no reenvio — 2026-11-03 — develop
+
+- **Nota fiscal após a conclusão:** a página de detalhes da OS passa a permitir anexar/atualizar a nota fiscal mesmo depois de encerrada (responsável ou administrador), para que ela fique fixa no arquivamento da OS.
+- **Reenvio de e-mail:** ao reenviar, o relatório é republicado com as imagens/legendas atuais e a nota fiscal anexada é incluída no e-mail — a nota e as imagens não se perdem mais no reenvio.
+- Teste novo em `test_rev12_correcoes.py` (NF após conclusão + reenvio com NF).
+
 ## 9.6.0-dev.6 — ícone de desenvolvimento — 2026-11-03 — develop
 
 - **Ícone DEV:** o ambiente de desenvolvimento passa a usar `icone_devel.png` (selo dos PDFs, favicon dos portais e ícone da janela). O MAIN continua usando `icone.png`. Há fallback automático para o outro ícone quando um deles não existir.
