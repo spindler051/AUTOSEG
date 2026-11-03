@@ -51,7 +51,9 @@ O Tkinter continua disponível apenas como fallback manual:
   simbólicos do libadwaita, não ícones do KDE.
 - **Claro/escuro:** o `Adw.StyleManager` fica em `DEFAULT`, seguindo a
   aparência do macOS em Tempo de execução → Aparência.
-- **Logo:** `logo.png` e `icone.png` do projeto.
+- **Logo:** `logo.png` e `icone.png` do projeto. No ambiente de desenvolvimento
+  (`AUTOSEG_DEV=1`), o ícone usado é `icone_devel.png` para diferenciar
+  visualmente o DEV do MAIN (selo dos PDFs, favicon dos portais e ícone da janela).
 
 Não há código `if macOS` nas telas: cores, fontes, ícones e tamanhos vêm do
 libadwaita e do sistema.

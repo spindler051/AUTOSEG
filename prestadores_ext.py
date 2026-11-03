@@ -19,6 +19,22 @@ for p in (ANEXOS, RELATORIOS, RASCUNHOS):
 
 def agora(): return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+
+def nome_icone():
+    """Nome do ícone do aplicativo: DEV usa icone_devel.png; MAIN usa icone.png."""
+    return 'icone_devel.png' if os.environ.get('AUTOSEG_DEV') == '1' else 'icone.png'
+
+
+def caminho_icone(diretorio):
+    """Caminho do ícone disponível em `diretorio`, com fallback para o outro nome."""
+    diretorio = Path(diretorio)
+    preferido = diretorio / nome_icone()
+    if preferido.is_file():
+        return preferido
+    alternativo = diretorio / ('icone.png' if nome_icone() == 'icone_devel.png' else 'icone_devel.png')
+    return alternativo if alternativo.is_file() else None
+
+
 @contextmanager
 def db(banco):
     """Commit ou rollback da transação e SEMPRE fecha a conexão SQLite."""

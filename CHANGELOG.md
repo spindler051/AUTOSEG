@@ -1,5 +1,9 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — ícone de desenvolvimento — 2026-11-03 — develop
+
+- **Ícone DEV:** o ambiente de desenvolvimento passa a usar `icone_devel.png` (selo dos PDFs, favicon dos portais e ícone da janela). O MAIN continua usando `icone.png`. Há fallback automático para o outro ícone quando um deles não existir.
+
 ## 9.6.0-dev.6 — cadastro de CNPJ do prestador — 2026-11-03 — develop
 
 - **Integrações e pagamentos:** o campo "Provedor de envio" passou de texto livre para um menu suspenso com as opções válidas (vazio, SMTP, Microsoft Graph, Gmail API, Outro), evitando "Configuração inválida" por valor digitado fora da lista.

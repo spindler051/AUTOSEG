@@ -142,9 +142,8 @@ class App(DesktopV9Mixin,DesktopOperacoesMixin,tk.Tk):
         self.destroy()
 
     def definir_icone(self):
-        caminho = os.path.join(PASTA_APP, "icone.png")
-        if not os.path.exists(caminho):
-            caminho = LOGO
+        icone = ext.caminho_icone(PASTA_APP)
+        caminho = str(icone) if icone else LOGO
 
         try:
             self.icone_app = tk.PhotoImage(file=caminho)

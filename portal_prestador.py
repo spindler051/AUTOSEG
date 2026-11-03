@@ -1073,11 +1073,14 @@ class PortalPrestador:
                     if path=='/static/portal.js':
                         return self.send_bytes((Path(__file__).parent/'portal.js').read_bytes(),'application/javascript; charset=utf-8')
                     if path in ('/logo.png','/icone.png','/favicon.ico'):
-                        nome={'/logo.png':'logo.png','/icone.png':'icone.png','/favicon.ico':'icone.png'}[path]
-                        arquivo=ext.BASE/nome
-                        if not arquivo.is_file():
-                            arquivo=Path(__file__).parent/nome
-                        if arquivo.is_file():
+                        if path == '/logo.png':
+                            arquivo = ext.BASE/'logo.png'
+                            if not arquivo.is_file():
+                                arquivo = Path(__file__).parent/'logo.png'
+                        else:
+                            arquivo = (ext.caminho_icone(ext.BASE)
+                                       or ext.caminho_icone(Path(__file__).parent))
+                        if arquivo and arquivo.is_file():
                             return self.send_bytes(arquivo.read_bytes(),'image/png')
                         return self.erro('Imagem não encontrada.',404,self.sessao())
                     if path=='/prestadores' or path.startswith('/prestadores/'):

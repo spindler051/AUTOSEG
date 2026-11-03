@@ -34,6 +34,17 @@ def caminho_imagem(nome):
     return None
 
 
+def _caminho_icone():
+    """Localiza o ícone (icone.png ou icone_devel.png), preferindo o do ambiente."""
+    nomes = [ext.nome_icone()]
+    nomes.append('icone.png' if ext.nome_icone() == 'icone_devel.png' else 'icone_devel.png')
+    for nome in nomes:
+        caminho = caminho_imagem(nome)
+        if caminho:
+            return caminho
+    return None
+
+
 def logo_flowable(largura_max=175, altura_max=40):
     """Retorna uma imagem ReportLab proporcional ou None se logo.png não existir."""
     caminho = caminho_imagem('logo.png')
@@ -53,8 +64,8 @@ def logo_flowable(largura_max=175, altura_max=40):
 
 
 def desenhar_selo(canvas, documento):
-    """Desenha o selo icone.png no canto superior direito de cada página."""
-    caminho = caminho_imagem('icone.png')
+    """Desenha o selo (icone.png, ou icone_devel.png em DEV) no canto superior direito."""
+    caminho = _caminho_icone()
     if not caminho:
         return
     try:
