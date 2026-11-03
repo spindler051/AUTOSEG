@@ -62,7 +62,7 @@ def cabecalho():
 def pagina_texto(titulo,corpo):
     """HTML completo do portal, sem escrever na resposta (usado pelo servidor 8765)."""
     _,layout,*_=u()
-    html=layout(titulo,corpo).replace('<a class="brand" href="/">','<a class="brand" href="/cliente">',1)
+    html=layout(titulo,corpo,cliente=True)
     html=html.replace('</style>',_CSS_ACESSIVEL+'</style>',1)
     html=html.replace('<body><header>', '<body><a class="skip-to-content" href="#conteudo">Pular para o conteúdo</a><header>',1)
     html=html.replace('<main>', '<main id="conteudo" tabindex="-1">',1)

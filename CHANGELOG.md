@@ -1,5 +1,9 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.7 — cabeçalho do Portal do Cliente — 2026-11-03 — develop
+
+- **Portal do Cliente:** o topo passa a exibir apenas a logo AUTOSEG, maior, sem os textos "Gestão de Serviços" e "AUTOMAÇÃO E SEGURANÇA · Portal de Serviços". O Portal do Prestador permanece como estava.
+
 ## 9.6.0-dev.7 — composição declarativa no YAML — 2026-11-03 — develop
 
 - **Composição sob demanda:** o YAML da OS pode trazer um bloco `composicao` (pai + `filhos`). Só os componentes declarados aparecem no PDF; os demais deixam de ser exibidos com R$ 0,00.

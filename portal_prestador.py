@@ -127,7 +127,7 @@ def tabela(headers, rows):
     return '<div class="table-scroll"><table><thead><tr>'+''.join(f'<th>{esc(h)}</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+linha(cells)+'</tr>' for cells in rows)+'</tbody></table></div>'
 
 
-def layout(titulo,corpo,usuario=None,nonce=None):
+def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
     menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
@@ -137,6 +137,16 @@ def layout(titulo,corpo,usuario=None,nonce=None):
     footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
+    if cliente:
+        # Portal do Cliente: apenas a logo, grande, sem textos auxiliares.
+        topo=('<a class="brand" href="/cliente" style="display:flex;align-items:center">'
+              '<img src="/logo.png" alt="AUTOSEG" style="height:88px;max-width:380px;object-fit:contain;display:block">'
+              '</a>')
+    else:
+        topo=('<a class="brand" href="/" style="display:flex;align-items:center;gap:10px">'
+              '<img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block">'
+              '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
+              '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
@@ -157,7 +167,7 @@ form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;ove
 fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-{CSS_MOBILE}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top"><a class="brand" href="/" style="display:flex;align-items:center;gap:10px"><img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block"><span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a><span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
+{CSS_MOBILE}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
 
 
 class PortalPrestador:
