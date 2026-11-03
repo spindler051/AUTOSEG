@@ -11,7 +11,8 @@ CAMPOS = (
     'v9_diagnostico','v9_execucao','v9_resultado','relatorio_tecnico',
     'valor_mao_obra','valor_materiais_manual','valor_total_override',
     'forma_pagamento','tecnico','motivo_encerramento',
-    'material_item[]','material_qtd[]','material_unit[]'
+    'material_item[]','material_qtd[]','material_unit[]',
+    'destinatario_sel[]','emails_adicionais'
 )
 
 

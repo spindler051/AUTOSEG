@@ -721,12 +721,12 @@ class PortalPrestador:
                 dados_cliente=[(x['id'],f'{x["nome"]} — ID {x["id"]}') for x in cl]
                 # Carregar rascunho salvo pelo prestador se existir
                 try:
-                    rasc_salvo = ext.obter_rascunho_web(banco, oid, pid) if oid else None
+                    rasc_salvo = ext.obter_rascunho_web(banco, oid, s['pid']) if oid else None
                     if rasc_salvo:
                         for k,v in rasc_salvo.items():
                             if k.startswith('_'):
                                 continue
-                            if isinstance(v,str) and k not in d:
+                            if k not in d and isinstance(v,(str,list)):
                                 d[k]=v
                 except Exception:
                     rasc_salvo = None
@@ -811,14 +811,20 @@ class PortalPrestador:
                         [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
                         'Concluída',required=True)
                     if contatos_os:
+                        selecionados_d = d.get('destinatario_sel[]') or []
+                        if isinstance(selecionados_d, str):
+                            selecionados_d = [selecionados_d]
+                        selecionados_d = [str(x) for x in selecionados_d if str(x).strip()]
+                        if not selecionados_d:
+                            selecionados_d = ['cliente', 'sindico']
                         corpo+='<fieldset><legend>Destinatários do relatório</legend>'
                         corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
                         for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
                             email=contatos_os.get(chave) or ''
                             if email:
-                                marcado=' checked' if chave in ('cliente','sindico') else ''
+                                marcado=' checked' if chave in selecionados_d else ''
                                 corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
-                        corpo+='<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" placeholder="financeiro@imobiliaria.com.br"></label>'
+                        corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@imobiliaria.com.br"></label>'
                         corpo+='<p class="muted">A lista final é registrada no banco e enviada em BCC, evitando expor os endereços entre os destinatários.</p></fieldset>'
                     if responsavel==s['pid']:
                         corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
@@ -917,7 +923,7 @@ class PortalPrestador:
                         +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
                     if d['status']=='Concluída':
                         docs+=botao('Preparar nota fiscal (.json)',f'/os/{oid}/nota')
-                    if d['status'] in fluxo.FIM and (responsavel==s['pid'] or cad9.prestador_admin(banco,pid)):
+                    if d['status'] in fluxo.FIM and (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])):
                         docs+=(f'<form method="post" action="/os/{oid}/reenviar-email" style="display:inline">'
                                f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
                                '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
@@ -1256,7 +1262,7 @@ class PortalPrestador:
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])
                         prod.salvar_rascunho(banco,oid,pid,d)
-                        dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio')}
+                        dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
                         ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
                         sem_fechar = dict(d)
                         sem_fechar['acao_status'] = 'salvar'
@@ -1268,6 +1274,13 @@ class PortalPrestador:
                         if str(d.get('relatorio_tecnico','')).strip():
                             with ext.db(banco) as c:
                                 aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+                        # A nota fiscal anexada no mesmo envio é gravada junto com o rascunho.
+                        arquivo=d.get('nota_fiscal')
+                        if isinstance(arquivo,tuple) and arquivo[0]:
+                            try:
+                                ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                            except Exception as falha:
+                                LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
                         return self.pagina('Rascunho salvo',card('Rascunho',
                             '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
                             +botao('Voltar à OS',f'/os/{oid}')),s)
@@ -1286,6 +1299,20 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                 raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
+                        # Anexar a NF não deve apagar os campos já preenchidos no formulário.
+                        try:
+                            dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+                            ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                            try:
+                                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+                                                     str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+                            except Exception:
+                                pass
+                            if str(d.get('relatorio_tecnico','')).strip():
+                                with ext.db(banco) as c:
+                                    aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+                        except Exception as falha:
+                            LOG.exception('Falha ao preservar rascunho ao anexar NF na OS %s', oid)
                         ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
@@ -1314,6 +1341,12 @@ class PortalPrestador:
                                                 aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')) or '', f'Prestador {s["nome"]}')
                                         except Exception:
                                             pass
+                                    arquivo=d.get('nota_fiscal')
+                                    if isinstance(arquivo,tuple) and arquivo[0]:
+                                        try:
+                                            ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                                        except Exception as falha:
+                                            LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
                                     return self.pagina('Rascunho salvo',card('Rascunho',
                                         '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'/os/{oid}')),s)
                                 except Exception as e:

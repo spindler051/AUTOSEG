@@ -4,12 +4,14 @@ Usa exclusivamente banco e pastas temporárias; nenhum e-mail real é enviado.
 """
 import http.cookiejar
 import io
+import json
 import re
 import tempfile
 import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 import atendimento_os as aten
@@ -26,6 +28,10 @@ from banco import criar_banco
 from portal_prestador import PortalPrestador
 from pypdf import PdfReader
 
+# Nenhum envio real de e-mail em segundo plano durante os testes.
+import os
+os.environ['AUTOSEG_GMAIL_DESATIVADO'] = '1'
+
 
 def browser():
     return urllib.request.build_opener(
@@ -40,6 +46,28 @@ def req(client, base, path, data=None):
             return resposta.status, resposta.read().decode('utf-8', 'replace')
     except urllib.error.HTTPError as erro:
         return erro.code, erro.read().decode('utf-8', 'replace')
+
+
+def multipart(client, base, path, campos, arquivos):
+    fronteira = '----autosegcorr' + uuid.uuid4().hex
+    partes = []
+    for nome, valor in campos:
+        partes.append(f'--{fronteira}\r\nContent-Disposition: form-data; name="{nome}"\r\n\r\n{valor}\r\n'.encode())
+    for nome, nome_arquivo, conteudo, mime in arquivos:
+        partes.append((f'--{fronteira}\r\nContent-Disposition: form-data; name="{nome}"; '
+                       f'filename="{nome_arquivo}"\r\nContent-Type: {mime}\r\n\r\n').encode()
+                      + conteudo + b'\r\n')
+    partes.append(f'--{fronteira}--\r\n'.encode())
+    pedido = urllib.request.Request(base + path, b''.join(partes),
+                                    {'Content-Type': f'multipart/form-data; boundary={fronteira}'})
+    try:
+        with client.open(pedido, timeout=30) as resposta:
+            return resposta.status, resposta.read().decode('utf-8', 'replace')
+    except urllib.error.HTTPError as erro:
+        return erro.code, erro.read().decode('utf-8', 'replace')
+
+
+PDF_MINIMO = b'%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n'
 
 
 def texto_pdf(arquivo):
@@ -87,6 +115,21 @@ class CorrecoesRev12(unittest.TestCase):
         conclusao.update(acao_status='Concluída', v9_execucao='exec')
         neg.os_salvar(self.db, conclusao, pid, oid)
         return oid
+
+    def _servidor(self):
+        servidor = PortalPrestador(self.db, '127.0.0.1', 0)
+        servidor.iniciar()
+        self.addCleanup(servidor.parar)
+        return servidor, f'http://127.0.0.1:{servidor.servidor.server_port}'
+
+    def _login(self, base, email='prestador.teste@exemplo.com.br'):
+        cliente = browser()
+        req(cliente, base, '/login', {'email': email, 'senha': 'senha-bem-segura-2026'})
+        return cliente
+
+    def _csrf(self, base, cliente, oid):
+        _, html = req(cliente, base, f'/os/{oid}')
+        return re.search(r'name="csrf" value="([^"]+)"', html).group(1)
 
     # ---------------------------------------------------------------- 1
     def test_os_rapida_busca_cartoes_e_criacao_aberta(self):
@@ -242,6 +285,105 @@ class CorrecoesRev12(unittest.TestCase):
                 gmail_service.enviar_email_gmail(endereco, 'Teste', '<p>Teste</p>')
             self.assertIn('bloqueado', str(contexto.exception))
             self.assertIn(endereco, str(contexto.exception))
+
+    # ---------------------------------------------------------------- 6
+    def test_rascunho_restaura_destinatarios_e_email_adicional(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
+                            sindico_email='sindico@exemplo.com.br',
+                            administradora_email='adm@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        rasc = {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Serviço',
+                'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                'materiais_presentes': '1', 'v9_execucao': 'exec',
+                'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
+                'emails_adicionais': 'extra@exemplo.com.br'}
+        status, html = req(cliente, base, f'/os/{oid}/rascunho/salvar', rasc)
+        self.assertEqual(status, 200)
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('value="extra@exemplo.com.br"', html)
+        self.assertIn('value="administradora" checked', html)
+        self.assertIn('value="cliente" checked', html)
+
+    def test_conclusao_envia_todos_os_destinatarios_selecionados(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
+                            sindico_email='sindico@exemplo.com.br',
+                            administradora_email='adm@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        status, html = req(cliente, base, f'/os/{oid}/salvar',
+                           {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Serviço',
+                            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                            'materiais_presentes': '1', 'v9_execucao': 'exec',
+                            'relatorio_tecnico': 'rel', 'acao_status': 'Concluída',
+                            'modo_envio': 'encerrar',
+                            'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
+                            'emails_adicionais': 'extra@exemplo.com.br'})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            reg = c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
+                            (oid,)).fetchone()
+        self.assertEqual(sorted(json.loads(reg['destinatarios_json'])),
+                         sorted(['cliente@exemplo.com.br', 'sindico@exemplo.com.br',
+                                 'adm@exemplo.com.br', 'extra@exemplo.com.br']))
+
+    def test_anexar_nota_fiscal_preserva_rascunho(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        campos = [('csrf', token), ('cliente_id', str(cid)), ('descricao', 'Serviço'),
+                  ('tecnico', 'T'), ('forma_pagamento', 'PIX'), ('valor_mao_obra', '10'),
+                  ('materiais_presentes', '1'), ('v9_execucao', 'Execução preservada'),
+                  ('relatorio_tecnico', 'Relato preservado')]
+        status, html = multipart(cliente, base, f'/os/{oid}/nota-fiscal', campos,
+                                 [('nota_fiscal', 'nf.pdf', PDF_MINIMO, 'application/pdf')])
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(ext.ultima_nota_fiscal(self.db, oid))
+        rasc = ext.obter_rascunho_web(self.db, oid, pid)
+        self.assertEqual(rasc.get('v9_execucao'), 'Execução preservada')
+        self.assertEqual(rasc.get('relatorio_tecnico'), 'Relato preservado')
+
+    def test_rascunho_salva_nota_fiscal_anexada(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        campos = [('csrf', token), ('cliente_id', str(cid)), ('descricao', 'Serviço'),
+                  ('tecnico', 'T'), ('forma_pagamento', 'PIX'), ('valor_mao_obra', '10'),
+                  ('materiais_presentes', '1'), ('v9_execucao', 'exec')]
+        status, html = multipart(cliente, base, f'/os/{oid}/rascunho/salvar', campos,
+                                 [('nota_fiscal', 'nf.pdf', PDF_MINIMO, 'application/pdf')])
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(ext.ultima_nota_fiscal(self.db, oid))
+        rasc = ext.obter_rascunho_web(self.db, oid, pid)
+        self.assertEqual(rasc.get('v9_execucao'), 'exec')
 
 
 if __name__ == '__main__':

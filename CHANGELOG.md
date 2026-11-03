@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — rascunho, nota fiscal e destinatários — 2026-11-03 — develop
+
+- **Rascunho do Portal Prestador:** corrigida a recuperação automática dos campos ao reabrir a OS (a referência ao prestador logado estava indefinida, o que descartava o rascunho em silêncio). Agora os campos preenchidos — inclusive via YAML — reaparecem corretamente.
+- **Destinatários e e-mail adicional:** a seleção de destinatários e o campo “E-mails adicionais” voltam marcados/preenchidos ao reabrir a OS, e a lista final da conclusão usa todos os selecionados (cliente, síndico, administradora e extras), não apenas o cliente.
+- **Nota fiscal:** anexar o PDF deixa de recarregar a página e de apagar o rascunho — os campos já preenchidos são preservados. O botão “SALVAR RASCUNHO” também grava a nota fiscal anexada no mesmo envio.
+- Testes novos em `test_rev12_correcoes.py` (rascunho, destinatários, nota fiscal).
+
 ## 9.6.0-dev.6 — correções de portal, PDF, CNPJ e exclusões — 2026-11-03 — develop
 
 - **Portal Prestador — OS rápida:** busca por nome, CNPJ/CPF, cidade ou e-mail e lista em cartões, no mesmo padrão do Portal Cliente; a OS continua nascendo **Aberta**.
