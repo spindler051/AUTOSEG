@@ -189,7 +189,7 @@ def os_salvar(banco,d,pid,oid=None):
     if tempo_horas<0:raise ValueError('Tempo de execução não pode ser negativo.')
     comp=composicao.calcular(
         total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
-        horas=tempo_horas)
+        horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
     comp_json=composicao.para_json(comp)
     composicao.instalar_banco(banco)
     # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.

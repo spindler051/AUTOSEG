@@ -145,6 +145,55 @@ class ComposicaoTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             composicao.salvar({"versao": 1, "componentes": []})
 
+    def test_100_por_cento_materiais(self):
+        comp = composicao.calcular(total_centavos=2150, materiais_centavos=2150,
+                                   mao_obra_centavos=0)
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 2150)
+        self.assertEqual(valores["Materiais"], 2150)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 0)
+        self.assertEqual(valores["Taxa mínima de visita"], 0)
+        self.assertEqual(valores["Custos administrativos"], 0)
+        self.assertEqual(valores["Outros custos e margem de contribuição"], 0)
+        self.assertEqual(sum(valores.values()), 2150)
+        pct = {x["nome"]: x["percentual"] for x in comp["componentes"]}
+        self.assertEqual(pct["Materiais"], 100.0)
+        self.assertEqual(pct["Mão de obra / hora técnica"], 0.0)
+
+    def test_100_por_cento_mao_de_obra(self):
+        comp = composicao.calcular(total_centavos=2150, materiais_centavos=0,
+                                   mao_obra_centavos=2150)
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(valores["Materiais"], 0)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 2150)
+        self.assertEqual(valores["Taxa mínima de visita"], 0)
+        self.assertEqual(sum(valores.values()), 2150)
+        pct = {x["nome"]: x["percentual"] for x in comp["componentes"]}
+        self.assertEqual(pct["Mão de obra / hora técnica"], 100.0)
+        self.assertEqual(pct["Materiais"], 0.0)
+
+    def test_composicao_mista(self):
+        comp = composicao.calcular(total_centavos=3000, materiais_centavos=1000,
+                                   mao_obra_centavos=2000)
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(valores["Materiais"], 1000)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 2000)
+        self.assertEqual(valores["Taxa mínima de visita"], 0)
+        self.assertEqual(valores["Outros custos e margem de contribuição"], 0)
+        self.assertEqual(sum(valores.values()), 3000)
+        pct = {x["nome"]: x["percentual"] for x in comp["componentes"]}
+        self.assertAlmostEqual(pct["Materiais"], 33.33, places=2)
+        self.assertAlmostEqual(pct["Mão de obra / hora técnica"], 66.67, places=2)
+
+    def test_composicao_com_sobra_vai_para_residual(self):
+        comp = composicao.calcular(total_centavos=3500, materiais_centavos=1000,
+                                   mao_obra_centavos=2000)
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(valores["Materiais"], 1000)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 2000)
+        self.assertEqual(valores["Outros custos e margem de contribuição"], 500)
+        self.assertEqual(sum(valores.values()), 3500)
+
 
 class ComposicaoBancoTest(unittest.TestCase):
     def setUp(self):

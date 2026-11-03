@@ -123,7 +123,8 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
         comp=composicao.calcular(
             total_centavos=composicao.centavos_de_reais(o['valor_total']),
             materiais_centavos=composicao.centavos_de_reais(o['valor_materiais']),
-            horas=o['tempo_horas'] if 'tempo_horas' in o.keys() else 0)
+            horas=o['tempo_horas'] if 'tempo_horas' in o.keys() else 0,
+            mao_obra_centavos=composicao.centavos_de_reais(o['valor_mao_obra']))
         c.execute('UPDATE ordens_servico SET composicao_json=? WHERE id=?',
                   (composicao.para_json(comp),os_id))
     except Exception as erro:

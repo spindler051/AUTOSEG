@@ -269,7 +269,7 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         corpo += _dados_pagamento_html(banco, os_id)
         msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
                                     caminho_pdf_relatorio=arquivo,
-                                    caminho_pdf_nf=caminho_nf, usar_bcc=True,
+                                    caminho_pdf_nf=caminho_nf,
                                     nome_pdf_nf=(nota['nome_original'] if nota else None))
         prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
     except Exception as erro:

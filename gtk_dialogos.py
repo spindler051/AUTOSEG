@@ -797,7 +797,8 @@ class DialogoOS(Adw.Dialog):
         comp = composicao.calcular(
             total_centavos=composicao.centavos_de_reais(total),
             materiais_centavos=composicao.centavos_de_reais(materiais),
-            horas=tempo_horas)
+            horas=tempo_horas,
+            mao_obra_centavos=composicao.centavos_de_reais(mao_obra))
         comp_json = composicao.para_json(comp)
         composicao.instalar_banco(BANCO)
         observacoes = self.observacoes.get_texto()

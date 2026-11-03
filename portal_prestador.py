@@ -825,7 +825,7 @@ class PortalPrestador:
                                 marcado=' checked' if chave in selecionados_d else ''
                                 corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
                         corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@imobiliaria.com.br"></label>'
-                        corpo+='<p class="muted">A lista final é registrada no banco e enviada em BCC, evitando expor os endereços entre os destinatários.</p></fieldset>'
+                        corpo+='<p class="muted">A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
                     if responsavel==s['pid']:
                         corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
                         corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'

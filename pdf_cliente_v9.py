@@ -38,7 +38,8 @@ def gerar(banco,os_id):
                 comp=composicao.calcular(
                     total_centavos=composicao.centavos_de_reais(os_['valor_total']),
                     materiais_centavos=composicao.centavos_de_reais(os_['valor_materiais']),
-                    horas=os_['tempo_horas'] if 'tempo_horas' in os_.keys() else 0)
+                    horas=os_['tempo_horas'] if 'tempo_horas' in os_.keys() else 0,
+                    mao_obra_centavos=composicao.centavos_de_reais(os_['valor_mao_obra']))
             except Exception:
                 comp=None
         anexos=[]

@@ -103,7 +103,7 @@ def salvar(banco,d,identificador=None):
     total_materiais=sum(int(Decimal(m['quantidade'])*m['preco_centavos']) for m in materiais)
     comp=composicao.calcular(
         total_centavos=preco+total_materiais, materiais_centavos=total_materiais,
-        horas=tempo_horas, tipo_servico=nome)
+        horas=tempo_horas, tipo_servico=nome, mao_obra_centavos=preco)
     comp_json=composicao.para_json(comp)
     composicao.instalar_banco(banco)
     with ext.db(banco) as c:
@@ -183,7 +183,8 @@ def valores_orcamento(banco,identificador,quantidade=1):
                 total_centavos=servico['preco_servico_centavos']+materiais_total,
                 materiais_centavos=materiais_total,
                 horas=servico.get('tempo_horas') or 0,
-                tipo_servico=servico.get('nome') or '')
+                tipo_servico=servico.get('nome') or '',
+                mao_obra_centavos=servico['preco_servico_centavos'])
         except Exception:
             comp=None
     return {'servico':servico,'quantidade':quantidade,'materiais':materiais,
@@ -247,7 +248,8 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
             comp=composicao.calcular(
                 total_centavos=dados['total'],materiais_centavos=dados['subtotal_materiais'],
                 horas=(servico.get('tempo_horas') or 0)*dados['quantidade'],
-                tipo_servico=servico.get('nome') or '')
+                tipo_servico=servico.get('nome') or '',
+                mao_obra_centavos=dados['subtotal_servico'])
         linhas_comp=[[par('Componente'),par('Valor'),par('%')]]
         for item in comp.get('componentes',[]):
             linhas_comp.append([par(item['nome']),par(reais(item['valor_centavos'])),

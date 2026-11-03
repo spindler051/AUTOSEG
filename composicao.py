@@ -276,8 +276,14 @@ def _escalar(valores, total):
 
 
 def calcular(total_centavos=None, materiais_centavos=0, horas=None,
-             tipo_servico="", config=None):
-    """Calcula a composição; o total sempre confere com a soma dos componentes."""
+             tipo_servico="", config=None, mao_obra_centavos=None):
+    """Calcula a composição; o total sempre confere com a soma dos componentes.
+
+    Quando ``mao_obra_centavos`` é informado, a composição é explícita: o valor
+    real de mão de obra e o de materiais são usados e nenhuma taxa fixa,
+    percentual ou fórmula padrão é aplicada por cima. O que sobrar (se houver)
+    fica no componente residual.
+    """
     config = validar(config or carregar())
     componentes = [
         c for c in config["componentes"]
@@ -291,75 +297,110 @@ def calcular(total_centavos=None, materiais_centavos=0, horas=None,
     materiais = int(materiais_centavos or 0)
     if materiais < 0:
         raise ValueError("O valor de materiais não pode ser negativo.")
+    mao_obra = None if mao_obra_centavos is None else int(mao_obra_centavos)
+    if mao_obra is not None and mao_obra < 0:
+        raise ValueError("O valor de mão de obra não pode ser negativo.")
     horas = None if horas in (None, "") else float(horas)
     if horas is not None and horas < 0:
         raise ValueError("As horas não podem ser negativas.")
 
-    valores = {}
-    for componente in componentes:
-        modo = componente["modo"]
-        if modo == "materiais":
-            valor = materiais
-        elif modo == "fixo":
-            valor = int(componente["valor"])
-        elif modo == "hora":
-            quantidade = horas if horas is not None and horas > 0 else (
-                componente.get("horas_padrao") or config.get("horas_padrao") or 0)
-            valor = _round(Decimal(str(quantidade)) * Decimal(int(componente["valor"])))
-        elif modo == "formula":
-            valor = _avaliar_formula(componente["formula"], valores)
-        else:
-            valor = 0
-        valores[componente["id"]] = max(0, int(valor))
-
-    percentuais = [c for c in componentes if c["modo"] == "percentual"]
-    soma_percentual = sum(Decimal(str(c["valor"])) / Decimal(100) for c in percentuais)
-    if total is None:
-        base = sum(valores[c["id"]] for c in componentes
-                   if c["modo"] not in ("percentual", "residual"))
-        if soma_percentual >= 1:
-            total = base + sum(
-                _round(Decimal(base) * Decimal(str(c["valor"])) / 100)
-                for c in percentuais)
-        else:
-            total = _round(Decimal(base) / (Decimal(1) - soma_percentual))
-        total = max(0, int(total))
-    for componente in percentuais:
-        valores[componente["id"]] = _round(
-            Decimal(total) * Decimal(str(componente["valor"])) / 100)
-
-    residual = next((c for c in componentes if c["modo"] == "residual"), None)
     aviso = ""
-    if residual is not None:
-        valores[residual["id"]] = 0
-        sem_residual = {c["id"]: valores[c["id"]] for c in componentes if c is not residual}
-        resto = total - sum(sem_residual.values())
-        if resto >= 0:
-            valores[residual["id"]] = resto
-        else:
-            valores.update(_escalar(sem_residual, total))
-            valores[residual["id"]] = 0
-            aviso = ("O total informado é menor que a soma dos componentes fixos; "
-                     "os valores foram proporcionalizados sem alterar o total.")
+    if mao_obra is not None:
+        # Composição explícita: materiais e mão de obra reais. Os demais
+        # componentes ficam zerados e o residual fecha o valor total.
+        valores = {}
+        hora_atribuida = False
+        for componente in componentes:
+            modo = componente["modo"]
+            if modo == "materiais":
+                valores[componente["id"]] = materiais
+            elif modo == "hora" and not hora_atribuida:
+                valores[componente["id"]] = mao_obra
+                hora_atribuida = True
+            else:
+                valores[componente["id"]] = 0
+        if total is None:
+            total = materiais + mao_obra
+        residual = next((c for c in componentes if c["modo"] == "residual"), None)
+        if residual is not None:
+            valores[residual["id"]] = max(
+                0, total - sum(v for cid, v in valores.items() if cid != residual["id"]))
+        # Fecha o total com exatidão em centavos.
+        diferenca = total - sum(valores.values())
+        if diferenca:
+            alvo = residual["id"] if residual is not None else next(
+                (c["id"] for c in componentes if c["modo"] == "hora"), None)
+            if alvo is None:
+                alvo = next((c["id"] for c in componentes if c["modo"] == "materiais"), None)
+            if alvo is not None:
+                valores[alvo] = max(0, valores[alvo] + diferenca)
+        if sum(valores.values()) != total:
+            raise ValueError("Não foi possível fechar a composição no valor total.")
     else:
-        valores = _escalar(valores, total)
-        aviso = ("O total informado foi distribuído proporcionalmente entre os "
-                 "componentes configurados, sem alterar o total.")
+        valores = {}
+        for componente in componentes:
+            modo = componente["modo"]
+            if modo == "materiais":
+                valor = materiais
+            elif modo == "fixo":
+                valor = int(componente["valor"])
+            elif modo == "hora":
+                quantidade = horas if horas is not None and horas > 0 else (
+                    componente.get("horas_padrao") or config.get("horas_padrao") or 0)
+                valor = _round(Decimal(str(quantidade)) * Decimal(int(componente["valor"])))
+            elif modo == "formula":
+                valor = _avaliar_formula(componente["formula"], valores)
+            else:
+                valor = 0
+            valores[componente["id"]] = max(0, int(valor))
 
-    diferenca = total - sum(valores.values())
-    if diferenca:
-        candidato = residual["id"] if residual is not None else max(
-            componentes, key=lambda c: valores[c["id"]])["id"]
-        valores[candidato] = max(0, valores[candidato] + diferenca)
-    diferenca = total - sum(valores.values())
-    if diferenca:
-        for componente in sorted(componentes, key=lambda c: valores[c["id"]], reverse=True):
-            novo = valores[componente["id"]] + diferenca
-            if novo >= 0:
-                valores[componente["id"]] = novo
-                break
-    if sum(valores.values()) != total:
-        raise ValueError("Não foi possível fechar a composição no valor total.")
+        percentuais = [c for c in componentes if c["modo"] == "percentual"]
+        soma_percentual = sum(Decimal(str(c["valor"])) / Decimal(100) for c in percentuais)
+        if total is None:
+            base = sum(valores[c["id"]] for c in componentes
+                       if c["modo"] not in ("percentual", "residual"))
+            if soma_percentual >= 1:
+                total = base + sum(
+                    _round(Decimal(base) * Decimal(str(c["valor"])) / 100)
+                    for c in percentuais)
+            else:
+                total = _round(Decimal(base) / (Decimal(1) - soma_percentual))
+            total = max(0, int(total))
+        for componente in percentuais:
+            valores[componente["id"]] = _round(
+                Decimal(total) * Decimal(str(componente["valor"])) / 100)
+
+        residual = next((c for c in componentes if c["modo"] == "residual"), None)
+        if residual is not None:
+            valores[residual["id"]] = 0
+            sem_residual = {c["id"]: valores[c["id"]] for c in componentes if c is not residual}
+            resto = total - sum(sem_residual.values())
+            if resto >= 0:
+                valores[residual["id"]] = resto
+            else:
+                valores.update(_escalar(sem_residual, total))
+                valores[residual["id"]] = 0
+                aviso = ("O total informado é menor que a soma dos componentes fixos; "
+                         "os valores foram proporcionalizados sem alterar o total.")
+        else:
+            valores = _escalar(valores, total)
+            aviso = ("O total informado foi distribuído proporcionalmente entre os "
+                     "componentes configurados, sem alterar o total.")
+
+        diferenca = total - sum(valores.values())
+        if diferenca:
+            candidato = residual["id"] if residual is not None else max(
+                componentes, key=lambda c: valores[c["id"]])["id"]
+            valores[candidato] = max(0, valores[candidato] + diferenca)
+        diferenca = total - sum(valores.values())
+        if diferenca:
+            for componente in sorted(componentes, key=lambda c: valores[c["id"]], reverse=True):
+                novo = valores[componente["id"]] + diferenca
+                if novo >= 0:
+                    valores[componente["id"]] = novo
+                    break
+        if sum(valores.values()) != total:
+            raise ValueError("Não foi possível fechar a composição no valor total.")
 
     saida = []
     for componente in componentes:
@@ -454,19 +495,21 @@ def recalcular_tudo(banco=None):
             total = int(preco or 0) + total_materiais
             composicao = calcular(
                 total_centavos=total, materiais_centavos=total_materiais,
-                horas=tempo, tipo_servico=nome or "", config=config)
+                horas=tempo, tipo_servico=nome or "", config=config,
+                mao_obra_centavos=int(preco or 0))
             conexao.execute(
                 "UPDATE catalogo_servicos SET composicao_json=? WHERE id=?",
                 (para_json(composicao), identificador))
             servicos += 1
         for linha in conexao.execute(
-                """SELECT id,valor_total,valor_materiais,tempo_horas
+                """SELECT id,valor_mao_obra,valor_total,valor_materiais,tempo_horas
                    FROM ordens_servico WHERE status IN ('Aberta','Pendente')"""):
-            identificador, total_reais, materiais_reais, tempo = linha
+            identificador, mao_reais, total_reais, materiais_reais, tempo = linha
             composicao = calcular(
                 total_centavos=centavos_de_reais(total_reais),
                 materiais_centavos=centavos_de_reais(materiais_reais),
-                horas=tempo, config=config)
+                horas=tempo, config=config,
+                mao_obra_centavos=centavos_de_reais(mao_reais))
             conexao.execute(
                 "UPDATE ordens_servico SET composicao_json=? WHERE id=?",
                 (para_json(composicao), identificador))

@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — composição financeira e destinatários — 2026-11-03 — develop
+
+- **Composição do valor (relatório e orçamento):** a composição agora respeita a mão de obra e os materiais reais da OS/serviço. Antes, os componentes padrão (hora técnica, taxa de visita, custos e margem) eram aplicados por cima e, quando o total era menor, tudo era proporcionalizado, gerando percentuais incorretos.
+  - `composicao.calcular` recebe `mao_obra_centavos`; quando informado, materiais e mão de obra são os valores reais e os demais componentes ficam zerados (o residual fecha o total).
+  - OS 100% materiais → Materiais 100% e demais componentes R$ 0,00; idem para 100% mão de obra e composições mistas.
+  - Valores em centavos com `Decimal` e soma dos componentes exatamente igual ao total.
+  - Aplicado na gravação da OS, no encerramento, no catálogo, no orçamento e no recálculo em lote.
+- **Destinatários:** o e-mail de conclusão passa a expor todos os destinatários selecionados no campo **Para** de um único e-mail (removido o envio em BCC e o texto que o mencionava).
+- Testes novos em `test_composicao.py` (100% materiais, 100% mão de obra, misto e com sobra) e em `test_rev12_correcoes.py` (composição 100% materiais nos PDFs de relatório e orçamento).
+
 ## 9.6.0-dev.6 — rascunho, nota fiscal e destinatários — 2026-11-03 — develop
 
 - **Rascunho do Portal Prestador:** corrigida a recuperação automática dos campos ao reabrir a OS (a referência ao prestador logado estava indefinida, o que descartava o rascunho em silêncio). Agora os campos preenchidos — inclusive via YAML — reaparecem corretamente.

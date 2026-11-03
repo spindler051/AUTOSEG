@@ -21,7 +21,7 @@ Branch: `develop` (sem merge na `main` nesta revisão)
 - Checkboxes no formulário da OS para cliente, síndico e administradora/imobiliária, com os e-mails cadastrados.
 - Campo de e-mails adicionais (separados por vírgula).
 - `produtividade_os.destinatarios_para_os` deduplica, valida e não sobrescreve a seleção com o síndico.
-- A lista final é registrada em `produtividade_email`; o envio usa BCC para não expor os endereços.
+- A lista final é registrada em `produtividade_email`; todos os destinatários são expostos no campo Para de um único e-mail.
 - Teste: quatro destinatários selecionados são registrados e enviados juntos.
 
 ## 4. Identidade visual nos PDFs

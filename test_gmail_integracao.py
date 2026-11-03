@@ -182,7 +182,7 @@ class GmailIntegracao(unittest.TestCase):
                           'adm@example.org', 'extra@example.org'):
                 self.assertIn(email, status['destinatarios_json'])
             self.assertEqual(len(capturado['destinatario']), 4)
-            self.assertTrue(capturado['bcc'])
+            self.assertFalse(capturado['bcc'])
             self.assertTrue(str(capturado['nf']).endswith('.pdf'))
             self.assertIn('Favorecido Teste', capturado['corpo'])
             self.assertIn('pix-teste', capturado['corpo'])

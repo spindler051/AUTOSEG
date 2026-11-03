@@ -219,6 +219,40 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn(b'.090196 .090196 .090196 rg',
                       leitor.pages[0].get_contents().get_data())
 
+    def test_relatorio_100_por_cento_materiais_no_pdf(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Cliente 100% materiais')
+        dados = {'cliente_id': str(cid), 'descricao': 'Instalação de cabo',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '0',
+                 'valor_materiais_manual': '0', 'material_item[]': ['Cabo'],
+                 'material_qtd[]': ['1'], 'material_unit[]': ['21,50'],
+                 'materiais_presentes': '1', 'relatorio_tecnico': 'ok',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        conclusao = dict(dados)
+        conclusao.update(acao_status='Concluída', v9_execucao='exec')
+        neg.os_salvar(self.db, conclusao, pid, oid)
+        texto = texto_pdf(pdf_cliente_v9.gerar(self.db, oid))
+        self.assertIn('Materiais', texto)
+        self.assertIn('100,00%', texto)
+        self.assertIn('21,50', texto)
+        for ruim in ('13,72', '63,77', '19,12', '13,71', '2,95', '4,11'):
+            self.assertNotIn(ruim, texto)
+
+    def test_orcamento_100_por_cento_materiais_no_pdf(self):
+        servico = cat.salvar(self.db, {'nome': 'Só materiais',
+                                       'descricao': 'Sem mão de obra',
+                                       'preco_servico': '0',
+                                       'materiais': 'Cabo | 1 | 21,50'})
+        bruto = cat.pdf_orcamento(self.db, servico, 1, 'Cliente Exemplo')
+        texto = '\n'.join(p.extract_text() or '' for p in PdfReader(io.BytesIO(bruto)).pages)
+        self.assertIn('Materiais', texto)
+        self.assertIn('100,00%', texto)
+        self.assertIn('21,50', texto)
+        for ruim in ('13,72', '63,77', '19,12'):
+            self.assertNotIn(ruim, texto)
+
     # ---------------------------------------------------------------- 4
     def test_excluir_material_sem_uso_remove_e_com_historico_arquiva(self):
         sem_uso = estoque.cadastrar(self.db, 'Conector RJ45', venda='2,50')
