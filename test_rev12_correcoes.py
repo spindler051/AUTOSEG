@@ -175,22 +175,32 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Portão da garagem', ordem['descricao'])
 
     # ---------------------------------------------------------------- 2 e 3
-    def test_relatorio_pdf_sem_marcacao_e_cnpj_so_quando_diferente(self):
+    def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):
         outro = self._prestador('Prestador Outro', documento='11222333000181')
         igual = self._prestador('Prestador Principal', documento='23864393000187')
-        cid_outro = self._cliente(outro, 'Cliente Outro')
+        sem_doc = self._prestador('Prestador Sem Documento')
+        cid_outro = self._cliente(outro, 'Cliente Outro', documento='12345678000195')
         cid_igual = self._cliente(igual, 'Cliente Principal')
+        cid_sem = self._cliente(sem_doc, 'Cliente Sem Documento')
 
+        # Prestador com CNPJ próprio: mostra o CNPJ dele e o documento do cliente.
         texto = texto_pdf(pdf_cliente_v9.gerar(
             self.db, self._os_concluida(outro, cid_outro)))
         self.assertNotIn('<b>', texto.lower())
         self.assertIn('TOTAL', texto)
         self.assertIn('11.222.333/0001-81', texto)
+        self.assertIn('12.345.678/0001-95', texto)
 
+        # Prestador com o CNPJ principal: mostra o principal.
         texto = texto_pdf(pdf_cliente_v9.gerar(
             self.db, self._os_concluida(igual, cid_igual)))
         self.assertNotIn('<b>', texto.lower())
-        self.assertNotIn('23.864.393/0001-87', texto)
+        self.assertIn('23.864.393/0001-87', texto)
+
+        # Prestador sem CNPJ: usa o CNPJ padrão da AUTOSEG.
+        texto = texto_pdf(pdf_cliente_v9.gerar(
+            self.db, self._os_concluida(sem_doc, cid_sem)))
+        self.assertIn('23.864.393/0001-87', texto)
 
     def test_prestadores_podem_repetir_cnpj(self):
         primeiro = self._prestador('Prestador A')

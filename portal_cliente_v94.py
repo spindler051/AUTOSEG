@@ -773,7 +773,8 @@ def post(h,path,d,banco):
     if path=='/cliente/orcamento/pdf':
         perfil=fluxo_pf.obter_perfil(banco,uid)
         nome=perfil['nome'] if perfil and perfil.get('nome') else 'Cliente'
-        pdf=catalogo.pdf_orcamento(banco,int(d.get('servico_id','0')),d.get('quantidade','1'),nome)
+        doc=perfil.get('cpf','') if perfil else ''
+        pdf=catalogo.pdf_orcamento(banco,int(d.get('servico_id','0')),d.get('quantidade','1'),nome,doc)
         return h.send_bytes(pdf,'application/pdf',filename='AUTOSEG_orcamento_estimativo.pdf')
     if path=='/cliente/nova-organizacao':
         resultado=cad.criar_organizacao_e_os(banco,uid,d)

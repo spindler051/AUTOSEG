@@ -17,6 +17,24 @@ def formatar_cnpj(valor):
     return f'{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:]}'
 
 
+def formatar_cpf(valor):
+    """Formata CPF canônico (11 dígitos) sem inventar dados."""
+    digitos = re.sub(r'\D', '', str(valor or ''))
+    if len(digitos) != 11:
+        return ''
+    return f'{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:]}'
+
+
+def formatar_documento(valor):
+    """Formata CPF (11) ou CNPJ (14); retorna '' quando inválido."""
+    digitos = re.sub(r'\D', '', str(valor or ''))
+    if len(digitos) == 11:
+        return formatar_cpf(digitos)
+    if len(digitos) == 14:
+        return formatar_cnpj(digitos)
+    return ''
+
+
 def caminho_imagem(nome):
     """Localiza logo.png/icone.png na pasta de dados (MAIN/DEV), no bundle ou no código."""
     candidatos = [

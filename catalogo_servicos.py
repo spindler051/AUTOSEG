@@ -194,7 +194,7 @@ def valores_orcamento(banco,identificador,quantidade=1):
             'composicao':comp}
 
 
-def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
+def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente',cliente_documento=''):
     """Gera orçamento não vinculante e sem dados financeiros confidenciais."""
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
@@ -204,6 +204,7 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     dados=valores_orcamento(banco,identificador,quantidade)
     servico=dados['servico']
     nome_cliente=str(cliente or 'Cliente')[:120]
+    doc_formato = marca.formatar_documento(cliente_documento)
     bio=BytesIO()
     doc=SimpleDocTemplate(bio,pagesize=A4,leftMargin=45,rightMargin=45,topMargin=48,bottomMargin=48)
     styles=getSampleStyleSheet()
@@ -228,7 +229,7 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     content.extend([Spacer(1,10),
              par('AUTOSEG — CNPJ '+marca.CNPJ_PRINCIPAL),
              par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
-             par('Solicitante: '+nome_cliente),Spacer(1,12),
+             par('Solicitante: '+nome_cliente + (' — '+doc_formato if doc_formato else '')),Spacer(1,12),
              Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)])
     linhas=[[par('Item'),par('Qtde.'),par('Total')],
             [par('Mão de obra: '+servico['nome']),str(dados['quantidade']),reais(dados['subtotal_servico'])]]

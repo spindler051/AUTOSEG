@@ -24,7 +24,7 @@ def gerar(banco,os_id):
     from PIL import Image
     import io
     with ext.db(banco) as c:
-        os_=c.execute('SELECT o.*,cl.nome cliente FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        os_=c.execute('SELECT o.*,cl.nome cliente,cl.documento cliente_documento FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
         if not os_:raise ValueError('Ordem de serviço não encontrada.')
         sol=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_solicitacoes'").fetchone() else None
         enc=c.execute('SELECT relatorio,motivo,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_encerramentos'").fetchone() else None
@@ -54,15 +54,16 @@ def gerar(banco,os_id):
     P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
     PB=lambda s:Paragraph('<b>'+escape(str(s or ''))+'</b>',estilo['AutosegCorpoV9'])
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
-    # O CNPJ do prestador só aparece quando é válido e diferente do CNPJ principal.
-    cnpj_prestador=''
-    if resp:
-        cnpj=identidade.formatar_cnpj(resp['documento'])
-        if cnpj and re.sub(r'\D','',cnpj)!=identidade.CNPJ_PRINCIPAL_DIGITOS:
-            cnpj_prestador=cnpj
-    prestador_texto=(resp['nome'] if resp else 'Não informado')
-    if cnpj_prestador:
-        prestador_texto+=' — CNPJ '+cnpj_prestador
+    # CNPJ do prestador: usa o cadastrado; se não houver, usa o CNPJ principal.
+    cnpj_prestador = identidade.formatar_cnpj(resp['documento']) if resp else ''
+    if not cnpj_prestador:
+        cnpj_prestador = identidade.CNPJ_PRINCIPAL
+    prestador_texto = (resp['nome'] if resp else 'Não informado') + ' — CNPJ ' + cnpj_prestador
+    # Documento do cliente (CPF ou CNPJ) exibido no cabeçalho.
+    doc_cliente = identidade.formatar_documento(os_['cliente_documento'] if 'cliente_documento' in os_.keys() else '')
+    cliente_texto = str(os_['cliente'])
+    if doc_cliente:
+        cliente_texto += ' — ' + doc_cliente
     linhas=[]
     logo_texto=Paragraph('<font color="#FFFFFF">AUTO</font><font color="#FFD400">SEG</font>',
         ParagraphStyle('LogoV9',fontName='Helvetica-Bold',fontSize=19,leading=21))
@@ -73,7 +74,7 @@ def gerar(banco,os_id):
     topo.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),preto),('TOPPADDING',(0,0),(-1,-1),13),('BOTTOMPADDING',(0,0),(-1,-1),13)]))
     linhas.extend([topo,Spacer(1,13),Paragraph('RELATÓRIO TÉCNICO DE SERVIÇO',estilo['AutosegTituloV9'])])
     dados=[[P('Ordem de serviço: '+str(os_['numero_os'])),P('Situação: '+str(os_['status']))],
-           [P('Cliente: '+str(os_['cliente'])),P('Prestador: '+prestador_texto)],
+           [P('Cliente: '+cliente_texto),P('Prestador: '+prestador_texto)],
            [P('Abertura: '+data_br(os_['data_abertura'])),P('Encerramento: '+data_br(enc['encerrado_em'] if enc else os_['data_conclusao']))]]
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
     linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])

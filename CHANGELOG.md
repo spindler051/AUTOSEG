@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.7 — CNPJ e documento nos PDFs — 2026-11-03 — develop
+
+- **Relatório PDF:** mostra o CNPJ do prestador responsável; se ele não tiver CNPJ cadastrado, usa o CNPJ principal da AUTOSEG (23.864.393/0001-87). Também exibe o CPF/CNPJ do cliente.
+- **Orçamento PDF:** passa a exibir o CPF/CNPJ do solicitante (cliente), além do CNPJ da AUTOSEG.
+- **Nota fiscal:** o bloco "Não precisa de nota fiscal" ficou em destaque na tela de finalização da OS; a conclusão exige NF anexada ou essa opção marcada.
+
 ## 9.6.0-dev.7 — nota fiscal confiável, YAML tolerante e PDF — 2026-11-03 — develop
 
 - **Nota fiscal (correção crítica):** removido o descarte silencioso da nota fiscal no envio de e-mail. Antes, se o arquivo da nota não pudesse ser lido, o e-mail seguia sem o anexo e ainda assim era marcado como enviado. Agora, quando há nota fiscal associada à OS, ela **deve** ser anexada; falha de leitura interrompe o envio e registra `falhou` com erro claro — nunca um falso sucesso.
