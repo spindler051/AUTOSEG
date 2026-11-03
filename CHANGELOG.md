@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.7 — status acima do rascunho e PDF/e-mail de OS pendente — 2026-11-03 — develop
+
+- **Portal do Prestador:** o status da OS agora aparece logo acima dos botões de ação (inclusive o SALVAR RASCUNHO), na ordem da página.
+- **OS pendente:** ao registrar a situação "Pendente", o relatório parcial é publicado em PDF e enviado ao(s) destinatário(s) selecionado(s), com assunto e corpo indicando "atendimento pendente".
+- Teste novo em `test_rev12_correcoes.py`.
+
 ## 9.6.0-dev.7 — cabeçalho do Portal do Cliente — 2026-11-03 — develop
 
 - **Portal do Cliente:** o topo passa a exibir apenas a logo AUTOSEG, maior, sem os textos "Gestão de Serviços" e "AUTOMAÇÃO E SEGURANÇA · Portal de Serviços". O Portal do Prestador permanece como estava.

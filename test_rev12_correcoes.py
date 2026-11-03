@@ -501,6 +501,58 @@ class CorrecoesRev12(unittest.TestCase):
                            dict(base_form, sem_nota_fiscal='1'))
         self.assertEqual(status, 200)
 
+    def test_pendente_publica_pdf_e_envia_email(self):
+        import time
+        import os
+        import gmail_service
+        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Pendente', email='cliente@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Atendimento pendente', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+                 'materiais_presentes': '1', 'relatorio_tecnico': 'Aguardando peça.',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        capt = {}
+        def fake(destinatario, assunto, corpo, **kw):
+            capt['assunto'] = assunto
+            capt['corpo'] = corpo
+            return 'msg-pend'
+        original = gmail_service.enviar_email_gmail
+        gmail_service.enviar_email_gmail = fake
+        try:
+            status, html = req(cliente, base, f'/os/{oid}/salvar',
+                               {'csrf': token, 'cliente_id': str(cid),
+                                'descricao': 'Atendimento pendente', 'tecnico': 'T',
+                                'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+                                'materiais_presentes': '1', 'v9_execucao': 'Parcial',
+                                'relatorio_tecnico': 'Aguardando peça.',
+                                'acao_status': 'Pendente', 'modo_envio': 'encerrar',
+                                'sem_nota_fiscal': '1', 'destinatario_sel[]': ['cliente']})
+            self.assertEqual(status, 200)
+            doc = reg = None
+            for _ in range(50):
+                with ext.db(self.db) as c:
+                    doc = c.execute("SELECT COUNT(*) FROM os_documentos WHERE os_id=? AND tipo='relatorio_pdf'",
+                                    (oid,)).fetchone()[0]
+                    reg = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
+                                    (oid,)).fetchone()
+                if doc and reg and reg['status'] in ('enviado', 'falhou'):
+                    break
+                time.sleep(0.05)
+            self.assertGreaterEqual(doc, 1)
+            self.assertEqual(reg['status'], 'enviado')
+            self.assertIn('pendente', capt['assunto'].lower())
+            with ext.db(self.db) as c:
+                self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                           (oid,)).fetchone()['status'], 'Pendente')
+        finally:
+            gmail_service.enviar_email_gmail = original
+
 
 if __name__ == '__main__':
     unittest.main()

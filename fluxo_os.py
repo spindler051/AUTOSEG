@@ -16,6 +16,8 @@ import composicao
 
 FIM = ('Concluída', 'Cancelada', 'Não realizada')
 FIM_TODOS = FIM
+# Statuses com PDF publicável: encerramentos finais + pendente (relatório parcial).
+PUBLICAVEIS = FIM + ('Pendente',)
 LOCK_PDF = threading.RLock()
 
 
@@ -226,8 +228,8 @@ def publicar_relatorio(banco,os_id):
     with LOCK_PDF:
         with ext.db(banco) as c:
             o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
-            if not o or o['status'] not in FIM:
-                raise ValueError('O relatório só é publicado após um encerramento final.')
+            if not o or o['status'] not in PUBLICAVEIS:
+                raise ValueError('O relatório só é publicado após um encerramento final ou pendência registrada.')
             proximo=c.execute("SELECT COALESCE(MAX(versao),0)+1 FROM os_documentos WHERE os_id=? AND tipo='relatorio_pdf'",(os_id,)).fetchone()[0]
         arq=Path(ext.gerar_pdf(banco,os_id))
         if not arq.is_file() or arq.stat().st_size<100: raise ValueError('PDF não foi gerado corretamente.')

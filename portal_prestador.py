@@ -891,6 +891,8 @@ class PortalPrestador:
                         corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
+                if oid:
+                    corpo+=f'<p style="margin-top:16px"><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b></p>'
                 corpo+='<div class="actions">'
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
@@ -1398,7 +1400,7 @@ class PortalPrestador:
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
                             with ext.db(banco) as c:
                                 prod._os_ativa_responsavel(c,oid,pid)
-                            if str(d.get('acao_status',''))=='Concluída':
+                            if str(d.get('acao_status','')) in ('Concluída','Pendente'):
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),
                                     str(d.get('emails_adicionais','')))
@@ -1411,7 +1413,7 @@ class PortalPrestador:
                             if destinatarios:
                                 prod.registrar_envio(banco,oid,destinatarios)
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-                            if str(d.get('acao_status','')) in fluxo.FIM:
+                            if str(d.get('acao_status','')) in fluxo.PUBLICAVEIS:
                                 try: fluxo.publicar_relatorio(banco,oid)
                                 except Exception as falha:
                                     LOG.exception('Encerrada OS %s, mas falhou a publicação do PDF',oid)

@@ -229,10 +229,11 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         arquivo = fluxo.validar_pdf_publicado(documento)
         with ext.db(banco) as c:
             dados = c.execute(
-                "SELECT o.numero_os, cl.nome FROM ordens_servico o "
+                "SELECT o.numero_os, cl.nome, o.status FROM ordens_servico o "
                 "JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?", (os_id,)).fetchone()
         numero = dados['numero_os'] if dados else f'#{os_id}'
         nome = (dados['nome'] or 'Cliente') if dados else 'Cliente'
+        situacao = (dados['status'] if dados else '') or ''
         nota = ext.ultima_nota_fiscal(banco, os_id)
         caminho_nf = None
         if nota:
@@ -240,9 +241,14 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
             # ler o arquivo é um erro real: nunca enviar "silenciosamente" sem
             # o anexo nem marcar a nota como entregue por causa do relatório.
             _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
-        assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
-        corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
-                 f"<p>Segue em anexo o relatório técnico do atendimento.</p>")
+        if situacao == 'Pendente':
+            assunto = f"Ordem de Serviço {numero} — atendimento pendente - AUTOSEG"
+            corpo = (f"<h3>Olá {nome},</h3><p>A OS {numero} está com atendimento pendente.</p>"
+                     f"<p>Segue em anexo o relatório parcial do atendimento.</p>")
+        else:
+            assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
+            corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
+                     f"<p>Segue em anexo o relatório técnico do atendimento.</p>")
         if caminho_nf:
             corpo += ('<p>A nota fiscal também está anexada a este e-mail.</p>')
         else:
