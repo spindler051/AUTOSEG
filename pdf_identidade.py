@@ -1,7 +1,20 @@
 """Identidade visual AUTOSEG para PDFs (logo no cabeçalho e selo em todas as páginas)."""
+import re
 from pathlib import Path
 
 import prestadores_ext as ext
+
+# CNPJ principal da empresa, usado nos orçamentos e como referência nos relatórios.
+CNPJ_PRINCIPAL = '23.864.393/0001-87'
+CNPJ_PRINCIPAL_DIGITOS = re.sub(r'\D', '', CNPJ_PRINCIPAL)
+
+
+def formatar_cnpj(valor):
+    """Formata CNPJ canônico (14 dígitos) sem inventar dados."""
+    digitos = re.sub(r'\D', '', str(valor or ''))
+    if len(digitos) != 14:
+        return ''
+    return f'{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:]}'
 
 
 def caminho_imagem(nome):

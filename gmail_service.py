@@ -56,6 +56,13 @@ def _validar_email(campo):
     return email
 
 
+def _dominio_reservado(email):
+    """Bloqueia domínios de teste/exemplo que sempre geram retorno de erro."""
+    dominio = str(email or '').rsplit('@', 1)[-1].strip().lower()
+    return (dominio in {'example.com', 'example.net', 'example.org', 'example.edu'}
+            or dominio.endswith(('.example', '.test', '.invalid', '.localhost')))
+
+
 def obter_credenciais(interativo=False):
     Request, Credentials, build, HttpError = _google_libs()
     creds = None
@@ -103,11 +110,8 @@ def enviar_email_gmail(
     nome_pdf_relatorio=None,
     nome_pdf_nf=None
 ):
-    Request, Credentials, build, HttpError = _google_libs()
+    HttpError = None
     try:
-        creds = obter_credenciais(interativo=False)
-        service = build('gmail', 'v1', credentials=creds)
-
         if not isinstance(assunto, str) or any(c in assunto for c in '\r\n'):
             raise ValueError('Assunto inválido.')
         if isinstance(destinatario, (list, tuple)):
@@ -120,6 +124,14 @@ def enviar_email_gmail(
         if isinstance(copia, str):
             copia = [x.strip() for x in copia.replace(';', ',').split(',') if x.strip()]
         copia = [_validar_email(e) for e in copia]
+        bloqueados = [e for e in para_lista + copia if _dominio_reservado(e)]
+        if bloqueados:
+            raise ValueError('Destinatário de teste/exemplo bloqueado para evitar devoluções: '
+                             + ', '.join(bloqueados))
+
+        Request, Credentials, build, HttpError = _google_libs()
+        creds = obter_credenciais(interativo=False)
+        service = build('gmail', 'v1', credentials=creds)
 
         message = MIMEMultipart()
         if usar_bcc and len(para_lista) > 1:
@@ -159,11 +171,11 @@ def enviar_email_gmail(
         print(f"[Gmail] E-mail enviado com sucesso. ID da mensagem: {msg_id}")
         return msg_id
 
-    except HttpError as error:
-        erro_detalhe = error.resp.reason if hasattr(error, 'resp') else str(error)
-        raise RuntimeError(f"[Gmail] Erro da API do Google: {erro_detalhe}")
-    except Exception as e:
-        raise RuntimeError(f"[Gmail] Erro ao enviar mensagem: {e}") from e
+    except Exception as error:
+        if HttpError is not None and isinstance(error, HttpError):
+            erro_detalhe = error.resp.reason if hasattr(error, 'resp') else str(error)
+            raise RuntimeError(f"[Gmail] Erro da API do Google: {erro_detalhe}") from error
+        raise RuntimeError(f"[Gmail] Erro ao enviar mensagem: {error}") from error
 
 
 def _dados_pagamento_html(banco, os_id):

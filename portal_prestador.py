@@ -42,6 +42,13 @@ VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 CSS_MOBILE = """
 .lista-organizacoes-pj{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .lista-organizacoes-pj .resultado-organizacao{margin:0}
+.resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}
+.resultado-organizacao h3{margin:0 0 5px;font-size:21px}
+.resultado-organizacao p{margin:4px 0 12px;color:#ddd;overflow-wrap:anywhere}
+.resultado-organizacao .btn{width:100%;text-align:center;margin:0}
+.aviso-claro{border-left:5px solid var(--yellow);padding:15px 18px;background:#2a2617;border-radius:8px}
+.busca-pj .busca-linha{display:flex;gap:8px;align-items:flex-end}
+.busca-pj .busca-linha input{flex:1;min-width:0}
 @media (max-width: 760px) {
   html, body { max-width: 100%; overflow-x: hidden; }
   .top { gap: 10px; padding: 10px 14px; }
@@ -393,9 +400,13 @@ class PortalPrestador:
                 for serv in catalogo.listar(banco):
                     if termo and termo not in (serv['nome']+' '+serv['descricao']).casefold():continue
                     valor=catalogo.valores_orcamento(banco,serv['id']) if serv['ativo'] else None
+                    excluir=(f'<form method="post" action="/servicos/{serv["id"]}/excluir" '
+                             'data-confirm="Excluir definitivamente este serviço do catálogo?">'
+                             +self.hidden(s)
+                             +'<button class="danger" type="submit">Excluir</button></form>')
                     rows.append((esc(serv['nome']),esc(serv['descricao'][:100]),
                         catalogo.reais(valor['total']) if valor else 'Arquivado',
-                        botao('Editar',f'/servicos/{serv["id"]}/editar','secondary')))
+                        botao('Editar',f'/servicos/{serv["id"]}/editar','secondary')+excluir))
                 return self.pagina('Serviços e valores',
                     '<p>Catálogo para propostas e preenchimento de relatórios. Os preços são editados somente por prestadores.</p>'
                     +botao('+ Novo serviço','/servicos/novo')
@@ -521,32 +532,92 @@ class PortalPrestador:
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
 
-            def os_rapida_form(self, s, erro=''):
+            def os_rapida_form(self, s, erro='', q='', cliente_id=None):
+                """Abertura rápida com busca e cartões, no mesmo padrão do Portal do Cliente."""
                 with ext.db(banco) as c:
-                    clientes = c.execute("SELECT id,nome,tipo_pessoa FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
-                    prestadores = c.execute("SELECT id,nome FROM prestadores WHERE ativo=1 ORDER BY nome").fetchall()
-                if not clientes:
-                    return self.pagina('Nova OS rápida', card('Sem clientes',
-                        '<p>Cadastre um cliente ou condomínio antes de abrir a OS.</p>'
-                        + botao('Cadastrar cliente', '/clientes/novo')), s)
-                opcoes = ''.join(f'<option value="{int(x["id"])} — {esc(x["nome"])}"></option>' for x in clientes)
-                form = (f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
-                        '<label for="cliente-rapida">Buscar condomínio, empresa ou cliente</label>'
-                        f'<input id="cliente-rapida" name="cliente_texto" list="lista-clientes-rapida" required '
-                        'placeholder="Digite o nome e escolha a sugestão" autocomplete="off">'
-                        f'<datalist id="lista-clientes-rapida">{opcoes}</datalist>'
-                        '<p class="muted">Digite parte do nome; o navegador mostra os cadastros correspondentes. '
-                        'A OS será criada como <b>Aberta</b>, pronta para preenchimento e finalização.</p>'
-                        + textarea('Solicitação / descrição do serviço', 'descricao', required=True))
-                if prestadores:
-                    form += select('Atribuir prestador (opcional)', 'prestador_id',
-                                   [('', 'Não atribuir agora')] + [(x['id'], x['nome']) for x in prestadores])
-                else:
-                    form += '<p class="muted">Nenhum prestador ativo cadastrado; a OS ficará sem responsável.</p>'
-                form += '<button type="submit">Criar OS aberta</button></form>'
+                    if cliente_id:
+                        cliente = c.execute(
+                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email FROM clientes "
+                            "WHERE id=? AND status!='Inativo'", (int(cliente_id),)).fetchone()
+                        if not cliente:
+                            return self.os_rapida_form(
+                                s, 'Cliente não encontrado ou inativo. Escolha outro na lista.', q=q)
+                        prestadores = c.execute(
+                            "SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome").fetchall()
+                        local = ' · '.join(x for x in (cliente['tipo_pessoa'], cliente['bairro'],
+                                                       cliente['cidade']) if x)
+                        form = (f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
+                                f'<input type="hidden" name="cliente_id" value="{int(cliente["id"])}">'
+                                f'<p class="passo">{esc(cliente["nome"])}'
+                                + (f' · {esc(local)}' if local else '') + '</p>'
+                                + textarea('Solicitação / descrição do serviço', 'descricao',
+                                           required=True))
+                        if prestadores:
+                            form += select('Atribuir prestador (opcional)', 'prestador_id',
+                                           [('', 'Não atribuir agora')]
+                                           + [(x['id'], x['nome']) for x in prestadores])
+                        else:
+                            form += ('<p class="muted">Nenhum prestador ativo cadastrado; '
+                                     'a OS ficará sem responsável.</p>')
+                        form += ('<p class="notice">A OS será criada como <b>Aberta</b>. '
+                                 'Ela só fica <b>Pendente</b> se o atendimento for iniciado e '
+                                 'encerrado com essa situação.</p>'
+                                 '<button type="submit" style="width:100%">Criar OS aberta</button></form>')
+                        aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                        return self.pagina(
+                            'Nova OS rápida — ' + cliente['nome'],
+                            card('Solicitação para ' + cliente['nome'], aviso + form)
+                            + botao('← Voltar e escolher outro cliente', '/os/rapida', 'secondary'), s)
+
+                    termo = str(q or '').strip()[:120]
+                    esc_like = termo.replace('!', '!!').replace('%', '!%').replace('_', '!_')
+                    digitos = cad9.digitos(termo)
+                    if termo:
+                        filtro = ("WHERE status!='Inativo' AND (nome LIKE ? ESCAPE '!' "
+                                  "OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' "
+                                  "OR email LIKE ? ESCAPE '!'")
+                        params = ['%' + esc_like + '%'] * 4
+                        if digitos:
+                            filtro += " OR documento LIKE ? ESCAPE '!'"
+                            params.append('%' + digitos + '%')
+                        filtro += ")"
+                        clientes = c.execute(
+                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                            "FROM clientes " + filtro + " ORDER BY nome LIMIT 100",
+                            params).fetchall()
+                    else:
+                        clientes = c.execute(
+                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                            "FROM clientes WHERE status!='Inativo' ORDER BY nome LIMIT 100").fetchall()
+
+                busca = ('<form method="get" action="/os/rapida" class="busca-pj">'
+                         '<label for="q-os-rapida">Buscar condomínio, empresa ou cliente</label>'
+                         '<div class="busca-linha">'
+                         f'<input id="q-os-rapida" name="q" type="search" value="{esc(termo)}" '
+                         'placeholder="Digite o nome, CNPJ/CPF, cidade ou e-mail" autocomplete="off">'
+                         '<button type="submit">Buscar</button></div></form>')
+                cards = []
+                for x in clientes:
+                    local = ' · '.join(y for y in (x['tipo_pessoa'], x['bairro'], x['cidade']) if y)
+                    contato = (' · ' + esc(x['email'])) if x['email'] else ''
+                    cards.append(
+                        '<article class="resultado-organizacao">'
+                        f'<h3>{esc(x["nome"])}</h3><p>{esc(local)}{contato}</p>'
+                        f'<a class="btn" href="/os/rapida?cliente={int(x["id"])}">'
+                        'Abrir OS para este cliente</a></article>')
+                lista = ''.join(cards) or (
+                    '<p class="aviso-claro">Nenhum cliente encontrado para esta busca. '
+                    'Tente outro nome ou <a href="/clientes/novo">cadastre o cliente</a>.</p>')
                 aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
-                return self.pagina('Nova OS rápida', card('Condomínio, cliente e solicitação', aviso + form)
-                                   + botao('Voltar às OS', '/os', 'secondary'), s)
+                return self.pagina(
+                    'Nova OS rápida',
+                    card('1. Encontre o cliente',
+                         '<p>Busque pelo nome, CNPJ/CPF, cidade ou e-mail. '
+                         'Ao escolher, você informa a solicitação e cria a OS.</p>' + aviso + busca)
+                    + card('2. Escolha o cliente', '<div class="lista-organizacoes-pj">'
+                           + lista + '</div>')
+                    + botao('Nova OS completa', '/os/nova', 'secondary')
+                    + botao('Voltar às OS', '/os', 'secondary'), s)
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
@@ -1024,7 +1095,12 @@ class PortalPrestador:
                     if path=='/servicos':return self.servicos_lista(s)
                     if path=='/servicos/novo':return self.servico_form(s)
                     if path=='/historico':return self.os_lista(s,True)
-                    if path=='/os/rapida':return self.os_rapida_form(s)
+                    if path=='/os/rapida':
+                        qs=parse_qs(urlparse(self.path).query)
+                        q=qs.get('q',[''])[0][:120]
+                        try:cliente_rapido=int(qs.get('cliente',['0'])[0]) or None
+                        except (ValueError,TypeError):cliente_rapido=None
+                        return self.os_rapida_form(s,q=q,cliente_id=cliente_rapido)
                     if path=='/os/nova':return self.os_form(s)
                     if path=='/clientes':return self.clientes_lista(s)
                     if path=='/clientes/novo':return self.cliente_form(s)
@@ -1108,6 +1184,9 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='arquivar':
                         catalogo.arquivar(banco,int(partes[1]))
                         return self.redir('/servicos')
+                    if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='excluir':
+                        catalogo.excluir(banco,int(partes[1]))
+                        return self.redir('/servicos')
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='reativar':
                         catalogo.reativar(banco,int(partes[1]))
                         return self.redir('/servicos')
@@ -1143,14 +1222,16 @@ class PortalPrestador:
                         neg.cliente_excluir(banco,int(partes[1]),pid)
                         return self.redir('/clientes')
                     if path=='/os/rapida/salvar':
-                        texto=str(d.get('cliente_texto','')).strip()
+                        texto=(str(d.get('cliente_id','')).strip()
+                               or str(d.get('cliente_texto','')).strip())
                         try:
                             cliente_id=int(texto.split('—',1)[0].strip())
                         except (ValueError,TypeError):
-                            return self.os_rapida_form(s,'Selecione um cliente/condomínio válido na lista.')
+                            return self.os_rapida_form(s,erro='Selecione um cliente/condomínio válido na lista.')
                         descricao=str(d.get('descricao','')).strip()
                         if len(descricao)<5:
-                            return self.os_rapida_form(s,'Descreva a solicitação com pelo menos 5 caracteres.')
+                            return self.os_rapida_form(s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
+                                                       cliente_id=cliente_id)
                         dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
                                'forma_pagamento':'PIX','valor_mao_obra':'0','valor_materiais_manual':'0',
                                'materiais_presentes':'1','acao_status':'salvar'}

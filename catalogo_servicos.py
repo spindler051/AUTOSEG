@@ -161,6 +161,13 @@ def arquivar(banco,identificador):
             raise ValueError('Serviço não encontrado.')
 
 
+def excluir(banco,identificador):
+    """Remove o serviço do catálogo. OS antigas preservam seus próprios valores."""
+    with ext.db(banco) as c:
+        if not c.execute('DELETE FROM catalogo_servicos WHERE id=?',(int(identificador),)).rowcount:
+            raise ValueError('Serviço não encontrado.')
+
+
 def valores_orcamento(banco,identificador,quantidade=1):
     try:quantidade=int(quantidade)
     except (ValueError,TypeError):raise ValueError('Quantidade inválida.')
@@ -202,15 +209,23 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
     normal=styles['BodyText']
     def par(s):return Paragraph(escape(str(s)),normal)
     logo=marca.logo_flowable(180,42)
-    titulo=Paragraph('Orçamento estimativo',styles['Title'])
+    titulo=Paragraph('<font color="#FFFFFF">Orçamento estimativo</font>',styles['Title'])
     content=[]
     if logo is not None:
+        # O logo.png tem partes brancas com transparência: a faixa preta garante
+        # contraste também em impressão e em telas claras.
         cabecalho=Table([[logo,titulo]],colWidths=[200,300],hAlign='LEFT')
-        cabecalho.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-                                       ('LEFTPADDING',(0,0),(-1,-1),0),
-                                       ('BOTTOMPADDING',(0,0),(-1,-1),8)]))
+        cabecalho.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#171717')),
+                                       ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                                       ('LEFTPADDING',(0,0),(-1,-1),10),
+                                       ('RIGHTPADDING',(0,0),(-1,-1),10),
+                                       ('TOPPADDING',(0,0),(-1,-1),10),
+                                       ('BOTTOMPADDING',(0,0),(-1,-1),10)]))
         content.append(cabecalho)
-    content.extend([Spacer(1,14),
+    else:
+        content.append(titulo)
+    content.extend([Spacer(1,10),
+             par('AUTOSEG — CNPJ '+marca.CNPJ_PRINCIPAL),
              par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
              par('Solicitante: '+nome_cliente),Spacer(1,12),
              Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)])
@@ -253,7 +268,7 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
         cv.line(45, 40, A4[0]-45, 40)
         cv.setFillColor(colors.HexColor('#666666'))
         cv.setFont('Helvetica', 8)
-        cv.drawString(45, 26, 'AUTOSEG — Orçamento estimativo')
+        cv.drawString(45, 26, 'AUTOSEG — Orçamento estimativo · CNPJ '+marca.CNPJ_PRINCIPAL)
         cv.drawRightString(A4[0]-45, 26, 'Página '+str(doc.page))
         marca.desenhar_selo(cv, doc)
     doc.build(content, onFirstPage=rodape, onLaterPages=rodape)

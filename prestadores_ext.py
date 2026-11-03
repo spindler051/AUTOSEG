@@ -160,6 +160,17 @@ def cadastrar(banco,nome,email,senha,telefone='',documento='',especialidade=''):
         (nome.strip(),email.strip().lower(),senha_hash(senha),telefone.strip(),documento.strip(),especialidade.strip(),agora()))
         return cur.lastrowid
 
+def definir_documento_prestador(banco, prestador_id, documento):
+    """Atualiza o CNPJ do prestador. O mesmo CNPJ pode existir em vários prestadores."""
+    import cadastros_v9 as cad
+    doc = cad.validar_documento_auto(str(documento or '').strip())
+    with db(banco) as c:
+        if not c.execute('SELECT 1 FROM prestadores WHERE id=?', (int(prestador_id),)).fetchone():
+            raise ValueError('Prestador não encontrado.')
+        c.execute('UPDATE prestadores SET documento=? WHERE id=?', (doc, int(prestador_id)))
+    return doc
+
+
 def redefinir_senha_prestador_desktop(banco,prestador_id,nova_senha):
     """Somente uma ação administrativa local do desktop deve chamar esta função."""
     if len(nova_senha)<10:raise ValueError('A nova senha deve ter pelo menos dez caracteres.')

@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — correções de portal, PDF, CNPJ e exclusões — 2026-11-03 — develop
+
+- **Portal Prestador — OS rápida:** busca por nome, CNPJ/CPF, cidade ou e-mail e lista em cartões, no mesmo padrão do Portal Cliente; a OS continua nascendo **Aberta**.
+- **PDF do relatório:** corrigida a exibição literal de `<b> TOTAL <B> ...` na composição do valor; o total agora é impresso em negrito normal.
+- **CNPJ do prestador:** campo no cadastro desktop e em Integrações e pagamentos; o mesmo CNPJ pode repetir entre prestadores. O relatório mostra o CNPJ do responsável apenas quando válido e diferente do principal (23.864.393/0001-87); o orçamento usa sempre o CNPJ principal.
+- **Orçamento PDF:** faixa preta atrás do logo para dar contraste às partes brancas/transparentes do `logo.png`.
+- **Desktop GTK4:** botões “Excluir material” e “Excluir serviço”. Material com histórico é arquivado para preservar auditoria; sem histórico é removido. Serviço sai do catálogo e OS antigas mantêm os valores gravados.
+- **Serviços e valores (Portal Prestador):** botão de exclusão do serviço, com confirmação.
+- **E-mail:** e-mails adicionais digitados manualmente entram na lista final (sem serem ignorados); envios para domínios de teste/exemplo (`example.*`, `.test`, `.invalid`, `.localhost`) são bloqueados antes da rede para evitar devoluções.
+- Testes novos em `test_rev12_correcoes.py`; `test_rev09_fluxo_os.py` não dispara mais envios reais.
+
 ## 9.6.0-dev.6 — ajustes de interface e status — 2026-11-03 — develop
 
 - Chamado PJ rápido sem login com busca e cartões de condomínios/empresas (mesmo padrão da página com cadastro).

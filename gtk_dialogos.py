@@ -1141,7 +1141,7 @@ class DialogoPrestador(Adw.Dialog):
         self.nome = ui.campo_entry(grupo, "Nome")
         self.email = ui.campo_entry(grupo, "E-mail (login)")
         self.telefone = ui.campo_entry(grupo, "Telefone")
-        self.documento = ui.campo_entry(grupo, "CPF / CNPJ")
+        self.documento = ui.campo_entry(grupo, "CNPJ do prestador (pode repetir)")
         self.especialidade = ui.campo_entry(grupo, "Especialidade")
         self.senha = Adw.PasswordEntryRow(title="Senha inicial (mínimo 10 caracteres)")
         grupo.add(self.senha)
@@ -1229,6 +1229,10 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
         self.janela = janela
         self.prestador_id = prestador_id
         self.config = ext.obter_config_prestador(BANCO, prestador_id)
+        with ext.db(BANCO) as c:
+            registro = c.execute('SELECT documento FROM prestadores WHERE id=?',
+                                 (prestador_id,)).fetchone()
+        self.documento_atual = (registro['documento'] if registro else '') or ''
         self.set_title("Integrações e pagamentos")
         self.set_content_width(620)
         self.set_content_height(680)
@@ -1245,6 +1249,9 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
                                        self.config.get("provedor_email", ""))
         self.remetente = ui.campo_entry(grupo, "E-mail remetente",
                                         self.config.get("email_remetente", ""))
+        self.documento = ui.campo_entry(
+            grupo, "CNPJ do prestador (usado no relatório quando diferente do principal)",
+            cad9.formatar_documento(self.documento_atual))
         self.dados = ui.campo_texto(grupo, "Dados bancários e cadastrais",
                                     self.config.get("dados_bancarios_texto", ""), 180)
         toolbar.set_content(pagina)
@@ -1265,6 +1272,8 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
         dados["email_remetente"] = self.remetente.get_text().strip()
         dados["dados_bancarios_texto"] = self.dados.get_texto()
         try:
+            ext.definir_documento_prestador(BANCO, self.prestador_id,
+                                            self.documento.get_text())
             ext.salvar_config_prestador(BANCO, self.prestador_id, dados)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Configuração inválida", str(erro))

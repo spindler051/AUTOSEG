@@ -123,6 +123,25 @@ def cadastrar(banco,nome,sku='',unidade='un',custo='0',venda='0',minimo='0',iden
         return identificador
 
 
+def excluir(banco, produto_id):
+    """Exclui o material. Se houver histórico, apenas o arquiva para preservar auditoria."""
+    with ext.db(banco) as c:
+        instalar_conexao(c)
+        c.execute('BEGIN IMMEDIATE')
+        if not c.execute('SELECT 1 FROM estoque_produtos WHERE id=?', (int(produto_id),)).fetchone():
+            raise ValueError('Material não encontrado.')
+        usado = c.execute(
+            '''SELECT 1 FROM estoque_movimentos WHERE produto_id=?
+               UNION ALL SELECT 1 FROM estoque_os_aplicacoes WHERE produto_id=? LIMIT 1''',
+            (int(produto_id), int(produto_id))).fetchone()
+        if usado:
+            c.execute('UPDATE estoque_produtos SET ativo=0, atualizado_em=? WHERE id=?',
+                      (ext.agora(), int(produto_id)))
+            return 'arquivado'
+        c.execute('DELETE FROM estoque_produtos WHERE id=?', (int(produto_id),))
+        return 'excluido'
+
+
 def _movimentar(c,pid,delta,tipo,motivo,ator,os_id=None):
     delta=_q(delta,True)
     if not delta:return

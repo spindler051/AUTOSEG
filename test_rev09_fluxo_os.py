@@ -5,6 +5,7 @@ Cobre: assumir, em rota, início, rascunho persistente, encerramentos,
 YAML sem gravação, PDF autorizado e bloqueio de terceiros.
 """
 import http.cookiejar
+import os
 import re
 import sys
 import tempfile
@@ -13,6 +14,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+# Testes nunca disparam e-mails reais: apenas registram a pendência.
+os.environ['AUTOSEG_GMAIL_DESATIVADO'] = '1'
 
 import atendimento_os as aten
 import cadastros_v9 as cad9

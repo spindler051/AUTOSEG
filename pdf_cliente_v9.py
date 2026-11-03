@@ -28,7 +28,7 @@ def gerar(banco,os_id):
         if not os_:raise ValueError('Ordem de serviço não encontrada.')
         sol=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_solicitacoes'").fetchone() else None
         enc=c.execute('SELECT relatorio,motivo,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_encerramentos'").fetchone() else None
-        resp=c.execute('SELECT p.nome FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
+        resp=c.execute('SELECT p.nome,p.documento FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
         mats=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
@@ -51,7 +51,17 @@ def gerar(banco,os_id):
     estilo.add(ParagraphStyle(name='AutosegCorpoV9',fontName='Helvetica',fontSize=9,leading=13,textColor=preto,spaceAfter=5))
     estilo.add(ParagraphStyle(name='AutosegPequenoV9',fontName='Helvetica',fontSize=8,leading=11,textColor=cinza,spaceAfter=6))
     P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
+    PB=lambda s:Paragraph('<b>'+escape(str(s or ''))+'</b>',estilo['AutosegCorpoV9'])
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
+    # O CNPJ do prestador só aparece quando é válido e diferente do CNPJ principal.
+    cnpj_prestador=''
+    if resp:
+        cnpj=identidade.formatar_cnpj(resp['documento'])
+        if cnpj and re.sub(r'\D','',cnpj)!=identidade.CNPJ_PRINCIPAL_DIGITOS:
+            cnpj_prestador=cnpj
+    prestador_texto=(resp['nome'] if resp else 'Não informado')
+    if cnpj_prestador:
+        prestador_texto+=' — CNPJ '+cnpj_prestador
     linhas=[]
     logo_texto=Paragraph('<font color="#FFFFFF">AUTO</font><font color="#FFD400">SEG</font>',
         ParagraphStyle('LogoV9',fontName='Helvetica-Bold',fontSize=19,leading=21))
@@ -62,7 +72,7 @@ def gerar(banco,os_id):
     topo.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),preto),('TOPPADDING',(0,0),(-1,-1),13),('BOTTOMPADDING',(0,0),(-1,-1),13)]))
     linhas.extend([topo,Spacer(1,13),Paragraph('RELATÓRIO TÉCNICO DE SERVIÇO',estilo['AutosegTituloV9'])])
     dados=[[P('Ordem de serviço: '+str(os_['numero_os'])),P('Situação: '+str(os_['status']))],
-           [P('Cliente: '+str(os_['cliente'])),P('Prestador: '+(resp['nome'] if resp else 'Não informado'))],
+           [P('Cliente: '+str(os_['cliente'])),P('Prestador: '+prestador_texto)],
            [P('Abertura: '+data_br(os_['data_abertura'])),P('Encerramento: '+data_br(enc['encerrado_em'] if enc else os_['data_conclusao']))]]
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
     linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
@@ -90,7 +100,7 @@ def gerar(banco,os_id):
         for item in comp.get('componentes',[]):
             linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
                                 P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
-        linhas_comp.append([P('<b>TOTAL</b>'),P('<b>'+brl(comp.get('total_centavos',0)/100)+'</b>'),P('<b>100,00%</b>')])
+        linhas_comp.append([PB('TOTAL'),PB(brl(comp.get('total_centavos',0)/100)),PB('100,00%')])
         tc=Table(linhas_comp,colWidths=[300,100,60],repeatRows=1)
         tc.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),
             ('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),

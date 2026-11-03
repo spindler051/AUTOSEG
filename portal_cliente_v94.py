@@ -525,8 +525,8 @@ def formulario_org(h,s,administrador=False):
     form+=campos('Apartamento ou cargo','unidade',required=True,placeholder='Apartamento 203 ou Porteiro')
     form+=select('Urgência','urgencia',[(x,x) for x in ('Normal','Alta','Baixa')])
     form+=textarea('Descreva o serviço solicitado','descricao',required=True)
-    form+=('<p class="notice">Ao enviar, o condomínio entra na lista principal de clientes e a OS aparece em Pendentes. '
-           'O cadastro poderá ser complementado pelo prestador. Isso não concede acesso de síndico.</p>'
+    form+=('<p class="notice">Ao enviar, o condomínio entra na lista principal de clientes e a OS aparece como <b>Aberta</b>, '
+           'pronta para atendimento. O cadastro poderá ser complementado pelo prestador. Isso não concede acesso de síndico.</p>'
            '<button type="submit" style="width:100%;white-space:normal">Cadastrar local e solicitar OS</button></form>')
     return pagina(h,'Cadastrar local e solicitar OS',card('Condomínio ou empresa',form)
                   +botao('Voltar','/cliente/organizacoes','secondary'))

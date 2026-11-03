@@ -1205,8 +1205,9 @@ class Janela(Adw.ApplicationWindow):
         self.tabela_prestadores = ui.Tabela([
             ("ID", 55, False, 0.5),
             ("Nome", 0, True, 0.0),
-            ("E-mail", 230, False, 0.0),
-            ("Especialidade", 180, False, 0.0),
+            ("CNPJ", 165, False, 0.0),
+            ("E-mail", 220, False, 0.0),
+            ("Especialidade", 160, False, 0.0),
             ("Ativo", 70, False, 0.5),
         ])
         pagina.append(self.tabela_prestadores.widget)
@@ -1231,14 +1232,15 @@ class Janela(Adw.ApplicationWindow):
             self, "busca_prestadores") else ""
         with ext.db(BANCO) as c:
             registros = c.execute(
-                "SELECT id,nome,email,especialidade,ativo FROM prestadores "
+                "SELECT id,nome,documento,email,especialidade,ativo FROM prestadores "
                 "WHERE excluido=0 ORDER BY nome").fetchall()
         linhas = []
         for p in registros:
-            texto = f"{p['nome']} {p['email']} {p['especialidade'] or ''}".casefold()
+            cnpj = cad9.formatar_documento(p['documento'])
+            texto = f"{p['nome']} {cnpj} {p['email']} {p['especialidade'] or ''}".casefold()
             if termo and termo not in texto:
                 continue
-            linhas.append((p["id"], p["nome"], p["email"], p["especialidade"] or "",
+            linhas.append((p["id"], p["nome"], cnpj, p["email"], p["especialidade"] or "",
                            "Sim" if p["ativo"] else "Não"))
         self.tabela_prestadores.definir_linhas(linhas)
 
@@ -1831,6 +1833,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Novo serviço", self._novo_servico, icone="list-add-symbolic",
                      css="suggested-action"),
             ui.botao("Editar", self._editar_servico),
+            ui.botao("Excluir serviço", self._excluir_servico, css="destructive-action"),
             ui.botao("Importar YAML", self._importar_servico),
             ui.botao("Arquivar / reativar", self._arquivar_servico)))
         self.tabela_catalogo = ui.Tabela([
@@ -1870,6 +1873,29 @@ class Janela(Adw.ApplicationWindow):
         valores = self._servico_selecionado()
         if valores:
             dialogos.DialogoServico(self, valores[0]).present(self)
+
+    def _excluir_servico(self):
+        valores = self._servico_selecionado()
+        if not valores:
+            return
+        registro = catalogo.obter(BANCO, valores[0])
+        if not registro:
+            return
+        ui.alerta(
+            self, "Excluir serviço",
+            f"Excluir “{registro['nome']}” do catálogo?\n\n"
+            "As ordens de serviço antigas preservam os valores já registrados.",
+            lambda: self._executar_exclusao_servico(valores[0]),
+            destrutivo=True, rotulo_ok="Excluir")
+
+    def _executar_exclusao_servico(self, servico_id):
+        try:
+            catalogo.excluir(BANCO, servico_id)
+        except Exception as erro:
+            ui.aviso_erro(self, "Catálogo", str(erro))
+            return
+        self.carregar_catalogo()
+        ui.toast(self, "Serviço excluído do catálogo.")
 
     def _arquivar_servico(self):
         valores = self._servico_selecionado()
@@ -2105,6 +2131,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Editar", self._editar_material),
             ui.botao("Entrada / ajuste", self._ajustar_material),
             ui.botao("Histórico", self._historico_material),
+            ui.botao("Excluir material", self._excluir_material, css="destructive-action"),
             ui.botao("Importar YAML", self._importar_materiais),
             ui.botao("Modelo YAML", self._modelo_materiais)))
         self.tabela_estoque = ui.Tabela([
@@ -2127,6 +2154,8 @@ class Janela(Adw.ApplicationWindow):
         negativos = 0
         baixos = 0
         for material in registros:
+            if not material.get("ativo", 1):
+                continue
             if termo and termo not in estoque._chave(
                     f"{material['nome']} {material['sku']}"):
                 continue
@@ -2172,6 +2201,27 @@ class Janela(Adw.ApplicationWindow):
         valores = self.tabela_estoque.selecionado()
         dialogos.DialogoHistoricoEstoque(
             self, valores[0] if valores else None).present(self)
+
+    def _excluir_material(self):
+        valores = self._material_selecionado()
+        if not valores:
+            return
+        ui.alerta(
+            self, "Excluir material",
+            f"Excluir “{valores[1]}” do estoque?\n\n"
+            "Se houver histórico de uso, o material será arquivado e deixará de aparecer.",
+            lambda: self._executar_exclusao_material(valores[0]),
+            destrutivo=True, rotulo_ok="Excluir")
+
+    def _executar_exclusao_material(self, produto_id):
+        try:
+            resultado = estoque.excluir(BANCO, produto_id)
+        except Exception as erro:
+            ui.aviso_erro(self, "Estoque", str(erro))
+            return
+        self.carregar_estoque()
+        ui.toast(self, "Material arquivado." if resultado == "arquivado"
+                 else "Material excluído do estoque.")
 
     def _modelo_materiais(self):
         self._baixar_modelo_yaml("modelo_materiais.yaml", importacao_yaml.MODELO_MATERIAIS_VAZIO)
