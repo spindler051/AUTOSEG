@@ -24,28 +24,29 @@ class ComposicaoTest(unittest.TestCase):
         self.pasta.cleanup()
 
     def test_exemplo_200(self):
-        comp = composicao.calcular(total_centavos=20000, materiais_centavos=0, horas=1)
+        comp = composicao.calcular(total_centavos=60000, materiais_centavos=0, horas=1)
         valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
-        self.assertEqual(comp["total_centavos"], 20000)
-        self.assertEqual(sum(valores.values()), 20000)
+        self.assertEqual(comp["total_centavos"], 60000)
+        self.assertEqual(sum(valores.values()), 60000)
         self.assertEqual(valores["Materiais"], 0)
         self.assertEqual(valores["Mão de obra / hora técnica"], 10000)
-        self.assertEqual(valores["Taxa mínima de visita"], 3000)
-        self.assertEqual(valores["Custos administrativos"], 2000)
-        self.assertEqual(valores["Custos operacionais e tecnológicos"], 2000)
-        self.assertEqual(valores["Margem de risco e contingência"], 1000)
-        self.assertEqual(valores["Outros custos e margem de contribuição"], 2000)
+        self.assertEqual(valores["Taxa de deslocamento"], 5000)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertEqual(valores["Custos administrativos"], 6000)
+        self.assertEqual(valores["Custos operacionais e tecnológicos"], 6000)
+        self.assertEqual(valores["Margem de risco e contingência"], 3000)
+        self.assertEqual(valores["Outros custos e margem de contribuição"], 5000)
 
     def test_sem_materiais_todos_os_componentes(self):
-        comp = composicao.calcular(total_centavos=20000, materiais_centavos=0, horas=1)
-        self.assertEqual(len(comp["componentes"]), 7)
+        comp = composicao.calcular(total_centavos=60000, materiais_centavos=0, horas=1)
+        self.assertEqual(len(comp["componentes"]), 8)
         self.assertTrue(all("valor_centavos" in item for item in comp["componentes"]))
         self.assertTrue(all(item["valor_centavos"] >= 0 for item in comp["componentes"]))
 
     def test_total_calculado_sem_valor_final(self):
         comp = composicao.calcular(materiais_centavos=0, horas=1)
-        self.assertEqual(comp["total_centavos"], 17333)
-        self.assertEqual(sum(x["valor_centavos"] for x in comp["componentes"]), 17333)
+        self.assertEqual(comp["total_centavos"], 53333)
+        self.assertEqual(sum(x["valor_centavos"] for x in comp["componentes"]), 53333)
 
     def test_total_menor_que_componentes_fixos(self):
         comp = composicao.calcular(total_centavos=10000, materiais_centavos=0, horas=1)

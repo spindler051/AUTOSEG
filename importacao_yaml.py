@@ -82,18 +82,44 @@ def _numero_decimal(valor, rotulo, permitir_zero=True):
 
 
 def _materiais_os_lista(materiais):
-    if not isinstance(materiais, list) or len(materiais) > 100:
+    """Valida a lista `materiais` (financeiros) com mensagens específicas.
+
+    - ``None`` é interpretado como lista vazia (sem lançamentos financeiros).
+    - Valor não-lista gera erro específico.
+    - Cada item deve ser um mapeamento com ``item``, ``quantidade`` e
+      ``valor_unitario``; campos ausentes ou inválidos geram erro numerado.
+
+    Nunca inventa quantidade, preço ou valor: campo ausente não vira zero e
+    descrições em texto livre não viram lançamentos financeiros.
+    """
+    if materiais is None:
+        return []
+    if not isinstance(materiais, list):
+        raise ValueError('O campo "materiais" deve ser uma lista.')
+    if len(materiais) > 100:
         raise ValueError('Materiais deve ser uma lista de até 100 itens.')
     resposta = []
-    for material in materiais:
-        if (not isinstance(material, Mapping)
-                or set(material) - {'item', 'quantidade', 'valor_unitario'}):
-            raise ValueError('Material inválido: informe item, quantidade e valor_unitario.')
-        item = str(material.get('item', '')).strip()
-        if not 1 <= len(item) <= 180:
-            raise ValueError('Informe o nome do material.')
-        quantidade = _numero_decimal(material.get('quantidade', 1), 'Quantidade', False)
-        valor = _numero_decimal(material.get('valor_unitario', 0), 'Valor unitário')
+    for indice, material in enumerate(materiais, start=1):
+        if not isinstance(material, Mapping):
+            raise ValueError(f'Material {indice}: deve ser um item com os campos '
+                             '"item", "quantidade" e "valor_unitario".')
+        if material.get('item') is None or not str(material.get('item', '')).strip():
+            raise ValueError(f'Material {indice}: campo "item" não informado.')
+        item = str(material['item']).strip()
+        if len(item) > 180:
+            raise ValueError(f'Material {indice}: campo "item" excede 180 caracteres.')
+        if 'quantidade' not in material or material.get('quantidade') in (None, ''):
+            raise ValueError(f'Material {indice}: campo "quantidade" não informado.')
+        if 'valor_unitario' not in material or material.get('valor_unitario') in (None, ''):
+            raise ValueError(f'Material {indice}: campo "valor_unitario" não informado.')
+        try:
+            quantidade = _numero_decimal(material.get('quantidade'), 'Quantidade', False)
+        except ValueError:
+            raise ValueError(f'Material {indice}: campo "quantidade" inválido.')
+        try:
+            valor = _numero_decimal(material.get('valor_unitario'), 'Valor unitário', True)
+        except ValueError:
+            raise ValueError(f'Material {indice}: campo "valor_unitario" inválido.')
         resposta.append({
             'item': item,
             'quantidade': float(quantidade),
@@ -184,23 +210,11 @@ def relatorio(nome, conteudo, numero_os=None):
             raise ValueError(k+' deve ser texto de até 5.000 caracteres.')
         resultado['v9_'+k if k!='relatorio_tecnico' else k]=v.strip()
     if 'materiais' in entrada:
-        materiais=entrada['materiais']
-        if not isinstance(materiais,list) or len(materiais)>100:
-            raise ValueError('Materiais deve ser uma lista de até 100 itens.')
-        resultado['material_yaml']=[]
-        for m in materiais:
-            if not isinstance(m,Mapping) or set(m)-{'item','quantidade','valor_unitario'}:
-                raise ValueError('Material inválido: informe item, quantidade e valor_unitario.')
-            if not isinstance(m.get('item'),str) or not m['item'].strip():
-                raise ValueError('Informe o nome do material.')
-            try:
-                from portal_negocios import numero
-                q=numero(m.get('quantidade',1),'Quantidade')
-                u=numero(m.get('valor_unitario',0),'Valor unitário')
-            except (ValueError,TypeError) as exc:
-                raise ValueError('Quantidade ou valor unitário inválido no material.') from exc
-            if not q:raise ValueError('Quantidade deve ser positiva.')
-            resultado['material_yaml'].append({'item':m['item'].strip()[:180], 'quantidade':q,'valor_unitario':u})
+        resultado['material_yaml'] = [
+            {'item': m['item'], 'quantidade': m['quantidade'],
+             'valor_unitario': m['valor_unitario']}
+            for m in _materiais_os_lista(entrada['materiais'])
+        ]
     return resultado
 
 

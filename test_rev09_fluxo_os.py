@@ -286,7 +286,7 @@ def main():
                 'anexo_id[]': [str(x) for x in anexo_ids],
                 'anexo_legenda[]': ['Legenda final ANTES', 'Legenda final DEPOIS'],
                 'anexo_visivel[]': ['1', '1'],
-                'acao_status': 'Concluída', 'modo_envio': 'encerrar'})
+                'acao_status': 'Concluída', 'modo_envio': 'encerrar', 'sem_nota_fiscal': '1'})
             check('conclusão da OS', status == 200)
             with ext.db(banco) as cursor:
                 check('status concluída', cursor.execute(

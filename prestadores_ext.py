@@ -549,11 +549,11 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     nota=ultima_nota_fiscal(banco,os_id)
     caminho_nf=None
     if nota:
-        try:
-            _,caminho_nf=obter_nota_fiscal(banco,os_id,nota['id'])
-            corpo+='\n\nA nota fiscal segue anexa a esta mensagem.'
-        except Exception:
-            caminho_nf=None
+        # Nota fiscal associada deve ser anexada; falha de leitura é erro real.
+        _,caminho_nf=obter_nota_fiscal(banco,os_id,nota['id'])
+        corpo+='\n\nA nota fiscal segue anexa a esta mensagem.'
+    else:
+        corpo+='\n\nNenhuma nota fiscal foi anexada a esta OS.'
     msg.set_content(corpo)
     msg.add_attachment(Path(pdf).read_bytes(),maintype='application',subtype='pdf',filename=Path(pdf).name)
     if caminho_nf:

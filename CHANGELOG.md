@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.7 — nota fiscal confiável, YAML tolerante e PDF — 2026-11-03 — develop
+
+- **Nota fiscal (correção crítica):** removido o descarte silencioso da nota fiscal no envio de e-mail. Antes, se o arquivo da nota não pudesse ser lido, o e-mail seguia sem o anexo e ainda assim era marcado como enviado. Agora, quando há nota fiscal associada à OS, ela **deve** ser anexada; falha de leitura interrompe o envio e registra `falhou` com erro claro — nunca um falso sucesso.
+- **Transparência do envio:** o corpo do e-mail agora informa explicitamente se a nota fiscal foi anexada ou se nenhuma nota fiscal foi associada à OS, e a montagem verifica existência/leitura/validade dos PDFs antes de enviar.
+- **Importador YAML (relatório):** `materiais: null`, `materiais: []` e `materiais` ausente são aceitos como ausência de lançamento financeiro. Valor não-lista gera `O campo "materiais" deve ser uma lista.`; materiais incompletos geram erros específicos e numerados (`Material N: campo "…" não informado/inválido`). Nenhum campo ausente recebe zero automático e descrições em texto livre não viram lançamentos financeiros.
+- **PDF do relatório:** fotografias maiores (largura útil da página, proporção preservada, maior resolução) e tabela de composição mantida unida com a linha TOTAL para evitar linha órfã na página seguinte.
+- **Nota fiscal opcional:** a OS só pode ser concluída se houver nota fiscal anexada ou se o prestador marcar "Não precisa de nota fiscal". Após a conclusão, é possível anexar/atualizar a NF e reenviar o e-mail.
+- **Composição de valor:** adicionada a "Taxa de deslocamento" (R$ 50) e "valor mínimo de visita" ajustado para R$ 250. Os PDFs passam a exibir "Composição do valor (valor estimado)".
+- Testes novos em `test_importacao_yaml.py`, `test_gmail_integracao.py`, `test_pdf_relatorio.py` e `test_rev12_correcoes.py`.
+
 ## 9.6.0-dev.6 — nota fiscal e imagens no reenvio — 2026-11-03 — develop
 
 - **Nota fiscal após a conclusão:** a página de detalhes da OS passa a permitir anexar/atualizar a nota fiscal mesmo depois de encerrada (responsável ou administrador), para que ela fique fixa no arquivamento da OS.

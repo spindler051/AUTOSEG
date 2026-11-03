@@ -51,7 +51,7 @@ def main():
                 assert c.execute('SELECT descricao FROM ordens_servico WHERE id=1').fetchone()[0]==original
                 assert c.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=1').fetchone()[0]=='Teste de rascunho persistente'
             # Encerra via portal e baixa o PDF publicado.
-            body.update({'descricao':original,'modo_envio':'encerrar','acao_status':'Concluída'})
+            body.update({'descricao':original,'modo_envio':'encerrar','acao_status':'Concluída','sem_nota_fiscal':'1'})
             st,html,_=navegar(opener,base,'/os/1/salvar',body)
             assert st==200,(st,html[-800:])
             st,pdf,_=navegar(opener,base,'/os/1/pdf')

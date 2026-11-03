@@ -38,14 +38,24 @@ componentes:
     ordem: 2
     aplicavel_a: []
 
+  - id: deslocamento
+    nome: Taxa de deslocamento
+    descricao: Deslocamento da equipe (combustível).
+    modo: fixo
+    valor: 5000
+    ativo: true
+    obrigatorio: false
+    ordem: 3
+    aplicavel_a: []
+
   - id: visita
     nome: Taxa mínima de visita
     descricao: Deslocamento e atendimento mínimo.
     modo: fixo
-    valor: 3000
+    valor: 25000
     ativo: true
     obrigatorio: false
-    ordem: 3
+    ordem: 4
     aplicavel_a: []
 
   - id: administrativo
@@ -55,7 +65,7 @@ componentes:
     valor: 10
     ativo: true
     obrigatorio: false
-    ordem: 4
+    ordem: 5
     aplicavel_a: []
 
   - id: operacional
@@ -65,7 +75,7 @@ componentes:
     valor: 10
     ativo: true
     obrigatorio: false
-    ordem: 5
+    ordem: 6
     aplicavel_a: []
 
   - id: risco
@@ -75,7 +85,7 @@ componentes:
     valor: 5
     ativo: true
     obrigatorio: false
-    ordem: 6
+    ordem: 7
     aplicavel_a: []
 
   - id: outros
@@ -85,5 +95,5 @@ componentes:
     valor: 0
     ativo: true
     obrigatorio: false
-    ordem: 7
+    ordem: 8
     aplicavel_a: []

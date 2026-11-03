@@ -236,15 +236,17 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         nota = ext.ultima_nota_fiscal(banco, os_id)
         caminho_nf = None
         if nota:
-            try:
-                _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
-            except Exception:
-                caminho_nf = None
+            # Se há nota fiscal associada à OS, ela DEVE ser anexada. Falha ao
+            # ler o arquivo é um erro real: nunca enviar "silenciosamente" sem
+            # o anexo nem marcar a nota como entregue por causa do relatório.
+            _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
         assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
         corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
                  f"<p>Segue em anexo o relatório técnico do atendimento.</p>")
         if caminho_nf:
-            corpo += '<p>A nota fiscal está anexada a este e-mail.</p>'
+            corpo += ('<p>A nota fiscal também está anexada a este e-mail.</p>')
+        else:
+            corpo += '<p>Nenhuma nota fiscal foi anexada a esta OS.</p>'
         corpo += _dados_pagamento_html(banco, os_id)
         msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
                                     caminho_pdf_relatorio=arquivo,

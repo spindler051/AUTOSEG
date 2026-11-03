@@ -364,7 +364,7 @@ class CorrecoesRev12(unittest.TestCase):
                             'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
                             'materiais_presentes': '1', 'v9_execucao': 'exec',
                             'relatorio_tecnico': 'rel', 'acao_status': 'Concluída',
-                            'modo_envio': 'encerrar',
+                            'modo_envio': 'encerrar', 'sem_nota_fiscal': '1',
                             'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
                             'emails_adicionais': 'extra@exemplo.com.br'})
         self.assertEqual(status, 200)
@@ -465,6 +465,31 @@ class CorrecoesRev12(unittest.TestCase):
             self.assertTrue(str(capturado.get('nf', '')).endswith('.pdf'))
         finally:
             gmail_service.enviar_email_gmail = original
+
+    def test_conclusao_exige_nota_fiscal_ou_nao_precisa(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
+                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor, base = self._servidor()
+        cliente = self._login(base)
+        token = self._csrf(base, cliente, oid)
+        base_form = {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Serviço',
+                     'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
+                     'materiais_presentes': '1', 'v9_execucao': 'exec',
+                     'relatorio_tecnico': 'rel', 'acao_status': 'Concluída',
+                     'modo_envio': 'encerrar'}
+        # Sem NF e sem "não precisa" → bloqueado.
+        status, html = req(cliente, base, f'/os/{oid}/salvar', dict(base_form))
+        self.assertEqual(status, 400)
+        self.assertIn('nota fiscal', html.lower())
+        # Com "não precisa de nota fiscal" → permitido.
+        status, html = req(cliente, base, f'/os/{oid}/salvar',
+                           dict(base_form, sem_nota_fiscal='1'))
+        self.assertEqual(status, 200)
 
 
 if __name__ == '__main__':

@@ -93,7 +93,6 @@ def gerar(banco,os_id):
     tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
     tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
     linhas.append(tm)
-    linhas.append(S('04  COMPOSIÇÃO DO VALOR'))
     if comp:
         linhas_comp=[[Paragraph('<b>Componente</b>',estilo['AutosegCorpoV9']),
                       Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
@@ -107,9 +106,12 @@ def gerar(banco,os_id):
             ('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
             ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),('VALIGN',(0,0),(-1,-1),'TOP'),
             ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-        linhas.append(tc)
+        # Mantém o cabeçalho da seção e a tabela (inclusive a linha TOTAL)
+        # unidos, evitando linha órfã na página seguinte.
+        linhas.append(KeepTogether([S('04  COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'), tc]))
         if comp.get('aviso'):linhas.append(P(comp['aviso']))
     else:
+        linhas.append(S('04  COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'))
         linhas.append(P('Composição não disponível para esta OS.'))
     linhas.append(S('05  VALORES E PAGAMENTO'))
     valores=[['TOTAL',brl(os_['valor_total'])],
@@ -122,9 +124,13 @@ def gerar(banco,os_id):
             if not p.is_file():continue
             try:
                 with Image.open(p) as im:
-                    im.thumbnail((900,630));buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=82);buf.seek(0)
+                    # Resolução preservada para tela e impressão; reduz apenas
+                    # imagens maiores que o limite, mantendo a proporção.
+                    im.thumbnail((1400, 1400));buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=85);buf.seek(0)
                     w,h=im.size
-                escala=min(400/w,265/h)
+                # Usa a largura útil da página (A4 com margens de 42pt) sem
+                # distorcer: a escala preserva a proporção original.
+                escala=min(480/w, 540/h)
                 foto=PdfImage(buf,width=w*escala,height=h*escala)
                 bloco=([S('06  REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
                 linhas.append(KeepTogether(bloco))

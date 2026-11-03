@@ -869,6 +869,7 @@ class PortalPrestador:
                         corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
                         corpo+='<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" accept="application/pdf">'
                         corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/nota-fiscal" formnovalidate>Anexar nota fiscal</button>'
+                        corpo+='<label style="display:block;margin:8px 0"><input type="checkbox" name="sem_nota_fiscal" value="1"> Não precisa de nota fiscal</label>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
                 corpo+='<div class="actions">'
@@ -1369,6 +1370,11 @@ class PortalPrestador:
                             # Só o botão de encerramento aplica o status escolhido.
                             if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
+                            # Exige nota fiscal (ou a opção "não precisa") para concluir a OS.
+                            if (d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída'
+                                    and not d.get('sem_nota_fiscal')
+                                    and not ext.listar_notas_fiscais(banco, oid)):
+                                raise ValueError('Anexe a nota fiscal ou marque "Não precisa de nota fiscal" antes de concluir.')
                             if not str(d.get('relatorio_tecnico','')).strip():
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
                             with ext.db(banco) as c:

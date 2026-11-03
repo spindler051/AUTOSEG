@@ -260,7 +260,7 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente'):
             ('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.35,colors.grey),
             ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),
             ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-        content.extend([Spacer(1,14),Paragraph('Composição do valor',styles['Heading3']),tabela_comp])
+        content.extend([Spacer(1,14),Paragraph('Composição do valor (valor estimado)',styles['Heading3']),tabela_comp])
         if comp.get('aviso'):
             content.append(Spacer(1,6))
             content.append(par(comp['aviso']))

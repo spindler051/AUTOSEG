@@ -240,6 +240,43 @@ class GmailIntegracao(unittest.TestCase):
         self.assertIn('nf_email.pdf', nomes)
         self.assertIn('relatorio.pdf', nomes)
 
+    def test_nota_fiscal_com_arquivo_faltante_nao_envia_em_silencio(self):
+        # Nota fiscal associada mas com arquivo ilegível deve registrar 'falhou',
+        # nunca "sucesso" sem o anexo obrigatório.
+        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
+        oid = self._concluir_com_pdf()
+        with ext.db(self.banco) as c:
+            pid = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (oid,)).fetchone()['prestador_id']
+        nota_id = ext.salvar_nota_fiscal(self.banco, oid, pid, 'nf.pdf',
+                                         b'%PDF-1.4\n% nota\n%%EOF\n')
+        with ext.db(self.banco) as c:
+            caminho = c.execute('SELECT caminho FROM os_notas_fiscais WHERE id=?',
+                                (nota_id,)).fetchone()['caminho']
+        Path(caminho).unlink()  # simula arquivo físico ausente
+        original = gmail_service.enviar_email_gmail
+        chamado = []
+        def fake(*args, **kwargs):
+            chamado.append(1)
+            return 'nao-deve-chegar'
+        gmail_service.enviar_email_gmail = fake
+        try:
+            gmail_service.enviar_relatorio_os_concluida(self.banco, oid)
+            import produtividade_os as prod
+            status = None
+            for _ in range(50):
+                with ext.db(self.banco) as c:
+                    r = c.execute('SELECT status,erro FROM produtividade_email WHERE os_id=?',
+                                  (oid,)).fetchone()
+                if r and r['status'] == 'falhou':
+                    status = r
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(status, 'deveria registrar falha de envio')
+            self.assertEqual(chamado, [], 'não deveria enviar sem a nota fiscal')
+            self.assertIn('nota fiscal', status['erro'].lower())
+        finally:
+            gmail_service.enviar_email_gmail = original
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
