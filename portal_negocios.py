@@ -187,9 +187,20 @@ def os_salvar(banco,d,pid,oid=None):
     except ValueError:
         raise ValueError('Tempo de execução inválido.') from None
     if tempo_horas<0:raise ValueError('Tempo de execução não pode ser negativo.')
-    comp=composicao.calcular(
-        total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
-        horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
+    comp_yaml=d.get('composicao_yaml')
+    if comp_yaml:
+        import json as _json_comp
+        if isinstance(comp_yaml,str):
+            try:
+                comp_yaml=_json_comp.loads(comp_yaml)
+            except ValueError as exc:
+                raise ValueError('Composição declarativa inválida no YAML.') from exc
+        comp=composicao.declarativa(
+            total_centavos=int(round(total*100)),blocos=comp_yaml)
+    else:
+        comp=composicao.calcular(
+            total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
+            horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
     comp_json=composicao.para_json(comp)
     composicao.instalar_banco(banco)
     # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.

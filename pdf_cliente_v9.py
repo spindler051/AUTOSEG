@@ -54,6 +54,8 @@ def gerar(banco,os_id):
     P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
     PB=lambda s:Paragraph('<b>'+escape(str(s or ''))+'</b>',estilo['AutosegCorpoV9'])
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
+    # Filhos da composição declarativa: recuados e em cinza para diferenciar do pai.
+    Pfilho=lambda s:Paragraph('&nbsp;&nbsp;&nbsp;&nbsp;<font color="#555555">— '+escape(str(s or ''))+'</font>',estilo['AutosegCorpoV9'])
     # CNPJ do prestador: usa o cadastrado; se não houver, usa o CNPJ principal.
     cnpj_prestador = identidade.formatar_cnpj(resp['documento']) if resp else ''
     if not cnpj_prestador:
@@ -101,6 +103,9 @@ def gerar(banco,os_id):
         for item in comp.get('componentes',[]):
             linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
                                 P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
+            for filho in item.get('filhos',[]):
+                linhas_comp.append([Pfilho(filho.get('nome','')),P(brl(filho.get('valor_centavos',0)/100)),
+                                    P(f"{filho.get('percentual',0):.2f}%".replace('.',','))])
         linhas_comp.append([PB('TOTAL'),PB(brl(comp.get('total_centavos',0)/100)),PB('100,00%')])
         tc=Table(linhas_comp,colWidths=[300,100,60],repeatRows=1)
         tc.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),

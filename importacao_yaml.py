@@ -181,6 +181,38 @@ def ordem_servico(nome, conteudo):
     }
 
 
+def _composicao_os(blocos, nivel='Componente'):
+    """Valida a composição declarativa (pai + filhos) vinda do YAML da OS."""
+    if blocos is None:
+        return []
+    if not isinstance(blocos, list):
+        raise ValueError('O campo "composicao" deve ser uma lista.')
+    if len(blocos) > 50:
+        raise ValueError('Composição com componentes demais.')
+    saida = []
+    for indice, entrada in enumerate(blocos, start=1):
+        if not isinstance(entrada, Mapping):
+            raise ValueError(f'{nivel} {indice}: item inválido.')
+        cid = str(entrada.get('id') or '').strip()
+        if not cid:
+            raise ValueError(f'{nivel} {indice}: informe o "id" do componente.')
+        item = {'id': cid}
+        if entrada.get('valor') not in (None, ''):
+            item['valor'] = entrada['valor']
+        if entrada.get('percentual') not in (None, ''):
+            item['percentual'] = entrada['percentual']
+        if entrada.get('residual'):
+            item['residual'] = True
+        if entrada.get('filhos') is not None:
+            item['filhos'] = _composicao_os(entrada['filhos'], f'Filho {indice}')
+        if ('valor' not in item and 'percentual' not in item
+                and not item.get('residual') and not item.get('filhos')):
+            raise ValueError(
+                f'{nivel} {indice} ({cid}): informe valor, percentual ou residual.')
+        saida.append(item)
+    return saida
+
+
 def relatorio(nome, conteudo, numero_os=None):
     """Modelo reutilizável: nunca identifica nem muda a OS aberta.
 
@@ -200,7 +232,7 @@ def relatorio(nome, conteudo, numero_os=None):
     if set(d)-{'versao','os'} or not isinstance(d.get('os'), Mapping):
         raise ValueError('Utilize a seção os do modelo oficial. A saída não deve conter instruções nem exemplo.')
     entrada=d['os']
-    if set(entrada)-{'numero','diagnostico','execucao','resultado','relatorio_tecnico','materiais'}:
+    if set(entrada)-{'numero','diagnostico','execucao','resultado','relatorio_tecnico','materiais','composicao'}:
         raise ValueError('Campo de OS desconhecido no YAML.')
     resultado={}
     for k in CAMPOS_RELATORIO:
@@ -215,6 +247,8 @@ def relatorio(nome, conteudo, numero_os=None):
              'valor_unitario': m['valor_unitario']}
             for m in _materiais_os_lista(entrada['materiais'])
         ]
+    if 'composicao' in entrada:
+        resultado['composicao_yaml'] = _composicao_os(entrada['composicao'])
     return resultado
 
 

@@ -659,6 +659,9 @@ class PortalPrestador:
                             d[k]=preenchimento[k]
                     if 'material_yaml' in preenchimento and (substituir or not mat):
                         mat=preenchimento['material_yaml']
+                    # Composição declarativa (pai + filhos) vinda do YAML/agente.
+                    if 'composicao_yaml' in preenchimento:
+                        d['composicao_yaml'] = preenchimento['composicao_yaml']
                     itens=preenchimento.get('material_item[]',[])
                     quantidades=preenchimento.get('material_qtd[]',[])
                     unitarios=preenchimento.get('material_unit[]',[])
@@ -731,6 +734,10 @@ class PortalPrestador:
                 except Exception:
                     rasc_salvo = None
                 corpo+=f'<form method="post" action="{action}" id="form-os" enctype="multipart/form-data">{token}'
+                if d.get('composicao_yaml'):
+                    import json as _json_comp
+                    corpo+=('<input type="hidden" name="composicao_yaml" value="'
+                            +esc(_json_comp.dumps(d['composicao_yaml'],ensure_ascii=False))+'">')
                 servicos_ativos=catalogo.listar(banco,ativos=True)
                 if servicos_ativos:
                     import json

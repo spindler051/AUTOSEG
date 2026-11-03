@@ -423,6 +423,124 @@ def calcular(total_centavos=None, materiais_centavos=0, horas=None,
     }
 
 
+def declarativa(total_centavos, blocos, config=None):
+    """Composição declarativa (pai + filhos) definida no YAML da OS.
+
+    Cada bloco traz ``id`` e ``valor`` (R$) ou ``percentual``; opcionalmente
+    ``filhos``. O pai pode ser percentual do total; os filhos podem ser valor,
+    percentual do pai ou ``residual: true`` para fechar o pai. Só os
+    componentes declarados entram na composição.
+    """
+    config = validar(config or carregar())
+    catalogo = {c["id"]: c for c in config["componentes"]}
+    total = int(total_centavos or 0)
+    if total < 0:
+        raise ValueError("O valor total não pode ser negativo.")
+    if not isinstance(blocos, list) or not blocos:
+        raise ValueError("Informe ao menos um componente na composição.")
+
+    def _normalizar(entrada, base_centavos, rotulo):
+        if not isinstance(entrada, dict):
+            raise ValueError(f"{rotulo}: componente inválido.")
+        cid = str(entrada.get("id") or "").strip()
+        if cid not in catalogo:
+            raise ValueError(f"{rotulo}: componente desconhecido: {cid or '(vazio)'}")
+        cfg = catalogo[cid]
+        if entrada.get("valor") not in (None, ""):
+            valor = centavos_de_reais(entrada["valor"])
+        elif entrada.get("percentual") not in (None, ""):
+            try:
+                pct = Decimal(str(entrada["percentual"]))
+            except (InvalidOperation, ValueError) as exc:
+                raise ValueError(f"{rotulo}: percentual inválido.") from exc
+            if not pct.is_finite() or pct < 0 or pct > 100:
+                raise ValueError(f"{rotulo}: percentual fora de 0–100.")
+            valor = _round(Decimal(base_centavos) * pct / 100)
+        elif entrada.get("residual"):
+            valor = None
+        else:
+            raise ValueError(f"{rotulo}: informe valor, percentual ou residual.")
+        return cid, cfg, valor, entrada
+
+    saida = []
+    soma_pais = 0
+    for indice_pai, entrada_pai in enumerate(blocos, start=1):
+        cid_pai, cfg_pai, valor_pai, entrada_norm = _normalizar(
+            entrada_pai, total, f"Componente {indice_pai}")
+        if valor_pai is None:
+            raise ValueError(f"Componente {indice_pai}: o pai não pode ser residual.")
+        valor_pai = max(0, int(valor_pai))
+        soma_pais += valor_pai
+
+        valores_filhos = []
+        if entrada_norm.get("filhos"):
+            lista_filhos = entrada_norm["filhos"]
+            if not isinstance(lista_filhos, list) or len(lista_filhos) > 100:
+                raise ValueError(f"Componente {indice_pai}: filhos inválidos.")
+            ocupado = 0
+            residuais = []
+            for indice_filho, entrada_filho in enumerate(lista_filhos, start=1):
+                cid_f, cfg_f, valor_f, _ = _normalizar(
+                    entrada_filho, valor_pai,
+                    f"Filho {indice_filho} de {cid_pai}")
+                if valor_f is None:
+                    residuais.append((cid_f, cfg_f))
+                    continue
+                valor_f = max(0, int(valor_f))
+                ocupado += valor_f
+                valores_filhos.append((cid_f, cfg_f, valor_f))
+            disponivel = valor_pai - ocupado
+            if disponivel < 0:
+                raise ValueError(
+                    f"Componente {cid_pai}: os filhos excedem o valor do pai.")
+            for posicao, (cid_f, cfg_f) in enumerate(residuais):
+                valores_filhos.append((cid_f, cfg_f, disponivel if posicao == 0 else 0))
+            if not residuais and disponivel > 0:
+                if not valores_filhos:
+                    raise ValueError(f"Componente {cid_pai}: informe os filhos.")
+                cid_f, cfg_f, valor_f = valores_filhos[-1]
+                valores_filhos[-1] = (cid_f, cfg_f, valor_f + disponivel)
+            if sum(valor for _, _, valor in valores_filhos) != valor_pai:
+                raise ValueError(
+                    f"Componente {cid_pai}: a soma dos filhos não fecha o valor do pai.")
+
+        filhos = []
+        for cid_f, cfg_f, valor_f in valores_filhos:
+            filhos.append({
+                "id": cid_f,
+                "nome": cfg_f["nome"],
+                "descricao": cfg_f["descricao"],
+                "modo": cfg_f["modo"],
+                "valor_centavos": int(valor_f),
+                "percentual": round((valor_f / valor_pai * 100), 2) if valor_pai else 0.0,
+                "obrigatorio": cfg_f["obrigatorio"],
+                "ordem": len(filhos) + 1,
+            })
+
+        saida.append({
+            "id": cid_pai,
+            "nome": cfg_pai["nome"],
+            "descricao": cfg_pai["descricao"],
+            "modo": cfg_pai["modo"],
+            "valor_centavos": valor_pai,
+            "percentual": round((valor_pai / total * 100), 2) if total else 0.0,
+            "obrigatorio": cfg_pai["obrigatorio"],
+            "ordem": indice_pai,
+            "filhos": filhos,
+        })
+
+    if soma_pais != total:
+        raise ValueError(
+            f"A soma dos componentes ({soma_pais / 100:.2f}) não fecha com o total ({total / 100:.2f}).")
+    return {
+        "versao": 1,
+        "total_centavos": total,
+        "declarativa": True,
+        "componentes": saida,
+        "aviso": "",
+    }
+
+
 def para_json(composicao):
     return json.dumps(composicao, ensure_ascii=False, sort_keys=True)
 

@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.7 — composição declarativa no YAML — 2026-11-03 — develop
+
+- **Composição sob demanda:** o YAML da OS pode trazer um bloco `composicao` (pai + `filhos`). Só os componentes declarados aparecem no PDF; os demais deixam de ser exibidos com R$ 0,00.
+- **Hierarquia:** o pai pode ser valor ou percentual do total; os filhos podem ser valor, percentual do pai ou `residual: true` para fechar o valor do pai.
+- **Agente:** o bloco pode ser preenchido por um agente a partir da explicação de alto nível da OS, sem configuração manual.
+- **Encerramento:** a composição declarativa é preservada ao concluir a OS (não é sobrescrita pelo cálculo padrão).
+- **PDF:** filhos recuados e em cinza sob o componente pai; total continua batendo com o valor da OS.
+- Testes novos em `test_composicao.py` e `test_importacao_yaml.py`.
+
 ## 9.6.0-dev.7 — CNPJ e documento nos PDFs — 2026-11-03 — develop
 
 - **Relatório PDF:** mostra o CNPJ do prestador responsável; se ele não tiver CNPJ cadastrado, usa o CNPJ principal da AUTOSEG (23.864.393/0001-87). Também exibe o CPF/CNPJ do cliente.

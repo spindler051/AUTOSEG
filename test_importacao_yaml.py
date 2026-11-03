@@ -279,6 +279,37 @@ os:
         raise AssertionError("não apontou o número correto do material")
 
 
+def test_relatorio_composicao_declarativa():
+    dados = imp.relatorio("os.yaml", """versao: 1
+os:
+  diagnostico: "d"
+  execucao: "e"
+  resultado: "r"
+  relatorio_tecnico: "x"
+  materiais: []
+  composicao:
+    - id: visita
+      valor: 250.00
+      filhos:
+        - id: deslocamento
+          valor: 50.00
+        - id: administrativo
+          percentual: 10
+        - id: operacional
+          percentual: 10
+        - id: risco
+          percentual: 5
+        - id: outros
+          residual: true
+""".encode())
+    comp = dados["composicao_yaml"]
+    assert len(comp) == 1
+    assert comp[0]["id"] == "visita"
+    assert float(comp[0]["valor"]) == 250.0
+    assert len(comp[0]["filhos"]) == 5
+    assert comp[0]["filhos"][-1]["residual"] is True
+
+
 if __name__ == "__main__":
     test_cliente_yaml()
     test_ordem_servico_yaml()
@@ -295,4 +326,5 @@ if __name__ == "__main__":
     test_relatorio_material_valor_faltando_nao_vira_zero()
     test_relatorio_material_texto_nao_vira_financeiro()
     test_relatorio_erro_numera_material_correto()
+    test_relatorio_composicao_declarativa()
     print("TESTES_YAML_OK")

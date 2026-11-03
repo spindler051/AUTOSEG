@@ -195,6 +195,34 @@ class ComposicaoTest(unittest.TestCase):
         self.assertEqual(valores["Outros custos e margem de contribuição"], 500)
         self.assertEqual(sum(valores.values()), 3500)
 
+    def test_composicao_declarativa_com_filhos(self):
+        comp = composicao.declarativa(total_centavos=25000, blocos=[{
+            "id": "visita", "valor": "250.00", "filhos": [
+                {"id": "deslocamento", "valor": "50.00"},
+                {"id": "administrativo", "percentual": 10},
+                {"id": "operacional", "percentual": 10},
+                {"id": "risco", "percentual": 5},
+                {"id": "outros", "residual": True},
+            ]}])
+        self.assertTrue(comp["declarativa"])
+        self.assertEqual(len(comp["componentes"]), 1)
+        pai = comp["componentes"][0]
+        self.assertEqual(pai["id"], "visita")
+        self.assertEqual(pai["valor_centavos"], 25000)
+        self.assertEqual(pai["percentual"], 100.0)
+        filhos = {f["id"]: f for f in pai["filhos"]}
+        self.assertEqual(filhos["deslocamento"]["valor_centavos"], 5000)
+        self.assertEqual(filhos["administrativo"]["valor_centavos"], 2500)
+        self.assertEqual(filhos["operacional"]["valor_centavos"], 2500)
+        self.assertEqual(filhos["risco"]["valor_centavos"], 1250)
+        self.assertEqual(filhos["outros"]["valor_centavos"], 13750)
+        self.assertEqual(sum(f["valor_centavos"] for f in pai["filhos"]), 25000)
+
+    def test_composicao_declarativa_rejeita_soma_diferente(self):
+        with self.assertRaises(ValueError):
+            composicao.declarativa(total_centavos=25000, blocos=[{
+                "id": "visita", "valor": "200.00"}])
+
 
 class ComposicaoBancoTest(unittest.TestCase):
     def setUp(self):

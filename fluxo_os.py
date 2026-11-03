@@ -120,13 +120,16 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
               (('Motivo: '+motivo+' | ') if motivo else '')+'Relatório: '+relato,
               prestador_id,ator)
     try:
-        comp=composicao.calcular(
-            total_centavos=composicao.centavos_de_reais(o['valor_total']),
-            materiais_centavos=composicao.centavos_de_reais(o['valor_materiais']),
-            horas=o['tempo_horas'] if 'tempo_horas' in o.keys() else 0,
-            mao_obra_centavos=composicao.centavos_de_reais(o['valor_mao_obra']))
-        c.execute('UPDATE ordens_servico SET composicao_json=? WHERE id=?',
-                  (composicao.para_json(comp),os_id))
+        # Composição declarativa (vinda do YAML/agente) é preservada no encerramento.
+        existente=composicao.de_json(o['composicao_json']) if 'composicao_json' in o.keys() else None
+        if not (existente and existente.get('declarativa')):
+            comp=composicao.calcular(
+                total_centavos=composicao.centavos_de_reais(o['valor_total']),
+                materiais_centavos=composicao.centavos_de_reais(o['valor_materiais']),
+                horas=o['tempo_horas'] if 'tempo_horas' in o.keys() else 0,
+                mao_obra_centavos=composicao.centavos_de_reais(o['valor_mao_obra']))
+            c.execute('UPDATE ordens_servico SET composicao_json=? WHERE id=?',
+                      (composicao.para_json(comp),os_id))
     except Exception as erro:
         print('Aviso: composição do valor não calculada no encerramento:',erro)
     if status=='Concluída':
