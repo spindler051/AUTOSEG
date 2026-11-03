@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — cadastro de CNPJ do prestador — 2026-11-03 — develop
+
+- **Integrações e pagamentos:** o campo "Provedor de envio" passou de texto livre para um menu suspenso com as opções válidas (vazio, SMTP, Microsoft Graph, Gmail API, Outro), evitando "Configuração inválida" por valor digitado fora da lista.
+- O salvamento agora separa o erro do **CNPJ** (título "CNPJ inválido") do erro de **configuração** (título "Configuração inválida"), deixando claro qual campo precisa de atenção.
+- O CNPJ do prestador continua validado (dígitos verificadores) e aceita o mesmo CNPJ em vários prestadores.
+
 ## 9.6.0-dev.6 — envio para múltiplos destinatários em DEV — 2026-11-03 — develop
 
 - **E-mail de conclusão:** removido o desvio de DEV que substituía todos os destinatários por um único e-mail de teste (`email_teste_dev`). Agora todos os destinatários selecionados recebem o e-mail no campo **Para**, também no ambiente de desenvolvimento. A proteção contra domínios de teste (`example.*`, `.invalid`, `.test`, `.localhost`) continua ativa.

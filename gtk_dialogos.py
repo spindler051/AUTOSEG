@@ -1246,8 +1246,12 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
             title="Envio e dados bancários",
             description="Dados para rascunhos de e-mail. Não cole senhas nem tokens.")
         pagina.add(grupo)
-        self.provedor = ui.campo_entry(grupo, "Provedor de envio",
-                                       self.config.get("provedor_email", ""))
+        opcoes_provedor = ('', 'SMTP', 'Microsoft Graph', 'Gmail API', 'Outro')
+        provedor_atual = self.config.get("provedor_email", "")
+        provedor_sel = (opcoes_provedor.index(provedor_atual)
+                        if provedor_atual in opcoes_provedor else 0)
+        self.provedor = ui.campo_combo(grupo, "Provedor de envio",
+                                       opcoes_provedor, provedor_sel)
         self.remetente = ui.campo_entry(grupo, "E-mail remetente",
                                         self.config.get("email_remetente", ""))
         self.documento = ui.campo_entry(
@@ -1269,12 +1273,16 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
 
     def _salvar(self):
         dados = dict(self.config)
-        dados["provedor_email"] = self.provedor.get_text().strip()
+        dados["provedor_email"] = ui.valor_combo(self.provedor)
         dados["email_remetente"] = self.remetente.get_text().strip()
         dados["dados_bancarios_texto"] = self.dados.get_texto()
         try:
             ext.definir_documento_prestador(BANCO, self.prestador_id,
                                             self.documento.get_text())
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "CNPJ inválido", str(erro))
+            return
+        try:
             ext.salvar_config_prestador(BANCO, self.prestador_id, dados)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Configuração inválida", str(erro))
