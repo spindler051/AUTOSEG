@@ -1,5 +1,10 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.6 — envio para múltiplos destinatários em DEV — 2026-11-03 — develop
+
+- **E-mail de conclusão:** removido o desvio de DEV que substituía todos os destinatários por um único e-mail de teste (`email_teste_dev`). Agora todos os destinatários selecionados recebem o e-mail no campo **Para**, também no ambiente de desenvolvimento. A proteção contra domínios de teste (`example.*`, `.invalid`, `.test`, `.localhost`) continua ativa.
+- Teste novo em `test_gmail_integracao.py` garante que, em DEV, a lista de destinatários não é colapsada.
+
 ## 9.6.0-dev.6 — composição financeira e destinatários — 2026-11-03 — develop
 
 - **Composição do valor (relatório e orçamento):** a composição agora respeita a mão de obra e os materiais reais da OS/serviço. Antes, os componentes padrão (hora técnica, taxa de visita, custos e margem) eram aplicados por cima e, quando o total era menor, tudo era proporcionalizado, gerando percentuais incorretos.

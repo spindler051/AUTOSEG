@@ -189,6 +189,40 @@ class GmailIntegracao(unittest.TestCase):
         finally:
             gmail_service.enviar_email_gmail = original
 
+    def test_dev_nao_colapsa_destinatarios_em_um_unico_email(self):
+        # Em DEV, a lista completa deve ser preservada (nenhum endereço de teste
+        # substitui os destinatários selecionados).
+        os.environ['AUTOSEG_DEV'] = '1'
+        self.addCleanup(os.environ.pop, 'AUTOSEG_DEV', None)
+        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
+        oid = self._concluir_com_pdf()
+        import produtividade_os as prod
+        with ext.db(self.banco) as c:
+            c.execute('UPDATE clientes SET email=?,sindico_email=?,administradora_email=? WHERE id=(SELECT cliente_id FROM ordens_servico WHERE id=?)',
+                      ('cliente@outlook.com', 'sindico@gmail.com', 'adm@gmail.com', oid))
+        original = gmail_service.enviar_email_gmail
+        capturado = {}
+        def fake(destinatario, *args, **kwargs):
+            capturado['destinatario'] = destinatario
+            return 'msg-dev-1'
+        gmail_service.enviar_email_gmail = fake
+        try:
+            destinatarios = prod.destinatarios_para_os(
+                self.banco, oid, ['cliente', 'sindico', 'administradora'], '')
+            gmail_service.enviar_relatorio_os_concluida(self.banco, oid, destinatarios)
+            for _ in range(50):
+                with ext.db(self.banco) as c:
+                    r = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
+                                  (oid,)).fetchone()
+                if r and r['status'] in ('enviado', 'falhou'):
+                    break
+                time.sleep(0.05)
+            self.assertEqual(sorted(capturado['destinatario']),
+                             sorted(['cliente@outlook.com', 'sindico@gmail.com',
+                                     'adm@gmail.com']))
+        finally:
+            gmail_service.enviar_email_gmail = original
+
     def test_email_rascunho_inclui_nota_fiscal(self):
         import email
         oid = self._concluir_com_pdf()
