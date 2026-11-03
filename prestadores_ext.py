@@ -503,6 +503,8 @@ def salvar_config_prestador(banco,pid,dados):
 def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     with db(banco) as c:
         r=c.execute('SELECT o.numero_os,c.email,c.nome FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        if prestador_id is None:
+            prestador_id=responsavel_atual(c,os_id)
     if not r: raise ValueError('OS inválida.')
     if not r['email']: raise ValueError('Cadastre o e-mail do cliente antes de preparar a mensagem.')
     config={}
@@ -517,8 +519,19 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     corpo=f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.'
     if pagamento:corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
     corpo+='\n\nAtenciosamente,\n'+(config.get('banco_titular') or 'AUTOSEG')
+    nota=ultima_nota_fiscal(banco,os_id)
+    caminho_nf=None
+    if nota:
+        try:
+            _,caminho_nf=obter_nota_fiscal(banco,os_id,nota['id'])
+            corpo+='\n\nA nota fiscal segue anexa a esta mensagem.'
+        except Exception:
+            caminho_nf=None
     msg.set_content(corpo)
     msg.add_attachment(Path(pdf).read_bytes(),maintype='application',subtype='pdf',filename=Path(pdf).name)
+    if caminho_nf:
+        msg.add_attachment(Path(caminho_nf).read_bytes(),maintype='application',subtype='pdf',
+                           filename=Path(nota['nome_original']).name if nota else Path(caminho_nf).name)
     path=RASCUNHOS/f'email_os_{os_id}_p{prestador_id if prestador_id is not None else 0}_{secrets.token_hex(4)}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
 
 def criar_rascunho_fiscal(banco,os_id):

@@ -339,6 +339,96 @@ class MelhoriasRev12(unittest.TestCase):
         with self.assertRaises(ValueError):
             iy.relatorio('ruim.yaml', b'versao: 1\ninstrucoes: {}\nos: {}\n')
 
+    def test_pj_publico_sem_login_aceitar_e_recusar(self):
+        from portal_prestador import PortalPrestador
+        from servidor_web import ServidorPortal
+        pid = ext.cadastrar(self.db, 'Prestador PJ', 'pj@example.org', 'senha-bem-segura-2026')
+        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
+        dados.update(nome='Condomínio Público', tipo_pessoa='Jurídica', status='Ativo',
+                     documento='12345678000195')
+        cid = neg.cliente_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            org = c.execute('SELECT id,nome,tipo FROM v9_organizacoes WHERE cliente_id=?', (cid,)).fetchone()
+        cliente_srv = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
+        cliente_srv.iniciar(); self.addCleanup(cliente_srv.parar)
+        prestador_srv = PortalPrestador(self.db, '127.0.0.1', 0)
+        prestador_srv.iniciar(); self.addCleanup(prestador_srv.parar)
+        base_cli = f'http://127.0.0.1:{cliente_srv.porta}'
+        base_pre = f'http://127.0.0.1:{prestador_srv.servidor.server_port}'
+        visitante = browser()
+        status, html = req(visitante, base_cli, '/pj-rapido')
+        self.assertEqual(status, 200)
+        self.assertIn('Condomínio Público', html)
+        status, html = req(visitante, base_cli, '/pj-rapido/enviar', {
+            'organizacao_texto': f'{org["id"]} — {org["nome"]} ({org["tipo"]})',
+            'nome': 'Visitante Público', 'telefone': '51999998888',
+            'descricao': 'Solicitação pública de teste para o condomínio.',
+            'urgencia': 'Normal', 'website': ''})
+        self.assertEqual(status, 200)
+        self.assertIn('PJ-', html)
+        self.assertIn('wa.me', html)
+        with ext.db(self.db) as c:
+            req_row = c.execute('SELECT * FROM pj_solicitacoes_publicas ORDER BY id DESC LIMIT 1').fetchone()
+            self.assertEqual(req_row['status'], 'Aguardando verificação')
+            self.assertEqual(req_row['telefone'], '51999998888')
+            sid = req_row['id']
+        prestador = browser()
+        status, html = req(prestador, base_pre, '/login',
+                           {'email': 'pj@example.org', 'senha': 'senha-bem-segura-2026'})
+        token = csrf(html)
+        status, html = req(prestador, base_pre, '/pj-publicas')
+        self.assertEqual(status, 200)
+        self.assertIn('Visitante Público', html)
+        status, html = req(prestador, base_pre, f'/pj-publicas/{sid}/aceitar', {'csrf': token})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            req_row = c.execute('SELECT * FROM pj_solicitacoes_publicas WHERE id=?', (sid,)).fetchone()
+            self.assertEqual(req_row['status'], 'Aceito')
+            self.assertTrue(req_row['os_id'])
+            os_row = c.execute('SELECT status,origem FROM ordens_servico WHERE id=?', (req_row['os_id'],)).fetchone()
+            self.assertEqual(os_row['status'], 'Aberta')
+            self.assertIn('público', os_row['origem'].lower())
+        status, html = req(visitante, base_cli, '/pj-rapido/enviar', {
+            'organizacao_texto': f'{org["id"]} — {org["nome"]} ({org["tipo"]})',
+            'nome': 'Outro Visitante', 'telefone': '51999997777',
+            'descricao': 'Segunda solicitação pública para recusa.', 'urgencia': 'Normal', 'website': ''})
+        with ext.db(self.db) as c:
+            sid2 = c.execute('SELECT id FROM pj_solicitacoes_publicas ORDER BY id DESC LIMIT 1').fetchone()['id']
+        status, html = req(prestador, base_pre, f'/pj-publicas/{sid2}/recusar',
+                           {'csrf': token, 'motivo': 'Pedido sem detalhes suficientes'})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM pj_solicitacoes_publicas WHERE id=?',
+                                       (sid2,)).fetchone()['status'], 'Recusado')
+
+    def test_form_os_um_rascunho_e_nota_apos_fotos(self):
+        from portal_prestador import PortalPrestador
+        pid = ext.cadastrar(self.db, 'Prestador Form', 'form@example.org', 'senha-bem-segura-2026')
+        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
+        dados.update(nome='Cliente Form', tipo_pessoa='Física', status='Ativo')
+        cid = neg.cliente_salvar(self.db, dados, pid)
+        d = {'cliente_id': str(cid), 'descricao': 'Serviço do formulário', 'tecnico': 'T',
+             'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
+             'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, d, pid)
+        ext.atribuir(self.db, oid, pid)
+        servidor = PortalPrestador(self.db, '127.0.0.1', 0)
+        servidor.iniciar(); self.addCleanup(servidor.parar)
+        base = f'http://127.0.0.1:{servidor.servidor.server_port}'
+        prestador = browser()
+        status, html = req(prestador, base, '/login',
+                           {'email': 'form@example.org', 'senha': 'senha-bem-segura-2026'})
+        token = csrf(html)
+        status, html = req(prestador, base, f'/os/{oid}')
+        self.assertEqual(status, 200)
+        self.assertEqual(html.count(f'formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO'), 1)
+        pos_fotos = html.find('name="imagens_encerramento[]"')
+        pos_nota = html.find('name="nota_fiscal"')
+        pos_confirmar = html.find('id="confirmar-situacao"')
+        self.assertGreater(pos_fotos, -1)
+        self.assertGreater(pos_nota, pos_fotos)
+        self.assertGreater(pos_confirmar, pos_nota)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

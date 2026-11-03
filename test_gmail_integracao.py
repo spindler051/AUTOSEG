@@ -21,6 +21,13 @@ class GmailIntegracao(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_gmail_')
         self.banco = str(Path(self.tmp.name) / 'teste.db')
+        self.dir = Path(self.tmp.name)
+        ext.RELATORIOS = self.dir / 'relatorios'
+        ext.ANEXOS = self.dir / 'anexos'
+        ext.RASCUNHOS = self.dir / 'rascunhos'
+        ext.NOTAS = self.dir / 'notas_fiscais'
+        for pasta in (ext.RELATORIOS, ext.ANEXOS, ext.RASCUNHOS, ext.NOTAS):
+            pasta.mkdir(parents=True, exist_ok=True)
         criar_banco(self.banco)
         for modulo in (ext, fluxo, aten, cad9):
             modulo.instalar(self.banco)
@@ -62,7 +69,8 @@ class GmailIntegracao(unittest.TestCase):
         chamadas = []
         detalhes = {}
         def fake_enviar(destinatario, assunto, corpo_html, cc=None,
-                        caminho_pdf_relatorio=None, caminho_pdf_nf=None, usar_bcc=False):
+                        caminho_pdf_relatorio=None, caminho_pdf_nf=None, usar_bcc=False,
+                        nome_pdf_relatorio=None, nome_pdf_nf=None):
             detalhes.update(destinatario=destinatario, corpo=corpo_html, nf=caminho_pdf_nf,
                             bcc=usar_bcc)
             chamadas.append((destinatario, assunto, caminho_pdf_relatorio))
@@ -149,7 +157,7 @@ class GmailIntegracao(unittest.TestCase):
         original = gmail_service.enviar_email_gmail
         capturado = {}
         def fake(destinatario, assunto, corpo_html, cc=None, caminho_pdf_relatorio=None,
-                 caminho_pdf_nf=None, usar_bcc=False):
+                 caminho_pdf_nf=None, usar_bcc=False, nome_pdf_relatorio=None, nome_pdf_nf=None):
             capturado.update(destinatario=destinatario, corpo=corpo_html,
                              nf=caminho_pdf_nf, bcc=usar_bcc)
             return 'msg-multi-1'
@@ -180,6 +188,23 @@ class GmailIntegracao(unittest.TestCase):
             self.assertIn('pix-teste', capturado['corpo'])
         finally:
             gmail_service.enviar_email_gmail = original
+
+    def test_email_rascunho_inclui_nota_fiscal(self):
+        import email
+        oid = self._concluir_com_pdf()
+        with ext.db(self.banco) as c:
+            pid = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (oid,)).fetchone()['prestador_id']
+        ext.salvar_nota_fiscal(self.banco, oid, pid, 'nf_email.pdf',
+                               b'%PDF-1.4\n% nota fiscal\n%%EOF\n')
+        relatorio = Path(self.tmp.name) / 'relatorio.pdf'
+        relatorio.write_bytes(b'%PDF-1.4\n% relatorio\n%%EOF\n')
+        arq = Path(ext.criar_email_rascunho(self.banco, oid, str(relatorio)))
+        msg = email.message_from_bytes(arq.read_bytes(), policy=email.policy.default)
+        anexos = list(msg.iter_attachments())
+        self.assertEqual(len(anexos), 2)
+        nomes = {a.get_filename() for a in anexos}
+        self.assertIn('nf_email.pdf', nomes)
+        self.assertIn('relatorio.pdf', nomes)
 
 
 if __name__ == '__main__':

@@ -31,6 +31,7 @@ import estoque_materiais as estoque
 import portal_v9 as v9
 import links_publicos as links9
 import produtividade_os as prod
+import solicitacoes_pj as pj_publico
 import socket
 from versao_app import versao_local
 
@@ -81,7 +82,7 @@ def tabela(headers, rows):
 
 
 def layout(titulo,corpo,usuario=None,nonce=None):
-    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
+    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
@@ -141,6 +142,7 @@ class PortalPrestador:
         usar_https=os.environ.get('PRESTADOR_HTTPS')=='1' 
         ext.instalar(banco)
         prod.instalar(banco)
+        pj_publico.instalar(banco)
         fluxo.instalar(banco)
         aten.instalar(banco)
         cad9.instalar(banco)
@@ -256,6 +258,40 @@ class PortalPrestador:
                     +campos_escuros('Senha','senha',kind='password',required=True)
                     +'<button type="submit">Entrar</button></form>'
                     '<p class="muted">O cadastro de prestadores é realizado somente pelo aplicativo desktop.</p>')+v9.barra_links('prestador'))
+
+            def pj_publicas(self, s):
+                pendentes = pj_publico.listar(banco, 'Aguardando verificação')
+                historico = pj_publico.listar(banco)
+                token = self.hidden(s)
+                linhas = []
+                for p in pendentes:
+                    acoes = (
+                        f'<form method="post" action="/pj-publicas/{p["id"]}/aceitar" style="display:inline">'
+                        f'{token}<button type="submit">Aceitar</button></form> '
+                        f'<form method="post" action="/pj-publicas/{p["id"]}/recusar" style="display:inline">'
+                        f'{token}<input name="motivo" required placeholder="Motivo da recusa" '
+                        f'style="max-width:220px;display:inline-block"><button class="danger" type="submit">Recusar</button></form>')
+                    linhas.append((f'PJ-{p["id"]:04d}', esc(p['organizacao']), esc(p['nome']),
+                                   esc(p['telefone']), esc(p['descricao'][:160]), esc(p['criado_em']), acoes))
+                if pendentes:
+                    tabela_pend = tabela(['Protocolo','Condomínio/empresa','Solicitante','Telefone','Solicitação','Recebido','Verificação'], linhas)
+                else:
+                    tabela_pend = '<p class="muted">Nenhuma solicitação aguardando verificação.</p>'
+                hist = []
+                for p in historico:
+                    if p['status'] == 'Aguardando verificação':
+                        continue
+                    os_link = (f'<a href="/os/{p["os_id"]}">OS {esc(p["os_id"])}</a>'
+                               if p['os_id'] else '—')
+                    hist.append((f'PJ-{p["id"]:04d}', esc(p['organizacao']), esc(p['nome']),
+                                 esc(p['status']), os_link, esc(p['motivo'] or ''), esc(p['decidido_em'] or '')))
+                tabela_hist = (tabela(['Protocolo','Condomínio/empresa','Solicitante','Situação','OS','Motivo','Decidido em'], hist)
+                               if hist else '<p class="muted">Sem histórico.</p>')
+                return self.pagina('Solicitações PJ sem cadastro',
+                    '<p class="muted">Pedidos de abertura de OS feitos por condomínios/empresas sem cadastro PF. '
+                    'Aceitar cria uma OS <b>Aberta</b>; recusar exige motivo.</p>'
+                    + card('Aguardando verificação', tabela_pend)
+                    + card('Histórico de verificação', tabela_hist), s)
 
             def os_lista(self,s,concluidas=False):
                 if concluidas:
@@ -585,8 +621,6 @@ class PortalPrestador:
                 except Exception:
                     rasc_salvo = None
                 corpo+=f'<form method="post" action="{action}" id="form-os" enctype="multipart/form-data">{token}'
-                if oid and d['status'] in ext.ATIVAS and responsavel==s['pid']:
-                    corpo+=f'<p style="position:sticky;top:0;z-index:3;background:#111;padding:8px 0"><button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO</button> <span class="muted">Salva diagnóstico, materiais, fotos e legendas sem finalizar.</span></p>'
                 servicos_ativos=catalogo.listar(banco,ativos=True)
                 if servicos_ativos:
                     import json
@@ -687,6 +721,7 @@ class PortalPrestador:
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS:
                     pode_editar_fotos = (responsavel == s['pid'])
+                    pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
                     corpo+='<p class="muted">Cada foto recebe uma legenda individual. A legenda é salva no SQLite, reaparece ao reabrir a OS e é incluída no PDF final.</p>'
                     if anexos:
@@ -713,6 +748,12 @@ class PortalPrestador:
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>SALVAR RASCUNHO</b> para guardar fotos e legendas sem finalizar.</p></div>'
                     else:
                         corpo+='<p class="notice">Assuma a OS para adicionar fotos e editar as legendas.</p>'
+                    if pode_nota:
+                        corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
+                        corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
+                        corpo+='<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" accept="application/pdf">'
+                        corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/nota-fiscal" formnovalidate>Anexar nota fiscal</button>'
+                        corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
                 corpo+='<div class="actions">'
                 if not oid:
@@ -766,6 +807,10 @@ class PortalPrestador:
                         +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
                     if d['status']=='Concluída':
                         docs+=botao('Preparar nota fiscal (.json)',f'/os/{oid}/nota')
+                    if d['status'] in fluxo.FIM and (responsavel==s['pid'] or cad9.prestador_admin(banco,pid)):
+                        docs+=(f'<form method="post" action="/os/{oid}/reenviar-email" style="display:inline">'
+                               f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
+                               '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
                 else:
                     docs='<p class="muted">O PDF e o rascunho de e-mail serão liberados após a conclusão/cancelamento e publicação do relatório.</p>'
                 itens_notas=''
@@ -774,15 +819,8 @@ class PortalPrestador:
                                   f' <small>{esc(nota["criado_em"])}</small></p>')
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
-                pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
-                upload_nota=''
-                if pode_nota:
-                    upload_nota=(f'<form method="post" action="/os/{oid}/nota-fiscal" enctype="multipart/form-data">{token}'
-                                 '<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
-                                 '<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" accept="application/pdf" required>'
-                                 '<button type="submit" class="secondary">Anexar nota fiscal</button></form>')
                 corpo+=card('Notas fiscais da OS',
-                            itens_notas + upload_nota +
+                            itens_notas +
                             '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão. '
                             'O arquivo fica armazenado no servidor e só é liberado para usuários autorizados.</p>')
                 corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
@@ -943,6 +981,7 @@ class PortalPrestador:
                         return v9.get(self,'/organizacoes/responsaveis',banco,s)
                     if path=='/':return self.inicio(s)
                     if path=='/os':return self.os_lista(s)
+                    if path=='/pj-publicas':return self.pj_publicas(s)
                     if path=='/servicos':return self.servicos_lista(s)
                     if path=='/servicos/novo':return self.servico_form(s)
                     if path=='/historico':return self.os_lista(s,True)
@@ -1112,6 +1151,13 @@ class PortalPrestador:
                         return self.pagina('Rascunho salvo',card('Rascunho',
                             '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
                             +botao('Voltar à OS',f'/os/{oid}')),s)
+                    if len(partes)==3 and partes[0]=='pj-publicas' and partes[1].isdigit() and partes[2] in ('aceitar','recusar'):
+                        sid=int(partes[1])
+                        if partes[2]=='aceitar':
+                            resultado=pj_publico.aceitar(banco,sid,ator=s['nome'])
+                            return self.redir(f'/os/{resultado["os_id"]}')
+                        pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'])
+                        return self.redir('/pj-publicas')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal':
                         oid=int(partes[1])
                         arquivo=d.get('nota_fiscal')
@@ -1206,6 +1252,17 @@ class PortalPrestador:
                         elif acao=='iniciar':
                             aten.iniciar_assumindo(banco,oid,pid)
                             prod.limpar_rota_ao_iniciar(banco,oid)
+                        elif acao=='reenviar-email':
+                            with ext.db(banco) as c:
+                                if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+                                    raise PermissionError('Somente o responsável ou administrador pode reenviar o e-mail.')
+                                registro=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
+                            destinatarios=None
+                            if registro and registro['destinatarios_json']:
+                                try:destinatarios=json.loads(registro['destinatarios_json'])
+                                except Exception:destinatarios=None
+                            import gmail_service
+                            gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'/os/{oid}')
                     if path=='/financeiro/banco/salvar':

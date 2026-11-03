@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit, urlencode
 import cadastros_v9 as cad
 import cliente_fluxo_v94 as fluxo_pf
 import portal_v9 as v9
+import solicitacoes_pj as pj_publico
 import prestadores_ext as ext
 import catalogo_servicos as catalogo
 
@@ -41,6 +42,40 @@ def pagina(h,titulo,corpo,status=200):
     return h.responder(pagina_texto(titulo,corpo),status)
 
 
+def pj_rapido_form(h, banco, erro=''):
+    card, _, campos, textarea, select, esc, botao, _ = u()
+    with ext.db(banco) as c:
+        orgs = c.execute(
+            "SELECT id,nome,tipo,cidade FROM v9_organizacoes "
+            "WHERE mesclado_em IS NULL ORDER BY nome LIMIT 500").fetchall()
+    if not orgs:
+        return pagina(h, 'Chamado PJ rápido', card(
+            'Nenhum local cadastrado',
+            '<p>Ainda não há condomínios ou empresas disponíveis para solicitação.</p>'
+            + botao('Voltar ao portal', '/cliente', 'secondary')))
+    opcoes = ''.join(
+        f'<option value="{o["id"]} — {esc(o["nome"])} ({esc(o["tipo"])})"></option>'
+        for o in orgs)
+    form = ('<form method="post" action="/pj-rapido/enviar">'
+            '<label for="org-pj-rapido">Condomínio ou empresa</label>'
+            '<input id="org-pj-rapido" name="organizacao_texto" list="lista-org-pj-rapido" '
+            'required placeholder="Digite o nome e escolha a sugestão" autocomplete="off">'
+            f'<datalist id="lista-org-pj-rapido">{opcoes}</datalist>'
+            + campos('Seu nome completo', 'nome', required=True)
+            + campos('Seu telefone com DDD', 'telefone', required=True,
+                     placeholder='(51) 99999-9999')
+            + select('Urgência', 'urgencia', [(x, x) for x in ('Normal', 'Alta', 'Baixa')])
+            + textarea('Descreva a solicitação', 'descricao', required=True)
+            + '<input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off">'
+            + '<p class="notice">Este chamado será verificado pela AUTOSEG antes de virar uma OS. '
+              'Após enviar, você recebe um protocolo e pode avisar pelo WhatsApp.</p>'
+            + '<button type="submit" style="width:100%">Enviar solicitação PJ</button></form>')
+    aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+    return pagina(h, 'Chamado rápido para condomínio/empresa',
+                  card('Abertura de OS para PJ sem cadastro PF', aviso + form)
+                  + botao('Entrar com CPF e senha', '/cliente', 'secondary'))
+
+
 def login(h,aviso=''):
     card,_,campos,_,_,esc,botao,_=u()
     mensagem=('<p class="notice" role="alert">'+esc(aviso)+'</p>') if aviso else ''
@@ -51,7 +86,8 @@ def login(h,aviso=''):
     corpo=card('Entre na sua conta',
         '<p>Use seu CPF e sua senha para solicitar um serviço ou acompanhar um pedido.</p>'
         +mensagem+form+'<p>Primeira vez aqui?</p>'
-        +'<div class="acao-principal">'+botao('Criar minha conta','/cliente/cadastro','secondary')+'</div>')
+        +'<div class="acao-principal">'+botao('Criar minha conta','/cliente/cadastro','secondary')+'</div>'
+        +'<div class="acao-principal">'+botao('Chamado rápido para condomínio/empresa (sem login)','/pj-rapido','secondary')+'</div>')
     corpo+='<details class="ajuda"><summary>Preciso de ajuda para entrar</summary>'
     corpo+='<p>Se esqueceu a senha, fale com a AUTOSEG. Nunca informe sua senha no WhatsApp.</p>'
     corpo+=botao('Pedir ajuda pelo WhatsApp','https://wa.me/'+cad.WHATSAPP_AUTOSEG,'secondary')
@@ -554,6 +590,7 @@ def pdf_chamado(h,banco,s,chamado_id):
 
 def get(h,path,banco):
     if path=='/cliente/cadastro':return cadastro(h)
+    if path in ('/pj-rapido','/cliente/pj-rapido'):return pj_rapido_form(h,banco)
     s=v9.sessao(h,banco)
     if path=='/cliente/cadastro-pj':return cadastro_pj(h,s)
     if not s:return login(h,'Faça login para acessar essa área.' if path!='/cliente' else '')
@@ -609,6 +646,29 @@ def post(h,path,d,banco):
         uid=fluxo_pf.criar_conta(banco,d.get('cpf',''),senha)
         usuario=fluxo_pf.obter_perfil(banco,uid)
         return h.redir('/cliente/painel',token_sessao(h,usuario))
+    if path in ('/pj-rapido/enviar','/cliente/pj-rapido/enviar'):
+        key='pj-publico:'+h.client_address[0]
+        agora=time.time(); eventos=[t for t in v9.FALHAS.get(key,[]) if agora-t<3600]
+        if len(eventos)>=10:
+            return pagina(h,'Muitas solicitações','<p>Aguarde uma hora antes de enviar outra solicitação.</p>',429)
+        v9.FALHAS[key]=eventos+[agora]
+        if str(d.get('website','')).strip():
+            raise ValueError('Solicitação inválida.')
+        try:
+            org=int(str(d.get('organizacao_texto','')).split('—',1)[0].strip())
+        except (ValueError,TypeError):
+            return pj_rapido_form(h,banco,'Selecione um condomínio/empresa na lista.')
+        sol=pj_publico.criar(banco,org,d.get('nome',''),d.get('telefone',''),
+                             d.get('descricao',''),str(d.get('urgencia','Normal')))
+        link=pj_publico.link_whatsapp(sol)
+        card_fn,_,_,_,_,esc_fn,botao_fn,_=v9.ui()
+        return pagina(h,'Solicitação PJ registrada',card_fn('Solicitação registrada',
+            '<p class="good">Sua solicitação foi registrada com o protocolo <b>'+esc_fn(sol['protocolo'])+'</b>.</p>'
+            '<p>Local: '+esc_fn(sol['organizacao'])+' · Solicitante: '+esc_fn(sol['nome'])+'</p>'
+            '<p>A AUTOSEG vai verificar o pedido antes de abrir a OS. '
+            'Você pode avisar pelo WhatsApp usando o botão abaixo.</p>')
+            +botao_fn('Avisar AUTOSEG pelo WhatsApp',link)
+            +botao_fn('Voltar ao portal','/cliente','secondary'))
     s=v9.sessao(h,banco)
     v9.verificar_csrf(s,d)
     uid=s['uid']

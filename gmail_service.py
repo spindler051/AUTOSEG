@@ -7,6 +7,7 @@ envio ocorre em thread separada e qualquer falha é registrada no banco.
 import os
 import base64
 import threading
+from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -98,7 +99,9 @@ def enviar_email_gmail(
     cc=None,
     caminho_pdf_relatorio=None,
     caminho_pdf_nf=None,
-    usar_bcc=False
+    usar_bcc=False,
+    nome_pdf_relatorio=None,
+    nome_pdf_nf=None
 ):
     Request, Credentials, build, HttpError = _google_libs()
     try:
@@ -132,7 +135,7 @@ def enviar_email_gmail(
         message.attach(MIMEText(corpo_html, 'html', 'utf-8'))
 
         anexos = [caminho_pdf_relatorio, caminho_pdf_nf]
-        for caminho in anexos:
+        for indice, caminho in enumerate(anexos):
             if caminho:
                 if not os.path.isfile(caminho):
                     raise FileNotFoundError(f'Anexo PDF não encontrado: {caminho}')
@@ -145,8 +148,9 @@ def enviar_email_gmail(
                     part = MIMEBase('application', 'pdf')
                     part.set_payload(f.read())
                     encoders.encode_base64(part)
-                    nome_arquivo = os.path.basename(caminho)
-                    part.add_header('Content-Disposition', f'attachment; filename="{nome_arquivo}"')
+                    nome_arquivo = ((nome_pdf_relatorio if indice == 0 else nome_pdf_nf)
+                                    or os.path.basename(caminho))
+                    part.add_header('Content-Disposition', f'attachment; filename="{Path(nome_arquivo).name}"')
                     message.attach(part)
 
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
@@ -232,7 +236,8 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         corpo += _dados_pagamento_html(banco, os_id)
         msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
                                     caminho_pdf_relatorio=arquivo,
-                                    caminho_pdf_nf=caminho_nf, usar_bcc=True)
+                                    caminho_pdf_nf=caminho_nf, usar_bcc=True,
+                                    nome_pdf_nf=(nota['nome_original'] if nota else None))
         prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
     except Exception as erro:
         try:
