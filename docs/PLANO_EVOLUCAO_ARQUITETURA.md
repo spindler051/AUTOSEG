@@ -1,5 +1,8 @@
 # Plano de evolução arquitetural — AUTOSEG
 
+> **Documento histórico.** O frontend Tkinter (`app.py`) foi removido na versão `9.6.0-dev.12`. O frontend desktop atual é `gtk_app.py` (GTK4/libadwaita).
+
+
 **Status:** planejamento, sem mudanças de código nesta etapa.  
 **Base:** branch `feature/gtk4-libadwaita`, versão `9.6.0-dev.4` (REV10).  
 **Objetivo:** documentar melhorias futuras para reduzir acoplamento, permitir

@@ -1,5 +1,8 @@
 # AUTOSEG REV09 — Auditoria e validação
 
+> **Documento histórico.** O frontend Tkinter (`app.py`) foi removido na versão `9.6.0-dev.12`. O frontend desktop atual é `gtk_app.py` (GTK4/libadwaita).
+
+
 Data: 2026-11-02
 Versão local: 9.6.0-dev.3 (REV09) sobre `develop`
 Versão remota integrada: `origin/develop` (REV07/REV08) + `origin/main` (CI v9.4.1)

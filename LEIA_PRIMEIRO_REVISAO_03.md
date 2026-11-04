@@ -36,4 +36,4 @@ cd "$HOME/GestaoServicos_DEV" || exit 1
 - O antigo fluxo de análise ainda possui funções internas para preservar dados e compatibilidade, embora removido da navegação principal. Deve ser descontinuado após auditoria.
 - Não há envio Gmail OAuth, consulta automática CNPJ, migração de banco real ou garantia de ausência de regressões.
 - O catálogo usa preços estimados configurados pelo prestador; não consulta impostos, deslocamento, estoque, disponibilidade ou desconto.
-- A integração visual desktop deverá ser validada **no macOS com Tkinter**: os testes automatizados não substituem homologação gráfica.
+- A integração visual desktop deverá ser validada **no macOS com GTK**: os testes automatizados não substituem homologação gráfica.

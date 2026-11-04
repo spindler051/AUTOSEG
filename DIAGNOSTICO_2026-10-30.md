@@ -1,5 +1,8 @@
 # Diagnóstico técnico do ZIP — AUTOSEG DEV
 
+> **Documento histórico.** O frontend Tkinter (`app.py`) foi removido na versão `9.6.0-dev.12`. O frontend desktop atual é `gtk_app.py` (GTK4/libadwaita).
+
+
 **Origem analisada:** ZIP enviado pelo usuário em 30/10/2026. Os arquivos de código foram analisados em cópia temporária; não foi executada gravação em base de produção.
 
 ## Arquitetura encontrada

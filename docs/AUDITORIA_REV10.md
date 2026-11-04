@@ -1,5 +1,8 @@
 # AUTOSEG REV10 — Rascunho e legendas de fotos
 
+> **Documento histórico.** O frontend Tkinter (`app.py`) foi removido na versão `9.6.0-dev.12`. O frontend desktop atual é `gtk_app.py` (GTK4/libadwaita).
+
+
 Data: 2026-11-02
 Versão: 9.6.0-dev.4 (REV10)
 Branch de desenvolvimento: `develop`
