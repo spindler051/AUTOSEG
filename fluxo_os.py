@@ -107,10 +107,10 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
         raise ValueError('Relatório ou motivo excedeu o tamanho permitido.')
     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     if not o or o['status'] not in ext.ATIVAS:
-        raise ValueError('Esta OS não está aberta ou pendente.')
+        raise ValueError('Esta OS não está ativa.')
     # Condição evita duplo fechamento em edições concorrentes.
     mod=c.execute('''UPDATE ordens_servico SET status=?,data_conclusao=?,atualizado_em=?
-        WHERE id=? AND status IN ('Aberta','Pendente')''',
+        WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')''',
         (status,ext.agora(),ext.agora(),os_id))
     if mod.rowcount!=1: raise ValueError('A OS já foi encerrada por outro usuário.')
     c.execute('''INSERT INTO os_encerramentos(os_id,situacao,motivo,relatorio,ator,prestador_id,encerrado_em)

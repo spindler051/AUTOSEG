@@ -278,7 +278,7 @@ def os_salvar(banco,d,pid,oid=None):
             aten.salvar_rascunho(c,oid,relato,f'Prestador ID {pid}')
             ext.evento(c,oid,'Relatório técnico',relato,pid,'Prestador')
         if acao=='Pendente':
-            if c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Pendente')",(oid,)).rowcount!=1:
+            if c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')",(oid,)).rowcount!=1:
                 raise ValueError('OS não está ativa.')
             ext.evento(c,oid,'Pendência','Atendimento pendente conforme relatório técnico.',pid,'Prestador')
         # Fotos e legendas valem tanto para rascunho quanto para encerramento.

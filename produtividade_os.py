@@ -58,7 +58,7 @@ def instalar(banco):
 def _os_ativa_responsavel(c,os_id,pid):
     os_=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     if not os_ or os_['status'] not in ext.ATIVAS:
-        raise ValueError('OS não está aberta ou pendente.')
+        raise ValueError('OS não está ativa.')
     if ext.responsavel_atual(c,os_id)!=pid:
         raise PermissionError('Somente o técnico atribuído pode alterar esta OS.')
     return os_
@@ -75,7 +75,7 @@ def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False):
         c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ext.ATIVAS:
-            raise ValueError('Somente OS abertas ou pendentes podem estar em rota.')
+            raise ValueError('Somente OS ativas podem estar em rota.')
         responsavel=ext.responsavel_atual(c,os_id)
         if responsavel is None:
             raise ValueError('Atribua um técnico antes de marcar Em rota.')

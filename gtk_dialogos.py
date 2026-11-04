@@ -933,7 +933,7 @@ class DialogoOS(Adw.Dialog):
                 ext.evento(cursor, os_salvo_id, "Relatório técnico", relato)
             if acao == "Pendente":
                 cursor.execute(
-                    "UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Pendente')",
+                    "UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')",
                     (os_salvo_id,))
                 if cursor.rowcount != 1:
                     conexao.rollback()

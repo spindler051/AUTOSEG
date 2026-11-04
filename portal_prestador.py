@@ -356,7 +356,7 @@ class PortalPrestador:
                             o.valor_total,cl.nome cliente,MAX(d.versao) versao
                             FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
                             LEFT JOIN os_documentos d ON d.os_id=o.id AND d.tipo='relatorio_pdf'
-                            WHERE o.status NOT IN ('Aberta','Pendente')
+                            WHERE o.status NOT IN ('Aberta','Iniciada','Pendente')
                             GROUP BY o.id ORDER BY o.id DESC LIMIT 500''').fetchall()
                     rows=[]
                     for x in lista:
@@ -380,8 +380,8 @@ class PortalPrestador:
                     rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
                         f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
-                return self.pagina('Ordens de serviço abertas e pendentes',
-                    '<p class="muted">Todos os prestadores veem as OS abertas e pendentes, mesmo quando atribuídas a outros.</p>'
+                return self.pagina('Ordens de serviço ativas',
+                    '<p class="muted">Todos os prestadores veem as OS abertas, iniciadas e pendentes, mesmo quando atribuídas a outros.</p>'
                     +f'<p>{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</p>'
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
@@ -389,12 +389,14 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     o=c.execute('''SELECT COUNT(*) total,
                         SUM(CASE WHEN status='Aberta' THEN 1 ELSE 0 END) abertas,
+                        SUM(CASE WHEN status='Iniciada' THEN 1 ELSE 0 END) iniciadas,
                         SUM(CASE WHEN status='Pendente' THEN 1 ELSE 0 END) pendentes,
                         SUM(CASE WHEN status='Concluída' THEN 1 ELSE 0 END) concluidas FROM ordens_servico''').fetchone()
                     f=c.execute('''SELECT SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END) recebido,
                         SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END) pendente FROM financeiro''').fetchone()
                     cl=c.execute("SELECT COUNT(*) total FROM clientes WHERE status!='Inativo'").fetchone()
-                indic=[('OS abertas',o['abertas'] or 0),('OS pendentes',o['pendentes'] or 0),('OS concluídas',o['concluidas'] or 0),
+                indic=[('OS abertas',o['abertas'] or 0),('OS iniciadas',o['iniciadas'] or 0),
+                       ('OS pendentes',o['pendentes'] or 0),('OS concluídas',o['concluidas'] or 0),
                        ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',cl['total'])]
                 k='<div class="kpis">'+''.join(f'<div class="kpi"><span>{esc(n)}</span><strong>{esc(v)}</strong></div>' for n,v in indic)+'</div>'
                 corpo=f'<p>Olá, <b>{esc(s["nome"])}</b>. Acesso completo às funcionalidades operacionais, com auditoria.</p>{k}'
@@ -1356,7 +1358,7 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             os_atual=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
                         if not os_atual or os_atual['status'] not in ext.ATIVAS:
-                            raise ValueError('Somente OS abertas ou pendentes podem importar relatório.')
+                            raise ValueError('Somente OS ativas podem importar relatório.')
                         try:pre=yaml_import.relatorio(arq[0],arq[1])
                         except ValueError as erro:return self.os_form(s,oid,erro=str(erro))
                         if not pre:

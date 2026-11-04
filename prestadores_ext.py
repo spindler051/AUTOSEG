@@ -151,7 +151,7 @@ def instalar(banco):
                      SELECT op.os_id, op.prestador_id, op.atribuido_em
                      FROM os_prestadores op
                      JOIN ordens_servico o ON o.id=op.os_id
-                     WHERE op.ativo=1 AND o.status IN ('Aberta','Pendente')
+                     WHERE op.ativo=1 AND o.status IN ('Aberta','Iniciada','Pendente')
                        AND op.rowid = (SELECT op2.rowid FROM os_prestadores op2
                                        WHERE op2.os_id=op.os_id AND op2.ativo=1
                                        ORDER BY op2.atribuido_em DESC,op2.rowid DESC LIMIT 1)''')
@@ -213,7 +213,7 @@ def evento(c,os_id,acao,descricao,prestador_id=None,ator='Administrador'):
     c.execute('INSERT INTO os_eventos(os_id,prestador_id,ator,acao,descricao,criado_em) VALUES(?,?,?,?,?,?)',
               (os_id,prestador_id,ator,acao,descricao,agora()))
 
-ATIVAS = ('Aberta', 'Pendente')
+ATIVAS = ('Aberta', 'Iniciada', 'Pendente')
 
 def listar_os_compartilhadas(banco):
     """Todas as OS ativas para todo prestador autenticado, atribuídas ou não."""
@@ -232,8 +232,9 @@ def listar_os_compartilhadas(banco):
             JOIN clientes cl ON cl.id=o.cliente_id
             LEFT JOIN os_responsaveis r ON r.os_id=o.id
             LEFT JOIN prestadores p ON p.id=r.prestador_id
-            WHERE o.status IN ('Aberta','Pendente')
-            ORDER BY CASE WHEN o.status='Pendente' THEN 0 ELSE 1 END, o.id DESC
+            WHERE o.status IN ('Aberta','Iniciada','Pendente')
+            ORDER BY CASE WHEN o.status='Pendente' THEN 0
+                          WHEN o.status='Iniciada' THEN 1 ELSE 2 END, o.id DESC
         """).fetchall()]
 
 def responsavel_atual(c, os_id):
@@ -254,7 +255,7 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(prestador_id,)).fetchone()
         if not o or not p: raise ValueError('OS ou prestador ativo não encontrado.')
-        if o['status'] not in ATIVAS: raise ValueError('Só é possível atribuir OS aberta ou pendente.')
+        if o['status'] not in ATIVAS: raise ValueError('Só é possível atribuir OS ativa.')
         anterior=responsavel_atual(c,os_id)
         if anterior==prestador_id: return False
         c.execute('INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo) VALUES(?,?,?,1) '
@@ -303,7 +304,7 @@ def registrar(banco,os_id,pid,acao,descricao):
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
         if not o or not p or not acesso(c,os_id,pid): raise PermissionError('Assuma a OS para registrar atividades.')
-        if o['status'] not in ATIVAS: raise ValueError('OS não está aberta ou pendente.')
+        if o['status'] not in ATIVAS: raise ValueError('OS não está ativa.')
         if acao=='Pendência': c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",(os_id,))
         if acao=='Conclusão informada':
             c.execute('INSERT INTO os_conclusoes(os_id,prestador_id,relato,informado_em,aprovado_em) VALUES(?,?,?,?,NULL) ON CONFLICT(os_id) DO UPDATE SET prestador_id=excluded.prestador_id,relato=excluded.relato,informado_em=excluded.informado_em,aprovado_em=NULL',(os_id,pid,descricao,agora()))
@@ -583,7 +584,7 @@ def desatribuir(banco, os_id, ator='Administrador'):
         c.execute('BEGIN IMMEDIATE')
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ATIVAS:
-            raise ValueError('Selecione uma OS aberta ou pendente.')
+            raise ValueError('Selecione uma OS ativa.')
         anterior = responsavel_atual(c, os_id)
         if anterior is None: return False
         c.execute('DELETE FROM os_responsaveis WHERE os_id=?',(os_id,))
@@ -606,7 +607,7 @@ def marcar_em_rota(banco, os_id, pid, ator=None):
         if not p or not o:
             raise PermissionError('Prestador ou OS inválida.')
         if o['status'] not in ATIVAS:
-            raise ValueError('Apenas OS abertas ou pendentes permitem marcar em rota.')
+            raise ValueError('Apenas OS ativas permitem marcar em rota.')
         if responsavel_atual(c, os_id) != pid:
             raise PermissionError('Somente o prestador responsável pode marcar em rota.')
         if em_rota_atual(c, os_id):

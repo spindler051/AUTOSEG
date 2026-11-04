@@ -22,6 +22,11 @@ def instalar(banco):
            (os_id,cliente_id,descricao_original,observacoes_originais,criado_em,origem)
            SELECT id,cliente_id,COALESCE(descricao,''),COALESCE(observacoes,''),
                   COALESCE(criado_em,''),COALESCE(origem,'App') FROM ordens_servico""")
+        # Legacy rows started before the Iniciada status existed: only untouched
+        # "Aberta" rows are migrated; an explicit "Pendente" remains pending.
+        c.execute("""UPDATE ordens_servico SET status='Iniciada'
+                     WHERE status='Aberta' AND id IN (
+                       SELECT os_id FROM os_atendimentos WHERE iniciado_em IS NOT NULL)""")
 
 def registrar_solicitacao(c,os_id,cliente_id,descricao,observacoes='',origem='App'):
     c.execute("""INSERT OR IGNORE INTO os_solicitacoes
@@ -40,6 +45,9 @@ def iniciar(banco,os_id,pid=None,ator='Administrador desktop'):
             ator=p['nome']
         existente=c.execute('SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone()
         if existente and existente['iniciado_em']:
+            # Repair only the legacy case where starting never changed "Aberta".
+            c.execute("""UPDATE ordens_servico SET status='Iniciada'
+                         WHERE id=? AND status='Aberta'""",(os_id,))
             try:
                 ext.finalizar_em_rota(c, os_id)
             except Exception:
@@ -49,11 +57,15 @@ def iniciar(banco,os_id,pid=None,ator='Administrador desktop'):
           VALUES(?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
           iniciado_em=excluded.iniciado_em,iniciado_por=excluded.iniciado_por,
           ator_inicio=excluded.ator_inicio''',(os_id,ext.agora(),pid,ator))
+        c.execute("""UPDATE ordens_servico SET status='Iniciada',atualizado_em=?
+                     WHERE id=? AND status IN ('Aberta','Pendente')""",
+                  (ext.agora(),os_id))
         try:
             ext.finalizar_em_rota(c, os_id)
         except Exception:
             pass
-        ext.evento(c,os_id,'Atendimento iniciado','Início de execução registrado no local.',pid,ator)
+        ext.evento(c,os_id,'Atendimento iniciado',
+                   'Início de execução registrado no local; situação alterada para Iniciada.',pid,ator)
         return True
 
 def salvar_rascunho(c,os_id,relato,ator):

@@ -50,4 +50,20 @@ class Fluxo(unittest.TestCase):
             c.execute('INSERT INTO os_atendimentos(os_id,iniciado_em) VALUES(?,?)',(oid,ext.agora()))
         with self.assertRaises(ValueError):cad.cancelar_chamado(self.path,ch,'Prestador','Já iniciado')
 
+    def test_inicio_muda_status_para_iniciada_e_permite_encerrar(self):
+        org,ch=self._abrir()
+        with ext.db(self.path) as c:
+            oid=c.execute('SELECT os_id FROM v9_chamados WHERE id=?',(ch,)).fetchone()['os_id']
+        self.assertTrue(aten.iniciar(self.path,oid))
+        with ext.db(self.path) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()['status'],'Iniciada')
+            self.assertTrue(c.execute('SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',(oid,)).fetchone()['iniciado_em'])
+        self.assertFalse(aten.iniciar(self.path,oid))
+        with ext.db(self.path) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()['status'],'Iniciada')
+            c.execute('BEGIN IMMEDIATE')
+            fluxo.aplicar_encerramento(c,oid,'Cancelada','Serviço não executado no teste.','Cliente desistiu.')
+        with ext.db(self.path) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()['status'],'Cancelada')
+
 if __name__=='__main__':unittest.main()

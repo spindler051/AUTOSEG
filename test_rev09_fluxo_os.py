@@ -179,6 +179,8 @@ def main():
             with ext.db(banco) as cursor:
                 check('atendimento iniciado', cursor.execute(
                     'SELECT iniciado_em FROM os_atendimentos WHERE os_id=?', (os_id,)).fetchone()['iniciado_em'])
+                check('status passa a Iniciada', cursor.execute(
+                    'SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()['status'] == 'Iniciada')
                 check('deslocamento encerrado', cursor.execute(
                     'SELECT COUNT(*) FROM os_deslocamentos WHERE os_id=? AND finalizado_em IS NULL',
                     (os_id,)).fetchone()[0] == 0)

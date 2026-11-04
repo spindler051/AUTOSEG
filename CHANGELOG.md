@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.13 — status Iniciada ao começar o atendimento — 2026-11-04 — develop
+
+- **Novo status:** ao clicar em `INICIAR OS` ou `Iniciar atendimento`, a OS passa de `Aberta`/`Pendente` para **`Iniciada`** na mesma transação.
+- **Status ativos:** `Iniciada` é tratada como OS ativa em listas, atribuição, rascunhos, fotos, importação YAML, encerramento e financeiro; não entra no histórico até ser concluída ou cancelada.
+- **Dashboards:** desktop e Portal do Prestador mostram a contagem de OS iniciadas; o histórico separa iniciadas de abertas/pendentes.
+- **Dados existentes:** OS já iniciadas que continuavam como `Aberta` são migradas de forma idempotente. OS marcadas explicitamente como `Pendente` permanecem pendentes.
+- **Contrato:** testes cobrem a transição, a idempotência e o encerramento a partir de `Iniciada`.
+- Nenhum valor, PDF, e-mail ou lançamento financeiro é alterado por esta mudança.
+
 ## Documentação — nome do produto e contrato de CLI — 2026-11-04
 
 - **CLI sem ambiguidade:** `workaholic` fica como CLI; a GUI usa `workaholic-gtk` (ou o nome próprio do app, se houver nome separado). Nada de symlink que abre GUI ou CLI conforme o ambiente.

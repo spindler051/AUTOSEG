@@ -350,6 +350,7 @@ class Janela(Adw.ApplicationWindow):
         self.cards = {}
         for indice, (chave, titulo_card, classe) in enumerate((
             ("abertas", "OS abertas", "error"),
+            ("iniciadas", "OS iniciadas", "warning"),
             ("pendentes", "OS pendentes", "warning"),
             ("receber", "A receber", "warning"),
             ("recebido", "Recebido", "success"),
@@ -411,6 +412,7 @@ class Janela(Adw.ApplicationWindow):
         try:
             resumo_os = conexao.execute(
                 "SELECT COALESCE(SUM(status='Aberta'),0) abertas, "
+                "COALESCE(SUM(status='Iniciada'),0) iniciadas, "
                 "COALESCE(SUM(status='Pendente'),0) pendentes FROM ordens_servico").fetchone()
             resumo_fin = conexao.execute(
                 "SELECT COALESCE(SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END),0) a_receber, "
@@ -421,6 +423,7 @@ class Janela(Adw.ApplicationWindow):
         finally:
             conexao.close()
         self.cards["abertas"].set_text(str(resumo_os["abertas"]))
+        self.cards["iniciadas"].set_text(str(resumo_os["iniciadas"]))
         self.cards["pendentes"].set_text(str(resumo_os["pendentes"]))
         self.cards["receber"].set_text(ui.brl(resumo_fin["a_receber"]))
         self.cards["recebido"].set_text(ui.brl(resumo_fin["recebido"]))
@@ -792,7 +795,7 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Atribuir / transferir", self._atribuir_os_selecionada))
         pagina.append(topo)
         pagina.append(ui.barra(ui.legenda(
-            "A tela mostra apenas OS abertas e pendentes. O histórico fica em Histórico e relatórios.")))
+            "A tela mostra apenas OS ativas: abertas, iniciadas e pendentes. O histórico fica em Histórico e relatórios.")))
         self.tabela_os = ui.Tabela([
             ("ID", 65, False, 0.5),
             ("OS", 85, False, 0.5),
@@ -828,7 +831,7 @@ class Janela(Adw.ApplicationWindow):
                    JOIN clientes c ON c.id=os.cliente_id
                    LEFT JOIN os_responsaveis r ON r.os_id=os.id
                    LEFT JOIN prestadores resp ON resp.id=r.prestador_id
-                   WHERE os.status IN ('Aberta','Pendente') ORDER BY os.id DESC""").fetchall()
+                   WHERE os.status IN ('Aberta','Iniciada','Pendente') ORDER BY os.id DESC""").fetchall()
         finally:
             conexao.close()
         termo = self.busca_os.get_text().casefold().strip() if hasattr(self, "busca_os") else ""
@@ -982,6 +985,7 @@ class Janela(Adw.ApplicationWindow):
         for indice, (chave, titulo_card, classe) in enumerate((
             ("total", "Total", "accent"),
             ("abertas", "Abertas", "error"),
+            ("iniciadas", "Iniciadas", "warning"),
             ("pendentes", "Pendentes", "warning"),
             ("concluidas", "Concluídas", "success"),
         )):
@@ -1036,18 +1040,19 @@ class Janela(Adw.ApplicationWindow):
             resumo = conexao.execute(
                 """SELECT COUNT(*) total,
                           COALESCE(SUM(status='Aberta'),0) abertas,
+                          COALESCE(SUM(status='Iniciada'),0) iniciadas,
                           COALESCE(SUM(status='Pendente'),0) pendentes,
                           COALESCE(SUM(status='Concluída'),0) concluidas,
                           COALESCE(SUM(CASE WHEN status='Concluída' THEN valor_total ELSE 0 END),0) valor_concluido,
-                          COALESCE(SUM(CASE WHEN status IN ('Aberta','Pendente') THEN valor_total ELSE 0 END),0) valor_aberto
+                          COALESCE(SUM(CASE WHEN status IN ('Aberta','Iniciada','Pendente') THEN valor_total ELSE 0 END),0) valor_aberto
                    FROM ordens_servico""").fetchone()
         finally:
             conexao.close()
-        for chave in ("total", "abertas", "pendentes", "concluidas"):
+        for chave in ("total", "abertas", "iniciadas", "pendentes", "concluidas"):
             self.cards_hist[chave].set_text(str(resumo[chave]))
         self.resumo_valores.set_text(
             f"Valor das OS concluídas: {ui.brl(resumo['valor_concluido'])}   •   "
-            f"Valor em aberto/pendente: {ui.brl(resumo['valor_aberto'])}")
+            f"Valor em OS ativas: {ui.brl(resumo['valor_aberto'])}")
         self.tabela_historico.definir_linhas([
             (r["id"], r["numero_os"], r["cliente"], r["data_conclusao"],
              ui.brl(r["valor_total"]), r["forma_pagamento"], r["status"],
@@ -1313,9 +1318,9 @@ class Janela(Adw.ApplicationWindow):
             ordens = c.execute(
                 """SELECT o.id,o.numero_os,c.nome cliente,o.status FROM ordens_servico o
                    JOIN clientes c ON c.id=o.cliente_id
-                   WHERE o.status IN ('Aberta','Pendente') ORDER BY o.id DESC""").fetchall()
+                   WHERE o.status IN ('Aberta','Iniciada','Pendente') ORDER BY o.id DESC""").fetchall()
         if not ordens:
-            ui.info(self, "Atribuição", "Não há OS abertas ou pendentes.")
+            ui.info(self, "Atribuição", "Não há OS ativas para atribuir.")
             return
         mapa = {f"{o['numero_os']} — {o['cliente']} ({o['status']}) [ID {o['id']}]": o["id"]
                 for o in ordens}
@@ -1440,7 +1445,7 @@ class Janela(Adw.ApplicationWindow):
         try:
             resumo = conexao.execute(
                 """SELECT COUNT(*) total,
-                          COALESCE(SUM(status IN ('Aberta','Pendente')),0) andamento,
+                          COALESCE(SUM(status IN ('Aberta','Iniciada','Pendente')),0) andamento,
                           COALESCE(SUM(status='Concluída'),0) concluidas
                    FROM ordens_servico WHERE origem='Portal'""").fetchone()
             registros = conexao.execute(

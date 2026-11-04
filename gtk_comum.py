@@ -27,7 +27,7 @@ except Exception:
     VERSAO = "9.6.0-dev.4"
 
 STATUS_FIM = ("Concluída", "Cancelada", "Não realizada")
-ATIVAS = ("Aberta", "Pendente")
+ATIVAS = ("Aberta", "Iniciada", "Pendente")
 
 
 def brl(valor):

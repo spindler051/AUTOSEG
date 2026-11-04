@@ -12,9 +12,9 @@ Consolidar OS, técnicos, relatórios, YAML, materiais, Gmail, permissões e fin
 ## Regras de negócio
 
 ### OS e atribuição
-- Estado operacional: `Aberta | Pendente | Concluída | Cancelada`.
+- Estado operacional: `Aberta | Iniciada | Pendente | Concluída | Cancelada`.
 - Atribuição: `responsavel_id` opcional, independente de iniciar atendimento.
-- Situação do atendimento: `Não iniciado | Em rota | Iniciado`; apresentar no desktop `Aberta / Não atribuída`, `Aberta / <nome>`, `Pendente / Não atribuída`, `Pendente / <nome>`, `Iniciada / <nome>`.
+- Situação do atendimento: `Não iniciado | Em rota | Iniciado`; começar o atendimento grava o status `Iniciada`. Apresentar no desktop `Aberta / Não atribuída`, `Aberta / <nome>`, `Iniciada / <nome>`, `Pendente / Não atribuída`, `Pendente / <nome>`.
 - Admin desktop vê todas e atribui/desatribui/reatribui. Prestador assume OS aberta/pendente sem responsável; assumir deve ser atômico para evitar conflito. Apenas responsável ou admin pode marcar `Em rota`; cliente acompanha. Iniciar remove `Em rota`.
 - Histórico de participações e alterações não é apagado ao reatribuir.
 

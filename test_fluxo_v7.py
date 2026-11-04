@@ -36,8 +36,13 @@ def main():
             assert st==200
             with ext.db(banco) as c:
                 assert c.execute('SELECT COUNT(*) FROM os_eventos WHERE os_id=1 AND acao="Atendimento iniciado"').fetchone()[0]==1
+                assert c.execute('SELECT status FROM ordens_servico WHERE id=1').fetchone()[0]=='Iniciada'
                 original=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=1').fetchone()[0]
                 assert original
+            st,html,_=navegar(opener,base,'/')
+            assert st==200 and b'OS iniciadas' in html
+            st,html,_=navegar(opener,base,'/os')
+            assert st==200 and b'Iniciada' in html
             body={'csrf':csrf,'cliente_id':'1','descricao':'TEXTO MALICIOSO',
                 'tecnico':'Atendente','forma_pagamento':'PIX','observacoes':'Anotação nova',
                 'valor_mao_obra':'100','valor_materiais_manual':'0','relatorio_tecnico':'Teste de rascunho persistente',
@@ -47,7 +52,7 @@ def main():
             st,html,_=navegar(opener,base,'/os/1')
             assert b'Teste de rascunho persistente' in html
             with ext.db(banco) as c:
-                assert c.execute('SELECT status FROM ordens_servico WHERE id=1').fetchone()[0]=='Aberta'
+                assert c.execute('SELECT status FROM ordens_servico WHERE id=1').fetchone()[0]=='Iniciada'
                 assert c.execute('SELECT descricao FROM ordens_servico WHERE id=1').fetchone()[0]==original
                 assert c.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=1').fetchone()[0]=='Teste de rascunho persistente'
             # Encerra via portal e baixa o PDF publicado.

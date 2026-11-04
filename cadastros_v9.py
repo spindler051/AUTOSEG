@@ -583,7 +583,7 @@ def cancelar_chamado(banco,chamado_id,ator,motivo):
         if ch['status'] in ('Cancelado','Recusado'):raise ValueError('Solicitação já cancelada/recusada.')
         if ch['os_id']:
             osat=c.execute('SELECT status FROM ordens_servico WHERE id=?',(ch['os_id'],)).fetchone()
-            if not osat or osat['status'] not in ('Aberta','Pendente'):
+            if not osat or osat['status'] not in ext.ATIVAS:
                 raise ValueError('A OS já começou seu encerramento; use o fluxo normal de finalização.')
             andam=c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_atendimentos'").fetchone()
             if andam:

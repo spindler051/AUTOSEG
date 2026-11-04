@@ -621,7 +621,7 @@ def recalcular_tudo(banco=None):
             servicos += 1
         for linha in conexao.execute(
                 """SELECT id,valor_mao_obra,valor_total,valor_materiais,tempo_horas
-                   FROM ordens_servico WHERE status IN ('Aberta','Pendente')"""):
+                   FROM ordens_servico WHERE status IN ('Aberta','Iniciada','Pendente')"""):
             identificador, mao_reais, total_reais, materiais_reais, tempo = linha
             composicao = calcular(
                 total_centavos=centavos_de_reais(total_reais),
