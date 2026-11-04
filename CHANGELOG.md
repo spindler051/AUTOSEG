@@ -7,6 +7,7 @@
 - **Critérios e candidatos:** critérios de nome, shortlist exploratória e necessidade de checagem de marca/domínio antes da decisão.
 - **Officina:** avaliado como candidato forte para o app GTK; PyPI livre, mas já existe organização `officina` no GitHub, cerca de 614 repositórios e necessidade de checagem de marca/Flathub.
 - **App ID:** `io.github.burtvadr.Officina` é válido se o repositório for `github.com/burtvadr/Officina` e o Metainfo usar o mesmo ID. Flathub não exige GitHub; exige um ID reverse-DNS e controle do domínio/namespace.
+- **Conta pessoal:** `burtvadr` é a conta pessoal do desenvolvedor; o repositório dedicado do Officina ainda será criado. O ID é provisório até o repositório e o Metainfo existirem.
 - **Separação sugerida:** `workaholic` fica como CLI do motor; `officina` seria o app GTK; `autoseg` o flavor de segurança — se as checagens passarem.
 - **Decisão adiada:** o nome do app genérico/plataforma continua TBD; Workaholic permanece como nome do motor/protótipo por enquanto.
 - Nenhuma mudança funcional.

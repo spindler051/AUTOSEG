@@ -173,6 +173,34 @@ Flathub submission yet.
 5. Keep **AUTOSEG** as the security/automation flavor name; it is a strong
    vertical brand and should not be renamed as part of this decision.
 
+## 7.1 Decision record — current status (2026-11-04)
+
+These points are recorded so they are not lost while the app is still being
+built:
+
+- **Developer account:** `burtvadr` is the developer’s **personal GitHub
+  account**. It exists and is controlled by the developer.
+- **Officina repository:** not created yet. It will be created later as a
+  dedicated repository, separate from the AUTOSEG monorepo.
+- **Provisional app ID:** `io.github.burtvadr.Officina`.
+  - It is valid only if the project repository becomes
+    `https://github.com/burtvadr/Officina`.
+  - It should not be used for a different repository, such as the current
+    AUTOSEG monorepo.
+  - It is provisional until the repository exists and the Metainfo is created.
+- **Name:** **Officina** is the strongest candidate for the generic GTK app,
+  but it is not a final trademark decision. `Workaholic` remains the engine
+  name/codename for now.
+- **Flathub:** not submitted and not ready. The app ID can be chosen before
+  submission, but the Flathub review also needs a stable release, source build,
+  Metainfo, license, English localization and a clean repository history.
+- **Personal vs project namespace:** using a personal account is acceptable for
+  the initial project. If Officina becomes a team project, reconsider a GitHub
+  organization or a project-owned domain **before** the Flathub submission,
+  because app ID changes after acceptance are conservative and require review.
+- **AUTOSEG:** remains the flavor name for security/automation and does not need
+  to use the Officina app ID unless it is distributed as a separate Flatpak.
+
 ## 8. Open decisions
 
 - Is Workaholic the engine name, the platform name, or only a codename?
