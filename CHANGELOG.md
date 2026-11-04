@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.14 — busca de cliente no orçamento — 2026-11-04 — develop
+
+- **Novo orçamento:** a escolha do cliente agora tem o mesmo campo de busca já usado no formulário de OS (`busca-cliente-os`).
+- **Lista menor:** o orçamento carrega até 100 clientes ativos, como o formulário de OS, em vez de 500.
+- **Sem componente novo:** a busca local e o seletor continuam sendo os mesmos já implementados no portal do prestador.
+- **Sem mudança no MAIN:** implementação apenas em `develop`; servidor e banco de produção intactos.
+
 ## Documentação — plano de correção financeira pela UI — 2026-11-04
 
 - **Problema:** hoje não é possível apagar/consolidar uma OS concluída nem ajustar rateio depois da conclusão pela interface.

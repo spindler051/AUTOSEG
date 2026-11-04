@@ -701,6 +701,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('Orçamento (não é OS)', html)
         self.assertIn('Nenhuma ordem de serviço é criada', html)
+        self.assertIn('id="busca-cliente-os"', html)
+        self.assertIn('name="cliente_id"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         with ext.db(self.db) as c:
             antes = c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0]

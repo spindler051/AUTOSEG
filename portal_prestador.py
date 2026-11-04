@@ -509,7 +509,7 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     clientes = c.execute(
                         "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
-                        "ORDER BY nome LIMIT 500").fetchall()
+                        "ORDER BY nome LIMIT 100").fetchall()
                 servicos = catalogo.listar(banco, ativos=True)
                 if not clientes:
                     return self.pagina('Novo orçamento', card('Sem clientes',
@@ -539,6 +539,9 @@ class PortalPrestador:
                     (x['id'], f'{x["nome"]} — {catalogo.reais(total_servico(x))}')
                     for x in servicos]
                 form = (f'<form method="post" action="/orcamento/pdf">{self.hidden(s)}'
+                        + '<label for="busca-cliente-os">Buscar cliente ou condomínio</label>'
+                          '<input type="search" id="busca-cliente-os" '
+                          'placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
                         + select('Cliente','cliente_id',opcoes_clientes,selecionado,required=True)
                         + select('Serviço / produto','servico_id',opcoes_servicos,'',required=True)
                         + '<label for="orcamento-quantidade">Quantidade</label>'
