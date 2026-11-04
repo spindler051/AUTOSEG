@@ -7,12 +7,16 @@ generic, modular, open-source platform. Read this file before changing code.
 
 1. `docs/PRODUCT_VISION.md` — product boundaries and long-term direction.
 2. `docs/PLATFORM_MIGRATION_PLAYBOOK.md` — how to migrate one slice at a time.
-3. `docs/PLATFORM_MIGRATION_LEDGER.md` — what is already migrated and what is
+3. `docs/HUMAN_CENTERED_DECISIONS.md` — how to defer decisions that need human
+   context and real usage.
+4. `docs/USER_FEEDBACK_GUIDE.md` — how to observe real work and collect useful
+   feedback without leading or surveillance.
+5. `docs/PLATFORM_MIGRATION_LEDGER.md` — what is already migrated and what is
    still legacy.
-4. `docs/GTK4_LINUX_MACOS.md` — current desktop frontend.
-5. `workaholic/AGENTS.md` and `workaholic/docs/ARCHITECTURE.md` before changing
+6. `docs/GTK4_LINUX_MACOS.md` — current desktop frontend.
+7. `workaholic/AGENTS.md` and `workaholic/docs/ARCHITECTURE.md` before changing
    the engine.
-6. `CHANGELOG.md` — recent behavior changes and known constraints.
+8. `CHANGELOG.md` — recent behavior changes and known constraints.
 
 ## Non-negotiable rules
 
@@ -80,6 +84,22 @@ Rules:
 - No secrets, production data or generated files added.
 - Platform delta declared (or justified as none).
 - Rollback path described for data/schema changes.
+
+## Human context and deferred decisions
+
+AI must not make irreversible product or architecture decisions alone. When a
+choice depends on what users value, real usage or an uncertain trade-off:
+
+1. Write the question in `docs/HUMAN_CENTERED_DECISIONS.md`.
+2. Implement only the reversible groundwork.
+3. Present options and consequences in plain language.
+4. Wait for human feedback, a pilot test or a small prototype.
+5. Record the decision and its context.
+
+Do not force the project owner to answer technical questions that require
+context they do not have yet. Prefer evidence from real use, observation,
+support history and comparable well-made software. Telemetry is not a substitute
+for human values.
 
 ## When unsure
 

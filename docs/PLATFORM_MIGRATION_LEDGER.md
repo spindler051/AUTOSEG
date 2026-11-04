@@ -70,3 +70,15 @@ When a slice changes:
 
 Do not mark a slice `source of truth` while any production writer still bypasses
 the adapter.
+
+## Deferred decisions
+
+These decisions need human context, real usage or a prototype. They are
+documented in `docs/HUMAN_CENTERED_DECISIONS.md` and are not blockers for
+characterization tests or reversible cleanup.
+
+| Decision | Status | Evidence / trigger |
+|---|---|---|
+| First full slice: catalog or service orders | Deferred | Coupling map, usage observation, read-only adapter spike, human review. |
+| Module contract: entry points + manifest vs alternative | Deferred | A second real consumer/flavor, developer-experience test, comparative review. |
+| Cadence: ~20% delta per PR vs per release | Deferred | Three or four releases of data on scope, review time and regressions. |

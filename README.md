@@ -67,6 +67,8 @@ Development database and ports:
 
 - [Product vision](docs/PRODUCT_VISION.md)
 - [Agent rules](AGENTS.md)
+- [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
+- [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
 - [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
 - [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)
 - [GTK4/libadwaita guide](docs/GTK4_LINUX_MACOS.md)

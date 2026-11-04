@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — decisões centradas em humanos — 2026-11-04
+
+- **Processo de decisão:** novo `docs/HUMAN_CENTERED_DECISIONS.md` registra que a IA não decide sozinha questões irreversíveis de produto/arquitetura e que decisões dependentes de valor humano ficam adiadas até haver evidência de uso, pilotos ou protótipos.
+- **Perguntas adiadas:** as três decisões pendentes (primeira fatia, contrato de módulos e cadência de migração) foram registradas com critérios de evidência e gatilhos de revisão.
+- **Feedback humano:** o processo inclui observação de uso real, histórico de suporte, pilotos, protótipos e comparação com softwares bem feitos; telemetria não substitui valores humanos. O guia prático está em `docs/USER_FEEDBACK_GUIDE.md`.
+- **Agentes:** `AGENTS.md`, playbook, ledger e template de PR atualizados para impedir decisões irreversíveis tomadas apenas por IA.
+- Nenhuma mudança funcional.
+
 ## Documentação — fluxo de agentes e migração incremental — 2026-11-04
 
 - **Regra para agentes:** novo `AGENTS.md` com a regra “uma mudança, um delta de plataforma”, preservação de comportamento, Workaholic fit check e definição de pronto.

@@ -41,6 +41,11 @@ Next opportunity:
 - [ ] No destructive rename of production columns/routes in this PR.
 - [ ] Permissions/auth changes reviewed.
 
+## Human context
+
+- [ ] This change does not make an irreversible product/architecture decision alone.
+- [ ] If it depends on user values or uncertain usage, the decision is recorded in `docs/HUMAN_CENTERED_DECISIONS.md` and only reversible groundwork is included.
+
 ## Tests
 
 Commands run:

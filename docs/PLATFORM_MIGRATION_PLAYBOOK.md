@@ -8,6 +8,8 @@ Related documents:
 
 - `docs/PRODUCT_VISION.md`
 - `AGENTS.md`
+- `docs/HUMAN_CENTERED_DECISIONS.md`
+- `docs/USER_FEEDBACK_GUIDE.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/docs/ARCHITECTURE.md`
 - `docs/MIGRACAO_MODULAR.md`
@@ -213,3 +215,20 @@ schemas, modules or flavors to create a client, open an OS, issue a report or
 receive a payment.
 
 Parity is more important than architectural purity.
+
+## 9. Decisions that need humans
+
+Some decisions cannot be settled by code inspection alone. They are tracked in
+`docs/HUMAN_CENTERED_DECISIONS.md` and stay deferred until there is evidence
+from real use, prototypes or pilot users.
+
+Until a decision is made:
+
+- do not build a plugin framework;
+- do not rename production database columns;
+- do not start a large migration just to satisfy an architecture diagram;
+- keep adding characterization tests, documentation and reversible adapters.
+
+The project owner is not required to answer technical questions in advance.
+The expected behavior is to reduce the question to understandable options,
+show consequences and gather human evidence.

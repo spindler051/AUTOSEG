@@ -77,6 +77,19 @@ second copy of the application.
 12. **Data ownership.** The user’s database, attachments and exports remain
     portable and usable without the original developer.
 
+### 3.1 Human-centered decisions
+
+AI can inspect code, propose alternatives and build reversible prototypes. It
+must not make irreversible product or architecture decisions alone. Decisions
+that depend on what users value, real workflows or an uncertain trade-off are
+deferred until there is evidence from actual use, pilot users, observation,
+support history or comparable well-made software.
+
+The project owner is not expected to answer technical questions before the
+context exists. The expected process is documented in
+`docs/HUMAN_CENTERED_DECISIONS.md`: reduce the question to understandable
+options, show consequences, run a small reversible experiment, then decide.
+
 ## 4. What belongs where
 
 ### Workaholic core
@@ -321,6 +334,8 @@ Names, organization and repository boundaries remain open.
 ## 11. Related documents
 
 - `AGENTS.md`
+- `docs/HUMAN_CENTERED_DECISIONS.md`
+- `docs/USER_FEEDBACK_GUIDE.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/README.md`
