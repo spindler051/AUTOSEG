@@ -509,7 +509,7 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     clientes = c.execute(
                         "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
-                        "ORDER BY nome LIMIT 100").fetchall()
+                        "ORDER BY nome LIMIT 500").fetchall()
                 servicos = catalogo.listar(banco, ativos=True)
                 if not clientes:
                     return self.pagina('Novo orçamento', card('Sem clientes',

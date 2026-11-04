@@ -695,10 +695,15 @@ class CorrecoesRev12(unittest.TestCase):
             'preco_servico': '150,00', 'tempo_horas': '1',
             'relatorio_padrao': 'Revisão realizada.',
             'materiais': 'Lubrificante | 1 | 25,00'})
+        with ext.db(self.db) as c:
+            for indice in range(110):
+                c.execute("INSERT INTO clientes(nome,status) VALUES(?, 'Ativo')",
+                          (f'Cliente Busca {indice:03d}',))
         _, base = self._servidor()
         cliente = self._login(base)
         status, html = req(cliente, base, '/orcamento')
         self.assertEqual(status, 200)
+        self.assertIn('Cliente Busca 109', html)
         self.assertIn('Orçamento (não é OS)', html)
         self.assertIn('Nenhuma ordem de serviço é criada', html)
         self.assertIn('id="busca-cliente-os"', html)
