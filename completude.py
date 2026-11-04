@@ -9,6 +9,7 @@ Ordem de procura:
 3. padrão interno
 """
 import os
+from decimal import Decimal
 from pathlib import Path
 
 PASTA_APP = Path(__file__).resolve().parent
@@ -73,8 +74,13 @@ def carregar():
 
 
 def _vazio(valor):
+    """Zero é um valor válido (ex.: mão de obra gratuita em garantia)."""
     if valor is None:
         return True
+    if isinstance(valor, bool):
+        return not valor
+    if isinstance(valor, (int, float, Decimal)):
+        return False
     if isinstance(valor, str):
         return not valor.strip()
     return not bool(valor)

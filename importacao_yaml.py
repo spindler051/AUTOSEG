@@ -109,17 +109,23 @@ def _materiais_os_lista(materiais):
         if len(item) > 180:
             raise ValueError(f'Material {indice}: campo "item" excede 180 caracteres.')
         if 'quantidade' not in material or material.get('quantidade') in (None, ''):
-            raise ValueError(f'Material {indice}: campo "quantidade" não informado.')
+            raise ValueError(
+                f'Material {indice}: campo "quantidade" não informado.'
+                + (f' Item: "{item[:60]}".' if item else '')
+                + ' Informe a quantidade usada ou remova este item da lista.')
         if 'valor_unitario' not in material or material.get('valor_unitario') in (None, ''):
-            raise ValueError(f'Material {indice}: campo "valor_unitario" não informado.')
+            raise ValueError(
+                f'Material {indice}: campo "valor_unitario" não informado.'
+                + (f' Item: "{item[:60]}".' if item else '')
+                + ' Informe o valor unitário ou remova este item da lista.')
         try:
             quantidade = _numero_decimal(material.get('quantidade'), 'Quantidade', False)
         except ValueError:
-            raise ValueError(f'Material {indice}: campo "quantidade" inválido.')
+            raise ValueError(f'Material {indice}: campo "quantidade" inválido. Use número maior que zero.')
         try:
             valor = _numero_decimal(material.get('valor_unitario'), 'Valor unitário', True)
         except ValueError:
-            raise ValueError(f'Material {indice}: campo "valor_unitario" inválido.')
+            raise ValueError(f'Material {indice}: campo "valor_unitario" inválido. Use número maior ou igual a zero.')
         resposta.append({
             'item': item,
             'quantidade': float(quantidade),
@@ -162,9 +168,9 @@ def ordem_servico(nome, conteudo):
             raise ValueError('cliente_id deve ser um número positivo.') from exc
     if cliente_id is None and not documento:
         raise ValueError('Informe cliente_id ou cliente_documento.')
-    pagamento = str(entrada.get('forma_pagamento', 'PIX')).strip() or 'PIX'
-    if pagamento not in ('PIX', 'Transferência', 'Dinheiro', 'Cartão', 'Boleto', 'Outro'):
-        raise ValueError('Forma de pagamento inválida.')
+    pagamento = str(entrada.get('forma_pagamento', '')).strip()
+    if pagamento and pagamento not in ('PIX', 'Transferência', 'Dinheiro', 'Cartão', 'Boleto', 'Outro'):
+        raise ValueError('Forma de pagamento inválida. Escolha PIX, Transferência, Dinheiro, Cartão, Boleto ou Outro.')
     urgencia = str(entrada.get('urgencia', 'Normal')).strip() or 'Normal'
     if urgencia not in ('Baixa', 'Normal', 'Alta'):
         raise ValueError('Urgência inválida.')
@@ -361,7 +367,7 @@ ordem_servico:
   cliente_documento: ""
   tecnico: ""
   descricao: ""
-  forma_pagamento: PIX
+  forma_pagamento: ""
   mao_obra: 0
   observacoes: ""
   urgencia: Normal

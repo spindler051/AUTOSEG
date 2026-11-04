@@ -17,9 +17,11 @@ from pathlib import Path
 import atendimento_os as aten
 import cadastros_v9 as cad
 import catalogo_servicos as cat
+import completude
 import estoque_materiais as estoque
 import fluxo_os as fluxo
 import gmail_service
+import importacao_yaml
 import pdf_cliente_v9
 import portal_negocios as neg
 import prestadores_ext as ext
@@ -165,7 +167,8 @@ class CorrecoesRev12(unittest.TestCase):
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         status, html = req(cliente, base, '/os/rapida/salvar',
                            {'csrf': token, 'cliente_id': str(alfa),
-                            'descricao': 'Portão da garagem não abre.'})
+                            'descricao': 'Portão da garagem não abre.',
+                            'forma_pagamento': 'PIX'})
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             ordem = c.execute('SELECT cliente_id,status,descricao FROM ordens_servico '
@@ -552,6 +555,119 @@ class CorrecoesRev12(unittest.TestCase):
                                            (oid,)).fetchone()['status'], 'Pendente')
         finally:
             gmail_service.enviar_email_gmail = original
+
+    def test_formulario_nao_tem_pagamento_nem_situacao_padrao(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Sem Padrão')
+        dados = {'cliente_id': str(cid), 'descricao': 'Teste de seleção',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '0',
+                 'materiais_presentes': '1', 'relatorio_tecnico': 'Teste',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        _, base = self._servidor()
+        cliente = self._login(base)
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertRegex(html, r'<select id="c_forma_pagamento" name="forma_pagamento"[^>]*>\s*'
+                               r'<option value=""[^>]*>Selecione a forma de pagamento</option>')
+        self.assertRegex(html, r'<select id="c_acao_status" name="acao_status"[^>]*>\s*'
+                               r'<option value=""[^>]*>Selecione a situação</option>')
+        vazio = dict(dados, forma_pagamento='', acao_status='salvar')
+        with self.assertRaisesRegex(ValueError, 'Selecione a forma de pagamento'):
+            neg.os_salvar(self.db, vazio, pid)
+
+    def test_garantia_mao_obra_zero_material_cobrado(self):
+        """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Garantia')
+        dados = {'cliente_id': str(cid), 'descricao': 'Reparo em garantia',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '0',
+                 'materiais_presentes': '1', 'material_item[]': ['Cabo de 4 vias'],
+                 'material_qtd[]': ['2.5'], 'material_unit[]': ['30,20'],
+                 'relatorio_tecnico': 'Serviço em garantia; material cobrado.',
+                 'acao_status': 'Concluída'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status,valor_mao_obra,valor_materiais,valor_total '
+                            'FROM ordens_servico WHERE id=?', (oid,)).fetchone()
+            fin = c.execute('SELECT valor,status FROM financeiro WHERE os_id=?',
+                            (oid,)).fetchone()
+        self.assertEqual(os_['status'], 'Concluída')
+        self.assertEqual(float(os_['valor_mao_obra']), 0.0)
+        self.assertAlmostEqual(float(os_['valor_materiais']), 75.5, places=2)
+        self.assertAlmostEqual(float(os_['valor_total']), 75.5, places=2)
+        self.assertIsNotNone(fin)
+        self.assertAlmostEqual(float(fin['valor']), 75.5, places=2)
+
+    def test_garantia_total_sem_cobranca_nao_cria_financeiro(self):
+        """Garantia total: total 0,00 conclui sem criar lançamento de R$ 0,00."""
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Garantia Total')
+        dados = {'cliente_id': str(cid), 'descricao': 'Reparo em garantia total',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '0',
+                 'materiais_presentes': '1', 'material_item[]': [''],
+                 'material_qtd[]': [''], 'material_unit[]': [''],
+                 'relatorio_tecnico': 'Serviço em garantia, sem cobrança.',
+                 'acao_status': 'Concluída'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status,valor_total FROM ordens_servico WHERE id=?',
+                            (oid,)).fetchone()
+            fin = c.execute('SELECT COUNT(*) FROM financeiro WHERE os_id=?',
+                            (oid,)).fetchone()[0]
+        self.assertEqual(os_['status'], 'Concluída')
+        self.assertEqual(float(os_['valor_total']), 0.0)
+        self.assertEqual(fin, 0)
+
+    def test_completude_trata_zero_como_valor_presente(self):
+        self.assertFalse(completude._vazio(0))
+        self.assertFalse(completude._vazio(0.0))
+        self.assertTrue(completude._vazio(None))
+        self.assertTrue(completude._vazio(''))
+
+    def test_orcamento_avulso_gera_pdf_sem_criar_os(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Orçamento')
+        sid = cat.salvar(self.db, {
+            'nome': 'Revisão de portão', 'descricao': 'Revisão preventiva',
+            'preco_servico': '150,00', 'tempo_horas': '1',
+            'relatorio_padrao': 'Revisão realizada.',
+            'materiais': 'Lubrificante | 1 | 25,00'})
+        _, base = self._servidor()
+        cliente = self._login(base)
+        status, html = req(cliente, base, '/orcamento')
+        self.assertEqual(status, 200)
+        self.assertIn('Orçamento (não é OS)', html)
+        self.assertIn('Nenhuma ordem de serviço é criada', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        with ext.db(self.db) as c:
+            antes = c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0]
+        pedido = urllib.request.Request(
+            base + '/orcamento/pdf',
+            urllib.parse.urlencode({'csrf': token, 'cliente_id': str(cid),
+                                    'servico_id': str(sid), 'quantidade': '1'}).encode())
+        with cliente.open(pedido, timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'application/pdf')
+            self.assertTrue(resposta.read().startswith(b'%PDF'))
+        with ext.db(self.db) as c:
+            depois = c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0]
+        self.assertEqual(antes, depois)
+
+    def test_yaml_corrigido_da_garantia_e_aceito(self):
+        original = Path.home() / 'Downloads' / 'chatgpt erros' / 'relatorio_os_preenchido.yaml'
+        if not original.is_file():
+            self.skipTest('Arquivo de exemplo do ChatGPT não está disponível.')
+        with self.assertRaisesRegex(ValueError, 'quantidade'):
+            importacao_yaml.relatorio(original.name, original.read_bytes())
+        corrigido = original.with_name('relatorio_os_preenchido_corrigido.yaml')
+        dados = importacao_yaml.relatorio(corrigido.name, corrigido.read_bytes())
+        self.assertIn('v9_diagnostico', dados)
+        self.assertEqual(len(dados['material_yaml']), 1)
+        self.assertEqual(dados['material_yaml'][0]['item'], 'Cabo de 4 vias')
+        self.assertAlmostEqual(
+            dados['material_yaml'][0]['quantidade'] * dados['material_yaml'][0]['valor_unitario'],
+            20.0, places=2)
 
 
 if __name__ == '__main__':

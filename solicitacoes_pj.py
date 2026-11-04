@@ -143,7 +143,7 @@ def aceitar(banco, solicitacao_id, ator='Prestador'):
         cur = c.execute('''INSERT INTO ordens_servico
             (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,valor_materiais,
              valor_total,forma_pagamento,status,origem,urgencia,observacoes,criado_em)
-            VALUES(?,?,?,'',?,0,0,0,'PIX','Aberta','Portal PJ público',?,?,?)''',
+            VALUES(?,?,?,'',?,0,0,0,'','Aberta','Portal PJ público',?,?,?)''',
             (numero, cid, ext.agora(), p['descricao'], p['urgencia'], observacoes, ext.agora()))
         oid = cur.lastrowid
         aten.registrar_solicitacao(c, oid, cid, p['descricao'], observacoes, 'Portal PJ público')

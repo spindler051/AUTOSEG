@@ -539,7 +539,7 @@ def _criar_os_no_registro(c, chamado_id, ator):
     cols={r['name'] for r in c.execute('PRAGMA table_info(ordens_servico)')}
     dados={'numero_os':numero,'cliente_id':cid,'data_abertura':ext.agora(),
            'descricao':ch['descricao'],'valor_mao_obra':0,'valor_materiais':0,'valor_total':0,
-           'forma_pagamento':'PIX','status':'Aberta','origem':'Portal',
+           'forma_pagamento':'','status':'Aberta','origem':'Portal',
            'observacoes':f'Solicitação #{chamado_id} | Solicitante: {ch["solicitante_nome"] or "Não informado"} | Telefone: {ch["solicitante_telefone"] or "Não informado"} | Identificação: {ch["solicitante_identificacao"] or "pendente"} | Apartamento/cargo: {ch["unidade"] or "Não informado"} | Papel: {ch["papel"] or "Solicitante"} | Execução não autorizada',
            'tecnico':'','criado_em':ext.agora(),'urgencia':ch['urgencia']}
     keys=[k for k in dados if k in cols]

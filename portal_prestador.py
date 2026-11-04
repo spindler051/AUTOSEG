@@ -498,9 +498,59 @@ class PortalPrestador:
                 navegacao=f'<p class="muted">{total} cliente(s) encontrado(s). Página {pagina}.</p>'
                 if pagina>1:navegacao+=botao('Anterior','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina-1}),'secondary')
                 if offset+len(rows)<total:navegacao+=botao('Próximos clientes','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina+1}),'secondary')
-                return self.pagina('Clientes',botao('+ Novo cliente','/clientes/novo')+botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')
+                return self.pagina('Clientes',botao('+ Novo cliente','/clientes/novo')+botao('Novo orçamento','/orcamento','secondary')+botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')
                     +card('Pesquisar clientes',pesquisa)
                     +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
+
+            def orcamento_form(self, s, erro='', cliente_id=None):
+                """Orçamento avulso: escolhe cliente + serviço e gera o PDF padrão, sem criar OS."""
+                with ext.db(banco) as c:
+                    clientes = c.execute(
+                        "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
+                        "ORDER BY nome LIMIT 500").fetchall()
+                servicos = catalogo.listar(banco, ativos=True)
+                if not clientes:
+                    return self.pagina('Novo orçamento', card('Sem clientes',
+                        '<p>Cadastre um cliente antes de gerar um orçamento.</p>'
+                        + botao('Cadastrar cliente','/clientes/novo')), s)
+                if not servicos:
+                    return self.pagina('Novo orçamento', card('Sem serviços',
+                        '<p>Cadastre um serviço no catálogo antes de gerar um orçamento.</p>'
+                        + botao('Serviços e valores','/servicos')), s)
+                selecionado = str(cliente_id or '')
+                if selecionado and not any(str(x['id']) == selecionado for x in clientes):
+                    selecionado = ''
+                opcoes_clientes = [('', 'Selecione o cliente')] + [
+                    (x['id'], f'{x["nome"]} — {cad9.formatar_documento(x["documento"])}')
+                    for x in clientes]
+                def total_servico(servico):
+                    try:
+                        itens = json.loads(servico['materiais_json'] or '[]')
+                        materiais = sum(
+                            int(Decimal(str(m.get('quantidade', 0))) *
+                                int(m.get('preco_centavos', 0)))
+                            for m in itens)
+                    except (TypeError, ValueError, KeyError):
+                        materiais = 0
+                    return (servico['preco_servico_centavos'] or 0) + materiais
+                opcoes_servicos = [('', 'Selecione o serviço / produto')] + [
+                    (x['id'], f'{x["nome"]} — {catalogo.reais(total_servico(x))}')
+                    for x in servicos]
+                form = (f'<form method="post" action="/orcamento/pdf">{self.hidden(s)}'
+                        + select('Cliente','cliente_id',opcoes_clientes,selecionado,required=True)
+                        + select('Serviço / produto','servico_id',opcoes_servicos,'',required=True)
+                        + '<label for="orcamento-quantidade">Quantidade</label>'
+                          '<input id="orcamento-quantidade" name="quantidade" type="number" '
+                          'min="1" max="20" value="1" required>'
+                        + '<p class="notice">O valor do serviço e dos materiais do catálogo '
+                          'é multiplicado pela quantidade. Você poderá revisar o PDF antes de enviar.</p>'
+                        + '<button type="submit">Gerar orçamento em PDF</button></form>')
+                aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                return self.pagina('Novo orçamento',
+                    botao('← Clientes','/clientes','secondary')
+                    + card('Orçamento (não é OS)',
+                           '<p class="notice">Este PDF é apenas um orçamento estimativo. '
+                           'Nenhuma ordem de serviço é criada.</p>' + aviso + form), s)
 
             def cliente_form(self,s,cid=None,preenchimento=None):
                 with ext.db(banco) as c:
@@ -517,8 +567,9 @@ class PortalPrestador:
                     ('administradora_email','E-mail da imobiliária / administradora')]
                 for k,t in campos:
                     fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
-                corpo=(f'<p>{botao("← Clientes","/clientes","secondary")}</p>'
-                    f'<form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
+                corpo=(f'<p>{botao("← Clientes","/clientes","secondary")}'
+                    + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
+                    + f'</p><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
                     '<div class="col2"><div>'
                     +select('Tipo de pessoa','tipo_pessoa',[(z,z) for z in ('Jurídica','Física')],d.get('tipo_pessoa') or 'Jurídica')
                     +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
@@ -561,7 +612,10 @@ class PortalPrestador:
                                 f'<p class="passo">{esc(cliente["nome"])}'
                                 + (f' · {esc(local)}' if local else '') + '</p>'
                                 + textarea('Solicitação / descrição do serviço', 'descricao',
-                                           required=True))
+                                           required=True)
+                                + select('Forma de pagamento', 'forma_pagamento',
+                                         [('', 'Selecione a forma de pagamento')]
+                                         + [(z, z) for z in neg.OS_FORMAS], '', required=True))
                         if prestadores:
                             form += select('Atribuir prestador (opcional)', 'prestador_id',
                                            [('', 'Não atribuir agora')]
@@ -772,8 +826,12 @@ class PortalPrestador:
                     corpo+='<label for="busca-cliente-os">Buscar cliente ou condomínio</label><input type="search" id="busca-cliente-os" placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
                     corpo+=select('Cliente','cliente_id',dados_cliente,d.get('cliente_id',cl[0]['id']),required=True)
                 corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
-                corpo+='</div><div>'+select('Forma de pagamento','forma_pagamento',[(z,z) for z in neg.OS_FORMAS],d.get('forma_pagamento') or 'PIX')
+                corpo+='</div><div>'+select('Forma de pagamento','forma_pagamento',
+                    [('', 'Selecione a forma de pagamento')]+[(z,z) for z in neg.OS_FORMAS],
+                    d.get('forma_pagamento') or '')
                 corpo+=campos_escuros('Valor de mão de obra (R$)','valor_mao_obra',d.get('valor_mao_obra') or '0',required=True)+'</div></div>'
+                corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra. ' \
+                       'Os materiais continuam sendo cobrados normalmente pelo valor informado abaixo.</p>'
                 corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
                 corpo+='<div>'+campos_escuros('Total negociado (R$), opcional — substitui a soma','valor_total_override',
                   (d.get('valor_total') if d and abs(float(d.get('valor_total') or 0)-float(d.get('valor_mao_obra') or 0)-float(d.get('valor_materiais') or 0))>0.009 else ''))+'</div></div>'
@@ -825,8 +883,8 @@ class PortalPrestador:
                 if oid and d['status'] in ext.ATIVAS:
                     corpo+='<p class="notice">Selecione a situação e confirme uma única vez. OS pendente permanece ativa; concluída/cancelada publica PDF para o cliente.</p>'
                     corpo+=select('Situação do atendimento','acao_status',
-                        [('Concluída','Concluído'),('Pendente','Pendente'),('Cancelada','Cancelado')],
-                        'Concluída',required=True)
+                        [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído'),('Cancelada','Cancelado')],
+                        '',required=True)
                     if contatos_os:
                         selecionados_d = d.get('destinatario_sel[]') or []
                         if isinstance(selecionados_d, str):
@@ -1142,6 +1200,11 @@ class PortalPrestador:
                         return self.os_rapida_form(s,q=q,cliente_id=cliente_rapido)
                     if path=='/os/nova':return self.os_form(s)
                     if path=='/clientes':return self.clientes_lista(s)
+                    if path=='/orcamento':
+                        qs=parse_qs(urlparse(self.path).query)
+                        try:cliente_orcamento=int(qs.get('cliente_id',['0'])[0]) or None
+                        except (ValueError,TypeError):cliente_orcamento=None
+                        return self.orcamento_form(s,cliente_id=cliente_orcamento)
                     if path=='/clientes/novo':return self.cliente_form(s)
                     if path=='/financeiro':return self.financeiro(s)
                     if path=='/relatorios':return self.redir('/historico')
@@ -1234,6 +1297,29 @@ class PortalPrestador:
                         if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
                         pre=yaml_import.cliente(arq[0],arq[1])
                         return self.cliente_form(s,preenchimento=pre)
+                    if path=='/orcamento/pdf':
+                        try:
+                            cliente_id=int(str(d.get('cliente_id','')).strip())
+                            servico_id=int(str(d.get('servico_id','')).strip())
+                        except (TypeError,ValueError):
+                            raise ValueError('Selecione o cliente e o serviço / produto.')
+                        try:quantidade=int(str(d.get('quantidade','1')).strip())
+                        except (TypeError,ValueError):
+                            return self.orcamento_form(s,'Quantidade inválida.',cliente_id)
+                        with ext.db(banco) as c:
+                            cliente=c.execute('SELECT id,nome,documento FROM clientes '
+                                              'WHERE id=? AND status!=\'Inativo\'',
+                                              (cliente_id,)).fetchone()
+                        if not cliente:
+                            return self.orcamento_form(s,'Cliente não encontrado.',cliente_id)
+                        try:
+                            pdf=catalogo.pdf_orcamento(banco,servico_id,quantidade,
+                                                       cliente=cliente['nome'],
+                                                       cliente_documento=cliente['documento'] or '')
+                        except ValueError as erro:
+                            return self.orcamento_form(s,str(erro),cliente_id)
+                        return self.send_bytes(pdf,'application/pdf',
+                                               filename=f'Orcamento_{cliente_id}_{servico_id}.pdf')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='yaml':
                         oid=int(partes[1]);arq=d.get('yaml')
                         if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
@@ -1271,8 +1357,13 @@ class PortalPrestador:
                         if len(descricao)<5:
                             return self.os_rapida_form(s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
                                                        cliente_id=cliente_id)
+                        forma=str(d.get('forma_pagamento','')).strip()
+                        if forma not in neg.OS_FORMAS:
+                            return self.os_rapida_form(
+                                s, erro='Escolha a forma de pagamento.',
+                                cliente_id=cliente_id)
                         dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
-                               'forma_pagamento':'PIX','valor_mao_obra':'0','valor_materiais_manual':'0',
+                               'forma_pagamento':forma,'valor_mao_obra':'0','valor_materiais_manual':'0',
                                'materiais_presentes':'1','acao_status':'salvar'}
                         oid=neg.os_salvar(banco,dados,pid)
                         prestador_id=str(d.get('prestador_id','')).strip()
@@ -1385,9 +1476,11 @@ class PortalPrestador:
                                 except Exception as e:
                                     return self.erro(str(e),400,s)
                             acao_status = str(d.get('acao_status',''))
-                            if acao_status in fluxo.FIM and not d.get('modo_envio'):
+                            if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
                                 d = dict(d); d['modo_envio'] = 'encerrar'
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
+                            if acao_status not in ('Pendente','Concluída','Cancelada'):
+                                raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
                             # Só o botão de encerramento aplica o status escolhido.
                             if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
                                 raise ValueError('Preencha Serviço executado antes de concluir.')

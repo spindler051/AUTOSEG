@@ -145,6 +145,7 @@ def os_salvar(banco,d,pid,oid=None):
     if not descricao: raise ValueError('Preencha a descrição do serviço.')
     tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
     forma=texto(d,'forma_pagamento',60)
+    if not forma: raise ValueError('Selecione a forma de pagamento.')
     if forma not in OS_FORMAS: raise ValueError('Forma de pagamento inválida.')
     observacoes=texto(d,'observacoes')
     relato=texto(d,'relatorio_tecnico',5000)

@@ -109,7 +109,7 @@ def registrar_os_pf(banco,uid,descricao,urgencia='Normal'):
         numero_os=proximo_numero_os(c.cursor())
         dados={'numero_os':numero_os,'cliente_id':cid,'data_abertura':ext.agora(),
                'descricao':descricao,'valor_mao_obra':0,'valor_materiais':0,
-               'valor_total':0,'forma_pagamento':'PIX','status':'Aberta',
+               'valor_total':0,'forma_pagamento':'','status':'Aberta',
                'origem':'Portal','urgencia':urgencia,'criado_em':ext.agora(),
                'observacoes':'Solicitação PF pelo portal pessoal; perfil completo.', 'tecnico':''}
         cols={r['name'] for r in c.execute('PRAGMA table_info(ordens_servico)')}

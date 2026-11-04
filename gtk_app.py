@@ -870,7 +870,7 @@ class Janela(Adw.ApplicationWindow):
     def _encerrar_os(self):
         valores = self._os_selecionada()
         if valores:
-            dialogos.DialogoOS(self, valores[0], modo="Concluída").present(self)
+            dialogos.DialogoOS(self, valores[0]).present(self)
 
     def _atribuir_os_selecionada(self):
         valores = self._os_selecionada()

@@ -1,34 +1,365 @@
-# Modelo reutilizável para preencher uma OS aberta.
-# Leia as instruções e use SOMENTE o que o técnico relatou.
-# A saída deve conter apenas a seção "os" preenchida (e "versao: 1").
+# =============================================================================
+# AUTOSEG — MODELO OFICIAL DE RELATÓRIO TÉCNICO DE ORDEM DE SERVIÇO (YAML)
+# =============================================================================
+#
+# PARA QUE SERVE
+#   Este arquivo serve para pré-preencher o relatório de uma OS já aberta no
+#   Portal do Prestador ou no aplicativo desktop. Ele NÃO cria OS, NÃO altera
+#   valores, NÃO muda o status e NÃO envia e-mail. A importação apenas coloca
+#   os textos e os materiais na tela para revisão humana antes de salvar.
+#
+# COMO USAR (passo a passo)
+#   1. Copie este arquivo e renomeie para, por exemplo, relatorio_os.yaml.
+#   2. Preencha SOMENTE a seção "os" do bloco "modelo" abaixo.
+#   3. Apague as seções "instrucoes" e "exemplo" da sua cópia.
+#   4. A saída enviada ao sistema deve ter exatamente esta estrutura:
+#
+#          versao: 1
+#          os:
+#            diagnostico: "..."
+#            execucao: "..."
+#            resultado: "..."
+#            relatorio_tecnico: "..."
+#            materiais: []
+#
+#   5. Envie o arquivo em "Importação rápida de relatório" na tela da OS.
+#   6. Confira tudo na tela. A importação NÃO salva sozinha: você precisa
+#      revisar e clicar em "Salvar rascunho" ou "Confirmar situação".
+#
+# REGRA DE OURO
+#   Escreva apenas o que o técnico relatou. Não invente diagnóstico, peça,
+#   quantidade, preço, data ou resultado. Se não foi informado, deixe o texto
+#   vazio ("") ou omita o campo. É melhor um relatório curto e verdadeiro do
+#   que um relatório bonito e inventado.
+#
+# LIMITES TÉCNICOS
+#   - Arquivo: até 64 KB, codificação UTF-8.
+#   - Cada campo de texto: até 5.000 caracteres.
+#   - Materiais: até 100 itens.
+#   - Composição: até 50 componentes.
+#   - Não use âncoras (&), aliases (*) nem múltiplos documentos YAML (---).
+#   - Não use TAB. Use espaços. A indentação de cada nível é obrigatória.
+# =============================================================================
+
 versao: 1
 
 instrucoes:
-  objetivo: >-
-    Preencher os campos da ordem de serviço com base exclusivamente
-    no relato fornecido pelo técnico.
+  o_que_e_este_arquivo: >-
+    Modelo de pré-preenchimento do relatório técnico de uma OS do AUTOSEG.
+    O programa lê a seção "os" e copia os textos para os campos correspondentes
+    da tela. Os materiais viram linhas de material na OS, com quantidade e
+    valor unitário. Nada é gravado no banco antes da confirmação humana.
 
-  regras:
-    - Não inventar informações, procedimentos, materiais ou resultados.
-    - Não deduzir informações que não foram explicitamente relatadas.
-    - Corrigir a redação e organizar o relato sem alterar seu significado.
-    - Manter os nomes e a estrutura dos campos do modelo.
-    - Se uma informação não foi fornecida, não a inventar.
-    - Não adicionar campos novos.
-    - Retornar somente o YAML preenchido, sem explicações.
+  como_preencher:
+    - passo: 1
+      acao: >-
+        Leia o relato do técnico inteiro antes de escrever. Separe o que é
+        diagnóstico (causa), execução (o que foi feito), resultado (teste
+        final) e relatório técnico (observações e recomendações).
+    - passo: 2
+      acao: >-
+        Preencha os quatro campos de texto com frases completas, em português,
+        sem marcadores de lista e sem HTML. O PDF já aplica a formatação.
+    - passo: 3
+      acao: >-
+        Liste em "materiais" apenas os itens que foram efetivamente aplicados
+        e que têm, ao mesmo tempo, quantidade e valor unitário. Cada item exige
+        os três campos: item, quantidade e valor_unitario.
+    - passo: 4
+      acao: >-
+        Se um material foi citado no relato mas não tem quantidade ou preço
+        confirmado, NÃO o coloque na lista financeira. Cite-o apenas no texto
+        do relatório. Exemplo: "foram substituídos os parafusos de fixação",
+        sem criar uma linha de material com valores nulos.
+    - passo: 5
+      acao: >-
+        Se não houve material, use materiais: []. Lista vazia é válida.
+        Nunca use materiais: null, quantidade: null ou valor_unitario: null.
+    - passo: 6
+      acao: >-
+        Revise o checklist final. Depois, envie o YAML e confira a prévia na
+        tela da OS. Corrija o que estiver diferente do relato do técnico.
 
-  campos:
-    diagnostico: >-
-      Descrever o problema identificado e sua causa, somente se informada.
-    execucao: >-
-      Descrever o que foi realizado durante o atendimento.
-    resultado: >-
-      Informar o resultado explicitamente relatado pelo técnico.
-    relatorio_tecnico: >-
-      Registrar recomendações ou observações fornecidas pelo técnico.
-    materiais: >-
-      Listar somente os materiais explicitamente informados.
-      Se nenhum material foi informado, manter uma lista vazia.
+  formato_de_saida:
+    explicacao: >-
+      A saída é o arquivo que você envia ao sistema. Ela não leva instruções,
+      exemplos, comentários explicativos nem campos inventados. Leva somente
+      "versao" e "os".
+    estrutura_minima: |
+      versao: 1
+      os:
+        diagnostico: "texto"
+        execucao: "texto"
+        resultado: "texto"
+        relatorio_tecnico: "texto"
+        materiais: []
+    regras:
+      - A chave "versao" é obrigatória e deve ser o número inteiro 1.
+      - A chave "os" é obrigatória e deve ser um mapa (pares chave: valor).
+      - Use aspas duplas quando o texto tiver dois-pontos, cerquilha (#), aspas ou quebra de linha.
+      - Para textos longos, use o bloco >- (dobra linhas em um parágrafo) ou | (preserva linhas).
+      - Não coloque a seção "instrucoes" nem a seção "exemplo" na saída.
+
+  dicionario_de_tags:
+    versao:
+      significado: Versão do formato do arquivo.
+      funcao: Permite que o programa reconheça o modelo correto.
+      como_preencher: Número inteiro 1, sem aspas.
+      obrigatorio: true
+      exemplo: 1
+    os:
+      significado: Bloco que contém o relatório da ordem de serviço.
+      funcao: Agrupa todos os campos que serão copiados para a tela da OS.
+      como_preencher: Mapa com os campos abaixo. Não renomeie a chave.
+      obrigatorio: true
+      exemplo: 'os: {diagnostico: "..."}'
+    diagnostico:
+      significado: Problema encontrado e sua causa técnica.
+      funcao: Campo "Diagnóstico" da OS e do PDF do cliente.
+      como_preencher: >-
+        Descreva o defeito observado, o teste realizado e a causa identificada.
+        Se a causa não foi confirmada, escreva apenas o que foi observado.
+      obrigatorio: false
+      limite: 5.000 caracteres
+      exemplo: >-
+        Fechadura eletrônica sem travamento por mau contato no cabo de ligação.
+    execucao:
+      significado: O que a equipe fez durante o atendimento.
+      funcao: Campo "Serviço executado" da OS e do PDF do cliente.
+      como_preencher: >-
+        Descreva o procedimento em ordem cronológica, incluindo testes e
+        substituições. Não repita o diagnóstico inteiro.
+      obrigatorio: false
+      limite: 5.000 caracteres
+      exemplo: >-
+        Substituímos o cabo de 4 vias, alinhamos a fechadura e reapertamos a fixação.
+    resultado:
+      significado: Resultado final comprovado por teste.
+      funcao: Campo "Resultado e testes" da OS e do PDF do cliente.
+      como_preencher: >-
+        Informe o que foi testado e o resultado observado. Se não houve teste,
+        diga isso; não invente "100% funcionando".
+      obrigatorio: false
+      limite: 5.000 caracteres
+      exemplo: >-
+        Após os testes de abertura, fechamento e travamento, o sistema operou normalmente.
+    relatorio_tecnico:
+      significado: Observações, recomendações e histórico interno.
+      funcao: Campo "Relato técnico complementar" da OS.
+      como_preencher: >-
+        Use para recomendações, condições encontradas, garantia, pendências e
+        orientações ao cliente. Não use para esconder informação do diagnóstico.
+      obrigatorio: false
+      limite: 5.000 caracteres
+      exemplo: >-
+        Serviço realizado em garantia. Recomendamos revisar a fixação a cada seis meses.
+    numero:
+      significado: Número da OS em modelos antigos.
+      funcao: Compatibilidade. O programa IGNORA este campo na importação.
+      como_preencher: Omita. O sistema sempre usa a OS que está aberta na tela.
+      obrigatorio: false
+      exemplo: 'OS-0021'
+    materiais:
+      significado: Lista financeira de materiais aplicados.
+      funcao: Cria as linhas de material da OS, com quantidade e valor unitário.
+      como_preencher: >-
+        Lista de mapas. Use [] quando não houver material. Cada item precisa
+        dos três campos abaixo. Não use null em nenhum deles.
+      obrigatorio: false
+      exemplo: |
+        materiais:
+          - item: Cabo de 4 vias
+            quantidade: 2.5
+            valor_unitario: 8.00
+    composicao:
+      significado: Detalhamento opcional de como o valor total foi composto.
+      funcao: >-
+        Mostra os componentes do valor no PDF. Não define o preço e não
+        substitui os campos de valor da tela da OS.
+      como_preencher: >-
+        Use somente se o solicitante pedir o detalhamento. A soma dos
+        componentes deve fechar exatamente com o valor total da OS. Os "id"
+        precisam existir na configuração de composição do sistema.
+      obrigatorio: false
+      exemplo: |
+        composicao:
+          - id: materiais
+            valor: 75.50
+          - id: hora_tecnica
+            valor: 0.00
+
+  campos_de_material:
+    item:
+      significado: Nome do material aplicado.
+      funcao: Primeira coluna da linha de material na OS.
+      como_preencher: Texto de 1 a 180 caracteres, sem quebra de linha.
+      obrigatorio: true
+      exemplo: Cabo de 4 vias
+    quantidade:
+      significado: Quantidade efetivamente usada.
+      funcao: Multiplicada pelo valor unitário para calcular o total do material.
+      como_preencher: >-
+        Número maior que zero. Use ponto decimal (2.5) ou vírgula (2,5).
+        Não use null, vazio, texto ou quantidade negativa.
+      obrigatorio: true
+      exemplo: 2.5
+    valor_unitario:
+      significado: Preço de uma unidade do material, em reais.
+      funcao: Compor o valor do material na OS e no financeiro.
+      como_preencher: >-
+        Número maior ou igual a zero. Use ponto decimal (8.00) ou vírgula (8,00).
+        Não use null, vazio ou texto. Zero é permitido para material cortesia.
+      obrigatorio: true
+      exemplo: 8.00
+
+  regras_de_materiais:
+    - >-
+      material com quantidade ou valor desconhecido NÃO entra na lista.
+      Descreva o uso no texto do relatório e deixe a lista apenas com o que
+      pode ser cobrado ou registrado com segurança.
+    - >-
+      material cortesia pode ter valor_unitario: 0.00, mas ainda precisa de
+      quantidade válida. Isso registra o uso sem gerar cobrança.
+    - >-
+      não repita o mesmo material em duas linhas. Some a quantidade em uma
+      única linha.
+    - >-
+      o valor total do material é calculado pelo sistema (quantidade × valor
+      unitário). Não escreva "valor_total" no YAML; esse campo não é aceito.
+
+  cenario_de_garantia:
+    explicacao: >-
+      Em serviço coberto por garantia, a mão de obra é gratuita e os materiais
+      podem ser cobrados ou também ficarem em garantia. O YAML do relatório
+      NÃO tem campo de mão de obra: os valores são preenchidos na tela da OS,
+      nos campos "Valor de mão de obra" e "Valor de materiais".
+    como_representar:
+      - >-
+        No YAML, liste apenas os materiais efetivamente aplicados, com
+        quantidade e valor unitário. Se o material também for garantia, use
+        valor_unitario: 0.00 ou deixe a lista vazia.
+      - >-
+        No texto, registre claramente "Serviço executado em garantia" e a
+        origem da garantia (nota fiscal, data, contrato ou autorização).
+      - >-
+        Na tela da OS, informe 0,00 no campo "Valor de mão de obra".
+        Zero é um valor válido e não bloqueia a finalização.
+      - >-
+        Se houver material cobrado, o total da OS será o valor dos materiais.
+        Se tudo for garantia, o total será 0,00 e o sistema não cria cobrança.
+    exemplo_de_texto: >-
+      Serviço executado em garantia técnica referente à instalação de
+      12/09/2026. A mão de obra foi realizada sem cobrança; o material
+      aplicado foi cobrado conforme a lista abaixo.
+
+  checklist_antes_de_enviar:
+    - 'A saída tem somente "versao: 1" e "os:"?'
+    - Todos os textos estão em português e sem HTML?
+    - Nenhum fato foi inventado?
+    - Cada material tem item, quantidade e valor_unitario preenchidos?
+    - 'Nenhum material tem quantidade: null ou valor_unitario: null?'
+    - Materiais sem quantidade/preço foram removidos da lista?
+    - A lista está vazia quando não há material?
+    - O texto de garantia está claro, quando for o caso?
+    - O arquivo está em UTF-8 e tem menos de 64 KB?
+
+  erros_comuns:
+    - erro: 'quantidade: null'
+      por_que_falha: >-
+        O programa rejeita material sem quantidade. Null não é zero; é ausência
+        de informação. O erro exato é: campo "quantidade" não informado.
+      correcao: >-
+        Informe a quantidade real ou remova o item da lista e cite-o apenas no texto.
+    - erro: 'valor_unitario: null'
+      por_que_falha: >-
+        O programa rejeita material sem preço unitário. Null não vira 0,00
+        automaticamente, para não criar cobrança errada.
+      correcao: >-
+        Informe o valor real, use 0.00 para cortesia ou remova o item da lista.
+    - erro: 'materiais: null'
+      por_que_falha: O campo deve ser uma lista; null não é lista.
+      correcao: 'Use materiais: [] quando não houver material.'
+    - erro: 'campo desconhecido'
+      por_que_falha: >-
+        A saída deve usar apenas os campos do modelo. Campos como "valor_total",
+        "mao_obra" ou "garantia" não são aceitos dentro de "os".
+      correcao: >-
+        Remova o campo. Valores e garantia são informados na tela da OS, não no YAML.
+    - erro: 'instruções ou exemplo na saída'
+      por_que_falha: >-
+        A saída preenchida não pode conter as seções "instrucoes" ou "exemplo";
+        elas servem apenas para orientar quem preenche.
+      correcao: Envie somente versao e os.
+    - erro: 'YAML inválido: revise a indentação'
+      por_que_falha: >-
+        Espaços, dois-pontos ou recuo incorretos quebram a estrutura.
+      correcao: >-
+        Use dois espaços por nível, nunca TAB. Coloque dois-pontos e um espaço
+        depois de cada chave. Aspas duplas em textos com caracteres especiais.
+
+  exemplos:
+    exemplo_1_simples:
+      relato: >-
+        O portão não fechava porque o sensor estava desalinhado. Cobrimos o
+        sensor e o relé não clicava. Alinhamos o sensor, testamos a obstrução
+        e o sistema voltou a funcionar.
+      saida: |
+        versao: 1
+        os:
+          diagnostico: >-
+            Portão automático sem fechamento por sensor de segurança desalinhado.
+          execucao: >-
+            Alinhamos o sensor, cobrimos o feixe para testar o relé e ajustamos
+            o conjunto até o acionamento correto.
+          resultado: >-
+            Após o teste de obstrução, o portão abriu e fechou normalmente.
+          relatorio_tecnico: >-
+            Recomendamos verificar o alinhamento do sensor a cada seis meses.
+          materiais: []
+    exemplo_2_com_materiais:
+      relato: >-
+        A fechadura não travava. Havia mau contato no cabo de 4 vias.
+        Substituímos 2,5 metros de cabo a R$ 8,00 o metro e alinhamos a peça.
+      saida: |
+        versao: 1
+        os:
+          diagnostico: >-
+            Fechadura eletrônica sem travamento por mau contato no cabo de ligação.
+          execucao: >-
+            Substituímos o cabo de 4 vias, alinhamos a fechadura e reapertamos a fixação.
+          resultado: >-
+            Após os testes de abertura, fechamento e travamento, o sistema operou normalmente.
+          relatorio_tecnico: >-
+            Serviço concluído. Recomendamos revisar a fixação a cada seis meses.
+          materiais:
+            - item: Cabo de 4 vias
+              quantidade: 2.5
+              valor_unitario: 8.00
+    exemplo_3_garantia:
+      relato: >-
+        Atendimento em garantia. A fechadura não travava por mau contato no
+        cabo. Substituímos o cabo e alinhamos a peça. O material foi cobrado,
+        mas a mão de obra ficou gratuita.
+      saida: |
+        versao: 1
+        os:
+          diagnostico: >-
+            Fechadura eletrônica sem travamento por mau contato no cabo de ligação.
+          execucao: >-
+            Substituímos o cabo de 4 vias e alinhamos a fechadura.
+          resultado: >-
+            Sistema testado e operando normalmente após o reparo.
+          relatorio_tecnico: >-
+            Serviço executado em garantia técnica. A mão de obra foi gratuita;
+            o material aplicado foi cobrado conforme a lista.
+          materiais:
+            - item: Cabo de 4 vias
+              quantidade: 2.5
+              valor_unitario: 30.20
+      observacao: >-
+        Na tela da OS, preencha "Valor de mão de obra" com 0,00. O total será
+        calculado apenas com o material. Se o material também for garantia,
+        use materiais: [] e total 0,00.
 
 modelo:
   os:
@@ -39,26 +370,35 @@ modelo:
     materiais: []
 
 exemplo:
-  relato_tecnico: >-
-    Chegamos no local dia 2 de novembro de 2026, às 5h30.
-    O portão não fechava porque o sensor estava desalinhado.
-    Cobrimos o sensor e o relé não clicava. Alinhamos o sensor,
-    fizemos a obstrução e o sistema voltou a funcionar.
-    Se acontecer novamente, recomendamos fazer essa checagem.
-
-  saida:
+  preenchido:
     os:
       diagnostico: >-
-        Inspeção do automatizador. O portão não estava fechando
-        devido ao desalinhamento do sensor.
+        Fechadura eletrônica apresentava funcionamento irregular, alternando
+        entre abrir e fechar e, em algumas ocasiões, não realizando o travamento.
       execucao: >-
-        Chegamos ao local em 02/11/2026 às 5h30. Realizamos análise
-        técnica e identificamos o desalinhamento do sensor por meio
-        de análise física. Ao cobrir o sensor, verificamos que o relé
-        não era ativado (não fazia clique). Alinhamos o sensor e
-        realizamos novamente o teste de obstrução.
-      resultado: Sistema funcionando normalmente.
+        Substituímos o cabo de ligação e alinhamos a fechadura para corrigir
+        o atrito e a pressão excessiva.
+      resultado: >-
+        Após os testes, a fechadura abriu, fechou e travou corretamente.
       relatorio_tecnico: >-
-        Caso o problema ocorra novamente, recomendamos realizar
-        essa checagem do sensor.
-      materiais: []
+        Serviço executado em garantia. Recomendamos revisar a fixação a cada
+        seis meses.
+      materiais:
+        - item: Cabo de 4 vias
+          quantidade: 2.5
+          valor_unitario: 8.00
+  garantia:
+    os:
+      diagnostico: >-
+        Fechadura eletrônica sem travamento por mau contato no cabo de ligação.
+      execucao: >-
+        Substituímos o cabo de 4 vias e alinhamos a fechadura.
+      resultado: >-
+        Sistema testado e operando normalmente após o reparo.
+      relatorio_tecnico: >-
+        Serviço executado em garantia técnica. A mão de obra foi gratuita;
+        o material aplicado foi cobrado conforme a lista.
+      materiais:
+        - item: Cabo de 4 vias
+          quantidade: 2.5
+          valor_unitario: 30.20

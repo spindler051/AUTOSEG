@@ -296,7 +296,8 @@ class MelhoriasRev12(unittest.TestCase):
         self.assertIn('Nova OS rápida', html)
         status, html = req(prestador, base, '/os/rapida/salvar', {
             'csrf': token, 'cliente_texto': f'{cid} — Condomínio Rápido',
-            'descricao': 'Solicitação criada pelo fluxo rápido', 'prestador_id': str(pid)})
+            'descricao': 'Solicitação criada pelo fluxo rápido', 'prestador_id': str(pid),
+            'forma_pagamento': 'PIX'})
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             row = c.execute("SELECT id,status FROM ordens_servico WHERE descricao LIKE '%fluxo rápido%'").fetchone()

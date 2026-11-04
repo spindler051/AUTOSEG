@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.8 — orçamento avulso, garantia 0,00 e YAML autoexplicativo — 2026-11-03 — develop
+
+- **Situação e pagamento sem padrão:** o formulário da OS (GTK e Portal do Prestador) abre com “Selecione a situação” e “Selecione a forma de pagamento”. Não existe mais “Concluída” nem “PIX” pré-selecionados; salvar sem escolher é bloqueado.
+- **Orçamento na seção de clientes:** botão “Novo orçamento” na lista e no cadastro do cliente. Escolhe cliente, serviço/produto do catálogo e quantidade; gera o PDF padrão de orçamento **sem criar OS** e sem lançamento financeiro.
+- **Garantia com mão de obra 0,00:** o valor zero é aceito e não é tratado como campo vazio. A OS conclui com material cobrado e mão de obra gratuita; o financeiro recebe apenas o valor dos materiais.
+- **Garantia total:** quando o total é 0,00, a OS conclui sem criar lançamento financeiro de R$ 0,00.
+- **YAML:** modelo `modelo_relatorio_os.yaml` reescrito com instruções completas, dicionário de tags, regras de materiais, cenário de garantia, checklist e exemplos. Material com `quantidade` ou `valor_unitario` nulo continua sendo rejeitado, agora com mensagem que orienta a remover o item ou informar o dado.
+- **Exemplo corrigido:** `relatorio_os_preenchido_corrigido.yaml` remove os materiais sem quantidade/preço e mantém apenas o cabo, que tem valores válidos.
+- Testes novos em `test_rev12_correcoes.py`.
+
 ## 9.6.0-dev.7 — status acima do rascunho e PDF/e-mail de OS pendente — 2026-11-03 — develop
 
 - **Portal do Prestador:** o status da OS agora aparece logo acima dos botões de ação (inclusive o SALVAR RASCUNHO), na ordem da página.

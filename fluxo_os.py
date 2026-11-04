@@ -135,17 +135,24 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
     except Exception as erro:
         print('Aviso: composição do valor não calculada no encerramento:',erro)
     if status=='Concluída':
-        f=c.execute('SELECT id,status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
-        titulo=f'OS {o["numero_os"]} - {(o["descricao"] or "Serviço")[:140]}'
-        if f:
-            if f['status']!='Recebido':
-                c.execute('''UPDATE financeiro SET cliente_id=?,descricao=?,valor=?,forma_pagamento=?,
-                    status='Aguardando pagamento',data_lancamento=? WHERE id=?''',
-                    (o['cliente_id'],titulo,o['valor_total'],o['forma_pagamento'],ext.agora()[:10],f['id']))
+        total=float(o['valor_total'] or 0)
+        if total<=0:
+            # Garantia/cortesia total: não cria cobrança de R$ 0,00.
+            ext.evento(c,os_id,'OS concluída sem cobrança',
+                      'Mão de obra e materiais sem valor a receber; nenhum lançamento financeiro foi criado.',
+                      prestador_id,ator)
         else:
-            c.execute('''INSERT INTO financeiro(os_id,cliente_id,descricao,valor,forma_pagamento,status,data_lancamento)
-                VALUES(?,?,?,?,?,'Aguardando pagamento',?)''',
-                (os_id,o['cliente_id'],titulo,o['valor_total'],o['forma_pagamento'],ext.agora()[:10]))
+            f=c.execute('SELECT id,status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
+            titulo=f'OS {o["numero_os"]} - {(o["descricao"] or "Serviço")[:140]}'
+            if f:
+                if f['status']!='Recebido':
+                    c.execute('''UPDATE financeiro SET cliente_id=?,descricao=?,valor=?,forma_pagamento=?,
+                        status='Aguardando pagamento',data_lancamento=? WHERE id=?''',
+                        (o['cliente_id'],titulo,o['valor_total'],o['forma_pagamento'],ext.agora()[:10],f['id']))
+            else:
+                c.execute('''INSERT INTO financeiro(os_id,cliente_id,descricao,valor,forma_pagamento,status,data_lancamento)
+                    VALUES(?,?,?,?,?,'Aguardando pagamento',?)''',
+                    (os_id,o['cliente_id'],titulo,o['valor_total'],o['forma_pagamento'],ext.agora()[:10]))
         c.execute('UPDATE os_conclusoes SET aprovado_em=? WHERE os_id=?',(ext.agora(),os_id))
     else:
         # Não apaga financeiro anterior; impede fingir que dívida foi cancelada.

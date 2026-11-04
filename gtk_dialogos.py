@@ -447,8 +447,8 @@ class DialogoOS(Adw.Dialog):
         self.cliente = ui.campo_combo(grupo, "Cliente", self.opcoes_cliente or ["Nenhum cliente"], indice)
         self.tecnico = ui.campo_entry(grupo, "Atendido por (cliente no local)",
                                       base.get("tecnico", ""))
-        pagamentos = ["PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"]
-        pagamento = base.get("forma_pagamento", "PIX")
+        pagamentos = ["Selecione a forma de pagamento", "PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"]
+        pagamento = base.get("forma_pagamento", "")
         self.pagamento = ui.campo_combo(
             grupo, "Forma de pagamento", pagamentos,
             pagamentos.index(pagamento) if pagamento in pagamentos else 0)
@@ -513,6 +513,12 @@ class DialogoOS(Adw.Dialog):
         self.mao_obra.connect("notify::text", lambda *_args: self._recalcular())
         self.materiais_valor.connect("notify::text", lambda *_args: self._recalcular())
         self.total.connect("notify::text", lambda *_args: None)
+        self.mao_obra.set_tooltip_text(
+            "Serviço em garantia ou cortesia: use 0,00. "
+            "Os materiais continuam sendo cobrados pelo valor informado.")
+        self.total.set_tooltip_text(
+            "O total é a soma de mão de obra + materiais. "
+            "Em garantia, a mão de obra pode ficar em 0,00.")
         if self.materiais:
             self.materiais_valor.set_editable(False)
         self._recalcular()
@@ -540,15 +546,8 @@ class DialogoOS(Adw.Dialog):
                     subtitle="O início registra data, hora e responsável.",
                     icon_name="media-playback-start-symbolic"))
             if self.dados and self.dados.get("status") in ui.ATIVAS:
-                status_opcoes = ["Manter em aberto", "Pendente", "Concluída", "Cancelada"]
-                padrao = 0
-                if self.modo == "Concluída":
-                    padrao = 2
-                elif self.modo == "Pendente":
-                    padrao = 1
-                elif self.modo == "Cancelada":
-                    padrao = 3
-                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, padrao)
+                status_opcoes = ["Selecione a situação", "Pendente", "Concluída", "Cancelada"]
+                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, 0)
                 relato = ""
                 motivo = ""
                 if self.encerramento:
@@ -762,9 +761,11 @@ class DialogoOS(Adw.Dialog):
 
     def _confirmar_situacao(self):
         situacao = ui.valor_combo(self.status)
-        if situacao == "Manter em aberto":
-            self._salvar(None)
-        elif situacao == "Pendente":
+        if situacao not in ("Pendente", "Concluída", "Cancelada"):
+            ui.aviso_erro(self.janela, "Situação da OS",
+                          "Escolha Pendente, Concluída ou Cancelada antes de confirmar.")
+            return
+        if situacao == "Pendente":
             self._salvar("Pendente")
         elif situacao == "Concluída":
             ui.alerta(
@@ -787,6 +788,10 @@ class DialogoOS(Adw.Dialog):
         descricao = self.descricao.get_texto()
         tecnico = self.tecnico.get_text().strip()
         pagamento = ui.valor_combo(self.pagamento)
+        if pagamento not in ("PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"):
+            ui.aviso_erro(self.janela, "Forma de pagamento",
+                          "Escolha a forma de pagamento antes de salvar.")
+            return
         mao_obra = ui.numero(self.mao_obra.get_text())
         materiais = sum(float(x.get("quantidade") or 0) * float(x.get("valor_unitario") or 0)
                         for x in self.materiais)
@@ -1648,6 +1653,10 @@ class DialogoOSRapida(Adw.Dialog):
                                           altura=110)
         opcoes = ["Não atribuir agora"] + [f"#{p['id']} {p['nome']}" for p in self.prestadores]
         self.combo_prestador = ui.campo_combo(grupo, "Atribuir prestador (opcional)", opcoes, 0)
+        self.pagamento = ui.campo_combo(
+            grupo, "Forma de pagamento",
+            ["Selecione a forma de pagamento", "PIX", "Transferência", "Dinheiro",
+             "Cartão", "Boleto", "Outro"], 0)
         toolbar.set_content(pagina)
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -1683,8 +1692,13 @@ class DialogoOSRapida(Adw.Dialog):
             ui.aviso_erro(self.janela, "Solicitação", "Descreva a solicitação com pelo menos 5 caracteres.")
             return
         cliente = self.clientes_filtrados[indice]
+        pagamento = ui.valor_combo(self.pagamento)
+        if pagamento not in ("PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"):
+            ui.aviso_erro(self.janela, "Forma de pagamento",
+                          "Escolha a forma de pagamento antes de criar a OS.")
+            return
         dados = {"cliente_id": str(cliente["id"]), "descricao": descricao, "tecnico": "",
-                 "forma_pagamento": "PIX", "valor_mao_obra": "0",
+                 "forma_pagamento": pagamento, "valor_mao_obra": "0",
                  "valor_materiais_manual": "0", "materiais_presentes": "1",
                  "acao_status": "salvar"}
         try:
