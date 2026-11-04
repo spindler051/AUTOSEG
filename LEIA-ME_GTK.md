@@ -1,11 +1,11 @@
 # AUTOSEG — interface GTK4/libadwaita
 
-O frontend novo está em `gtk_app.py` e compartilha o mesmo backend, banco e
-regras do app Tkinter e dos portais. Não é um fork.
+O frontend desktop está em `gtk_app.py` e compartilha o mesmo backend, banco e
+regras dos portais. Não é um fork.
 
 - Linux: `./INICIAR_AUTOSEG_GTK.sh`
 - Linux no display da VM (Wayland/DRM, sem Xwayland): `./ABRIR_NO_DRM.sh`
-- macOS: `./INICIAR_AUTOSEG.command` (GTK; Tkinter legado em `INICIAR_AUTOSEG_TK.command`)
+- macOS: `./INICIAR_AUTOSEG.command` (GTK)
 - O frontend GTK é o mesmo código em Linux e macOS; só lançadores/empacotamento são específicos
 - Guia completo em português: `docs/GTK4_LINUX_MACOS.md`
 - Normas GNOME baixadas: `docs/gnome-hig/index.html`

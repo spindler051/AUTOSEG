@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Backend HTTP headless do AUTOSEG.
 
-Sobe somente os portais do cliente e do prestador, sem Tkinter/GTK. Útil para
+Sobe somente os portais do cliente e do prestador, sem interface gráfica. Útil para
 deixar o banco no macOS e acessar os portais do Linux via túnel SSH.
 
 Variáveis:

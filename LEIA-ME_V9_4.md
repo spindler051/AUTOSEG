@@ -19,7 +19,7 @@ bash "$HOME/GestaoServicos2/INICIAR_AUTOSEG.command"
 ```
 
 O instalador copia **somente** os 5 módulos alterados, faz backup consistente
-via SQLite e preserva `dados.db`, `app.py`, `servidor_web.py`, PDFs, imagens e
+via SQLite e preserva `dados.db`, `gtk_app.py`, `servidor_web.py`, PDFs, imagens e
 Workaholic. Não utiliza o instalador v9.2 que tinha caminhos fixos.
 
 ## Telas novas

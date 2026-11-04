@@ -1,6 +1,6 @@
 """Casos de uso da conta pessoal e do atendimento PF (v9.4).
 
-Sem dependência HTTP ou Tkinter. Preserva cliente legado/OS e não vincula
+Sem dependência HTTP ou de interface gráfica. Preserva cliente legado/OS e não vincula
 CPF informado na internet a OS históricas sem comprovação de titularidade.
 """
 import re

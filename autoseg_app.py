@@ -1,4 +1,4 @@
-"""Bootstrap do AUTOSEG.app (PyInstaller).
+"""Bootstrap do AUTOSEG.app (GTK4/libadwaita / PyInstaller).
 
 Mantém o banco, anexos, PDFs, rascunhos e logs fora do bundle, na pasta
 MAIN (~/gestaoservicos_MAIN) ou na pasta indicada por AUTOSEG_BASE.
@@ -16,15 +16,7 @@ def _base():
 
 
 def _mostrar_erro(titulo, texto):
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
-        raiz = tk.Tk()
-        raiz.withdraw()
-        messagebox.showerror(titulo, texto)
-        raiz.destroy()
-    except Exception:
-        print(f'{titulo}: {texto}', file=sys.stderr)
+    print(f'{titulo}: {texto}', file=sys.stderr)
 
 
 def main():
@@ -61,9 +53,8 @@ def main():
     sys.excepthook = registrar_falha
 
     try:
-        import app as autoseg
-        aplicativo = autoseg.App()
-        aplicativo.mainloop()
+        import gtk_app
+        return gtk_app.main()
     except Exception as erro:
         registrar_falha(type(erro), erro, erro.__traceback__)
         return 1
@@ -73,7 +64,6 @@ def main():
         except Exception:
             pass
         trava.close()
-    return 0
 
 
 if __name__ == '__main__':

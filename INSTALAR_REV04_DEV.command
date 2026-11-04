@@ -19,7 +19,7 @@ if [[ ! -x "$DEV/.venv/bin/python" ]]; then
   echo 'ERRO: .venv ausente. Recrie o ambiente e instale requirements.txt antes de prosseguir.'
   exit 1
 fi
-if [[ ! -f "$PACOTE/estoque_materiais.py" || ! -f "$PACOTE/app.py" || ! -f "$PACOTE/VERIFICAR_AUTOSEG_DEV.command" ]]; then
+if [[ ! -f "$PACOTE/estoque_materiais.py" || ! -f "$PACOTE/gtk_app.py" || ! -f "$PACOTE/VERIFICAR_AUTOSEG_DEV.command" ]]; then
   echo 'ERRO: pacote incompleto. Não prosseguir.'
   exit 1
 fi

@@ -4,7 +4,7 @@ O Workaholic cuida de validação, CRUD e versionamento. Este adaptador mapeia
 o registro genérico para a tabela legada ``clientes`` e mantém as regras
 específicas do AUTOSEG: CPF/CNPJ, completude e sincronização PJ.
 
-shortcut: escritores legados (portal, Tkinter, importadores) ainda não
+shortcut: escritores legados (portal, desktop, importadores) ainda não
 incrementam ``versao``; a tela mantém o comportamento último-que-salva,
 igual ao anterior. O bloqueio otimista do repositório só é usado por chamadas
 diretas. Migrar os demais escritores antes de remover as escritas diretas.

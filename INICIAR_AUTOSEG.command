@@ -1,6 +1,5 @@
 #!/bin/zsh
-# O Tkinter está congelado; o app padrão agora é o GTK4/libadwaita.
-# Fallback legado: INICIAR_AUTOSEG_TK.command
+# Interface padrão: GTK4/libadwaita. O aplicativo Tkinter foi removido.
 set -e
 cd "$(dirname "$0")"
 exec ./INICIAR_AUTOSEG_GTK.command "$@"

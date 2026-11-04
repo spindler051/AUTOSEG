@@ -1,4 +1,4 @@
-"""Bootstrap do AUTOSEG DEV.app.
+"""Bootstrap do AUTOSEG DEV.app (GTK4/libadwaita).
 
 Aponta para a pasta de desenvolvimento (~/GestaoServicos_DEV), banco de teste
 (dados_teste/autoseg_teste.db) e portas locais 8865/8866, isolado do MAIN.

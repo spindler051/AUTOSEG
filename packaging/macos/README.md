@@ -37,12 +37,6 @@ O lançador:
 - copia `completude.yaml` para a pasta de dados, se ainda não existir;
 - executa `gtk_app.py`.
 
-O Tkinter continua disponível apenas como fallback manual:
-
-```bash
-./INICIAR_AUTOSEG_TK.command
-```
-
 ## Aparência
 
 - **Fonte:** nenhuma família é forçada pelo app; o GTK usa a fonte padrão do

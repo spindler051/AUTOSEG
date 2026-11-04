@@ -1,7 +1,7 @@
 """AUTOSEG — interface desktop GTK4/libadwaita.
 
-Mesmo backend, banco e regras dos portais e do app Tkinter. Roda em Linux
-(Wayland/X11) e macOS; não é um fork. Documentação em docs/GTK4_LINUX_MACOS.md.
+Mesmo backend, banco e regras dos portais. Roda em Linux (Wayland/X11) e
+macOS. Documentação em docs/GTK4_LINUX_MACOS.md.
 """
 import json
 import os
@@ -251,7 +251,7 @@ class Janela(Adw.ApplicationWindow):
             developer_name="AUTOSEG — Automação e Segurança",
             version=ui.VERSAO,
             comments="Gestão de serviços, ordens, financeiro e portais.\n"
-                     "Interface GTK4/libadwaita com o mesmo backend do app Tkinter.",
+                     "Interface GTK4/libadwaita sobre o backend compartilhado.",
             website="https://github.com/spindler051/AUTOSEG",
         )
         sobre.present(self)
@@ -334,7 +334,7 @@ class Janela(Adw.ApplicationWindow):
         subtitulo.add_css_class("title-2")
         caixa.append(subtitulo)
         caixa.append(ui.legenda(
-            "Mesmo banco e mesmas regras do app Tkinter e dos portais. "
+            "Mesmo banco e mesmas regras dos portais. "
             "A interface é GTK4/libadwaita em Linux e macOS."))
 
         atalhos = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)

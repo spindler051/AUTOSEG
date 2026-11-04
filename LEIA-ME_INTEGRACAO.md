@@ -14,7 +14,7 @@ O Workaholic NÃO substitui o aplicativo e NÃO está conectado ao banco `dados.
 3. Extraia o ZIP e execute `bash ~/Downloads/GestaoServicos/INSTALAR_NO_MAC.command` (ajuste o caminho se o descompactador usar outro diretório).
 4. Abra a interface com `bash ~/GestaoServicos/INICIAR_AUTOSEG.command`.
 
-O instalador exige uma instalação existente com `app.py`, `banco.py`, `servidor_web.py` e `dados.db`. Ele cria backup consistente do banco antes de copiar módulos. Ele não substitui `banco.py`, `servidor_web.py`, `dados.db`, fotos, PDFs, logotipos ou `.venv` existente.
+O instalador exige uma instalação existente com `gtk_app.py`, `banco.py`, `servidor_web.py` e `dados.db`. Ele cria backup consistente do banco antes de copiar módulos. Ele não substitui `banco.py`, `servidor_web.py`, `dados.db`, fotos, PDFs, logotipos ou `.venv` existente.
 
 ## CLI experimental Workaholic
 

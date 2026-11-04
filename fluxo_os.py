@@ -1,6 +1,6 @@
 """AUTOSEG v5 — ciclo de encerramento, credenciais do cliente e PDF publicado.
 
-Os mesmos serviços são usados por Tkinter e portal web. Não altera nem remove
+Os mesmos serviços são usados pelo desktop GTK e pelos portais web. Não altera nem remove
 registros antigos. O histórico de eventos é append-only.
 """
 import hashlib

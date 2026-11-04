@@ -9,7 +9,7 @@ if [[ -z "$DEST" ]]; then
   exit 2
 fi
 DEST="$(cd "$DEST" 2>/dev/null && pwd)" || { echo 'Diretório destino não encontrado.'; exit 2; }
-for f in app.py banco.py dados.db portal_prestador.py portal_v9.py cadastros_v9.py INICIAR_AUTOSEG.command; do
+for f in banco.py dados.db portal_prestador.py portal_v9.py cadastros_v9.py INICIAR_AUTOSEG.command; do
   [[ -f "$DEST/$f" ]] || { echo "ERRO: $DEST/$f ausente. Nenhuma alteração realizada."; exit 1; }
 done
 if command -v lsof >/dev/null 2>&1; then

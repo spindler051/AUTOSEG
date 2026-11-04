@@ -5,7 +5,7 @@ Arquitetura obrigatória do AUTOSEG:
 
   * http://127.0.0.1:8765/  -> Portal do Cliente (este arquivo)
   * http://127.0.0.1:8766/  -> Portal do Prestador (portal_prestador.py)
-  * aplicativo desktop       -> app.py
+  * aplicativo desktop       -> gtk_app.py
 
 Os dois sites usam o MESMO banco SQLite (dados.db) e as mesmas regras de
 negócio. Este módulo não redireciona para a 8766: ele serve o portal inteiro

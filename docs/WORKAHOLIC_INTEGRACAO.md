@@ -89,7 +89,7 @@ Para cada entidade:
 
 ## Limites conhecidos
 
-- Portal, Tkinter e importadores ainda escrevem direto em `clientes` e não
+- Portal, desktop e importadores ainda escrevem direto em `clientes` e não
   incrementam `versao`; a tela mantém o comportamento último-que-salva, igual
   ao anterior. Migrar esses escritores antes de remover as escritas diretas.
 - A desativação de cliente ainda usa `cadastros_v9.desativar_cliente` para

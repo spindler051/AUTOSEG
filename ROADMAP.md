@@ -69,8 +69,8 @@ O Portal do Cliente mantém seu desenho visual atual. Melhorias nele serão pont
 - [x] Importação YAML de serviços com modelo oficial, prévia e validação.
 - [x] Catálogo web com linhas de material separadas, sem `|`, permitindo zero itens.
 - [x] Mensagem de erro de catálogo dentro do formulário, sem perder o preenchimento.
-- [x] Editor Tkinter de Serviços e Valores, independente do navegador.
-- [x] Módulo Tkinter Materiais e Estoque, fora da navegação web e sem rotas CRUD no portal.
+- [x] Editor desktop (GTK) de Serviços e Valores, independente do navegador.
+- [x] Módulo desktop (GTK) de Materiais e Estoque, fora da navegação web e sem rotas CRUD no portal.
 - [x] Integração estoque ↔ materiais de OS (desktop e prestador) com transação, ajustes diferenciais, saldo negativo e histórico.
 - [x] Estoque preexistente em OS antigas registrado como linha de base **sem baixar novamente**.
 - [x] Selecionar material cadastrado na OS (desktop e prestador), sem mostrar custo/saldo no portal.

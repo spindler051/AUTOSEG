@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.12 — remoção completa do app Tkinter — 2026-11-03 — develop
+
+- **Removido o frontend Tkinter:** `app.py`, `desktop_v9.py`, `desktop_operacoes.py`, `test_tk_v6.py`, `test_tk_v9.py` e `INICIAR_AUTOSEG_TK.command` saíram do código.
+- **Bootstrap:** `autoseg_app.py` agora inicia o `gtk_app.py` (GTK4/libadwaita), sem `tkinter`.
+- **Lançadores e instaladores:** `INICIAR_AUTOSEG_DEV.command`, `VERIFICAR_AUTOSEG_DEV.command`, `ATUALIZAR_AUTOSEG_V9_4.command` e `INSTALAR_REV04_DEV.command` foram ajustados para não exigir mais `app.py`.
+- **Instaladores obsoletos:** removidos `INSTALAR_AUTOSEG_V9_2_BASE.command` e a variante `2`, que instalavam o frontend antigo.
+- **Nenhum módulo ativo importa `tkinter`.** O GTK é o único frontend desktop.
+- Documentação ativa atualizada para não indicar fallback Tkinter.
+
 ## 9.6.0-dev.11 — numeração consistente em PDFs, e-mails e notas — 2026-11-03 — develop
 
 - **PDF publicado:** o nome do arquivo passa a usar o número da OS (`OS-0014_relatorio_v2.pdf`) em vez do ID interno (`OS_16...`). O conteúdo do PDF já usava o número correto.

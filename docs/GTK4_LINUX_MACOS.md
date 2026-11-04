@@ -1,28 +1,26 @@
 # AUTOSEG GTK4/libadwaita — Linux e macOS
 
-Este documento descreve a interface desktop nova (`gtk_app.py`), que usa o
-**mesmo backend**, o **mesmo banco SQLite** e as **mesmas regras** do app
-Tkinter e dos portais. Não é um fork: nenhum módulo de regra de negócio foi
-duplicado para Linux ou macOS.
+Este documento descreve a interface desktop (`gtk_app.py`), que usa o
+**mesmo backend**, o **mesmo banco SQLite** e as **mesmas regras** dos portais.
+Não é um fork: nenhum módulo de regra de negócio foi duplicado para Linux ou
+macOS.
 
 - Branch de desenvolvimento: `develop`
-- Versão lida de `versao.json`: `9.6.0-dev.4`
+- Versão lida de `versao.json`: `9.6.0-dev.12`
 - Backend compartilhado: `banco.py`, `cadastros_v9.py`, `prestadores_ext.py`,
   `fluxo_os.py`, `atendimento_os.py`, `estoque_materiais.py`,
   `catalogo_servicos.py`, `portal_negocios.py`, `servidor_web.py`,
   `portal_prestador.py`
-- Frontends:
-  - `app.py` — Tkinter legado (continua funcionando)
-  - `gtk_app.py` — GTK4 + libadwaita (novo)
+- Frontend desktop: `gtk_app.py` — GTK4 + libadwaita. O frontend Tkinter foi
+  removido do código.
 
 ![Painel inicial da interface GTK4](gtk4-home.png)
 
 ## Princípio de convivência
 
-Os dois frontends podem ser abertos na mesma máquina, mas não ao mesmo tempo
-na mesma pasta de dados: os portais usam portas fixas. O banco é o mesmo e o
-schema é aditivo. Recursos novos entram no backend primeiro e ficam
-disponíveis para Tkinter, GTK, portal do cliente e portal do prestador.
+Há um único frontend desktop (GTK). Os portais do cliente e do prestador usam
+portas fixas e o mesmo SQLite. Recursos novos entram no backend primeiro e
+ficam disponíveis para o GTK, o portal do cliente e o portal do prestador.
 
 Variáveis úteis:
 
@@ -53,9 +51,7 @@ sistema; no Linux, a fonte configurada no desktop. O `Adw.StyleManager` fica
 em `DEFAULT`, então claro/escuro segue o sistema. Os ícones são nomes
 simbólicos Adwaita resolvidos pelo tema; não há ícones KDE no código.
 
-O `INICIAR_AUTOSEG.command` antigo agora delega ao GTK. O Tkinter fica
-congelado como fallback em `INICIAR_AUTOSEG_TK.command` até a validação visual
-no Mac; depois pode ser removido.
+O `INICIAR_AUTOSEG.command` delega ao GTK. Não existe mais fallback Tkinter.
 
 ## Trabalho em equipe Linux + macOS
 
@@ -160,8 +156,7 @@ que banco, PDFs, anexos e rascunhos fiquem fora do bundle e possam ser
 sincronizados/backupeados. O app usa `Gtk.UriLauncher` para abrir PDFs,
 pastas e URLs no aplicativo padrão do macOS.
 
-Não há Cage no macOS: a janela é nativa. O Tkinter legado continua disponível
-como fallback.
+Não há Cage no macOS: a janela é nativa. O frontend Tkinter foi removido.
 
 ### Status validado no macOS (02/11/2026)
 
@@ -357,7 +352,7 @@ Mapeamento usado no app:
 | `Adw.ViewStack` + `ViewSwitcherBar` | abas de chamados e organizações |
 | `Gtk.CssProvider` | apenas espaçamento/raio de cartões; cores do tema do sistema |
 
-Não foi recriado o tema preto/amarelo do Tkinter: o app usa as cores do
+Não foi recriado o tema preto/amarelo do app anterior: o app usa as cores do
 libadwaita, o modo claro/escuro do sistema e as classes de status
 (`.success`, `.warning`, `.error`, `.accent`).
 
@@ -373,6 +368,6 @@ Plano de modularização e deploy (sem mudanças de código):
   (já aplicado em `ABRIR_NO_DRM.sh`).
 - O macOS não foi testado neste ambiente (sem hardware macOS).
 - O envio real de e-mail/nota fiscal continua fora do escopo: o desktop gera
-  rascunhos, como no Tkinter.
+  rascunhos, como no app anterior.
 - O portal do cliente e o do prestador continuam sendo aplicações web; o app
   GTK só os inicia, monitora e abre no navegador.

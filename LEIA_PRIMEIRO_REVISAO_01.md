@@ -63,7 +63,7 @@ Se a branch estava limpa antes da aplicação, você pode voltar os arquivos ver
 
 ```zsh
 cd "$HOME/GestaoServicos_DEV" || exit 1
-git restore -- app.py cadastros_v9.py portal.js portal_negocios.py portal_prestador.py prestadores_ext.py requirements.txt
+git restore -- cadastros_v9.py portal.js portal_negocios.py portal_prestador.py prestadores_ext.py requirements.txt
 ```
 
 Os **arquivos novos** da revisão continuarão no diretório e devem ser revisados/removidos separadamente. Esse procedimento **não restaura o banco de dados de testes** caso você tenha criado dados manualmente durante os testes; preserve-o separadamente se necessário.
