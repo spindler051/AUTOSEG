@@ -578,6 +578,49 @@ class CorrecoesRev12(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Selecione a forma de pagamento'):
             neg.os_salvar(self.db, vazio, pid)
 
+    def test_financeiro_mostra_apenas_a_producao_do_prestador(self):
+        a = self._prestador('Técnico A', email='tecnico.a@exemplo.com.br')
+        b = self._prestador('Técnico B', email='tecnico.b@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Financeiro')
+        base_dados = {'cliente_id': str(cid), 'descricao': 'Serviço com rateio',
+                      'tecnico': 'T', 'forma_pagamento': 'PIX',
+                      'valor_mao_obra': '1000', 'materiais_presentes': '1',
+                      'relatorio_tecnico': 'Serviço concluído',
+                      'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, base_dados, a)
+        ext.atribuir(self.db, oid, a)
+        conclusao = dict(base_dados)
+        conclusao.update(acao_status='Concluída', sem_nota_fiscal='1')
+        conclusao['rateio_tecnico[]'] = [str(b)]
+        conclusao['rateio_valor[]'] = ['300,00']
+        neg.os_salvar(self.db, conclusao, a, oid)
+        with ext.db(self.db) as c:
+            fid = c.execute('SELECT id FROM financeiro WHERE os_id=?', (oid,)).fetchone()['id']
+        _, base = self._servidor()
+
+        cliente_a = self._login(base, 'tecnico.a@exemplo.com.br')
+        status, html = req(cliente_a, base, '/financeiro')
+        self.assertEqual(status, 200)
+        self.assertIn('A receber (minha produção)</span><strong>R$ 700,00</strong>', html)
+        self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('Minha parcela', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        req(cliente_a, base, f'/financeiro/{fid}/receber', {'csrf': token})
+        _, html = req(cliente_a, base, '/financeiro')
+        self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('Recebido (minha produção)</span><strong>R$ 700,00</strong>', html)
+
+        cliente_b = self._login(base, 'tecnico.b@exemplo.com.br')
+        status, html = req(cliente_b, base, '/financeiro')
+        self.assertEqual(status, 200)
+        self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('Minha produção como técnico secundário', html)
+
+        prod.confirmar_repasse(self.db, oid, a, b, '300,00')
+        _, html = req(cliente_b, base, '/financeiro')
+        self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('Recebido (minha produção)</span><strong>R$ 300,00</strong>', html)
+
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""
         pid = self._prestador()

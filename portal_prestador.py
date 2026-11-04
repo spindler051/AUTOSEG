@@ -1038,13 +1038,17 @@ class PortalPrestador:
                         JOIN ordens_servico o ON o.id=f.os_id JOIN clientes cl ON cl.id=f.cliente_id
                         JOIN os_encerramentos con ON con.os_id=f.os_id AND con.prestador_id=?
                         ORDER BY f.id DESC''',(s['pid'],)).fetchall()
+                pessoal=prod.financeiro_pessoal(banco,s['pid'])
+                partes_por_os={item['os_id']:item['partes_centavos']/100
+                               for item in pessoal['brutos_proprios']}
                 linhas=[]
                 for x in reg:
                     acao=(f'<form method="post" action="/financeiro/{x["id"]}/receber" data-confirm="Confirma que o valor foi realmente recebido?">{self.hidden(s)}'
                           '<button type="submit">Confirmar recebimento</button></form>') if x['status']!='Recebido' else '<span class="good">Recebido</span>'
-                    linhas.append((f'<a href="/os/{x["os_id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),dinheiro(x['valor']),
+                    minha_parcela=float(x['valor'] or 0)-partes_por_os.get(x['os_id'],0)
+                    linhas.append((f'<a href="/os/{x["os_id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
+                        dinheiro(x['valor']),dinheiro(minha_parcela),
                         esc(x['forma_pagamento']),esc(x['status']),esc(x['vencimento'] or ''),acao))
-                pessoal=prod.financeiro_pessoal(banco,s['pid'])
                 banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
                 token=self.hidden(s)
                 extras=card('Dados bancários para e-mail de cobrança',
@@ -1069,19 +1073,36 @@ class PortalPrestador:
                        dinheiro(x['pago_centavos']/100),
                        dinheiro((x['valor_centavos']-x['pago_centavos'])/100))
                       for x in pessoal['receber_de_colegas']]
-                extras+=card('Valores a receber de outros técnicos',
+                extras+=card('Minha produção como técnico secundário',
                     tabela(['OS','Valor','Já recebido (registrado)','Restante'],meus))
-                extras+=card('Líquido próprio após rateios',
+                extras+=card('Minha parcela nas OS que eu finalizei',
                     tabela(['OS','Cobrado da imobiliária','Repasses devidos','Minha parcela'],
                         [(esc(x['numero_os']),dinheiro(x['valor']),dinheiro(x['partes_centavos']/100),
                           dinheiro(float(x['valor'])-x['partes_centavos']/100))
                           for x in pessoal['brutos_proprios']]))
-                recebidos=sum(float(x['valor'] or 0) for x in reg if x['status']=='Recebido')
-                pendentes=sum(float(x['valor'] or 0) for x in reg if x['status']=='Aguardando pagamento')
-                return self.pagina('Financeiro',f'<div class="kpis"><div class="kpi"><span>A receber</span><strong>{dinheiro(pendentes)}</strong></div>'
-                    f'<div class="kpi"><span>Recebido</span><strong>{dinheiro(recebidos)}</strong></div></div>'
+                # O KPI é a produção PRÓPRIA do prestador, não o bruto da imobiliária:
+                # no encerramento, desconta os rateios dos técnicos secundários;
+                # nos rateios em que ele é secundário, soma a parcela dele.
+                a_receber=0.0
+                recebido=0.0
+                for item in pessoal['brutos_proprios']:
+                    parte=float(item['valor'] or 0)-item['partes_centavos']/100
+                    if item['status']=='Recebido':
+                        recebido+=parte
+                    elif item['status']=='Aguardando pagamento':
+                        a_receber+=parte
+                for item in pessoal['receber_de_colegas']:
+                    recebido+=item['pago_centavos']/100
+                    a_receber+=(item['valor_centavos']-item['pago_centavos'])/100
+                a_receber=round(a_receber,2)
+                recebido=round(recebido,2)
+                return self.pagina('Financeiro',f'<div class="kpis"><div class="kpi"><span>A receber (minha produção)</span><strong>{dinheiro(a_receber)}</strong></div>'
+                    f'<div class="kpi"><span>Recebido (minha produção)</span><strong>{dinheiro(recebido)}</strong></div></div>'
                     +'<p class="notice">A forma de pagamento PIX não comprova recebimento. Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
-                    +card('Lançamentos financeiros (bruto da imobiliária)',tabela(['OS','Cliente','Valor','Forma','Status','Vencimento','Ação'],linhas))+extras,s)
+                    +'<p class="muted">Os lançamentos abaixo mostram o valor bruto cobrado da imobiliária. '
+                    'Os KPIs acima mostram somente a sua parcela, já descontados os rateios dos técnicos secundários.</p>'
+                    +card('Lançamentos financeiros das OS que eu finalizei',
+                        tabela(['OS','Cliente','Valor bruto','Minha parcela','Forma','Status','Vencimento','Ação'],linhas))+extras,s)
 
             def relatorios(self,s,tipo='relatorios'):
                 with ext.db(banco) as c:

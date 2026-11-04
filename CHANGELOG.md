@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.10 — financeiro por produção do prestador — 2026-11-03 — develop
+
+- **A receber por prestador:** os KPIs “A receber” e “Recebido” agora mostram somente a parcela própria do prestador. Nas OS que ele finalizou, é o valor bruto menos os rateios dos técnicos secundários; nos rateios em que ele é secundário, é a parcela dele.
+- **Tabela transparente:** os lançamentos das OS finalizadas passam a exibir “Valor bruto” e “Minha parcela” lado a lado.
+- **Técnico secundário:** a aba financeira mostra “Minha produção como técnico secundário”, com valor, repasses já registrados e restante.
+- Teste HTTP novo em `test_rev12_correcoes.py` cobrindo finalizador e técnico secundário.
+
 ## 9.6.0-dev.9 — custo real de material em garantia — 2026-11-03 — develop
 
 - **Custo x valor cobrado:** novo campo “Custo real dos materiais (R$) — interno, não cobrado” na OS (GTK e Portal do Prestador). Ele registra o custo do material sem entrar no total cobrado nem no financeiro.
