@@ -1,5 +1,6 @@
 # Instruções para agentes que editarem Workaholic
 
+0. Leia também `../AGENTS.md` e `../docs/PLATFORM_MIGRATION_PLAYBOOK.md`: a regra é uma peça pequena por mudança, com consumidor/integração definido.
 1. Este repositório é **Workaholic**, não Workcore. Não importar nenhum módulo AUTOSEG para dentro do núcleo.
 2. Core tem domínio genérico, API Python e persistência via contrato. Produto AUTOSEG e GUI são camadas externas.
 3. Ler `README.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md` e `docs/MIGRATION_LEDGER.md` antes de editar.

@@ -320,6 +320,9 @@ Names, organization and repository boundaries remain open.
 
 ## 11. Related documents
 
+- `AGENTS.md`
+- `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
+- `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/README.md`
 - `workaholic/docs/ARCHITECTURE.md`
 - `workaholic/docs/MIGRATION_LEDGER.md`

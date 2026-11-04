@@ -66,6 +66,9 @@ Development database and ports:
 ## Documentation
 
 - [Product vision](docs/PRODUCT_VISION.md)
+- [Agent rules](AGENTS.md)
+- [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
+- [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)
 - [GTK4/libadwaita guide](docs/GTK4_LINUX_MACOS.md)
 - [Workaholic integration](docs/WORKAHOLIC_INTEGRACAO.md)
 - [Modular migration ledger](docs/MIGRACAO_MODULAR.md)

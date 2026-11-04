@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — fluxo de agentes e migração incremental — 2026-11-04
+
+- **Regra para agentes:** novo `AGENTS.md` com a regra “uma mudança, um delta de plataforma”, preservação de comportamento, Workaholic fit check e definição de pronto.
+- **Playbook:** `docs/PLATFORM_MIGRATION_PLAYBOOK.md` com receita de migração por fatia, testes de caracterização, adaptadores, rollback e anti-padrões.
+- **Ledger:** `docs/PLATFORM_MIGRATION_LEDGER.md` com o estado real das fatias (clientes parcialmente migrado; catálogo, OS, financeiro e prestadores ainda legados).
+- **GitHub:** templates de pull request e issue para registrar o delta de plataforma e o fit no Workaholic.
+- Nenhuma mudança funcional nesta rodada.
+
 ## Documentação — visão de produto, plataforma genérica e 0BSD — 2026-11-04
 
 - **Visão de produto:** novo `docs/PRODUCT_VISION.md` descreve a separação entre o motor Workaholic, o app GTK genérico, a distribuição AUTOSEG e os módulos de locale/fiscal.
