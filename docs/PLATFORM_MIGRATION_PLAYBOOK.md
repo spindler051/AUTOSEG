@@ -10,6 +10,7 @@ Related documents:
 - `AGENTS.md`
 - `docs/HUMAN_CENTERED_DECISIONS.md`
 - `docs/USER_FEEDBACK_GUIDE.md`
+- `docs/ENGLISH_MIGRATION_PLAN.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/docs/ARCHITECTURE.md`
 - `docs/MIGRACAO_MODULAR.md`

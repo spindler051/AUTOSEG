@@ -69,6 +69,7 @@ Development database and ports:
 - [Agent rules](AGENTS.md)
 - [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
 - [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
+- [English migration plan](docs/ENGLISH_MIGRATION_PLAN.md)
 - [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)
 - [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
 - [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)

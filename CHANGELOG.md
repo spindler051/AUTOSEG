@@ -9,6 +9,14 @@
 - **Esqueleto:** pacote `telemetry/` com contratos, allowlist, sanitização de URL, truncamento/hash de IP e sink no-op; **não integrado** aos portais ou ao GTK.
 - Nenhuma coleta ou transmissão de dados foi ativada.
 
+## Documentação — plano de migração para inglês — 2026-11-04
+
+- **Plano:** `docs/ENGLISH_MIGRATION_PLAN.md` com fases, regras de compatibilidade, glossário e definição de pronto.
+- **Código x usuário:** código e docs de desenvolvedor em inglês; interface continua em português via tradução.
+- **Compatibilidade:** rotas, banco, variáveis de ambiente, YAML e lançadores antigos continuam funcionando.
+- **Sem renomear e migrar na mesma mudança:** uma PR para a fatia, outra para o nome.
+- Nenhuma mudança funcional.
+
 ## Documentação — decisões centradas em humanos — 2026-11-04
 
 - **Processo de decisão:** novo `docs/HUMAN_CENTERED_DECISIONS.md` registra que a IA não decide sozinha questões irreversíveis de produto/arquitetura e que decisões dependentes de valor humano ficam adiadas até haver evidência de uso, pilotos ou protótipos.

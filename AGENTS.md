@@ -11,12 +11,14 @@ generic, modular, open-source platform. Read this file before changing code.
    context and real usage.
 4. `docs/USER_FEEDBACK_GUIDE.md` — how to observe real work and collect useful
    feedback without leading or surveillance.
-5. `docs/PLATFORM_MIGRATION_LEDGER.md` — what is already migrated and what is
+5. `docs/ENGLISH_MIGRATION_PLAN.md` — compatibility rules for the English
+   migration.
+6. `docs/PLATFORM_MIGRATION_LEDGER.md` — what is already migrated and what is
    still legacy.
-6. `docs/GTK4_LINUX_MACOS.md` — current desktop frontend.
-7. `workaholic/AGENTS.md` and `workaholic/docs/ARCHITECTURE.md` before changing
+7. `docs/GTK4_LINUX_MACOS.md` — current desktop frontend.
+8. `workaholic/AGENTS.md` and `workaholic/docs/ARCHITECTURE.md` before changing
    the engine.
-8. `CHANGELOG.md` — recent behavior changes and known constraints.
+9. `CHANGELOG.md` — recent behavior changes and known constraints.
 
 ## Non-negotiable rules
 
