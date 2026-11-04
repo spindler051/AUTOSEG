@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — visão de produto, plataforma genérica e 0BSD — 2026-11-04
+
+- **Visão de produto:** novo `docs/PRODUCT_VISION.md` descreve a separação entre o motor Workaholic, o app GTK genérico, a distribuição AUTOSEG e os módulos de locale/fiscal.
+- **Licença:** `LICENSE` raiz com 0BSD para o código original do projeto; o Workaholic mantém sua licença própria em `workaholic/LICENSE`.
+- **README:** novo `README.md` com estado atual, direção, licença e links de documentação.
+- **Workaholic:** status registrado explicitamente — não abandonado, mas hoje integrado apenas na fatia de clientes.
+- **Sem mudanças funcionais:** nenhuma tela, regra de negócio ou dado foi alterado nesta rodada.
+
 ## 9.6.0-dev.12 — remoção completa do app Tkinter — 2026-11-03 — develop
 
 - **Removido o frontend Tkinter:** `app.py`, `desktop_v9.py`, `desktop_operacoes.py`, `test_tk_v6.py`, `test_tk_v9.py` e `INICIAR_AUTOSEG_TK.command` saíram do código.

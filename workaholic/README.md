@@ -2,6 +2,15 @@
 
 Projeto **novo**, separado do AUTOSEG legado. CLI `workaholic-cli` (alias `workaholic`). Licença do código novo: 0BSD.
 
+## Relação com o AUTOSEG
+
+Workaholic é uma frente de primeira classe, não um experimento descartável.
+O AUTOSEG atual usa o Workaholic apenas na fatia de **clientes**
+(`integracao/clientes.py`). As demais entidades ainda estão nas tabelas legadas
+e serão migradas por adaptadores, uma fatia por vez. O objetivo é que o
+Workaholic se torne o motor genérico do produto — sem alterar o comportamento
+visível do AUTOSEG durante a migração. Ver `../docs/PRODUCT_VISION.md`.
+
 ## O que realmente funciona
 
 - Esquemas de entidades e campos definidos em YAML; os mesmos esquemas podem ser editados futuramente por uma GUI.

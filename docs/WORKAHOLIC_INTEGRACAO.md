@@ -1,5 +1,10 @@
 # Integração com o Workaholic
 
+> **Status:** o Workaholic não foi abandonado. Ele é o motor genérico planejado
+> para o produto de longo prazo, mas hoje está integrado apenas na fatia de
+> clientes. As demais entidades continuam nas tabelas legadas até a migração
+> por adaptadores. Ver `docs/PRODUCT_VISION.md`.
+
 ## O que é o Workaholic
 
 O Workaholic é o núcleo genérico de gestão de trabalho: entidades, campos,
