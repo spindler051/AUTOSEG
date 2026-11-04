@@ -99,13 +99,27 @@ checked properly before use.
 
 | Candidate | Why it might fit | Preliminary concern |
 |---|---|---|
+| **Officina** | Italian for workshop; broad craft/trades feeling; short and GNOME-ish; PyPI package names appeared free. | GitHub organization `officina` already exists; about 614 repositories in the quick search; not unique. Needs trademark/domain/Flathub check. |
 | **Craftbase** | Craft/work base; broad; PyPI appeared free; few GitHub repositories in the quick scan. | Needs trademark/domain check. |
 | **Jobsmith** | Artisan/smith metaphor; work + craft; PyPI appeared free. | Could sound like a job board. |
 | **Workroom** | Neutral, collaborative, easy to say. | Common word; many GitHub repositories; PyPI free. |
 | **Tradespace** | Trades + workspace; broad. | Needs collision/domain check. |
 
-Other directions worth testing: `craftdesk`, `jobdeck`, `workdeck`, `officina`.
-Do not choose by GitHub stars alone; check trademark and package namespaces.
+Other directions worth testing: `craftdesk`, `jobdeck`, `workdeck`.
+
+### A promising split if Officina passes the checks
+
+```text
+workaholic          # engine CLI
+officina            # generic GTK application
+officina-gtk        # optional explicit GUI alias
+autoseg             # security/automation flavor
+```
+
+This separates the engine, the generic app and the vertical flavor without
+making `workaholic` ambiguous. It still needs proper trademark, domain,
+Flathub and GitHub namespace verification before becoming a decision.
+
 
 ## 7. Recommendation for now
 

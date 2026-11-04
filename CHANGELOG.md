@@ -5,6 +5,8 @@
 - **CLI sem ambiguidade:** `workaholic` fica como CLI; a GUI usa `workaholic-gtk` (ou o nome próprio do app, se houver nome separado). Nada de symlink que abre GUI ou CLI conforme o ambiente.
 - **Nome do produto:** documentada a preocupação de colisão — “workaholic” tem centenas de repositórios no GitHub, usuário/organização já existentes e conotação negativa; PyPI estava livre, mas isso não basta.
 - **Critérios e candidatos:** critérios de nome, shortlist exploratória e necessidade de checagem de marca/domínio antes da decisão.
+- **Officina:** avaliado como candidato forte para o app GTK; PyPI livre, mas já existe organização `officina` no GitHub, cerca de 614 repositórios e necessidade de checagem de marca/Flathub.
+- **Separação sugerida:** `workaholic` fica como CLI do motor; `officina` seria o app GTK; `autoseg` o flavor de segurança — se as checagens passarem.
 - **Decisão adiada:** o nome do app genérico/plataforma continua TBD; Workaholic permanece como nome do motor/protótipo por enquanto.
 - Nenhuma mudança funcional.
 
