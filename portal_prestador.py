@@ -243,7 +243,7 @@ class PortalPrestador:
 
             def pagina(self,titulo,conteudo,s=None,status=200):
                 pagina=layout(titulo,conteudo,s)
-                if titulo=='Ordens de serviço abertas e pendentes':
+                if titulo=='Ordens de serviço ativas':
                     pagina=pagina.replace('</head>','<meta http-equiv="refresh" content="20"></head>')
                 return self.responder(pagina,status)
 

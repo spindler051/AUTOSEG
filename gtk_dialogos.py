@@ -1004,7 +1004,7 @@ class DialogoAtribuicao(Adw.Dialog):
                 "SELECT id,nome,email FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome")]
             self.atual_id = ext.responsavel_atual(c, os_id)
         if not self.ordem or self.ordem["status"] not in ext.ATIVAS:
-            raise ValueError("Somente OS aberta ou pendente.")
+            raise ValueError("Somente OS ativa.")
         self.set_title("Atribuição de OS")
         self.set_content_width(580)
         self.set_content_height(360)

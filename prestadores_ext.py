@@ -270,7 +270,7 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
         return True
 
 def assumir(banco,os_id,pid):
-    """Assunção atômica de OS aberta/pendente desatribuída, sem iniciar execução."""
+    """Assunção atômica de OS ativa desatribuída, sem iniciar execução."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
