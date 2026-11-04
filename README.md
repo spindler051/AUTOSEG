@@ -70,6 +70,7 @@ Development database and ports:
 - [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
 - [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
 - [English migration plan](docs/ENGLISH_MIGRATION_PLAN.md)
+- [Naming and CLI contract](docs/NAMING_AND_CLI.md)
 - [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)
 - [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
 - [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)

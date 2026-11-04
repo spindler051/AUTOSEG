@@ -337,6 +337,7 @@ Names, organization and repository boundaries remain open.
 - `docs/HUMAN_CENTERED_DECISIONS.md`
 - `docs/USER_FEEDBACK_GUIDE.md`
 - `docs/ENGLISH_MIGRATION_PLAN.md`
+- `docs/NAMING_AND_CLI.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/README.md`

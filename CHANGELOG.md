@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — nome do produto e contrato de CLI — 2026-11-04
+
+- **CLI sem ambiguidade:** `workaholic` fica como CLI; a GUI usa `workaholic-gtk` (ou o nome próprio do app, se houver nome separado). Nada de symlink que abre GUI ou CLI conforme o ambiente.
+- **Nome do produto:** documentada a preocupação de colisão — “workaholic” tem centenas de repositórios no GitHub, usuário/organização já existentes e conotação negativa; PyPI estava livre, mas isso não basta.
+- **Critérios e candidatos:** critérios de nome, shortlist exploratória e necessidade de checagem de marca/domínio antes da decisão.
+- **Decisão adiada:** o nome do app genérico/plataforma continua TBD; Workaholic permanece como nome do motor/protótipo por enquanto.
+- Nenhuma mudança funcional.
+
 ## Documentação — proposta de telemetria aberta e esqueleto — 2026-11-04
 
 - **Feature request:** `docs/features/OPEN_TELEMETRY.md` descreve telemetria opcional, desligada por padrão, para diagnóstico e investigação de abuso/segurança.
