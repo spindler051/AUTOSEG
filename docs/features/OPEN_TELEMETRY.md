@@ -34,6 +34,62 @@ The system must **not**:
 - hide collection behind unrelated consent;
 - send data to a third party by default.
 
+## 2.1 Legal reality
+
+This is not legal advice. Fingerprinting is **not a crime by itself**, and the
+items above are not all crimes. Legality depends on jurisdiction, purpose,
+legal basis, notice, consent, data minimization, retention, security and the
+relationship with the person (customer, employee, contractor, anonymous
+visitor).
+
+In Brazil, the LGPD applies to personal data and requires a legal basis,
+purpose limitation, necessity, transparency, security and respect for data
+subject rights. Some conduct can also engage the Marco Civil da Internet,
+consumer law, labour law, secrecy of communications or unauthorized-access
+rules. In the EU, the GDPR and ePrivacy rules apply; cross-site tracking and
+many cookies require consent. The US has a patchwork of state privacy and
+wiretap laws. Other countries have their own rules.
+
+Examples:
+
+| Signal / technique | Is it a crime? | Main issue |
+|---|---|---|
+| First-party session ID | No | Must be necessary, documented and retained briefly. |
+| Page path and timestamps | No | Personal data when linked to a person/session; transparency and purpose. |
+| IP address | No | Personal data in many jurisdictions; minimize, truncate/hash, define retention. |
+| Browser/OS/viewport | No | Low sensitivity, but still part of a fingerprint; declare it. |
+| Canvas/WebGL/audio/font fingerprint | Usually not by itself | High privacy risk; may require consent/DPIA and transparency; browsers may block it. |
+| Analytics/marketing cookies | No | Regulated; consent/notice and opt-out depending on jurisdiction. |
+| Cross-site tracking/profile | Not automatically a crime | Strongly regulated; consent, transparency and transfer rules; high legal/reputational risk. |
+| Capturing passwords/tokens | Not a normal “collection” issue | Security failure and potential secrecy/unauthorized-access liability; never store secrets in telemetry. |
+| Keystrokes/screen/content capture | Not automatically a crime | Wiretap/recording/employee-monitoring and privacy law; consent is complex; high risk. |
+| Sending to a third party | No | Processor contracts, international transfer, transparency and security obligations. |
+
+Scale does not create immunity. Large platforms have legal teams, consent
+frameworks, incident response and still face regulators and lawsuits. A
+self-hosted open-source application has a different risk profile: the operator
+is usually the data controller, and the code authors may also carry
+responsibilities depending on the deployment and jurisdiction.
+
+Open implementation makes collection auditable; it does **not** replace a legal
+basis, notice or security controls.
+
+### Risk tiers
+
+- **Tier 0 — off (default):** no collection.
+- **Tier 1 — diagnostics:** page path, timestamps, auth state, coarse
+  browser/OS, error codes, request ID. Short retention, no raw IP.
+- **Tier 2 — security:** Tier 1 plus truncated/hashed IP, login failures,
+  rate-limit events, admin actions. Audited access and retention.
+- **Tier 3 — high-risk:** full IP, precise screen/device signals, client-side
+  fingerprint signals, longer retention or external export. Requires explicit
+  purpose, DPIA/legal review, notice/consent where applicable, access control
+  and an incident plan.
+- **Prohibited by project policy:** passwords, tokens, form values, clipboard,
+  keystrokes, page content, screenshots, cross-site profiles and covert
+  collection. These are excluded because they create disproportionate security
+  and legal risk, not because every one of them is automatically a crime.
+
 ## 3. Principles
 
 1. **Off by default.** Installation starts with telemetry disabled.

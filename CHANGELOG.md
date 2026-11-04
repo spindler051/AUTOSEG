@@ -5,6 +5,7 @@
 - **Feature request:** `docs/features/OPEN_TELEMETRY.md` descreve telemetria opcional, desligada por padrão, para diagnóstico e investigação de abuso/segurança.
 - **Privacidade:** somente campos declarados; sem fingerprint oculto (canvas/WebGL/áudio/fontes), sem conteúdo de formulário, cookies, tokens, teclado ou screenshots.
 - **Controles:** opt-in do administrador, aviso ao usuário, retenção curta, acesso auditado, exportação/deleção e modo local-first.
+- **Realidade legal:** o documento diferencia fingerprinting legal com base/transparência de condutas de alto risco; inclui tiers 0–3 e uma lista de itens proibidos por política, não por serem automaticamente crimes.
 - **Esqueleto:** pacote `telemetry/` com contratos, allowlist, sanitização de URL, truncamento/hash de IP e sink no-op; **não integrado** aos portais ou ao GTK.
 - Nenhuma coleta ou transmissão de dados foi ativada.
 
