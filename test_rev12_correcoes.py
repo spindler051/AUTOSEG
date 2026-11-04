@@ -578,6 +578,21 @@ class CorrecoesRev12(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Selecione a forma de pagamento'):
             neg.os_salvar(self.db, vazio, pid)
 
+    def test_pdf_publicado_usa_o_numero_da_os_no_nome(self):
+        pid = self._prestador()
+        cid = self._cliente(pid, 'Condomínio Numeração', email='cliente@exemplo.com.br')
+        oid = self._os_concluida(pid, cid)
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET numero_os='OS-0099' WHERE id=?", (oid,))
+        caminho = Path(fluxo.publicar_relatorio(self.db, oid))
+        self.assertEqual(caminho.name, 'OS-0099_relatorio_v1.pdf')
+        self.assertNotIn(f'OS_{oid}_', caminho.name)
+        email = Path(ext.criar_email_rascunho(self.db, oid, str(caminho), pid))
+        self.assertTrue(email.name.startswith('email_OS-0099_'))
+        self.assertNotIn(f'email_os_{oid}', email.name)
+        nota = Path(ext.criar_rascunho_fiscal(self.db, oid))
+        self.assertEqual(nota.name, 'nota_fiscal_rascunho_OS-0099.json')
+
     def test_financeiro_mostra_apenas_a_producao_do_prestador(self):
         a = self._prestador('Técnico A', email='tecnico.a@exemplo.com.br')
         b = self._prestador('Técnico B', email='tecnico.b@exemplo.com.br')

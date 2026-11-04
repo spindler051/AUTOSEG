@@ -564,7 +564,8 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     if caminho_nf:
         msg.add_attachment(Path(caminho_nf).read_bytes(),maintype='application',subtype='pdf',
                            filename=Path(nota['nome_original']).name if nota else Path(caminho_nf).name)
-    path=RASCUNHOS/f'email_os_{os_id}_p{prestador_id if prestador_id is not None else 0}_{secrets.token_hex(4)}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
+    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or f'OS-{os_id}')).strip('_')
+    path=RASCUNHOS/f'email_{nome_os}_p{prestador_id if prestador_id is not None else 0}_{secrets.token_hex(4)}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
 
 def criar_rascunho_fiscal(banco,os_id):
     with db(banco) as c:
@@ -573,7 +574,8 @@ def criar_rascunho_fiscal(banco,os_id):
     if r['status']!='Concluída':
         raise ValueError('Rascunho fiscal disponível somente para OS concluída. Cancelamentos e serviços não realizados não devem emitir nota automaticamente.')
     payload={'status':'RASCUNHO_NAO_EMITIDO','ordem_servico_id':os_id,'numero_os':r['numero_os'],'tomador':{'nome':r['cliente_nome'],'documento':r['cliente_documento'],'email':r['cliente_email']},'descricao':r['descricao'],'valor_servico':r['valor_total'],'moeda':'BRL','integracao_api':None,'observacao':'Não é nota fiscal válida. Requer dados do emitente, município, tributos, autorização e API oficial.'}
-    path=RASCUNHOS/f'nota_fiscal_rascunho_os_{os_id}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
+    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or f'OS-{os_id}')).strip('_')
+    path=RASCUNHOS/f'nota_fiscal_rascunho_{nome_os}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
 
 def desatribuir(banco, os_id, ator='Administrador'):
     """Remove apenas o responsável atual. Histórico e participantes são preservados."""

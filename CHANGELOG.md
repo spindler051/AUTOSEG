@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.11 — numeração consistente em PDFs, e-mails e notas — 2026-11-03 — develop
+
+- **PDF publicado:** o nome do arquivo passa a usar o número da OS (`OS-0014_relatorio_v2.pdf`) em vez do ID interno (`OS_16...`). O conteúdo do PDF já usava o número correto.
+- **E-mail e nota fiscal:** os rascunhos `.eml` e `.json` também usam o número da OS no nome.
+- **Chamado de origem:** a tela da OS rotula o protocolo do chamado como “Chamado de origem”, deixando explícito que ele não é o número da OS.
+- **Migração:** os PDFs já publicados no MAIN foram renomeados e os caminhos em `os_documentos` atualizados, preservando o SHA-256.
+- Teste novo em `test_rev12_correcoes.py`.
+
 ## 9.6.0-dev.10 — financeiro por produção do prestador — 2026-11-03 — develop
 
 - **A receber por prestador:** os KPIs “A receber” e “Recebido” agora mostram somente a parcela própria do prestador. Nas OS que ele finalizou, é o valor bruto menos os rateios dos técnicos secundários; nos rateios em que ele é secundário, é a parcela dele.

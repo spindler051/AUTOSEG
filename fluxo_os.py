@@ -203,7 +203,7 @@ def recuperar_relatorios_antigos(banco, os_id=None):
                 if origem.stat().st_size<100:continue
                 with origem.open('rb') as arq:
                     if arq.read(5)!=b'%PDF-':continue
-                destino=publicados/f'OS_{o["id"]}_relatorio_v1.pdf'
+                destino=publicados/f'{nome_limpo}_relatorio_v1.pdf'
                 if destino.exists():
                     # Não substitui um documento órfão; exige intervenção manual.
                     continue
@@ -234,14 +234,15 @@ def publicar_relatorio(banco,os_id):
     instalar(banco)
     with LOCK_PDF:
         with ext.db(banco) as c:
-            o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+            o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
             if not o or o['status'] not in PUBLICAVEIS:
                 raise ValueError('O relatório só é publicado após um encerramento final ou pendência registrada.')
             proximo=c.execute("SELECT COALESCE(MAX(versao),0)+1 FROM os_documentos WHERE os_id=? AND tipo='relatorio_pdf'",(os_id,)).fetchone()[0]
         arq=Path(ext.gerar_pdf(banco,os_id))
         if not arq.is_file() or arq.stat().st_size<100: raise ValueError('PDF não foi gerado corretamente.')
         pasta=ext.RELATORIOS/'publicados';pasta.mkdir(parents=True,exist_ok=True)
-        destino=pasta/f'OS_{os_id}_relatorio_v{proximo}.pdf'
+        nome_limpo=re.sub(r'[^A-Za-z0-9_-]','_',str(o['numero_os'] or '')).strip('_') or f'OS_{os_id}'
+        destino=pasta/f'{nome_limpo}_relatorio_v{proximo}.pdf'
         temp=pasta/f'.{secrets.token_hex(12)}.tmp'
         try:
             shutil.copyfile(arq,temp)

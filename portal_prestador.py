@@ -820,7 +820,12 @@ class PortalPrestador:
                     corpo+=f'<input type="hidden" name="_versao_os" value="{esc(d.get("atualizado_em") or "") }">'
                 corpo+='<fieldset><legend>Identificação e serviço</legend><div class="col2"><div>'
                 if solicitacao:
-                    corpo+=f'<p class="notice"><strong>Solicitação original — somente leitura</strong><br>Cliente ID {solicitacao["cliente_id"]} · {esc(solicitacao["criado_em"])}<br>{esc(solicitacao["descricao_original"])}</p>'
+                    nome_cliente_solicitacao=next((x['nome'] for x in cl if x['id']==solicitacao['cliente_id']),'')
+                    corpo+=('<p class="notice"><strong>Chamado de origem — somente leitura</strong><br>'
+                        f'Cliente: {esc(nome_cliente_solicitacao)} · {esc(solicitacao["criado_em"])}<br>'
+                        f'{esc(solicitacao["descricao_original"])}<br>'
+                        f'<span class="muted">Número da OS: {esc(d.get("numero_os") or "")}. '
+                        'O chamado de origem não é o número da OS.</span></p>')
                     corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
                 else:
                     corpo+='<label for="busca-cliente-os">Buscar cliente ou condomínio</label><input type="search" id="busca-cliente-os" placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
@@ -841,7 +846,10 @@ class PortalPrestador:
                 else:
                     corpo+=textarea('Descrição do serviço','descricao',d.get('descricao') or '',required=True)
                 if solicitacao and d.get('origem')=='Portal':
-                    corpo+=f'<p class="muted">Observações originais: {esc(solicitacao["observacoes_originais"])}</p>'
+                    obs_origem=str(solicitacao['observacoes_originais'] or '').replace(
+                        'Solicitação #','Chamado de origem #').replace(
+                        'Solicitação pública','Chamado público')
+                    corpo+=f'<p class="muted">Protocolo do chamado (não é o número da OS): {esc(obs_origem)}</p>'
                     corpo+=f'<input type="hidden" name="observacoes" value="{esc(d.get("observacoes") or "") }">'
                 else:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
