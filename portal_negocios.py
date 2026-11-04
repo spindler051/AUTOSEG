@@ -180,6 +180,7 @@ def os_salvar(banco,d,pid,oid=None):
     mao_obra=numero(d.get('valor_mao_obra','0'),'Valor da mão de obra')
     total_mat=round(sum(m['valor_total'] for m in materiais),2) if materiais else numero(
         d.get('valor_materiais_manual','0'),'Valor de materiais')
+    custo_mat=numero(d.get('custo_materiais','0'),'Custo dos materiais')
     soma=round(mao_obra+total_mat,2)
     override=texto(d,'valor_total_override',30)
     total=numero(override,'Total negociado') if override else soma
@@ -216,11 +217,11 @@ def os_salvar(banco,d,pid,oid=None):
             n=proximo_numero_os(c.cursor())
             cur=c.execute('''INSERT INTO ordens_servico
                 (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                 valor_materiais,valor_total,forma_pagamento,status,observacoes,
+                 valor_materiais,custo_materiais,valor_total,forma_pagamento,status,observacoes,
                  tempo_horas,composicao_json,criado_em)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
-                mao_obra,total_mat,total,forma,'Aberta',observacoes,
+                mao_obra,total_mat,custo_mat,total,forma,'Aberta',observacoes,
                 tempo_horas,comp_json,ext.agora()))
             oid=cur.lastrowid
             aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
@@ -247,13 +248,14 @@ def os_salvar(banco,d,pid,oid=None):
                 raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
             old_dict=dict(old)
             updated={'cliente_id':cliente_id,'tecnico':tecnico,'descricao':descricao,
-                'valor_mao_obra':mao_obra,'valor_materiais':total_mat,'valor_total':total,
+                'valor_mao_obra':mao_obra,'valor_materiais':total_mat,
+                'custo_materiais':custo_mat,'valor_total':total,
                 'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas}
             diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
             c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
-                valor_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
+                valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
                 tempo_horas=?,composicao_json=?,atualizado_em=? WHERE id=?''',
-                (cliente_id,tecnico,descricao,mao_obra,total_mat,total,forma,observacoes,
+                (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,observacoes,
                  tempo_horas,comp_json,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))

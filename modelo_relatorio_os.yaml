@@ -231,26 +231,34 @@ instrucoes:
     explicacao: >-
       Em serviço coberto por garantia, a mão de obra é gratuita e os materiais
       podem ser cobrados ou também ficarem em garantia. O YAML do relatório
-      NÃO tem campo de mão de obra: os valores são preenchidos na tela da OS,
-      nos campos "Valor de mão de obra" e "Valor de materiais".
+      NÃO tem campo de valores: mão de obra, valor cobrado dos materiais e
+      custo real são preenchidos na tela da OS.
     como_representar:
       - >-
         No YAML, liste apenas os materiais efetivamente aplicados, com
-        quantidade e valor unitário. Se o material também for garantia, use
-        valor_unitario: 0.00 ou deixe a lista vazia.
+        quantidade e valor unitário. Esse valor é o PREÇO COBRADO do cliente.
+        Se o material também for garantia, use valor_unitario: 0.00 ou deixe
+        a lista vazia.
       - >-
         No texto, registre claramente "Serviço executado em garantia" e a
         origem da garantia (nota fiscal, data, contrato ou autorização).
       - >-
-        Na tela da OS, informe 0,00 no campo "Valor de mão de obra".
-        Zero é um valor válido e não bloqueia a finalização.
+        Na tela da OS, informe 0,00 no campo "Valor de mão de obra" e 0,00 no
+        valor cobrado dos materiais. Zero é um valor válido e não bloqueia a
+        finalização.
       - >-
-        Se houver material cobrado, o total da OS será o valor dos materiais.
-        Se tudo for garantia, o total será 0,00 e o sistema não cria cobrança.
+        Se o material teve custo mas não foi cobrado, registre esse custo no
+        campo interno "Custo real dos materiais (R$) — interno, não cobrado".
+        Ele NÃO entra no total da OS e NÃO gera financeiro; serve para o
+        controle interno da garantia.
+      - >-
+        Se houver material cobrado, o total da OS será o valor cobrado dos
+        materiais. Se tudo for garantia, o total será 0,00 e o sistema não
+        cria cobrança.
     exemplo_de_texto: >-
       Serviço executado em garantia técnica referente à instalação de
-      12/09/2026. A mão de obra foi realizada sem cobrança; o material
-      aplicado foi cobrado conforme a lista abaixo.
+      12/09/2026. A mão de obra e o material aplicado não foram cobrados do
+      cliente. Custo interno do material registrado para controle da garantia.
 
   checklist_antes_de_enviar:
     - 'A saída tem somente "versao: 1" e "os:"?'
@@ -338,8 +346,8 @@ instrucoes:
     exemplo_3_garantia:
       relato: >-
         Atendimento em garantia. A fechadura não travava por mau contato no
-        cabo. Substituímos o cabo e alinhamos a peça. O material foi cobrado,
-        mas a mão de obra ficou gratuita.
+        cabo. Substituímos o cabo e alinhamos a peça. O material teve custo,
+        mas não foi cobrado do cliente; a mão de obra também foi gratuita.
       saida: |
         versao: 1
         os:
@@ -350,16 +358,14 @@ instrucoes:
           resultado: >-
             Sistema testado e operando normalmente após o reparo.
           relatorio_tecnico: >-
-            Serviço executado em garantia técnica. A mão de obra foi gratuita;
-            o material aplicado foi cobrado conforme a lista.
-          materiais:
-            - item: Cabo de 4 vias
-              quantidade: 2.5
-              valor_unitario: 30.20
+            Serviço executado em garantia técnica. A mão de obra e o material
+            aplicado não foram cobrados do cliente. Custo interno do material
+            registrado para controle da garantia.
+          materiais: []
       observacao: >-
-        Na tela da OS, preencha "Valor de mão de obra" com 0,00. O total será
-        calculado apenas com o material. Se o material também for garantia,
-        use materiais: [] e total 0,00.
+        Na tela da OS, preencha "Valor de mão de obra" com 0,00 e o valor
+        cobrado dos materiais com 0,00. O total será 0,00. Se o material teve
+        custo, registre-o no campo interno "Custo real dos materiais".
 
 modelo:
   os:

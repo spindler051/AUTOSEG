@@ -718,7 +718,7 @@ class PortalPrestador:
                         if k.startswith('v9_') or k=='relatorio_tecnico':
                             if substituir or not str(d.get(k,'')).strip():d[k]=v
                     # Rascunho completo do servidor (produtividade_os) também chega aqui.
-                    for k in ('tecnico','valor_mao_obra','valor_materiais_manual','valor_total_override','forma_pagamento'):
+                    for k in ('tecnico','valor_mao_obra','valor_materiais_manual','custo_materiais','valor_total_override','forma_pagamento'):
                         if k in preenchimento and (substituir or not str(d.get(k,'')).strip()):
                             d[k]=preenchimento[k]
                     if 'material_yaml' in preenchimento and (substituir or not mat):
@@ -830,11 +830,12 @@ class PortalPrestador:
                     [('', 'Selecione a forma de pagamento')]+[(z,z) for z in neg.OS_FORMAS],
                     d.get('forma_pagamento') or '')
                 corpo+=campos_escuros('Valor de mão de obra (R$)','valor_mao_obra',d.get('valor_mao_obra') or '0',required=True)+'</div></div>'
-                corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra. ' \
-                       'Os materiais continuam sendo cobrados normalmente pelo valor informado abaixo.</p>'
+                corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra e <b>0,00</b> no valor cobrado dos materiais. ' \
+                       'O custo real dos materiais é interno e não entra no total cobrado.</p>'
                 corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
                 corpo+='<div>'+campos_escuros('Total negociado (R$), opcional — substitui a soma','valor_total_override',
                   (d.get('valor_total') if d and abs(float(d.get('valor_total') or 0)-float(d.get('valor_mao_obra') or 0)-float(d.get('valor_materiais') or 0))>0.009 else ''))+'</div></div>'
+                corpo+=campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')
                 if solicitacao:
                     corpo+=f'<input type="hidden" name="descricao" value="{esc(solicitacao["descricao_original"])}">'
                 else:

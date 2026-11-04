@@ -505,6 +505,9 @@ class DialogoOS(Adw.Dialog):
                                        ui.dinheiro_texto(base.get("valor_mao_obra", base.get("mao_obra", 0))))
         self.materiais_valor = ui.campo_entry(grupo, "Materiais (R$)",
                                               ui.dinheiro_texto(base.get("valor_materiais", 0)))
+        self.custo_materiais = ui.campo_entry(
+            grupo, "Custo real dos materiais (R$) — interno, não cobrado",
+            ui.dinheiro_texto(base.get("custo_materiais", 0)))
         self.total = ui.campo_entry(grupo, "Valor total (R$)",
                                     ui.dinheiro_texto(base.get("valor_total", 0)))
         self.tempo_horas = ui.campo_entry(
@@ -797,6 +800,7 @@ class DialogoOS(Adw.Dialog):
                         for x in self.materiais)
         if not self.materiais:
             materiais = ui.numero(self.materiais_valor.get_text())
+        custo_materiais = ui.numero(self.custo_materiais.get_text())
         total = ui.numero(self.total.get_text()) or (mao_obra + materiais)
         tempo_horas = ui.numero(self.tempo_horas.get_text())
         comp = composicao.calcular(
@@ -859,11 +863,11 @@ class DialogoOS(Adw.Dialog):
                 cursor.execute(
                     """INSERT INTO ordens_servico
                     (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                     valor_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
+                     valor_materiais,custo_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
                      dados_incompletos,tempo_horas,composicao_json,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?)""",
+                    VALUES(?,?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?)""",
                     (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
-                     tecnico, descricao, mao_obra, materiais, total, pagamento,
+                     tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
                      tempo_horas, comp_json, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 os_salvo_id = cursor.lastrowid
@@ -872,10 +876,10 @@ class DialogoOS(Adw.Dialog):
             else:
                 cursor.execute(
                     """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
-                    valor_mao_obra=?,valor_materiais=?,valor_total=?,forma_pagamento=?,
+                    valor_mao_obra=?,valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,
                     urgencia=?,observacoes=?,dados_incompletos=?,tempo_horas=?,
                     composicao_json=?,atualizado_em=? WHERE id=?""",
-                    (cliente_id, tecnico, descricao, mao_obra, materiais, total, pagamento,
+                    (cliente_id, tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
                      tempo_horas, comp_json,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
@@ -902,6 +906,8 @@ class DialogoOS(Adw.Dialog):
                     "descricao": anterior["descricao"] or "",
                     "valor_mao_obra": float(anterior["valor_mao_obra"] or 0),
                     "valor_materiais": float(anterior["valor_materiais"] or 0),
+                    "custo_materiais": float(anterior["custo_materiais"] or 0)
+                    if "custo_materiais" in anterior.keys() else 0.0,
                     "valor_total": float(anterior["valor_total"] or 0),
                     "forma_pagamento": anterior["forma_pagamento"] or "",
                     "observacoes": anterior["observacoes"] or "",
@@ -910,6 +916,7 @@ class DialogoOS(Adw.Dialog):
                 }
                 depois = {"cliente_id": cliente_id, "tecnico": tecnico, "descricao": descricao,
                           "valor_mao_obra": mao_obra, "valor_materiais": materiais,
+                          "custo_materiais": custo_materiais,
                           "valor_total": total, "forma_pagamento": pagamento,
                           "observacoes": observacoes, "tempo_horas": tempo_horas}
                 alteracoes = [f"{chave}: {antes[chave]!s} → {depois[chave]!s}"

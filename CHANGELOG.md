@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.9 — custo real de material em garantia — 2026-11-03 — develop
+
+- **Custo x valor cobrado:** novo campo “Custo real dos materiais (R$) — interno, não cobrado” na OS (GTK e Portal do Prestador). Ele registra o custo do material sem entrar no total cobrado nem no financeiro.
+- **Garantia sem cobrança de material:** o valor cobrado dos materiais pode ficar em `0,00`; o custo real fica registrado para controle interno e a OS conclui com total `0,00`, sem lançamento financeiro.
+- **Migração aditiva:** coluna `ordens_servico.custo_materiais` (REAL, padrão 0), sem alterar OS existentes.
+- **OS-0021 do MAIN:** material com custo interno de R$ 75,50 e valor cobrado `0,00`; o lançamento de R$ 75,50 a receber foi removido.
+- Testes atualizados em `test_rev12_correcoes.py`.
+
 ## 9.6.0-dev.8 — orçamento avulso, garantia 0,00 e YAML autoexplicativo — 2026-11-03 — develop
 
 - **Situação e pagamento sem padrão:** o formulário da OS (GTK e Portal do Prestador) abre com “Selecione a situação” e “Selecione a forma de pagamento”. Não existe mais “Concluída” nem “PIX” pré-selecionados; salvar sem escolher é bloqueado.

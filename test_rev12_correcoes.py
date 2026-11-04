@@ -572,6 +572,8 @@ class CorrecoesRev12(unittest.TestCase):
                                r'<option value=""[^>]*>Selecione a forma de pagamento</option>')
         self.assertRegex(html, r'<select id="c_acao_status" name="acao_status"[^>]*>\s*'
                                r'<option value=""[^>]*>Selecione a situação</option>')
+        self.assertIn('name="custo_materiais"', html)
+        self.assertIn('Custo real dos materiais', html)
         vazio = dict(dados, forma_pagamento='', acao_status='salvar')
         with self.assertRaisesRegex(ValueError, 'Selecione a forma de pagamento'):
             neg.os_salvar(self.db, vazio, pid)
@@ -607,16 +609,18 @@ class CorrecoesRev12(unittest.TestCase):
                  'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '0',
                  'materiais_presentes': '1', 'material_item[]': [''],
                  'material_qtd[]': [''], 'material_unit[]': [''],
+                 'custo_materiais': '75.50',
                  'relatorio_tecnico': 'Serviço em garantia, sem cobrança.',
                  'acao_status': 'Concluída'}
         oid = neg.os_salvar(self.db, dados, pid)
         with ext.db(self.db) as c:
-            os_ = c.execute('SELECT status,valor_total FROM ordens_servico WHERE id=?',
+            os_ = c.execute('SELECT status,valor_total,custo_materiais FROM ordens_servico WHERE id=?',
                             (oid,)).fetchone()
             fin = c.execute('SELECT COUNT(*) FROM financeiro WHERE os_id=?',
                             (oid,)).fetchone()[0]
         self.assertEqual(os_['status'], 'Concluída')
         self.assertEqual(float(os_['valor_total']), 0.0)
+        self.assertAlmostEqual(float(os_['custo_materiais']), 75.5, places=2)
         self.assertEqual(fin, 0)
 
     def test_completude_trata_zero_como_valor_presente(self):

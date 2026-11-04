@@ -81,6 +81,7 @@ def criar_banco(caminho=None):
             descricao TEXT,
             valor_mao_obra REAL DEFAULT 0,
             valor_materiais REAL DEFAULT 0,
+            custo_materiais REAL DEFAULT 0,
             valor_total REAL DEFAULT 0,
             forma_pagamento TEXT DEFAULT 'Outro',
             status TEXT DEFAULT 'Aberta',
@@ -142,6 +143,7 @@ def criar_banco(caminho=None):
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "contato_preferido", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "atualizado_em", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
+    adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "custo_materiais", "REAL DEFAULT 0")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_cliente ON ordens_servico(cliente_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status)")

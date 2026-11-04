@@ -115,6 +115,11 @@ def instalar(banco):
         col_conf={r[1] for r in c.execute('PRAGMA table_info(prestadores_config)').fetchall()}
         if 'dados_bancarios_texto' not in col_conf:
             c.execute("ALTER TABLE prestadores_config ADD COLUMN dados_bancarios_texto TEXT NOT NULL DEFAULT ''")
+        # REV12: custo real dos materiais é interno e não entra no valor cobrado.
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ordens_servico'").fetchone():
+            colunas_os={r[1] for r in c.execute('PRAGMA table_info(ordens_servico)').fetchall()}
+            if 'custo_materiais' not in colunas_os:
+                c.execute('ALTER TABLE ordens_servico ADD COLUMN custo_materiais REAL DEFAULT 0')
         # REV05: exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
