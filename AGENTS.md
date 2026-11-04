@@ -101,6 +101,18 @@ context they do not have yet. Prefer evidence from real use, observation,
 support history and comparable well-made software. Telemetry is not a substitute
 for human values.
 
+## Telemetry
+
+The `telemetry/` package is a proposal skeleton, not wired into the app.
+
+- Collection must stay off by default.
+- Admin opt-in, user notice, retention, access audit and deletion/export are
+  required before any wiring.
+- Never add covert fingerprinting (canvas, WebGL, audio, font enumeration),
+  form values, cookies, tokens, keystrokes, page content or screenshots.
+- Follow `docs/features/OPEN_TELEMETRY.md`; privacy/legal review is required
+  before production use.
+
 ## When unsure
 
 Stop and write down the uncertainty in the PR/issue instead of inventing a

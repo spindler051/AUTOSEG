@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — proposta de telemetria aberta e esqueleto — 2026-11-04
+
+- **Feature request:** `docs/features/OPEN_TELEMETRY.md` descreve telemetria opcional, desligada por padrão, para diagnóstico e investigação de abuso/segurança.
+- **Privacidade:** somente campos declarados; sem fingerprint oculto (canvas/WebGL/áudio/fontes), sem conteúdo de formulário, cookies, tokens, teclado ou screenshots.
+- **Controles:** opt-in do administrador, aviso ao usuário, retenção curta, acesso auditado, exportação/deleção e modo local-first.
+- **Esqueleto:** pacote `telemetry/` com contratos, allowlist, sanitização de URL, truncamento/hash de IP e sink no-op; **não integrado** aos portais ou ao GTK.
+- Nenhuma coleta ou transmissão de dados foi ativada.
+
 ## Documentação — decisões centradas em humanos — 2026-11-04
 
 - **Processo de decisão:** novo `docs/HUMAN_CENTERED_DECISIONS.md` registra que a IA não decide sozinha questões irreversíveis de produto/arquitetura e que decisões dependentes de valor humano ficam adiadas até haver evidência de uso, pilotos ou protótipos.
