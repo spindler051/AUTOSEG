@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## Documentação — plano de correção financeira pela UI — 2026-11-04
+
+- **Problema:** hoje não é possível apagar/consolidar uma OS concluída nem ajustar rateio depois da conclusão pela interface.
+- **Proposta:** no desktop GTK, duas ações explícitas — **Ajustar rateio** na OS correta e **Anular OS** na duplicada.
+- **Segurança:** sem exclusão física de histórico; anulação preserva OS, eventos, PDFs e auditoria; portal do prestador continua somente leitura.
+- **Próxima mudança DEV:** contratos de backend, depois diálogos GTK e teste de regressão em cópia do banco.
+- Nenhuma mudança de comportamento ou no servidor de produção.
+
 ## 9.6.0-dev.13 — status Iniciada ao começar o atendimento — 2026-11-04 — develop
 
 - **Novo status:** ao clicar em `INICIAR OS` ou `Iniciar atendimento`, a OS passa de `Aberta`/`Pendente` para **`Iniciada`** na mesma transação.
