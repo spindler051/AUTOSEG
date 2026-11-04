@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.15 — orçamento com vários itens e YAML — 2026-11-04 — develop
+
+- **Vários serviços:** o orçamento agora aceita uma lista de serviços do catálogo, cada um com sua quantidade, em vez de um único serviço.
+- **Materiais adicionais:** permite incluir vários materiais do estoque, com quantidade, preço de venda ativo e total calculado no servidor.
+- **PDF itemizado:** o orçamento mostra serviços, materiais adicionais, subtotais e total; serviços continuam incluindo os materiais do próprio catálogo.
+- **YAML de orçamento:** novo `modelo_orcamento.yaml` com instruções detalhadas, dicionário de campos, limites, garantias, erros comuns e exemplos; o envio deve conter somente `versao` e `orcamento`, como o modelo de relatório.
+- **Garantias:** o YAML não aceita preços, não cria OS, não cria financeiro e não movimenta estoque; IDs/nomes são resolvidos apenas em registros ativos.
+- **Busca de cliente:** o campo `busca-cliente-os` agora funciona também no orçamento, reutilizando o mesmo filtro do formulário de OS.
+- **Testes:** novo `test_orcamento_multiplo.py` cobre múltiplos serviços/materiais, PDF, YAML, modelo oficial e rejeições de segurança.
+- Nenhuma alteração no MAIN; implementação apenas em `develop`.
+
 ## 9.6.0-dev.14 — busca de cliente no orçamento — 2026-11-04 — develop
 
 - **Novo orçamento:** a escolha do cliente agora tem o mesmo campo de busca já usado no formulário de OS (`busca-cliente-os`).

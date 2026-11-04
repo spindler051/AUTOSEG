@@ -161,23 +161,6 @@
       form.addEventListener('input', recalc);
       recalc();
     }
-    // Busca local nas opções carregadas do seletor; nenhuma seleção é trocada sem ação.
-    const campoBuscaCliente = document.getElementById('busca-cliente-os');
-    const seletorCliente = form.querySelector('select[name="cliente_id"]');
-    if (campoBuscaCliente && seletorCliente) {
-      const opcoes = Array.from(seletorCliente.options).map(o => ({valor:o.value, nome:o.textContent}));
-      campoBuscaCliente.addEventListener('input', () => {
-        const termo = campoBuscaCliente.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-        const selecionado = seletorCliente.value;
-        seletorCliente.replaceChildren();
-        const candidatos = opcoes.filter(x => x.nome.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(termo));
-        for (const o of candidatos) seletorCliente.add(new Option(o.nome, o.valor));
-        if (candidatos.some(o => o.valor === selecionado)) seletorCliente.value = selecionado;
-        else seletorCliente.selectedIndex = -1;
-        if (!candidatos.length) campoBuscaCliente.setCustomValidity('Nenhum cliente encontrado. Limpe a busca.');
-        else campoBuscaCliente.setCustomValidity('');
-      });
-    }
     // Fotos: prévia + legenda individual + chave estável por arquivo.
     // A chave viaja junto com o arquivo para o servidor não duplicar fotos no rascunho.
     const campoFotos = document.getElementById('fotos-relatorio');
@@ -423,5 +406,90 @@
       form.dispatchEvent(new Event('input',{bubbles:true}));
     });
   }
+
+  // Busca local de cliente: funciona no formulário de OS e no orçamento.
+  const campoBuscaCliente = document.getElementById('busca-cliente-os');
+  if (campoBuscaCliente) {
+    const formCliente = campoBuscaCliente.closest('form');
+    const seletorCliente = formCliente?.querySelector('select[name="cliente_id"]');
+    if (seletorCliente) {
+      const opcoesCliente = Array.from(seletorCliente.options)
+        .map(o => ({valor:o.value, nome:o.textContent}));
+      campoBuscaCliente.addEventListener('input', () => {
+        const termo = campoBuscaCliente.value.normalize('NFD')
+          .replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+        const selecionado = seletorCliente.value;
+        seletorCliente.replaceChildren();
+        const candidatos = opcoesCliente.filter(x => x.nome.normalize('NFD')
+          .replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(termo));
+        for (const o of candidatos) seletorCliente.add(new Option(o.nome, o.valor));
+        if (candidatos.some(o => o.valor === selecionado)) seletorCliente.value = selecionado;
+        else seletorCliente.selectedIndex = -1;
+        if (!candidatos.length) campoBuscaCliente.setCustomValidity('Nenhum cliente encontrado. Limpe a busca.');
+        else campoBuscaCliente.setCustomValidity('');
+      });
+    }
+  }
+
+  // Orçamento: linhas dinâmicas de serviços e materiais adicionais.
+  const totalOrcamento = document.getElementById('total-orcamento');
+  const atualizarTotalOrcamento = () => {
+    if (!totalOrcamento) return;
+    let totalCentavos = 0;
+    document.querySelectorAll('#lista-servicos-orcamento .orcamento-servico-row').forEach(row => {
+      const select = row.querySelector('select[name="servico_id[]"]');
+      const qtd = row.querySelector('input[name="servico_qtd[]"]');
+      const opcao = select?.selectedOptions?.[0];
+      const unitario = Number(opcao?.dataset?.unitarioCentavos || 0);
+      const quantidade = Number(String(qtd?.value || '0').replace(',','.'));
+      if (select?.value && quantidade > 0) totalCentavos += unitario * quantidade;
+    });
+    document.querySelectorAll('#lista-materiais-orcamento .orcamento-material-row').forEach(row => {
+      const select = row.querySelector('select[name="material_id[]"]');
+      const qtd = row.querySelector('input[name="material_qtd[]"]');
+      const opcao = select?.selectedOptions?.[0];
+      const unitario = Number(opcao?.dataset?.unitarioCentavos || 0);
+      const quantidade = Number(String(qtd?.value || '0').replace(',','.'));
+      if (select?.value && quantidade > 0) totalCentavos += unitario * quantidade;
+    });
+    totalOrcamento.textContent = (totalCentavos / 100).toLocaleString('pt-BR', {
+      style:'currency', currency:'BRL'
+    });
+  };
+  const configurarLinhasOrcamento = (lista, modelo, adicionar, classeLinha,
+                                     classeRemover, maximo, mensagem) => {
+    if (!lista || !modelo || !adicionar) return;
+    adicionar.addEventListener('click', () => {
+      if (lista.querySelectorAll('.' + classeLinha).length >= maximo) {
+        window.alert(mensagem);
+        return;
+      }
+      const clone = modelo.content.firstElementChild.cloneNode(true);
+      lista.appendChild(clone);
+      clone.querySelector('select,input')?.focus();
+      atualizarTotalOrcamento();
+    });
+    lista.addEventListener('click', evento => {
+      const remover = evento.target.closest('.' + classeRemover);
+      if (!remover) return;
+      remover.closest('.' + classeLinha)?.remove();
+      atualizarTotalOrcamento();
+    });
+    lista.addEventListener('input', atualizarTotalOrcamento);
+    lista.addEventListener('change', atualizarTotalOrcamento);
+    atualizarTotalOrcamento();
+  };
+  configurarLinhasOrcamento(
+    document.getElementById('lista-servicos-orcamento'),
+    document.getElementById('modelo-servico-orcamento'),
+    document.getElementById('adicionar-servico-orcamento'),
+    'orcamento-servico-row', 'remover-servico-orcamento', 20,
+    'Limite de 20 serviços por orçamento.');
+  configurarLinhasOrcamento(
+    document.getElementById('lista-materiais-orcamento'),
+    document.getElementById('modelo-material-orcamento'),
+    document.getElementById('adicionar-material-orcamento'),
+    'orcamento-material-row', 'remover-material-orcamento', 50,
+    'Limite de 50 materiais adicionais por orçamento.');
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

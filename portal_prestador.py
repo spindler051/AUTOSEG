@@ -504,58 +504,169 @@ class PortalPrestador:
                     +card('Pesquisar clientes',pesquisa)
                     +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
 
-            def orcamento_form(self, s, erro='', cliente_id=None):
-                """Orçamento avulso: escolhe cliente + serviço e gera o PDF padrão, sem criar OS."""
+            def orcamento_form(self, s, erro='', cliente_id=None,
+                               servicos=None, materiais=None, aviso=''):
+                """Orçamento com cliente, vários serviços e materiais adicionais."""
                 with ext.db(banco) as c:
                     clientes = c.execute(
                         "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
                         "ORDER BY nome LIMIT 500").fetchall()
-                servicos = catalogo.listar(banco, ativos=True)
+                catalogo_servicos = catalogo.listar(banco, ativos=True)
+                produtos = estoque.listar(banco, ativos=True)
                 if not clientes:
                     return self.pagina('Novo orçamento', card('Sem clientes',
                         '<p>Cadastre um cliente antes de gerar um orçamento.</p>'
                         + botao('Cadastrar cliente','/clientes/novo')), s)
-                if not servicos:
-                    return self.pagina('Novo orçamento', card('Sem serviços',
-                        '<p>Cadastre um serviço no catálogo antes de gerar um orçamento.</p>'
+                if not catalogo_servicos and not produtos:
+                    return self.pagina('Novo orçamento', card('Sem serviços ou materiais',
+                        '<p>Cadastre um serviço no catálogo ou um material no estoque antes de gerar um orçamento.</p>'
                         + botao('Serviços e valores','/servicos')), s)
+
                 selecionado = str(cliente_id or '')
                 if selecionado and not any(str(x['id']) == selecionado for x in clientes):
                     selecionado = ''
                 opcoes_clientes = [('', 'Selecione o cliente')] + [
                     (x['id'], f'{x["nome"]} — {cad9.formatar_documento(x["documento"])}')
                     for x in clientes]
+
                 def total_servico(servico):
                     try:
                         itens = json.loads(servico['materiais_json'] or '[]')
-                        materiais = sum(
+                        materiais_servico = sum(
                             int(Decimal(str(m.get('quantidade', 0))) *
                                 int(m.get('preco_centavos', 0)))
                             for m in itens)
                     except (TypeError, ValueError, KeyError):
-                        materiais = 0
-                    return (servico['preco_servico_centavos'] or 0) + materiais
-                opcoes_servicos = [('', 'Selecione o serviço / produto')] + [
-                    (x['id'], f'{x["nome"]} — {catalogo.reais(total_servico(x))}')
-                    for x in servicos]
-                form = (f'<form method="post" action="/orcamento/pdf">{self.hidden(s)}'
-                        + '<label for="busca-cliente-os">Buscar cliente ou condomínio</label>'
-                          '<input type="search" id="busca-cliente-os" '
-                          'placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
+                        materiais_servico = 0
+                    return (servico['preco_servico_centavos'] or 0) + materiais_servico
+
+                opcoes_servico = [
+                    {'id': str(x['id']), 'nome': x['nome'],
+                     'unitario': total_servico(x)}
+                    for x in catalogo_servicos]
+                opcoes_material = [
+                    {'id': str(x['id']), 'nome': x['nome'],
+                     'unitario': int(x.get('venda_centavos') or 0),
+                     'unidade': x.get('unidade') or 'un'}
+                    for x in produtos]
+
+                def opcoes_html(opcoes, selecionado_id=''):
+                    return ''.join(
+                        f'<option value="{esc(x["id"])}" '
+                        f'data-unitario-centavos="{int(x["unitario"])}"'
+                        f'{" selected" if str(selecionado_id) == x["id"] else ""}>'
+                        f'{esc(x["nome"])} — {esc(catalogo.reais(x["unitario"]))}</option>'
+                        for x in opcoes)
+
+                def linha_servico(item):
+                    item = item or {}
+                    escolhido = str(item.get('id') or '')
+                    quantidade = str(item.get('quantidade') or '1')
+                    return ('<div class="orcamento-servico-row">'
+                            '<label>Serviço<select name="servico_id[]">'
+                            '<option value="">Selecione o serviço</option>'
+                            + opcoes_html(opcoes_servico, escolhido)
+                            + '</select></label>'
+                            '<label>Quantidade<input name="servico_qtd[]" type="number" '
+                            f'min="1" max="20" step="1" value="{esc(quantidade)}"></label>'
+                            '<button type="button" class="secondary remover-servico-orcamento">Remover</button>'
+                            '</div>')
+
+                def linha_material(item):
+                    item = item or {}
+                    escolhido = str(item.get('id') or '')
+                    quantidade = str(item.get('quantidade') or '1')
+                    return ('<div class="orcamento-material-row">'
+                            '<label>Material<select name="material_id[]">'
+                            '<option value="">Selecione o material</option>'
+                            + opcoes_html(opcoes_material, escolhido)
+                            + '</select></label>'
+                            '<label>Quantidade<input name="material_qtd[]" type="number" '
+                            f'min="0.01" max="1000" step="0.01" value="{esc(quantidade)}"></label>'
+                            '<button type="button" class="secondary remover-material-orcamento">Remover</button>'
+                            '</div>')
+
+                ids_servico = {x['id'] for x in opcoes_servico}
+                ids_material = {x['id'] for x in opcoes_material}
+                if servicos is None:
+                    linhas_servico = ([{'id': '', 'quantidade': '1'}]
+                                      if opcoes_servico else [])
+                else:
+                    linhas_servico = [
+                        {'id': str(x.get('id') or ''),
+                         'quantidade': str(x.get('quantidade') or '1')}
+                        for x in servicos]
+                linhas_material = [
+                    {'id': str(x.get('id') or ''),
+                     'quantidade': str(x.get('quantidade') or '1')}
+                    for x in (materiais or [])]
+                linhas_servico = [
+                    x for x in linhas_servico
+                    if not x['id'] or x['id'] in ids_servico]
+                linhas_material = [
+                    x for x in linhas_material
+                    if not x['id'] or x['id'] in ids_material]
+
+                campo_busca = ('<label for="busca-cliente-os">Buscar cliente ou condomínio</label>'
+                               '<input type="search" id="busca-cliente-os" '
+                               'placeholder="Digite o nome ou ID para localizar" autocomplete="off">')
+                secao_servicos = ''
+                if opcoes_servico:
+                    secao_servicos = (
+                        '<fieldset><legend>Serviços</legend>'
+                        '<p class="muted">Cada serviço já inclui os materiais cadastrados no próprio serviço. '
+                        'Use "Materiais adicionais" apenas para itens cobrados separadamente.</p>'
+                        '<div id="lista-servicos-orcamento">'
+                        + ''.join(linha_servico(x) for x in linhas_servico)
+                        + '</div>'
+                        '<button type="button" class="secondary" id="adicionar-servico-orcamento">'
+                        '+ Adicionar serviço</button>'
+                        f'<template id="modelo-servico-orcamento">{linha_servico({})}</template>'
+                        '</fieldset>')
+                secao_materiais = ''
+                if opcoes_material:
+                    secao_materiais = (
+                        '<fieldset><legend>Materiais adicionais — opcional</legend>'
+                        '<p class="muted">Preço de venda ativo do estoque. '
+                        'Não repita materiais que já fazem parte do serviço.</p>'
+                        '<div id="lista-materiais-orcamento">'
+                        + ''.join(linha_material(x) for x in linhas_material)
+                        + '</div>'
+                        '<button type="button" class="secondary" id="adicionar-material-orcamento">'
+                        '+ Adicionar material</button>'
+                        f'<template id="modelo-material-orcamento">{linha_material({})}</template>'
+                        '</fieldset>')
+
+                form = (f'<form method="post" action="/orcamento/pdf" id="form-orcamento">{self.hidden(s)}'
+                        + campo_busca
                         + select('Cliente','cliente_id',opcoes_clientes,selecionado,required=True)
-                        + select('Serviço / produto','servico_id',opcoes_servicos,'',required=True)
-                        + '<label for="orcamento-quantidade">Quantidade</label>'
-                          '<input id="orcamento-quantidade" name="quantidade" type="number" '
-                          'min="1" max="20" value="1" required>'
-                        + '<p class="notice">O valor do serviço e dos materiais do catálogo '
-                          'é multiplicado pela quantidade. Você poderá revisar o PDF antes de enviar.</p>'
+                        + secao_servicos
+                        + secao_materiais
+                        + '<p><strong>Total estimado: <span id="total-orcamento">—</span></strong></p>'
+                        + '<p class="notice">O PDF é apenas um orçamento estimativo. '
+                          'Nenhuma ordem de serviço, cobrança ou movimentação de estoque é criada.</p>'
                         + '<button type="submit">Gerar orçamento em PDF</button></form>')
-                aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                aviso_yaml = (f'<p class="good" id="yaml-orcamento-importado">{esc(aviso)}</p>'
+                              if aviso else '')
+                erro_html = card('Verifique os dados', f'<p class="bad">{esc(erro)}</p>') if erro else ''
+                importar = (
+                    f'<form method="post" enctype="multipart/form-data" action="/orcamento/yaml">'
+                    f'{self.hidden(s)}'
+                    '<label for="yaml-orcamento">Criar orçamento por YAML (até 64 KB)</label>'
+                    '<input type="file" id="yaml-orcamento" name="yaml" accept=".yaml,.yml" required>'
+                    '<button type="submit" class="secondary">Pré-visualizar YAML de orçamento</button>'
+                    '</form>'
+                    '<p class="muted"><a href="/modelos/orcamento.yaml">Baixar modelo YAML oficial</a> · '
+                    'A importação não cria OS nem cobrança; apenas preenche a tela para revisão.</p>')
                 return self.pagina('Novo orçamento',
                     botao('← Clientes','/clientes','secondary')
+                    + card('Importação por YAML', importar)
+                    + erro_html
                     + card('Orçamento (não é OS)',
-                           '<p class="notice">Este PDF é apenas um orçamento estimativo. '
-                           'Nenhuma ordem de serviço é criada.</p>' + aviso + form), s)
+                           aviso_yaml
+                           + '<p class="notice">Escolha um ou mais serviços e, se precisar, '
+                             'materiais adicionais. Os preços vêm do catálogo e do estoque ativos.</p>'
+                           + form), s)
 
             def cliente_form(self,s,cid=None,preenchimento=None):
                 with ext.db(banco) as c:
@@ -1213,8 +1324,8 @@ class PortalPrestador:
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
                     s=self.sessao()
                     if not s:return self.login()
-                    if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml'):
-                        nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml'}[path]
+                    if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml','/modelos/orcamento.yaml'):
+                        nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml','/modelos/orcamento.yaml':'modelo_orcamento.yaml'}[path]
                         arquivo=Path(__file__).parent/nome
                         return self.send_bytes(arquivo.read_bytes(),'application/x-yaml; charset=utf-8',filename=nome)
                     if path in ('/chamados','/organizacoes'):
@@ -1332,15 +1443,28 @@ class PortalPrestador:
                         if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
                         pre=yaml_import.cliente(arq[0],arq[1])
                         return self.cliente_form(s,preenchimento=pre)
+                    if path=='/orcamento/yaml':
+                        arq=d.get('yaml')
+                        if not isinstance(arq,tuple):
+                            raise ValueError('Selecione um arquivo YAML de orçamento.')
+                        try:
+                            pre=yaml_import.orcamento(arq[0],arq[1],banco)
+                        except ValueError as erro:
+                            return self.orcamento_form(s,erro=str(erro))
+                        if not pre:
+                            return self.orcamento_form(
+                                s,erro='O YAML está em branco. Preencha a seção "orcamento" '
+                                       'e remova as instruções antes de importar.')
+                        return self.orcamento_form(
+                            s,cliente_id=pre['cliente_id'],
+                            servicos=pre['servicos'],materiais=pre['materiais'],
+                            aviso='YAML importado. Confira cliente, serviços, materiais e '
+                                  'quantidades antes de gerar o PDF.')
                     if path=='/orcamento/pdf':
                         try:
                             cliente_id=int(str(d.get('cliente_id','')).strip())
-                            servico_id=int(str(d.get('servico_id','')).strip())
                         except (TypeError,ValueError):
-                            raise ValueError('Selecione o cliente e o serviço / produto.')
-                        try:quantidade=int(str(d.get('quantidade','1')).strip())
-                        except (TypeError,ValueError):
-                            return self.orcamento_form(s,'Quantidade inválida.',cliente_id)
+                            return self.orcamento_form(s,'Selecione o cliente.',None)
                         with ext.db(banco) as c:
                             cliente=c.execute('SELECT id,nome,documento FROM clientes '
                                               'WHERE id=? AND status!=\'Inativo\'',
@@ -1348,13 +1472,32 @@ class PortalPrestador:
                         if not cliente:
                             return self.orcamento_form(s,'Cliente não encontrado.',cliente_id)
                         try:
-                            pdf=catalogo.pdf_orcamento(banco,servico_id,quantidade,
-                                                       cliente=cliente['nome'],
-                                                       cliente_documento=cliente['documento'] or '')
+                            itens=catalogo.itens_orcamento_formulario(banco,d)
                         except ValueError as erro:
-                            return self.orcamento_form(s,str(erro),cliente_id)
-                        return self.send_bytes(pdf,'application/pdf',
-                                               filename=f'Orcamento_{cliente_id}_{servico_id}.pdf')
+                            try:
+                                brutos=catalogo.linhas_orcamento_formulario(d)
+                            except ValueError:
+                                brutos={'servicos':None,'materiais':None}
+                            return self.orcamento_form(
+                                s,str(erro),cliente_id=cliente_id,
+                                servicos=brutos['servicos'],materiais=brutos['materiais'])
+                        try:
+                            if len(itens['servicos'])==1 and not itens['materiais']:
+                                servico=itens['servicos'][0]
+                                pdf=catalogo.pdf_orcamento(
+                                    banco,servico['id'],servico['quantidade'],
+                                    cliente=cliente['nome'],
+                                    cliente_documento=cliente['documento'] or '')
+                                nome_pdf=f'Orcamento_{cliente_id}_{servico["id"]}.pdf'
+                            else:
+                                pdf=catalogo.pdf_orcamento_itens(
+                                    banco,cliente['nome'],cliente['documento'] or '',itens)
+                                nome_pdf=f'Orcamento_{cliente_id}.pdf'
+                        except ValueError as erro:
+                            return self.orcamento_form(
+                                s,str(erro),cliente_id=cliente_id,
+                                servicos=itens['servicos'],materiais=itens['materiais'])
+                        return self.send_bytes(pdf,'application/pdf',filename=nome_pdf)
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='yaml':
                         oid=int(partes[1]);arq=d.get('yaml')
                         if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')

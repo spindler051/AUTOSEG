@@ -58,6 +58,39 @@ servico:
 
 O catálogo aceita até 30 materiais por serviço. Em branco: `materiais: []`. Os valores utilizam **ponto** como separador decimal no YAML. No formulário, o prestador pode usar vírgula. Materiais do catálogo não geram baixa automática no estoque ao **apenas cadastrar o serviço**: o consumo ocorre na OS que os utiliza.
 
+## 4. Orçamento com vários serviços e materiais
+
+Arquivo: `modelo_orcamento.yaml`. Na tela **Portal do Prestador > Clientes > Novo orçamento**, use **Criar orçamento por YAML** e confira a prévia antes de gerar o PDF. O YAML não cria OS, não cria cobrança financeira e não movimenta estoque.
+
+O arquivo de envio deve ter **somente** `versao` e `orcamento`. As seções `instrucoes`, `modelo` e `exemplo` servem de guia e devem ser removidas, como no modelo de relatório técnico.
+
+```yaml
+versao: 1
+orcamento:
+  cliente_nome: Condomínio Exemplo Fictício
+  servicos:
+    - nome: Revisão de portão — DEMO
+      quantidade: 1
+    - id: 12
+      quantidade: 2
+  materiais:
+    - nome: Cabo de rede CAT6 — DEMO
+      quantidade: 10
+```
+
+Regras:
+
+- Informe exatamente um cliente: `cliente_id`, `cliente_documento` ou `cliente_nome`.
+- Cada serviço/material aceita `id` OU `nome`, nunca os dois.
+- Serviços precisam existir e estar ativos no catálogo; materiais precisam existir e estar ativos no estoque.
+- Serviços usam o preço ativo do catálogo, que já inclui os materiais cadastrados no próprio serviço.
+- Materiais adicionais usam o preço de venda ativo do estoque.
+- Não existe campo de preço, desconto ou total no YAML.
+- Quantidade de serviço: inteiro de 1 a 20. Quantidade de material: maior que zero, até 1.000.
+- Limites: 20 serviços e 50 materiais adicionais.
+- Não repita serviço/material; ajuste a quantidade em uma única linha.
+- O YAML só pré-preenche a tela. A geração do PDF exige confirmação humana.
+
 ## Regras de segurança
 
 - Não inclua CPF/CNPJ reais, senhas, tokens ou dados bancários em arquivos de teste.

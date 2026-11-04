@@ -3,7 +3,8 @@
 Somente o prestador pode inserir/alterar preços. Clientes autenticados podem
 solicitar PDF a partir dos preços *ativos*; o servidor nunca aceita preço do formulário.
 """
-from decimal import Decimal, InvalidOperation
+from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from xml.sax.saxutils import escape
 from datetime import datetime
@@ -192,6 +193,349 @@ def valores_orcamento(banco,identificador,quantidade=1):
             'subtotal_materiais':quantidade*materiais_total,
             'total':quantidade*(servico['preco_servico_centavos']+materiais_total),
             'composicao':comp}
+
+
+LIMITE_SERVICOS_ORCAMENTO = 20
+LIMITE_MATERIAIS_ORCAMENTO = 50
+
+
+def _lista_formulario(valor):
+    if valor is None:
+        return []
+    if isinstance(valor, (list, tuple)):
+        return list(valor)
+    return [valor]
+
+
+def _quantidade_servico(valor):
+    if isinstance(valor, bool):
+        raise ValueError('Quantidade do serviço inválida.')
+    try:
+        quantidade = int(str(valor).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Quantidade do serviço deve ser um número inteiro entre 1 e 20.') from exc
+    if not 1 <= quantidade <= 20:
+        raise ValueError('Quantidade do serviço deve estar entre 1 e 20.')
+    return quantidade
+
+
+def _quantidade_material(valor):
+    if isinstance(valor, bool):
+        raise ValueError('Quantidade do material inválida.')
+    texto = str(valor).strip().replace(',', '.')
+    try:
+        quantidade = Decimal(texto)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError('Quantidade do material inválida.') from exc
+    if not quantidade.is_finite() or quantidade <= 0 or quantidade > Decimal('1000'):
+        raise ValueError('Quantidade do material deve ser maior que zero e no máximo 1.000.')
+    return quantidade
+
+
+def _quantidade_texto(valor):
+    if isinstance(valor, Decimal):
+        return format(valor.normalize(), 'f').replace('.', ',')
+    return str(valor)
+
+
+def _servico_orcamento_por_id(banco, identificador):
+    try:
+        identificador = int(identificador)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('ID do serviço inválido.') from exc
+    servico = obter(banco, identificador, ativos=True)
+    if not servico:
+        raise ValueError(f'Serviço {identificador} não encontrado ou inativo.')
+    return servico
+
+
+def _servico_orcamento_por_nome(banco, nome):
+    nome = str(nome or '').strip()
+    if not nome:
+        raise ValueError('Nome do serviço não informado.')
+    encontrados = [x for x in listar(banco, ativos=True)
+                   if x['nome'].strip().casefold() == nome.casefold()]
+    if not encontrados:
+        raise ValueError(f'Serviço não encontrado ou inativo: {nome[:120]}')
+    if len(encontrados) > 1:
+        raise ValueError(f'Há mais de um serviço ativo com o nome "{nome[:120]}". Use o ID.')
+    return encontrados[0]
+
+
+def _material_orcamento_por_id(banco, identificador):
+    from estoque_materiais import listar as listar_estoque
+    try:
+        identificador = int(identificador)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('ID do material inválido.') from exc
+    encontrados = [x for x in listar_estoque(banco, ativos=True)
+                   if int(x['id']) == identificador]
+    if not encontrados:
+        raise ValueError(f'Material {identificador} não encontrado ou inativo.')
+    return encontrados[0]
+
+
+def _material_orcamento_por_nome(banco, nome):
+    from estoque_materiais import listar as listar_estoque
+    nome = str(nome or '').strip()
+    if not nome:
+        raise ValueError('Nome do material não informado.')
+    encontrados = [x for x in listar_estoque(banco, ativos=True)
+                   if x['nome'].strip().casefold() == nome.casefold()]
+    if not encontrados:
+        raise ValueError(f'Material não encontrado ou inativo: {nome[:120]}')
+    if len(encontrados) > 1:
+        raise ValueError(f'Há mais de um material ativo com o nome "{nome[:120]}". Use o ID.')
+    return encontrados[0]
+
+
+def montar_itens_orcamento(banco, servicos=None, materiais=None):
+    """Resolve itens do catálogo/estoque e calcula o total no servidor.
+
+    O formulário e o YAML nunca enviam preços. Serviços usam o preço ativo do
+    catálogo (já incluindo seus materiais); materiais adicionais usam o preço de
+    venda ativo do estoque.
+    """
+    servicos = servicos or []
+    materiais = materiais or []
+    if len(servicos) > LIMITE_SERVICOS_ORCAMENTO:
+        raise ValueError(f'Máximo de {LIMITE_SERVICOS_ORCAMENTO} serviços por orçamento.')
+    if len(materiais) > LIMITE_MATERIAIS_ORCAMENTO:
+        raise ValueError(f'Máximo de {LIMITE_MATERIAIS_ORCAMENTO} materiais por orçamento.')
+
+    servicos_saida = []
+    ids_servico = set()
+    for indice, item in enumerate(servicos, start=1):
+        if not isinstance(item, Mapping):
+            raise ValueError(f'Serviço {indice}: formato inválido.')
+        if set(item) - {'id', 'nome', 'quantidade'}:
+            raise ValueError(f'Serviço {indice}: campo desconhecido.')
+        tem_id = item.get('id') not in (None, '')
+        tem_nome = item.get('nome') not in (None, '')
+        if tem_id == tem_nome:
+            raise ValueError(f'Serviço {indice}: informe o id OU o nome, não ambos.')
+        try:
+            servico = (_servico_orcamento_por_id(banco, item['id']) if tem_id
+                       else _servico_orcamento_por_nome(banco, item['nome']))
+            quantidade = _quantidade_servico(item.get('quantidade', 1))
+        except ValueError as exc:
+            raise ValueError(f'Serviço {indice}: {exc}') from exc
+        if servico['id'] in ids_servico:
+            raise ValueError(f'Serviço repetido: {servico["nome"]}. Ajuste a quantidade em uma única linha.')
+        ids_servico.add(servico['id'])
+        unitario = int(valores_orcamento(banco, servico['id'], 1)['total'])
+        total = int((Decimal(quantidade) * Decimal(unitario)).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP))
+        servicos_saida.append({
+            'id': servico['id'], 'nome': servico['nome'],
+            'descricao': servico.get('descricao') or '',
+            'quantidade': quantidade, 'unitario_centavos': unitario,
+            'total_centavos': total,
+        })
+
+    materiais_saida = []
+    ids_material = set()
+    for indice, item in enumerate(materiais, start=1):
+        if not isinstance(item, Mapping):
+            raise ValueError(f'Material {indice}: formato inválido.')
+        if set(item) - {'id', 'nome', 'quantidade'}:
+            raise ValueError(f'Material {indice}: campo desconhecido.')
+        tem_id = item.get('id') not in (None, '')
+        tem_nome = item.get('nome') not in (None, '')
+        if tem_id == tem_nome:
+            raise ValueError(f'Material {indice}: informe o id OU o nome, não ambos.')
+        try:
+            material = (_material_orcamento_por_id(banco, item['id']) if tem_id
+                        else _material_orcamento_por_nome(banco, item['nome']))
+            quantidade = _quantidade_material(item.get('quantidade', 1))
+        except ValueError as exc:
+            raise ValueError(f'Material {indice}: {exc}') from exc
+        if material['id'] in ids_material:
+            raise ValueError(f'Material repetido: {material["nome"]}. Ajuste a quantidade em uma única linha.')
+        ids_material.add(material['id'])
+        unitario = int(material.get('venda_centavos') or 0)
+        total = int((quantidade * Decimal(unitario)).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP))
+        materiais_saida.append({
+            'id': material['id'], 'nome': material['nome'],
+            'unidade': material.get('unidade') or 'un',
+            'quantidade': quantidade, 'unitario_centavos': unitario,
+            'total_centavos': total,
+        })
+
+    if not servicos_saida and not materiais_saida:
+        raise ValueError('Adicione pelo menos um serviço ou material ao orçamento.')
+    return {
+        'servicos': servicos_saida,
+        'materiais': materiais_saida,
+        'total_centavos': sum(x['total_centavos'] for x in servicos_saida + materiais_saida),
+    }
+
+
+def linhas_orcamento_formulario(d):
+    """Lê as linhas visíveis do formulário sem resolver preços ou IDs."""
+    servicos_ids = _lista_formulario(d.get('servico_id[]'))
+    servicos_qtd = _lista_formulario(d.get('servico_qtd[]'))
+    if not servicos_ids and d.get('servico_id'):
+        servicos_ids = [d.get('servico_id')]
+        servicos_qtd = [d.get('quantidade', '1')]
+    if len(servicos_ids) != len(servicos_qtd):
+        raise ValueError('Linhas de serviço incompletas.')
+    servicos = []
+    for identificador, quantidade in zip(servicos_ids, servicos_qtd):
+        if not str(identificador or '').strip():
+            if str(quantidade or '').strip() not in ('', '1'):
+                raise ValueError('Selecione o serviço ou remova a linha.')
+            continue
+        servicos.append({'id': str(identificador).strip(),
+                         'quantidade': str(quantidade or '1').strip()})
+
+    materiais_ids = _lista_formulario(d.get('material_id[]'))
+    materiais_qtd = _lista_formulario(d.get('material_qtd[]'))
+    if len(materiais_ids) != len(materiais_qtd):
+        raise ValueError('Linhas de material incompletas.')
+    materiais = []
+    for identificador, quantidade in zip(materiais_ids, materiais_qtd):
+        if not str(identificador or '').strip():
+            if str(quantidade or '').strip() not in ('', '1'):
+                raise ValueError('Selecione o material ou remova a linha.')
+            continue
+        materiais.append({'id': str(identificador).strip(),
+                          'quantidade': str(quantidade or '1').strip()})
+    if not servicos and not materiais:
+        raise ValueError('Adicione pelo menos um serviço ou material ao orçamento.')
+    return {'servicos': servicos, 'materiais': materiais}
+
+
+def itens_orcamento_formulario(banco, d):
+    linhas = linhas_orcamento_formulario(d)
+    return montar_itens_orcamento(banco, linhas['servicos'], linhas['materiais'])
+
+
+def pdf_orcamento_itens(banco, cliente, cliente_documento, itens):
+    """PDF de orçamento com vários serviços e materiais adicionais."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.pagesizes import A4
+
+    nome_cliente = str(cliente or 'Cliente')[:120]
+    doc_formato = marca.formatar_documento(cliente_documento)
+    bio = BytesIO()
+    doc = SimpleDocTemplate(bio, pagesize=A4, leftMargin=45, rightMargin=45,
+                            topMargin=48, bottomMargin=48)
+    styles = getSampleStyleSheet()
+    normal = styles['BodyText']
+
+    def par(s):
+        return Paragraph(escape(str(s)), normal)
+
+    logo = marca.logo_flowable(180, 42)
+    titulo = Paragraph('<font color="#FFFFFF">Orçamento estimativo</font>', styles['Title'])
+    content = []
+    if logo is not None:
+        cabecalho = Table([[logo, titulo]], colWidths=[200, 300], hAlign='LEFT')
+        cabecalho.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#171717')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ]))
+        content.append(cabecalho)
+    else:
+        content.append(titulo)
+    content.extend([
+        Spacer(1, 10),
+        par('AUTOSEG — CNPJ ' + marca.CNPJ_PRINCIPAL),
+        par('Emitido em: ' + datetime.now().strftime('%d/%m/%Y %H:%M')),
+        par('Solicitante: ' + nome_cliente + (' — ' + doc_formato if doc_formato else '')),
+        Spacer(1, 12),
+    ])
+
+    if itens['servicos']:
+        content.append(Paragraph('Serviços', styles['Heading2']))
+        linhas = [[par('Serviço'), par('Qtde.'), par('Unitário'), par('Total')]]
+        for item in itens['servicos']:
+            nome = escape(item['nome'])
+            if item.get('descricao'):
+                nome += '<br/><font size="8">' + escape(item['descricao'][:300]) + '</font>'
+            linhas.append([
+                Paragraph(nome, normal),
+                par(str(item['quantidade'])),
+                par(reais(item['unitario_centavos'])),
+                par(reais(item['total_centavos'])),
+            ])
+        tabela = Table(linhas, colWidths=[270, 55, 90, 90], repeatRows=1, hAlign='LEFT')
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eee8c9')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), .35, colors.grey),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        content.append(tabela)
+        content.append(Spacer(1, 12))
+
+    if itens['materiais']:
+        content.append(Paragraph('Materiais adicionais', styles['Heading2']))
+        linhas = [[par('Material'), par('Qtde.'), par('Unitário'), par('Total')]]
+        for item in itens['materiais']:
+            linhas.append([
+                par(item['nome'] + (' (' + item['unidade'] + ')' if item.get('unidade') else '')),
+                par(_quantidade_texto(item['quantidade'])),
+                par(reais(item['unitario_centavos'])),
+                par(reais(item['total_centavos'])),
+            ])
+        tabela = Table(linhas, colWidths=[270, 55, 90, 90], repeatRows=1, hAlign='LEFT')
+        tabela.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#eee8c9')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), .35, colors.grey),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        content.append(tabela)
+        content.append(Spacer(1, 12))
+
+    resumo = []
+    subtotal_servicos = sum(x['total_centavos'] for x in itens['servicos'])
+    subtotal_materiais = sum(x['total_centavos'] for x in itens['materiais'])
+    if itens['servicos']:
+        resumo.append([par('Subtotal de serviços'), par(reais(subtotal_servicos))])
+    if itens['materiais']:
+        resumo.append([par('Subtotal de materiais adicionais'), par(reais(subtotal_materiais))])
+    resumo.append([par('TOTAL ESTIMADO'), par(reais(itens['total_centavos']))])
+    tabela_total = Table(resumo, colWidths=[350, 145], hAlign='LEFT')
+    tabela_total.setStyle(TableStyle([
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FFF7D9')),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('GRID', (0, 0), (-1, -1), .35, colors.grey),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    content.extend([
+        tabela_total,
+        Spacer(1, 10),
+        par('O valor unitário dos serviços já inclui os materiais cadastrados no '
+            'próprio serviço. Materiais adicionais são cobrados separadamente.'),
+        Spacer(1, 18),
+        par('Estimativa automática, não é nota fiscal nem proposta contratual. '
+            'Valores sujeitos a vistoria, disponibilidade e confirmação do prestador.'),
+    ])
+
+    def rodape(cv, doc):
+        cv.setStrokeColor(colors.HexColor('#E2B800'))
+        cv.line(45, 40, A4[0] - 45, 40)
+        cv.setFillColor(colors.HexColor('#666666'))
+        cv.setFont('Helvetica', 8)
+        cv.drawString(45, 26, 'AUTOSEG — Orçamento estimativo · CNPJ ' + marca.CNPJ_PRINCIPAL)
+        cv.drawRightString(A4[0] - 45, 26, 'Página ' + str(doc.page))
+        marca.desenhar_selo(cv, doc)
+
+    doc.build(content, onFirstPage=rodape, onLaterPages=rodape)
+    return bio.getvalue()
 
 
 def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente',cliente_documento=''):

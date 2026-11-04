@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping
 
 import cadastros_v9 as cad
+import prestadores_ext as ext
 from portal_negocios import CLIENTE_CAMPOS
 
 LIMITE_BYTES = 64 * 1024
@@ -256,6 +257,110 @@ def relatorio(nome, conteudo, numero_os=None):
     if 'composicao' in entrada:
         resultado['composicao_yaml'] = _composicao_os(entrada['composicao'])
     return resultado
+
+
+def _texto_orcamento(entrada, chave, limite):
+    valor = entrada.get(chave, '')
+    if valor is None:
+        return ''
+    if isinstance(valor, bool) or not isinstance(valor, (str, int, float)):
+        raise ValueError(f'Campo "{chave}" deve ser texto simples.')
+    texto = str(valor).strip()
+    if len(texto) > limite:
+        raise ValueError(f'Campo "{chave}" excede {limite} caracteres.')
+    return texto
+
+
+def _cliente_orcamento(banco, entrada):
+    identificadores = {
+        'cliente_id': _texto_orcamento(entrada, 'cliente_id', 30),
+        'cliente_documento': _texto_orcamento(entrada, 'cliente_documento', 30),
+        'cliente_nome': _texto_orcamento(entrada, 'cliente_nome', 250),
+    }
+    preenchidos = [chave for chave, valor in identificadores.items() if valor]
+    if len(preenchidos) != 1:
+        raise ValueError('Informe exatamente um cliente: cliente_id, cliente_documento ou cliente_nome. Deixe os outros vazios.')
+    with ext.db(banco) as c:
+        if identificadores['cliente_id']:
+            try:
+                cliente_id = int(identificadores['cliente_id'])
+            except (TypeError, ValueError) as exc:
+                raise ValueError('cliente_id deve ser um número inteiro positivo.') from exc
+            if cliente_id <= 0:
+                raise ValueError('cliente_id deve ser um número inteiro positivo.')
+            cliente = c.execute(
+                "SELECT id,nome,documento FROM clientes WHERE id=? AND status!='Inativo'",
+                (cliente_id,)).fetchone()
+            if not cliente:
+                raise ValueError(f'Cliente {cliente_id} não encontrado ou inativo.')
+            return dict(cliente)
+
+        candidatos = [dict(x) for x in c.execute(
+            "SELECT id,nome,documento FROM clientes WHERE status!='Inativo'")]
+        if identificadores['cliente_documento']:
+            documento = cad.digitos(identificadores['cliente_documento'])
+            if len(documento) not in (11, 14):
+                raise ValueError('CPF/CNPJ do cliente deve ter 11 ou 14 dígitos.')
+            encontrados = [x for x in candidatos if cad.digitos(x['documento']) == documento]
+            referencia = documento
+        else:
+            nome = identificadores['cliente_nome'].casefold()
+            encontrados = [x for x in candidatos if (x['nome'] or '').strip().casefold() == nome]
+            referencia = identificadores['cliente_nome']
+        if not encontrados:
+            raise ValueError(f'Cliente não encontrado ou inativo: {referencia[:120]}')
+        if len(encontrados) > 1:
+            raise ValueError('Há mais de um cliente ativo com essa identificação. Use cliente_id ou cliente_documento.')
+        return encontrados[0]
+
+
+def orcamento(nome, conteudo, banco):
+    """Valida YAML de orçamento e resolve cliente, serviços e materiais ativos.
+
+    Assim como o modelo de relatório, o arquivo enviado deve conter apenas
+    ``versao`` e ``orcamento``. O modelo oficial serve de rascunho e inclui as
+    instruções que devem ser removidas antes do envio. Nada é gravado.
+    """
+    import catalogo_servicos as cat
+
+    d = carregar(nome, conteudo)
+    if 'orcamento' in d:
+        if set(d) - {'versao', 'orcamento'} or not isinstance(d.get('orcamento'), Mapping):
+            raise ValueError('A saída deve conter apenas versao e a seção orcamento.')
+        entrada = d['orcamento']
+    elif 'modelo' in d:
+        if set(d) - {'versao', 'instrucoes', 'modelo', 'exemplo'}:
+            raise ValueError('O modelo oficial contém seções desconhecidas.')
+        modelo = d.get('modelo')
+        if not isinstance(modelo, Mapping) or not isinstance(modelo.get('orcamento'), Mapping):
+            raise ValueError('O modelo oficial deve conter modelo.orcamento.')
+        # Modelo em branco: nada a importar até a pessoa/IA gerar a saída limpa
+        # com versao + orcamento, como no modelo de relatório técnico.
+        return {}
+    else:
+        raise ValueError('Utilize a seção orcamento do modelo oficial.')
+
+    aceitos = {'cliente_id', 'cliente_documento', 'cliente_nome', 'servicos', 'materiais'}
+    if set(entrada) - aceitos:
+        raise ValueError('Campo desconhecido no orçamento: '
+                         + str(next(iter(set(entrada) - aceitos))))
+    cliente = _cliente_orcamento(banco, entrada)
+    servicos = entrada.get('servicos', [])
+    materiais = entrada.get('materiais', [])
+    if not isinstance(servicos, list):
+        raise ValueError('O campo "servicos" deve ser uma lista.')
+    if not isinstance(materiais, list):
+        raise ValueError('O campo "materiais" deve ser uma lista.')
+    resultado = cat.montar_itens_orcamento(banco, servicos, materiais)
+    return {
+        'cliente_id': cliente['id'],
+        'cliente_nome': cliente['nome'],
+        'servicos': [{'id': x['id'], 'quantidade': x['quantidade']}
+                     for x in resultado['servicos']],
+        'materiais': [{'id': x['id'], 'quantidade': str(x['quantidade'])}
+                      for x in resultado['materiais']],
+        'total_centavos': resultado['total_centavos'],
+    }
 
 
 def servico(nome,conteudo):
