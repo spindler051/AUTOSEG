@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.26 — mensagem real dos erros e permissão da OS — 2026-11-05 — develop
+
+- **Erro real no toast:** `self.erro` agora devolve JSON para requisições AJAX, então o toast mostra a mensagem exata do servidor em vez de “Não foi possível salvar”.
+- **Log de validação:** erros esperados de POST são registrados em `portal_prestador.log`; exceções ao salvar rascunho também.
+- **Permissão clara:** OS com outro responsável não mostra mais “SALVAR RASCUNHO” nem “Confirmar situação” para quem não é o técnico atribuído; mostra instrução para assumir ou pedir transferência.
+- **Testes:** conclusão por técnico não responsável retorna JSON 403 com “Somente o técnico atribuído…” e não navega.
+
 ## 9.6.0-dev.25 — erros de formulário em toast e legendas corrigidas — 2026-11-05 — develop
 
 - **Legendas de fotos:** os campos de legenda das fotos existentes agora ficam dentro do formulário colaborativo; salvar apenas a legenda não retorna mais “selecione uma foto”.

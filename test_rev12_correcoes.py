@@ -245,6 +245,8 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn(f'action="/os/{oid}/fotos"', html)
         self.assertIn('Adicionar fotos e legendas sem assumir a OS', html)
+        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
+        self.assertNotIn('name="modo_envio" value="encerrar"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
         Image.new('RGB', (4, 4), 'red').save(buffer, 'PNG')
@@ -293,6 +295,22 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(falha.exception.code, 400)
         dados = json.loads(falha.exception.read())
         self.assertIn('Selecione uma foto ou altere uma legenda', dados['error'])
+
+        # Tentar concluir sem ser o responsável deve explicar o motivo em JSON,
+        # sem navegar para uma página de erro.
+        corpo = urllib.parse.urlencode({
+            'csrf': token, 'modo_envio': 'encerrar', 'acao_status': 'Concluída',
+            'v9_execucao': 'Serviço executado', 'sem_nota_fiscal': '1',
+        }).encode()
+        pedido = urllib.request.Request(
+            base + f'/os/{oid}/salvar', corpo,
+            headers={'X-Requested-With': 'XMLHttpRequest',
+                     'Accept': 'application/json'})
+        with self.assertRaises(urllib.error.HTTPError) as falha:
+            cliente_b.open(pedido, timeout=30)
+        self.assertEqual(falha.exception.code, 403)
+        dados = json.loads(falha.exception.read())
+        self.assertIn('Somente o técnico atribuído', dados['error'])
 
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):

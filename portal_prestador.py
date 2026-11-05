@@ -375,6 +375,11 @@ class PortalPrestador:
                 return '/'
 
             def erro(self,msg,status=400,s=None):
+                if ('application/json' in self.headers.get('Accept','')
+                        or self.headers.get('X-Requested-With') == 'XMLHttpRequest'):
+                    return self.send_bytes(
+                        json.dumps({'ok':False,'error':str(msg)},ensure_ascii=False).encode(),
+                        'application/json; charset=utf-8',status=status)
                 destino=esc(self.voltar_url())
                 return self.pagina('Operação não concluída',
                     card('Aviso',f'<p class="bad">{esc(msg)}</p>'
@@ -1262,10 +1267,14 @@ class PortalPrestador:
                     pode_editar_fotos = (responsavel == s['pid'])
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
-                    corpo+=('<p class="muted">Para adicionar fotos: selecione os arquivos, '
-                            'escreva a legenda de cada um e clique em SALVAR RASCUNHO. '
-                            'A conclusão gera o PDF com as fotos e legendas. '
-                            'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>')
+                    if pode_editar_fotos:
+                        corpo+=('<p class="muted">Para adicionar fotos: selecione os arquivos, '
+                                'escreva a legenda de cada um e clique em SALVAR RASCUNHO. '
+                                'A conclusão gera o PDF com as fotos e legendas. '
+                                'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>')
+                    else:
+                        corpo+=('<p class="muted">Use a seção abaixo para adicionar fotos '
+                                'e legendas sem assumir a OS.</p>')
                     if anexos and pode_editar_fotos:
                         corpo+='<div class="fotos-rascunho">'
                         for a in anexos:
@@ -1310,12 +1319,13 @@ class PortalPrestador:
                     if d['status'] in ext.ATIVAS:
                         if responsavel==s['pid']:
                             corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO</button>'
+                            corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                         else:
-                            corpo+='<button class="secondary" name="modo_envio" value="rascunho" type="submit">SALVAR RASCUNHO</button>'
+                            corpo+=('<span class="notice">Esta OS está com outro responsável. '
+                                    'Você pode adicionar fotos e legendas abaixo; para salvar '
+                                    'rascunho ou concluir, assuma a OS ou peça transferência.</span>')
                     else:
                         corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
-                if oid and d['status'] in ext.ATIVAS:
-                    corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                 corpo+='</div></form>'
                 if oid and d['status'] in ext.ATIVAS and responsavel != s['pid']:
                     existentes=''
@@ -2130,6 +2140,7 @@ class PortalPrestador:
                                     return self.pagina('Rascunho salvo',card('Rascunho',
                                         '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'/os/{oid}')),s)
                                 except Exception as e:
+                                    LOG.exception('Falha ao salvar rascunho da OS %s', oid)
                                     return self.erro(str(e),400,s)
                             acao_status = str(d.get('acao_status',''))
                             if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
@@ -2236,6 +2247,7 @@ class PortalPrestador:
                             'application/json; charset=utf-8',status=403)
                     return self.erro(str(e),403,self.sessao())
                 except (KeyError,ValueError,TypeError) as e:
+                    LOG.warning('Validação POST %s: %s',path,e)
                     if quer_json:
                         return self.send_bytes(
                             json.dumps({'ok':False,'error':str(e)},ensure_ascii=False).encode(),
