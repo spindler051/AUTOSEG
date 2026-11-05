@@ -27,6 +27,7 @@ import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
 import feedback_portal as feedback
+import api_financeiro as api_fin
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
 import estoque_materiais as estoque
@@ -255,6 +256,7 @@ class PortalPrestador:
         catalogo.instalar(banco)
         estoque.instalar(banco)
         feedback.instalar(banco)
+        api_fin.instalar(banco)
         # Repara chamados antigos que não receberam OS após falha/interrupção,
         # inclusive quando apenas o Portal do Prestador é iniciado.
         recuperadas=cad9.sincronizar_solicitacoes_pendentes(banco)
@@ -1507,6 +1509,14 @@ class PortalPrestador:
                 mime=mimetypes.guess_type(arq.name)[0] or 'application/octet-stream'
                 return self.send_bytes(arq.read_bytes(),mime,filename=x['nome_original'])
 
+            def do_OPTIONS(self):
+                path=urlparse(self.path).path.rstrip('/') or '/'
+                if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
+                    return api_fin.handle(self,path,banco,'OPTIONS')
+                self.send_response(204)
+                self.send_header('Content-Length','0')
+                self.end_headers()
+
             def do_GET(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 try:
@@ -1517,6 +1527,8 @@ class PortalPrestador:
                                           'login_prestador':'e-mail e senha',
                                           'cadastro_prestadores':'bloqueado no portal web'}).encode('utf-8')
                         return self.send_bytes(dados,'application/json; charset=utf-8')
+                    if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
+                        return api_fin.handle(self,path,banco,'GET')
                     if path=='/static/portal.js':
                         return self.send_bytes((Path(__file__).parent/'portal.js').read_bytes(),'application/javascript; charset=utf-8')
                     if path in ('/logo.png','/icone.png','/favicon.ico'):
@@ -1632,6 +1644,8 @@ class PortalPrestador:
             def do_POST(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 try:
+                    if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
+                        return api_fin.handle(self,path,banco,'POST')
                     d=self.form()
                     if path=='/prestadores' or path.startswith('/prestadores/'):
                         return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop. '

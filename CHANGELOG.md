@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.21 — API financeira somente leitura — 2026-11-05 — develop
+
+- **API `/api/v1`:** expõe o financeiro do prestador autenticado — resumo, lançamentos de OS, rateios como técnico secundário e repasses a pagar — em JSON, com valores em centavos inteiros, datas ISO, paginação por cursor e OpenAPI 3.1.
+- **Tokens Bearer:** tokens `autoseg_fin_...` são criados pelo CLI `api_financeiro.py`, armazenados apenas como SHA-256, revogáveis, com escopo `financeiro:read` e auditoria em `api_acessos`. A API não usa cookie de sessão e é somente leitura.
+- **Contrato Unix:** endpoints pequenos, `curl`/`jq`, erros JSON, CORS opcional por `AUTOSEG_API_ORIGINS`, limite de 120 req/min por token e documentação em `docs/features/API_FINANCEIRO.md`.
+- **Testes:** `test_api_financeiro.py` cobre saúde/OpenAPI, token ausente/inválido/revogado, prestador inativo, isolamento entre prestadores, centavos, paginação sem duplicatas, filtros, repasse em duas etapas, POST rejeitado e CORS.
+- **Fora do MAIN:** a API fica apenas em `develop`; a `main` permanece com as correções de feedback da versão `9.6.0-dev.20`.
+
 ## 9.6.0-dev.20 — correções dos feedbacks e caixa da empresa — 2026-11-05 — develop
 
 - **Repasses em duas etapas:** o finalizador registra o envio integral (sem editar o valor já definido no rateio); o técnico secundário confirma o recebimento no próprio financeiro. O valor só entra como recebido após essa confirmação.
