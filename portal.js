@@ -662,19 +662,79 @@
     mensagemFeedback?.addEventListener('input', salvarRascunho);
     responderIaFeedback?.addEventListener('change', salvarRascunho);
     window.addEventListener('pagehide', salvarRascunho);
-    formFeedback?.addEventListener('submit', () => {
-      try { sessionStorage.setItem(CHAVE_ENVIADO, '1'); } catch (_erro) {}
+    const mostrarAvisoFeedback = texto => {
+      const aviso = document.getElementById('feedback-toast');
+      if (!aviso) return;
+      aviso.textContent = texto;
+      aviso.hidden = false;
+      window.clearTimeout(mostrarAvisoFeedback.timer);
+      mostrarAvisoFeedback.timer = window.setTimeout(() => {
+        aviso.hidden = true;
+      }, 6000);
+    };
+
+    formFeedback?.addEventListener('submit', async evento => {
       const pediuIa = !!responderIaFeedback?.checked;
       const status = document.getElementById('feedback-envio-status');
       const enviar = formFeedback.querySelector('button[type="submit"]');
-      if (status) {
-        status.textContent = pediuIa
-          ? 'Enviando feedback e aguardando a resposta da IA...'
-          : 'Enviando feedback...';
+      const prepararEnvio = () => {
+        if (status) {
+          status.textContent = pediuIa
+            ? 'Enviando feedback e aguardando a resposta da IA...'
+            : 'Enviando feedback...';
+        }
+        if (enviar) {
+          enviar.disabled = true;
+          enviar.textContent = pediuIa ? 'Aguardando IA...' : 'Enviando...';
+        }
+      };
+
+      // Navegadores antigos continuam usando o envio normal com confirmação.
+      if (!window.fetch || !window.FormData) {
+        try { sessionStorage.setItem(CHAVE_ENVIADO, '1'); } catch (_erro) {}
+        prepararEnvio();
+        return;
       }
-      if (enviar) {
-        enviar.disabled = true;
-        enviar.textContent = pediuIa ? 'Aguardando IA...' : 'Enviando...';
+
+      evento.preventDefault();
+      if (formFeedback.dataset.enviando === '1') return;
+      formFeedback.dataset.enviando = '1';
+      prepararEnvio();
+      try {
+        const resposta = await fetch('/feedback', {
+          method: 'POST',
+          body: new FormData(formFeedback),
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin'
+        });
+        let dados = {};
+        try { dados = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !dados.ok) {
+          throw new Error(dados.error || 'Não foi possível enviar o feedback.');
+        }
+        try {
+          sessionStorage.removeItem(CHAVE_RASCUNHO);
+          sessionStorage.removeItem(CHAVE_ENVIADO);
+        } catch (_erro) {}
+        formFeedback.reset();
+        fecharDialogo();
+        const numero = String(dados.id || '').padStart(4, '0');
+        mostrarAvisoFeedback(dados.ia_status === 'ok'
+          ? `Feedback FB-${numero} enviado. A resposta da IA foi registrada em Feedbacks.`
+          : `Feedback FB-${numero} enviado. Obrigado!`);
+      } catch (erro) {
+        if (status) {
+          status.textContent = erro.message || 'Não foi possível enviar. Tente novamente.';
+        }
+        if (enviar) {
+          enviar.disabled = false;
+          enviar.textContent = 'Enviar feedback';
+        }
+      } finally {
+        delete formFeedback.dataset.enviando;
       }
     });
   }

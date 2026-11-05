@@ -1,6 +1,6 @@
 # Provider portal feedback channel — DEV design
 
-**Status:** implemented as `9.6.0-dev.18` and promoted to MAIN after validation.
+**Status:** implemented as `9.6.0-dev.23` and promoted to MAIN after validation.
 **Scope:** Portal do Prestador only. The Portal do Cliente must not show the
 button, the dialog or the routes.
 **Product goal:** give providers a direct, low-friction channel to report

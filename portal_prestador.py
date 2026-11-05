@@ -93,6 +93,7 @@ CSS_FEEDBACK = """
 .feedback-dialog .feedback-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
 .feedback-dialog .feedback-actions button{margin:0}
 .feedback-dialog .feedback-privacidade{font-size:13px;line-height:1.5;color:#c9c9c9}
+.feedback-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1300;max-width:min(560px,calc(100vw - 28px));background:#1e1e1e;border:1px solid #ffd400;border-radius:10px;color:#fff;padding:12px 16px;box-shadow:0 10px 30px #000c}
 @media(max-width:620px){.feedback-fab{right:12px;bottom:12px;padding:12px 16px;font-size:14px}.feedback-dialog form{padding:17px}}
 """
 
@@ -173,7 +174,8 @@ def _dialogo_feedback(usuario):
       <button type="button" class="secondary" id="fechar-feedback">Cancelar</button>
     </div>
   </form>
-</dialog>'''
+</dialog>
+<div class="feedback-toast" id="feedback-toast" role="status" aria-live="polite" hidden></div>'''
 
 
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
@@ -1245,10 +1247,11 @@ class PortalPrestador:
                     pode_editar_fotos = (responsavel == s['pid'])
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
-                    corpo+='<p class="muted">Para adicionar fotos: selecione os arquivos, escreva a legenda de cada um e clique em '
-                    'SALVAR RASCUNHO. A conclusão gera o PDF com as fotos e legendas. '
-                    'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>'
-                    if anexos:
+                    corpo+=('<p class="muted">Para adicionar fotos: selecione os arquivos, '
+                            'escreva a legenda de cada um e clique em SALVAR RASCUNHO. '
+                            'A conclusão gera o PDF com as fotos e legendas. '
+                            'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>')
+                    if anexos and pode_editar_fotos:
                         corpo+='<div class="fotos-rascunho">'
                         for a in anexos:
                             legenda=esc(a['legenda'] or '')
@@ -1271,8 +1274,8 @@ class PortalPrestador:
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>SALVAR RASCUNHO</b> para guardar fotos e legendas sem finalizar.</p></div>'
                     else:
-                        corpo+='<p class="notice">Você pode adicionar fotos sem assumir a OS. '
-                        'Para editar legendas de fotos existentes, assuma a OS.</p>'
+                        corpo+=('<p class="notice">Você pode adicionar fotos e alterar '
+                                'legendas na seção abaixo, sem assumir a OS.</p>')
                     if pode_nota:
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
                         corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
@@ -1300,10 +1303,26 @@ class PortalPrestador:
                     corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                 corpo+='</div></form>'
                 if oid and d['status'] in ext.ATIVAS and responsavel != s['pid']:
-                    corpo+=card('Adicionar fotos sem assumir a OS',
-                        '<p class="muted">As fotos já anexadas aparecem acima. '
-                        'Você pode enviar novas fotos e legendas mesmo sem ser o responsável; '
-                        'elas entram no relatório quando a OS for concluída.</p>'
+                    existentes=''
+                    for a in anexos:
+                        vis=imagens_v9.get(a['id'],{})
+                        legenda=esc(vis.get('legenda',''))
+                        incluido='1' if vis.get('visivel',1) else '0'
+                        existentes+=('<div class="card">'
+                            +'<img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" '
+                             'style="width:110px;height:90px;object-fit:cover;display:block">'
+                            +'<b>'+esc(a['nome_original'])+'</b>'
+                            +'<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" '
+                            +f'value="{legenda}" placeholder="Ex.: Quadro antes do reparo"></label>'
+                            +f'<input type="hidden" name="anexo_id[]" value="{a["id"]}">'
+                            +'<label>Incluir no PDF<select name="anexo_visivel[]">'
+                            +f'<option value="1" {"selected" if incluido=="1" else ""}>Sim — incluir</option>'
+                            +f'<option value="0" {"selected" if incluido=="0" else ""}>Não — ocultar por privacidade</option>'
+                            +'</select></label></div>')
+                    corpo+=card('Adicionar fotos e legendas sem assumir a OS',
+                        '<p class="muted">Você pode enviar novas fotos e alterar legendas '
+                        'mesmo sem ser o responsável; elas entram no relatório quando a OS for concluída.</p>'
+                        +('<h3>Legendas das fotos existentes</h3>'+existentes if existentes else '')
                         +f'<form method="post" action="/os/{oid}/fotos" enctype="multipart/form-data">{token}'
                         +'<label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
                         +'<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple '
@@ -1338,19 +1357,23 @@ class PortalPrestador:
                             +esc(email_log['status'])+'</p>'
                             +('<p>'+esc(email_log['erro'])+'</p>' if email_log['erro'] else ''))
                 publicado=fluxo.ultimo_documento(banco,oid) if oid else None
-                if publicado:
+                if publicado and d['status'] in fluxo.FIM:
                     corpo+=card('Documento liberado ao cliente',
                         '<p class="good">PDF publicado, disponível para baixar no portal do cliente. Versão '+esc(publicado['versao'])+'.</p>'
                         +f'<form method="post" action="/os/{oid}/publicar">{token}<button class="secondary" type="submit">Publicar nova versão do relatório</button></form>')
+                elif publicado:
+                    corpo+=card('Documento anterior',
+                        f'<p class="muted">Existe uma versão anterior (v{esc(publicado["versao"])}), '
+                        'mas o PDF só fica disponível após o encerramento da OS.</p>')
                 elif d['status'] in fluxo.FIM:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="/os/{oid}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
-                if publicado:
+                if publicado and d['status'] in fluxo.FIM:
                     docs=(botao('Baixar PDF publicado',f'/os/{oid}/pdf')
                         +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
                     if d['status']=='Concluída':
                         docs+=botao('Preparar nota fiscal (.json)',f'/os/{oid}/nota')
-                    if d['status'] in fluxo.FIM and (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])):
+                    if responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid']):
                         docs+=(f'<form method="post" action="/os/{oid}/reenviar-email" style="display:inline">'
                                f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
                                '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
@@ -1477,13 +1500,19 @@ class PortalPrestador:
                         FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id ORDER BY o.id DESC LIMIT 500''').fetchall()
                 if tipo=='emails':
                     title='E-mails para clientes'; explanation='Gere um rascunho .eml com o PDF anexado. Nenhum e-mail será enviado automaticamente.'
-                    acao=lambda o:botao('Preparar .eml',f'/os/{o["id"]}/email')
+                    acao=lambda o:(botao('Preparar .eml',f'/os/{o["id"]}/email')
+                                   if o['status'] in fluxo.FIM else
+                                   '<span class="muted">Após encerrar</span>')
                 elif tipo=='notas':
                     title='Notas fiscais'; explanation='Rascunho JSON para futura integração NFS-e. Este arquivo NÃO é documento fiscal válido.'
-                    acao=lambda o:botao('Preparar rascunho JSON',f'/os/{o["id"]}/nota')
+                    acao=lambda o:(botao('Preparar rascunho JSON',f'/os/{o["id"]}/nota')
+                                   if o['status'] in fluxo.FIM else
+                                   '<span class="muted">Após encerrar</span>')
                 else:
                     title='Relatórios gerais e PDFs'; explanation='Histórico das OS e relatórios individuais com materiais, atividades e anexos.'
-                    acao=lambda o:botao('Baixar PDF',f'/os/{o["id"]}/pdf')
+                    acao=lambda o:(botao('Baixar PDF',f'/os/{o["id"]}/pdf')
+                                   if o['status'] in fluxo.FIM else
+                                   '<span class="muted">Após encerrar</span>')
                 rows=[(f'<a href="/os/{r["id"]}">{esc(r["numero_os"])}</a>',esc(r['cliente']),esc(r['status']),dinheiro(r['valor_total']),acao(r)) for r in oses]
                 resumo=(f'<div class="kpis"><div class="kpi"><span>Ordens de serviço</span><strong>{len(oses)}</strong></div>'
                         f'<div class="kpi"><span>Total exibido</span><strong>{dinheiro(sum(float(x["valor_total"] or 0) for x in oses))}</strong></div></div>') if tipo=='relatorios' else ''
@@ -1714,17 +1743,36 @@ class PortalPrestador:
                         meta=feedback.contexto(banco,s,
                                                feedback.ip_requisicao(self.client_address[0],self.headers),
                                                self.headers.get('User-Agent',''))
+                        quer_json = ('application/json' in self.headers.get('Accept','')
+                                     or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                         try:
                             _,item=feedback.criar(
                                 banco,s,pagina,str(d.get('mensagem','')),
                                 str(d.get('responder_ia','')) in ('1','on','true','sim'),
                                 meta)
                         except ValueError as erro:
+                            if quer_json:
+                                return self.send_bytes(
+                                    json.dumps({'ok':False,'error':str(erro)},
+                                               ensure_ascii=False).encode(),
+                                    'application/json; charset=utf-8',status=400)
                             return self.pagina('Feedback não enviado',
                                 card('Não foi possível enviar',
                                      f'<p class="bad">{esc(erro)}</p>'
                                      '<p>Seu texto não foi perdido pelo sistema; volte e tente novamente.</p>'
                                      +botao('Voltar ao início','/','secondary')),s,400)
+                        if quer_json:
+                            return self.send_bytes(
+                                json.dumps({
+                                    'ok': True,
+                                    'id': int(item['id']),
+                                    'status_dev': item['status_dev'],
+                                    'responder_ia': bool(item['responder_ia']),
+                                    'ia_status': item['ia_status'],
+                                    'resposta_ia': item['resposta_ia'] or '',
+                                    'ia_erro': item['ia_erro'] or '',
+                                }, ensure_ascii=False).encode(),
+                                'application/json; charset=utf-8')
                         return self.feedback_confirmacao(s,item)
                     partes_feedback=path.strip('/').split('/')
                     if len(partes_feedback)==3 and partes_feedback[0]=='feedback' and partes_feedback[1].isdigit() and partes_feedback[2]=='triagem':
@@ -1929,9 +1977,12 @@ class PortalPrestador:
                         legendas=_lista(d.get('foto_legenda[]'))
                         chaves=_lista(d.get('foto_chave[]'))
                         visiveis=_lista(d.get('foto_visivel[]'))
+                        anexo_ids=_lista(d.get('anexo_id[]'))
+                        anexo_legendas=_lista(d.get('anexo_legenda[]'))
+                        anexo_visiveis=_lista(d.get('anexo_visivel[]'))
                         imagens=[x for x in imagens if isinstance(x,tuple) and x[1]]
-                        if not imagens:
-                            raise ValueError('Selecione ao menos uma foto.')
+                        if not imagens and not anexo_ids:
+                            raise ValueError('Selecione uma foto ou altere uma legenda.')
                         if len(imagens)>10:
                             raise ValueError('Envie no máximo 10 fotos por vez.')
                         with ext.db(banco) as c:
@@ -1943,6 +1994,15 @@ class PortalPrestador:
                                     chave=chaves[i] if i<len(chaves) else None,
                                     legenda=legendas[i] if i<len(legendas) else '',
                                     visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1)
+                            for i,anexo_id in enumerate(anexo_ids):
+                                try:
+                                    anexo_id=int(anexo_id)
+                                except (TypeError,ValueError):
+                                    continue
+                                ext.definir_legenda_anexo_c(
+                                    c,oid,anexo_id,
+                                    anexo_legendas[i] if i<len(anexo_legendas) else '',
+                                    str(anexo_visiveis[i])!='0' if i<len(anexo_visiveis) else 1)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])

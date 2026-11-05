@@ -105,6 +105,30 @@ class FeedbackPortalTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn('autoseg-auto-refresh', clientes.decode())
 
+    def test_feedback_ajax_retorna_json_e_mantem_a_pagina(self):
+        corpo = urllib.parse.urlencode({
+            'csrf': self.csrf,
+            'mensagem': 'Feedback enviado sem sair da página atual.',
+            'pagina': '/clientes',
+            'responder_ia': '',
+        }).encode()
+        pedido = urllib.request.Request(
+            self.base + '/feedback', corpo,
+            headers={'X-Requested-With': 'XMLHttpRequest',
+                     'Accept': 'application/json'})
+        with self.browser.open(pedido, timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertIn('application/json', resposta.headers.get('Content-Type', ''))
+            dados = json.loads(resposta.read())
+        self.assertTrue(dados['ok'])
+        self.assertEqual(dados['status_dev'], 'Aguardando triagem')
+        self.assertEqual(dados['ia_status'], 'nao_solicitada')
+        with ext.db(self.db) as c:
+            linha = c.execute('SELECT * FROM portal_feedback WHERE id=?',
+                              (dados['id'],)).fetchone()
+        self.assertIsNotNone(linha)
+        self.assertEqual(linha['mensagem'], 'Feedback enviado sem sair da página atual.')
+
     def test_feedback_confirmacao_nao_mostra_triagem(self):
         cad.definir_admin(self.db, self.pid, True)
         status, _, html = self._enviar(

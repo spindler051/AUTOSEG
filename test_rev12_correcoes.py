@@ -182,6 +182,27 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(ordem['status'], 'Aberta')
         self.assertIn('Portão da garagem', ordem['descricao'])
 
+    def test_pdf_nao_abre_pagina_de_erro_em_os_ativa(self):
+        pid = self._prestador()
+        cid = self._cliente(pid)
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço em andamento',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        with ext.db(self.db) as c:
+            c.execute(
+                "INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
+                "VALUES(?,?,?,?,?,?)",
+                (oid, 'relatorio_pdf', 1, '/tmp/relatorio-antigo.pdf', 'x', ext.agora()))
+        _, base = self._servidor()
+        cliente = self._login(base)
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('Documento anterior', html)
+        self.assertNotIn(f'href="/os/{oid}/pdf"', html)
+        self.assertNotIn('Baixar PDF publicado', html)
+
     def test_fotos_sem_assumir_os(self):
         a = self._prestador('Técnico Foto A', email='foto.a@exemplo.com.br')
         b = self._prestador('Técnico Foto B', email='foto.b@exemplo.com.br')
@@ -196,7 +217,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_b = self._login(base, 'foto.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn(f'action="/os/{oid}/fotos"', html)
-        self.assertIn('Adicionar fotos sem assumir a OS', html)
+        self.assertIn('Adicionar fotos e legendas sem assumir a OS', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
         Image.new('RGB', (4, 4), 'red').save(buffer, 'PNG')
@@ -207,7 +228,7 @@ class CorrecoesRev12(unittest.TestCase):
             [('imagens_encerramento[]', 'portao.png', buffer.getvalue(), 'image/png')])
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
-            foto = c.execute('SELECT prestador_id FROM os_anexos WHERE os_id=?',
+            foto = c.execute('SELECT id,prestador_id FROM os_anexos WHERE os_id=?',
                              (oid,)).fetchone()
             legenda = c.execute('SELECT legenda FROM v9_anexos_visiveis v '
                                 'JOIN os_anexos a ON a.id=v.anexo_id WHERE a.os_id=?',
@@ -217,6 +238,21 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(foto['prestador_id'], b)
         self.assertEqual(legenda['legenda'], 'Foto do portão')
         self.assertEqual(responsavel['prestador_id'], a)
+
+        # O mesmo técnico não responsável pode alterar a legenda depois.
+        status, _ = req(cliente_b, base, f'/os/{oid}/fotos', {
+            'csrf': token,
+            'anexo_id[]': [str(foto['id'])],
+            'anexo_legenda[]': ['Legenda alterada pelo colaborador'],
+            'anexo_visivel[]': ['0'],
+        })
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            alterada = c.execute(
+                'SELECT legenda,visivel FROM v9_anexos_visiveis WHERE anexo_id=?',
+                (foto['id'],)).fetchone()
+        self.assertEqual(alterada['legenda'], 'Legenda alterada pelo colaborador')
+        self.assertEqual(alterada['visivel'], 0)
 
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):

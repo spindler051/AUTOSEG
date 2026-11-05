@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.23 — feedbacks 23–25: legendas, PDF e envio AJAX — 2026-11-05 — develop
+
+- **Legendas colaborativas:** qualquer prestador ativo pode adicionar fotos e alterar legendas de fotos existentes sem assumir a OS, pela seção colaborativa.
+- **PDF sem página de erro:** em OS ativa, a tela não mostra mais link para um PDF indisponível; exibe “Documento anterior” e “Após encerrar”. O link de PDF/e-mail/nota só aparece quando a OS está encerrada.
+- **Feedback sem sair da página:** o envio usa AJAX, fecha o diálogo, limpa o rascunho e mostra um aviso na página atual. Em erro, o diálogo permanece aberto com a mensagem.
+- **Servidor JSON:** `/feedback` responde JSON quando recebe `X-Requested-With: XMLHttpRequest` ou `Accept: application/json`, mantendo a confirmação HTML para navegadores sem JavaScript.
+- **Testes:** envio AJAX, edição de legenda por técnico não responsável, ausência de link de PDF em OS ativa e regressões de feedback/OS.
+
 ## 9.6.0-dev.22 — feedbacks 9–22: YAML, orçamento, OS rápida e fotos — 2026-11-05 — develop
 
 - **YAML sem dependência do nome:** a importação de cliente e serviço não exige mais extensão `.yaml/.yml` no nome do arquivo; o conteúdo é validado e erros aparecem na própria tela, com orientação para `ERR_UPLOAD_FILE_CHANGED`.
