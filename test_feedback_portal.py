@@ -105,6 +105,17 @@ class FeedbackPortalTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertNotIn('autoseg-auto-refresh', clientes.decode())
 
+    def test_feedback_confirmacao_nao_mostra_triagem(self):
+        cad.definir_admin(self.db, self.pid, True)
+        status, _, html = self._enviar(
+            'Quero enviar este feedback sem abrir a tela de triagem.')
+        self.assertEqual(status, 200)
+        texto = html.decode()
+        self.assertIn('Feedback FB-', texto)
+        self.assertIn('Obrigado', texto)
+        self.assertNotIn('name="status_dev"', texto)
+        self.assertIn('Voltar ao início', texto)
+
     def test_feedback_sem_ia_nao_cria_os_nem_financeiro(self):
         status, _, html = self._enviar('O botão de iniciar OS não apareceu para mim.')
         self.assertEqual(status, 200)

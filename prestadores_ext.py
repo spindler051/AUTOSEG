@@ -215,10 +215,23 @@ def evento(c,os_id,acao,descricao,prestador_id=None,ator='Administrador'):
 
 ATIVAS = ('Aberta', 'Iniciada', 'Pendente')
 
-def listar_os_compartilhadas(banco):
-    """Todas as OS ativas para todo prestador autenticado, atribuídas ou não."""
+def listar_os_compartilhadas(banco, ordem='status'):
+    """Todas as OS ativas para todo prestador autenticado, atribuídas ou não.
+
+    ``ordem`` is a whitelist key, never SQL from the caller. The default puts
+    in-progress and pending OS above open ones.
+    """
+    ordens = {
+        'status': (
+            "CASE WHEN o.status='Iniciada' THEN 0 "
+            "WHEN o.status='Pendente' THEN 1 ELSE 2 END, o.id DESC"),
+        'data': 'o.data_abertura DESC, o.id DESC',
+        'cliente': 'cl.nome COLLATE NOCASE ASC, o.id DESC',
+        'os': 'o.numero_os COLLATE NOCASE ASC, o.id DESC',
+    }
+    clausula = ordens.get(str(ordem or ''), ordens['status'])
     with db(banco) as c:
-        return [dict(x) for x in c.execute("""
+        return [dict(x) for x in c.execute(f"""
             SELECT o.id, o.numero_os, o.status, o.descricao, o.data_abertura,
                    cl.nome AS cliente,
                    r.prestador_id AS responsavel_id,
@@ -233,8 +246,7 @@ def listar_os_compartilhadas(banco):
             LEFT JOIN os_responsaveis r ON r.os_id=o.id
             LEFT JOIN prestadores p ON p.id=r.prestador_id
             WHERE o.status IN ('Aberta','Iniciada','Pendente')
-            ORDER BY CASE WHEN o.status='Pendente' THEN 0
-                          WHEN o.status='Iniciada' THEN 1 ELSE 2 END, o.id DESC
+            ORDER BY {clausula}
         """).fetchall()]
 
 def responsavel_atual(c, os_id):

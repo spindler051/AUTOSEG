@@ -633,6 +633,11 @@ class CorrecoesRev12(unittest.TestCase):
 
         prod.confirmar_repasse(self.db, oid, a, b, '300,00')
         _, html = req(cliente_b, base, '/financeiro')
+        self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('Confirmar que recebi', html)
+        prod.confirmar_recebimento_repasse(self.db, oid, b)
+        _, html = req(cliente_b, base, '/financeiro')
         self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 300,00</strong>', html)
 

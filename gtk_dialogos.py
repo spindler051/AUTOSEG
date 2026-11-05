@@ -1936,8 +1936,8 @@ class DialogoCaixaEmpresa(Adw.Dialog):
             "Capital investido", classe="accent")
         cartao_despesas, self.rotulo_despesas, self.detalhe_despesas = ui.cartao(
             "Despesas", classe="warning")
-        cartao_saldo, self.rotulo_saldo, _ = ui.cartao(
-            "Saldo em caixa", classe="success")
+        cartao_saldo, self.rotulo_saldo, self.detalhe_saldo = ui.cartao(
+            "Saldo do controle", classe="success")
         cartoes.append(cartao_capital)
         cartoes.append(cartao_despesas)
         cartoes.append(cartao_saldo)
@@ -1947,9 +1947,10 @@ class DialogoCaixaEmpresa(Adw.Dialog):
         self.rotulo_investidores.set_wrap(True)
         pagina.append(self.rotulo_investidores)
         pagina.append(ui.legenda(
-            "Receitas de OS continuam no Financeiro e não entram neste saldo. "
-            "Compra de material vinculada a uma OS é apenas referência e não "
-            "altera custo, estoque ou PDF da OS."))
+            "Saldo do controle = capital aportado − despesas registradas. "
+            "Não é saldo bancário. Receitas de OS continuam no Financeiro e "
+            "não entram aqui. Compra de material vinculada a uma OS é apenas "
+            "referência e não altera custo, estoque ou PDF da OS."))
 
         self.tabela = ui.Tabela([
             ("ID", 50, False, 0.5),
@@ -1957,6 +1958,7 @@ class DialogoCaixaEmpresa(Adw.Dialog):
             ("Tipo", 145, False, 0.0),
             ("Pessoa / OS", 175, False, 0.0),
             ("Descrição", 0, True, 0.0),
+            ("Finalidade", 140, False, 0.0),
             ("Categoria", 115, False, 0.0),
             ("Valor", 110, False, 1.0),
         ])
@@ -1984,6 +1986,8 @@ class DialogoCaixaEmpresa(Adw.Dialog):
         self.rotulo_capital.set_text(ui.brl(resumo["aportes_centavos"] / 100))
         self.rotulo_despesas.set_text(ui.brl(resumo["despesas_centavos"] / 100))
         self.rotulo_saldo.set_text(ui.brl(resumo["saldo_centavos"] / 100))
+        self.detalhe_saldo.set_text(
+            "capital − despesas; não é saldo bancário")
         if resumo["por_investidor"]:
             self.rotulo_investidores.set_text(
                 "Capital por investidor: " + " · ".join(
@@ -2007,6 +2011,7 @@ class DialogoCaixaEmpresa(Adw.Dialog):
                 empresa.TIPOS.get(item["tipo"], item["tipo"]),
                 pessoa_os or "—",
                 item["descricao"],
+                item.get("finalidade") or "—",
                 item["categoria"] or "—",
                 ui.brl(item["valor_centavos"] / 100),
             ))
@@ -2082,6 +2087,8 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
         self.descricao = ui.campo_entry(grupo, "Descrição", "")
         self._descricao_automatica = ""
         self.categoria = ui.campo_entry(grupo, "Categoria", "Capital")
+        self.finalidade = ui.campo_entry(
+            grupo, "Finalidade do aporte (opcional)", "")
         self.valor = ui.campo_entry(grupo, "Valor (R$)", "")
         opcoes_os = ["Nenhuma"] + [
             f"{o['numero_os']} — {o['cliente'] or 'sem cliente'}"
@@ -2091,9 +2098,11 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
         self.observacao = ui.campo_texto(
             grupo, "Observação (opcional)", "", altura=90)
         aviso = ui.legenda(
-            "Aporte é capital permanente e não será extornado. Compra de "
-            "material sem SKU pode ser vinculada a uma OS apenas para "
-            "referência; nada é alterado na OS, no estoque ou no Financeiro.")
+            "Aporte é capital permanente, não é saldo em caixa e não será "
+            "extornado. Informe a finalidade para saber a que se destina. "
+            "Compra de material sem SKU pode ser vinculada a uma OS apenas "
+            "para referência; nada é alterado na OS, no estoque ou no "
+            "Financeiro.")
         aviso.set_wrap(True)
         grupo.add(_linha_custom(aviso))
         toolbar.set_content(pagina)
@@ -2121,6 +2130,7 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
         codigo = self._codigo_tipo()
         self.categoria.set_text(empresa.CATEGORIAS_PADRAO[codigo])
         self.categoria.set_visible(codigo != "aporte")
+        self.finalidade.set_visible(codigo == "aporte")
         self.os.set_visible(codigo == "material")
         self.pessoa.set_title(
             "Investidor (obrigatório)" if codigo == "aporte"
@@ -2150,6 +2160,8 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
                 prestador_id=prestador_id,
                 os_id=os_id,
                 categoria=self.categoria.get_text().strip(),
+                finalidade=(self.finalidade.get_text().strip()
+                            if tipo == "aporte" else ""),
                 observacao=self.observacao.get_texto(),
                 criado_por="Desktop")
         except Exception as erro:

@@ -270,6 +270,20 @@ function testCancelClearsDraft() {
   assert.strictEqual(env.storage.has(DRAFT_KEY), false, 'cancelar deve limpar o rascunho');
 }
 
+function testDraftSubmitPausesRefreshAndShowsProgress() {
+  const env = load({pathname: '/os'});
+  assert.strictEqual(env.timers.size, 1);
+  const button = new FakeElement('salvar-rascunho');
+  button.setAttribute('formaction', '/os/1/rascunho/salvar');
+  env.document.dispatch('submit', {submitter: button});
+  assert.strictEqual(env.timers.size, 1, 'envio deve trocar o refresh por um timer zero');
+  assert.strictEqual([...env.timers.values()][0].delay, 0);
+  env.runZeroTimers();
+  assert.strictEqual(env.timers.size, 0);
+  assert.strictEqual(button.disabled, true);
+  assert.strictEqual(button.textContent, 'SALVANDO...');
+}
+
 function testFocusedFieldPausesRefresh() {
   const env = load({pathname: '/os'});
   assert.strictEqual(env.timers.size, 1);
@@ -291,6 +305,7 @@ const tests = [
   testSuccessfulSubmitClearsDraftOnDetailPage,
   testFailedSubmitKeepsDraft,
   testCancelClearsDraft,
+  testDraftSubmitPausesRefreshAndShowsProgress,
   testFocusedFieldPausesRefresh,
 ];
 

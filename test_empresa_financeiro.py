@@ -37,7 +37,8 @@ class EmpresaFinanceiroTest(unittest.TestCase):
 
     def _registrar_aportes(self):
         empresa.registrar(self.db, 'aporte', 'Aporte inicial', '30,00',
-                          '05/11/2026', prestador_id=self.joao_paulo)
+                          '05/11/2026', prestador_id=self.joao_paulo,
+                          finalidade='Capital de giro')
         empresa.registrar(self.db, 'aporte', 'Aporte inicial', '60,00',
                           '05/11/2026', prestador_id=self.joao_lucas)
         empresa.registrar(self.db, 'aporte', 'Aporte inicial', '40,00',
@@ -69,6 +70,12 @@ class EmpresaFinanceiroTest(unittest.TestCase):
             'Julio': 4000,
         })
         self.assertEqual(len(empresa.listar(self.db)), 6)
+        aportes = [x for x in empresa.listar(self.db) if x['tipo'] == 'aporte']
+        self.assertEqual(
+            {x['prestador_nome']: x['finalidade'] for x in aportes},
+            {'João Paulo': 'Capital de giro',
+             'João Lucas': 'Aporte inicial',
+             'Julio': 'Aporte inicial'})
 
     def test_material_reference_does_not_change_os_or_stock(self):
         with ext.db(self.db) as c:

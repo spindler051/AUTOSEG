@@ -95,6 +95,33 @@ class AutoSegMelhorias(unittest.TestCase):
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT COUNT(*) FROM ordens_servico WHERE id=?',(oid,)).fetchone()[0],1)
 
+    def test_ordem_das_os_ativas(self):
+        with ext.db(self.db) as c:
+            cliente_a = c.execute(
+                "INSERT INTO clientes(nome) VALUES('Alfa')").lastrowid
+            cliente_z = c.execute(
+                "INSERT INTO clientes(nome) VALUES('Zulu')").lastrowid
+            c.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,data_abertura) "
+                "VALUES('OS-0002',?,'Aberta','2026-11-02')", (cliente_a,))
+            c.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,data_abertura) "
+                "VALUES('OS-0003',?,'Iniciada','2026-11-01')", (cliente_z,))
+            c.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,data_abertura) "
+                "VALUES('OS-0001',?,'Pendente','2026-11-03')", (cliente_a,))
+        padrao = [x['status'] for x in ext.listar_os_compartilhadas(self.db)]
+        self.assertEqual(padrao, ['Iniciada', 'Pendente', 'Aberta'])
+        por_cliente = [x['cliente'] for x in ext.listar_os_compartilhadas(
+            self.db, 'cliente')]
+        self.assertEqual(por_cliente, ['Alfa', 'Alfa', 'Zulu'])
+        por_data = [x['numero_os'] for x in ext.listar_os_compartilhadas(
+            self.db, 'data')]
+        self.assertEqual(por_data, ['OS-0001', 'OS-0002', 'OS-0003'])
+        por_numero = [x['numero_os'] for x in ext.listar_os_compartilhadas(
+            self.db, 'os')]
+        self.assertEqual(por_numero, ['OS-0001', 'OS-0002', 'OS-0003'])
+
     def test_importacao_yaml_valida_sem_gravar(self):
         texto=Path(__file__).with_name('modelo_cadastro_cliente.yaml').read_bytes()
         antes=[]

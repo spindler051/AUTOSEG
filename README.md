@@ -74,6 +74,7 @@ Development database and ports:
 - [English migration plan](docs/ENGLISH_MIGRATION_PLAN.md)
 - [Naming and CLI contract](docs/NAMING_AND_CLI.md)
 - [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)
+- [Company cash ledger](docs/features/CAIXA_EMPRESA.md)
 - [OS financial correction UI plan](docs/features/OS_FINANCIAL_CORRECTION_UI.md)
 - [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
 - [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)

@@ -1,6 +1,6 @@
 # Company cash ledger — contributions and expenses
 
-**Status:** implemented as `9.6.0-dev.19` and promoted to MAIN after validation.
+**Status:** implemented as `9.6.0-dev.20` and promoted to MAIN after validation.
 **Scope:** desktop GTK app, inside **Materiais e estoque**. Not exposed by the
 Provider or Client portals.
 **Product goal:** keep a lightweight, honest record of investor capital and
@@ -44,8 +44,12 @@ The three concepts that must never be merged:
   author and removes it from active totals.
 - Values are stored as integer cents. Dates are stored as `YYYY-MM-DD` and
   accepted as `dd/mm/aaaa` or ISO in the UI.
-- The balance is `contributions − expenses`. A negative balance means expenses
-  exceeded contributions; it is shown, not hidden.
+- Contributions carry an optional **finalidade** (purpose) so the investor can
+  record what the capital is for.
+- The label is **Saldo do controle**, not “saldo em caixa”. It means
+  `contributions − recorded expenses`; it is not a bank balance and does not
+  include OS revenue. A negative balance means expenses exceeded contributions;
+  it is shown, not hidden.
 
 ## 3. Data model
 
@@ -58,6 +62,7 @@ CREATE TABLE empresa_movimentos(
     data TEXT NOT NULL,
     descricao TEXT NOT NULL,
     categoria TEXT NOT NULL DEFAULT '',
+    finalidade TEXT NOT NULL DEFAULT '',
     valor_centavos INTEGER NOT NULL CHECK(valor_centavos > 0),
     prestador_id INTEGER,
     os_id INTEGER,
@@ -78,12 +83,15 @@ No existing table is altered.
 
 Path: desktop app → **Materiais e estoque**.
 
-- A summary line shows capital, expenses and balance.
+- A summary line shows capital, expenses and **saldo do controle**.
 - **Caixa e investimentos** opens the ledger.
 - **Novo lançamento** offers the four types.
+- Contributions show a **finalidade** column; the form asks for it only for
+  contributions.
 - **Arquivar selecionado** preserves history.
 - The form has no SKU field. The OS field is visible only for material
   purchases and is optional.
+- The screen explicitly says the balance is not a bank balance.
 
 ## 5. Tests
 

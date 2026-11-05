@@ -47,12 +47,36 @@ def instalar(banco):
         CREATE TABLE IF NOT EXISTS produtividade_repasses(
             os_id INTEGER NOT NULL, tecnico_id INTEGER NOT NULL,
             pago_centavos INTEGER NOT NULL DEFAULT 0 CHECK(pago_centavos>=0),
+            enviado_centavos INTEGER NOT NULL DEFAULT 0 CHECK(enviado_centavos>=0),
+            enviado_em TEXT, confirmado_em TEXT, confirmado_por INTEGER,
             atualizado_em TEXT NOT NULL,
             PRIMARY KEY(os_id,tecnico_id));
         CREATE TABLE IF NOT EXISTS produtividade_bancos(
             prestador_id INTEGER PRIMARY KEY, dados_texto TEXT NOT NULL,
             atualizado_em TEXT NOT NULL);
         """)
+        colunas = {r['name'] for r in c.execute(
+            'PRAGMA table_info(produtividade_repasses)')}
+        adicoes = (
+            ('enviado_centavos',
+             'INTEGER NOT NULL DEFAULT 0 CHECK(enviado_centavos>=0)'),
+            ('enviado_em', 'TEXT'),
+            ('confirmado_em', 'TEXT'),
+            ('confirmado_por', 'INTEGER'),
+        )
+        for nome, definicao in adicoes:
+            if nome not in colunas:
+                c.execute(
+                    f'ALTER TABLE produtividade_repasses ADD COLUMN {nome} {definicao}')
+        # Histórico anterior tratava "pago" como confirmação imediata.
+        c.execute(
+            'UPDATE produtividade_repasses SET enviado_centavos=pago_centavos '
+            'WHERE enviado_centavos=0 AND pago_centavos>0')
+        c.execute(
+            'UPDATE produtividade_repasses SET '
+            'enviado_em=COALESCE(enviado_em,atualizado_em), '
+            'confirmado_em=COALESCE(confirmado_em,atualizado_em) '
+            'WHERE pago_centavos>0')
 
 
 def _os_ativa_responsavel(c,os_id,pid):
@@ -314,14 +338,18 @@ def financeiro_pessoal(banco,pid):
             JOIN os_encerramentos e ON e.os_id=f.os_id
             WHERE e.prestador_id=? ORDER BY f.id DESC""",(pid,))]
         meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.valor_centavos,
-            COALESCE(p.pago_centavos,0) pago_centavos,e.prestador_id de_tecnico
+            COALESCE(p.pago_centavos,0) pago_centavos,
+            COALESCE(p.enviado_centavos,0) enviado_centavos,
+            p.enviado_em,p.confirmado_em,e.prestador_id de_tecnico
             FROM produtividade_rateios r
             JOIN ordens_servico o ON o.id=r.os_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
             WHERE r.tecnico_id=? ORDER BY r.os_id DESC""",(pid,))]
         repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.tecnico_id,t.nome tecnico,
-            r.valor_centavos,COALESCE(p.pago_centavos,0) pago_centavos
+            r.valor_centavos,COALESCE(p.pago_centavos,0) pago_centavos,
+            COALESCE(p.enviado_centavos,0) enviado_centavos,
+            p.enviado_em,p.confirmado_em
             FROM produtividade_rateios r
             JOIN ordens_servico o ON o.id=r.os_id
             JOIN prestadores t ON t.id=r.tecnico_id
@@ -331,10 +359,13 @@ def financeiro_pessoal(banco,pid):
         return {'brutos_proprios':proprio,'receber_de_colegas':meus,'repassar_a_colegas':repassar}
 
 
-def confirmar_repasse(banco,os_id,finalizador_id,secundario_id,valor):
-    """Confirma transferência financeira já executada manualmente fora do AUTOSEG."""
-    cents=_centavos(valor)
-    if cents<=0:raise ValueError('Valor de repasse deve ser positivo.')
+def confirmar_repasse(banco,os_id,finalizador_id,secundario_id,valor=None):
+    """Registra que o finalizador enviou o repasse; o recebedor ainda confirma.
+
+    ``valor=None`` means the full amount not yet sent. The portal uses that so
+    the finalizer cannot change the rateio amount. Explicit values remain for
+    compatibility with internal tools and characterization tests.
+    """
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         e=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone()
@@ -343,19 +374,54 @@ def confirmar_repasse(banco,os_id,finalizador_id,secundario_id,valor):
         item=c.execute('SELECT valor_centavos FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
                        (os_id,secundario_id)).fetchone()
         if not item:raise ValueError('Parcela deste técnico não existe.')
-        atual=c.execute('SELECT pago_centavos FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
-                        (os_id,secundario_id)).fetchone()
+        atual=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
+                           WHERE os_id=? AND tecnico_id=?''',(os_id,secundario_id)).fetchone()
         pago=atual['pago_centavos'] if atual else 0
-        if cents+pago>item['valor_centavos']:
-            raise ValueError('Repasse excede a parcela devida.')
+        enviado=atual['enviado_centavos'] if atual else 0
+        a_enviar=item['valor_centavos']-pago-enviado
+        if a_enviar<=0:raise ValueError('Parcela já enviada ou confirmada.')
+        cents=a_enviar if valor is None or str(valor).strip()=='' else _centavos(valor)
+        if cents<=0:raise ValueError('Valor de repasse deve ser positivo.')
+        if cents>a_enviar:raise ValueError('Repasse excede o valor ainda não enviado.')
+        agora=ext.agora()
         c.execute("""INSERT INTO produtividade_repasses
-          (os_id,tecnico_id,pago_centavos,atualizado_em) VALUES(?,?,?,?)
+          (os_id,tecnico_id,pago_centavos,enviado_centavos,enviado_em,atualizado_em)
+          VALUES(?,?,?,?,?,?)
           ON CONFLICT(os_id,tecnico_id) DO UPDATE SET
-          pago_centavos=excluded.pago_centavos,atualizado_em=excluded.atualizado_em""",
-          (os_id,secundario_id,pago+cents,ext.agora()))
-        ext.evento(c,os_id,'Repasse confirmado',f'{cents} centavos para técnico {secundario_id}.',
+          enviado_centavos=excluded.enviado_centavos,
+          enviado_em=excluded.enviado_em,atualizado_em=excluded.atualizado_em""",
+          (os_id,secundario_id,pago,enviado+cents,agora,agora))
+        ext.evento(c,os_id,'Repasse enviado',
+                   f'{cents} centavos enviados ao técnico {secundario_id}; '
+                   'aguardando confirmação de recebimento.',
                    finalizador_id,f'Prestador {finalizador_id}')
-        return item['valor_centavos']-pago-cents
+        return a_enviar-cents
+
+
+def confirmar_recebimento_repasse(banco,os_id,secundario_id,valor=None):
+    """The secondary technician confirms that the repasse actually arrived."""
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        item=c.execute('SELECT valor_centavos FROM produtividade_rateios '
+                       'WHERE os_id=? AND tecnico_id=?',(os_id,secundario_id)).fetchone()
+        if not item:raise ValueError('Parcela deste técnico não existe.')
+        atual=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
+                           WHERE os_id=? AND tecnico_id=?''',(os_id,secundario_id)).fetchone()
+        if not atual:raise ValueError('Nenhum repasse enviado para confirmação.')
+        pago=atual['pago_centavos']
+        pendente=atual['enviado_centavos']-pago
+        if pendente<=0:raise ValueError('Nenhum repasse aguardando confirmação.')
+        cents=pendente if valor is None or str(valor).strip()=='' else _centavos(valor)
+        if cents<=0:raise ValueError('Valor de confirmação deve ser positivo.')
+        if cents>pendente:raise ValueError('Confirmação excede o valor enviado.')
+        agora=ext.agora()
+        c.execute('''UPDATE produtividade_repasses SET pago_centavos=?,confirmado_em=?,
+                     confirmado_por=?,atualizado_em=? WHERE os_id=? AND tecnico_id=?''',
+                  (pago+cents,agora,secundario_id,agora,os_id,secundario_id))
+        ext.evento(c,os_id,'Repasse recebido',
+                   f'{cents} centavos confirmados pelo técnico {secundario_id}.',
+                   secundario_id,f'Prestador {secundario_id}')
+        return pendente-cents
 
 
 def salvar_dados_bancarios(banco,pid,texto):

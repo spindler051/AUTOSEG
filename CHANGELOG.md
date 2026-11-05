@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.20 — correções dos feedbacks e caixa da empresa — 2026-11-05 — develop
+
+- **Repasses em duas etapas:** o finalizador registra o envio integral (sem editar o valor já definido no rateio); o técnico secundário confirma o recebimento no próprio financeiro. O valor só entra como recebido após essa confirmação.
+- **Ordenação das OS:** a página **Ordens de serviço ativas** ganhou ordenação por situação (iniciadas e pendentes primeiro), data, cliente ou número.
+- **Feedback direto:** o envio mostra uma confirmação simples, sem abrir a tela de triagem; a resposta da IA, quando pedida, continua visível.
+- **Rascunho da OS:** o auto-refresh é pausado durante o envio de formulários e o botão **SALVAR RASCUNHO** mostra “SALVANDO...” para evitar a sensação de congelamento.
+- **Caixa da empresa:** “saldo em caixa” passou a **saldo do controle** (capital − despesas, não saldo bancário), aportes ganharam **finalidade** e os R$ 130,00 iniciais foram registrados como gasto a detalhar no MAIN.
+- **Testes:** `test_empresa_financeiro.py` (6), `test_feedback_portal.py` (21), `test_produtividade_rev07.py` (9), `test_rev12_correcoes.py` (26) e `test_autoseg_melhorias.py` (9).
+
 ## 9.6.0-dev.19 — caixa da empresa dentro de Materiais e estoque — 2026-11-05 — develop
 
 - **Aportes de investidores:** a aba **Materiais e estoque** ganhou a seção **Caixa e investimentos**, com aporte de capital por investidor, sem devolução automática e sem misturar com receita de OS.

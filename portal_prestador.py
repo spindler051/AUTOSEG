@@ -421,7 +421,9 @@ class PortalPrestador:
                     resumo=f'<p class="muted">Ordens encerradas, relatórios publicados e PDFs centralizados. Anexos só durante o encerramento da OS.</p>'
                     return self.pagina('Histórico e relatórios',resumo+card('Histórico e documentos',
                         tabela(['OS','Cliente','Situação','Valor','Versão PDF','Documento'],rows)),s)
-                lista=ext.listar_os_compartilhadas(banco)
+                ordem=parse_qs(urlparse(self.path).query).get('ordem',['status'])[0]
+                if ordem not in ('status','data','cliente','os'):ordem='status'
+                lista=ext.listar_os_compartilhadas(banco,ordem)
                 rows=[]
                 for x in lista:
                     estado=x['status']
@@ -433,9 +435,19 @@ class PortalPrestador:
                     rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
                         f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
+                opcoes_ordem=[
+                    ('status','Situação: iniciadas e pendentes primeiro'),
+                    ('data','Data de criação: mais recentes'),
+                    ('cliente','Cliente: A-Z'),
+                    ('os','Número da OS'),
+                ]
+                filtro_ordem=(f'<form method="get" action="/os" class="actions">'
+                    +select('Ordenar por','ordem',opcoes_ordem,ordem)
+                    +'<button type="submit">Aplicar</button></form>')
                 return self.pagina('Ordens de serviço ativas',
                     '<p class="muted">Todos os prestadores veem as OS abertas, iniciadas e pendentes, mesmo quando atribuídas a outros.</p>'
                     +f'<p>{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</p>'
+                    +filtro_ordem
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
             def inicio(self,s):
@@ -559,6 +571,32 @@ class PortalPrestador:
                         f'<p style="white-space:pre-wrap">{esc(item["mensagem"])}</p>'
                         f'<p><span class="tag">{esc(item["status_dev"])}</span></p>')
                     +resposta+triagem+detalhes,s)
+
+            def feedback_confirmacao(self,s,item):
+                """Confirmação direta após o envio; nunca mostra a triagem."""
+                resposta=''
+                if item['responder_ia']:
+                    if item['ia_status']=='ok':
+                        resposta=card('Resposta da IA',
+                            '<p class="notice">A IA pode errar. Ela não altera o sistema e não substitui a revisão humana.</p>'
+                            +f'<p style="white-space:pre-wrap">{esc(item["resposta_ia"])}</p>'
+                            +f'<p class="muted">Categoria sugerida: {esc(item["categoria"])} · '
+                            +f'Urgência sugerida: {esc(item["urgencia"])}</p>')
+                    else:
+                        resposta=card('Resposta automática indisponível',
+                            f'<p class="warn">{esc(item["ia_erro"] or "A IA não respondeu.")}</p>'
+                            '<p>O feedback foi salvo e está disponível para análise humana.</p>')
+                return self.pagina('Feedback enviado',
+                    f'<p class="good">Feedback FB-{int(item["id"]):04d} registrado. Obrigado.</p>'
+                    +card('Seu relato',
+                        f'<p class="muted">{esc(item["criado_em"])} · '
+                        f'<code>{esc(item["pagina"])}</code> · '
+                        f'<span class="tag">{esc(item["status_dev"])}</span></p>'
+                        f'<p style="white-space:pre-wrap">{esc(item["mensagem"])}</p>')
+                    +resposta
+                    +'<p class="muted">A equipe fará a triagem depois. '
+                    'Você não precisa abrir a tela de triagem nem fazer mais nada.</p>'
+                    +botao('Voltar ao início','/','secondary'),s)
 
             def servicos_lista(self,s):
                 termo=str(parse_qs(urlparse(self.path).query).get('q',[''])[0]).strip()[:100].casefold()
@@ -1335,24 +1373,45 @@ class PortalPrestador:
                     +'<button type="submit">Salvar meus dados bancários</button></form>')
                 dividas=[]
                 for item in pessoal['repassar_a_colegas']:
-                    devido=item['valor_centavos']-item['pago_centavos']
-                    acao=''
-                    if devido>0:
+                    confirmado=item['pago_centavos']
+                    enviado=item['enviado_centavos']
+                    a_enviar=item['valor_centavos']-confirmado-enviado
+                    if a_enviar>0:
+                        # O valor já foi definido no rateio; o finalizador apenas
+                        # registra o envio integral. Quem recebe é que confirma.
                         acao=(f'<form method="post" action="/financeiro/repasse">{token}'
                               +f'<input type="hidden" name="os_id" value="{int(item["os_id"])}">'
                               +f'<input type="hidden" name="secundario_id" value="{int(item["tecnico_id"])}">'
-                              +campos_escuros('Valor pago manualmente (R$)','valor',f'{devido/100:.2f}',required=True)
-                              +'<button type="submit">Registrar repasse efetuado</button></form>')
-                    dividas.append((esc(item['numero_os']),esc(item['tecnico']),dinheiro(item['valor_centavos']/100),
-                                   dinheiro(item['pago_centavos']/100),dinheiro(devido/100),acao))
-                extras+=card('Repasses manuais a outros técnicos',
-                    tabela(['OS','Colega','Parcela','Já repassado','Restante','Ação'],dividas))
-                meus=[(esc(x['numero_os']),dinheiro(x['valor_centavos']/100),
-                       dinheiro(x['pago_centavos']/100),
-                       dinheiro((x['valor_centavos']-x['pago_centavos'])/100))
-                      for x in pessoal['receber_de_colegas']]
+                              +f'<button type="submit">Registrar envio de {dinheiro(a_enviar/100)}</button></form>')
+                    elif enviado>confirmado:
+                        acao='<span class="warn">Aguardando confirmação do colega</span>'
+                    else:
+                        acao='<span class="good">Confirmado pelo colega</span>'
+                    dividas.append((esc(item['numero_os']),esc(item['tecnico']),
+                                   dinheiro(item['valor_centavos']/100),
+                                   dinheiro(confirmado/100),dinheiro(enviado/100),
+                                   dinheiro(a_enviar/100),acao))
+                extras+=card('Repasses a outros técnicos',
+                    '<p class="muted">O valor da parcela já foi definido no rateio. '
+                    'Registre o envio; o colega confirma o recebimento no financeiro dele.</p>'
+                    +tabela(['OS','Colega','Parcela','Confirmado','Aguardando confirmação',
+                             'A enviar','Ação'],dividas))
+                meus=[]
+                for x in pessoal['receber_de_colegas']:
+                    confirmado=x['pago_centavos']
+                    enviado=x['enviado_centavos']
+                    pendente=max(0,enviado-confirmado)
+                    acao=''
+                    if pendente>0:
+                        acao=(f'<form method="post" action="/financeiro/repasse/confirmar">{token}'
+                              +f'<input type="hidden" name="os_id" value="{int(x["os_id"])}">'
+                              +'<button type="submit">Confirmar que recebi</button></form>')
+                    meus.append((esc(x['numero_os']),dinheiro(x['valor_centavos']/100),
+                                 dinheiro(confirmado/100),dinheiro(pendente/100),
+                                 dinheiro((x['valor_centavos']-confirmado)/100),acao))
                 extras+=card('Minha produção como técnico secundário',
-                    tabela(['OS','Valor','Já recebido (registrado)','Restante'],meus))
+                    '<p class="muted">O valor só entra como recebido depois da sua confirmação.</p>'
+                    +tabela(['OS','Valor','Confirmado','Aguardando confirmação','Restante','Ação'],meus))
                 extras+=card('Minha parcela nas OS que eu finalizei',
                     tabela(['OS','Cobrado da imobiliária','Repasses devidos','Minha parcela'],
                         [(esc(x['numero_os']),dinheiro(x['valor']),dinheiro(x['partes_centavos']/100),
@@ -1614,7 +1673,7 @@ class PortalPrestador:
                                                feedback.ip_requisicao(self.client_address[0],self.headers),
                                                self.headers.get('User-Agent',''))
                         try:
-                            fid,_=feedback.criar(
+                            _,item=feedback.criar(
                                 banco,s,pagina,str(d.get('mensagem','')),
                                 str(d.get('responder_ia','')) in ('1','on','true','sim'),
                                 meta)
@@ -1624,7 +1683,7 @@ class PortalPrestador:
                                      f'<p class="bad">{esc(erro)}</p>'
                                      '<p>Seu texto não foi perdido pelo sistema; volte e tente novamente.</p>'
                                      +botao('Voltar ao início','/','secondary')),s,400)
-                        return self.redir(f'/feedback/{fid}')
+                        return self.feedback_confirmacao(s,item)
                     partes_feedback=path.strip('/').split('/')
                     if len(partes_feedback)==3 and partes_feedback[0]=='feedback' and partes_feedback[1].isdigit() and partes_feedback[2]=='triagem':
                         if not s.get('admin'):
@@ -1951,7 +2010,12 @@ class PortalPrestador:
                         prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
                         return self.redir('/financeiro')
                     if path=='/financeiro/repasse':
-                        prod.confirmar_repasse(banco,int(d['os_id']),pid,int(d['secundario_id']),str(d['valor']))
+                        prod.confirmar_repasse(
+                            banco,int(d['os_id']),pid,int(d['secundario_id']),None)
+                        return self.redir('/financeiro')
+                    if path=='/financeiro/repasse/confirmar':
+                        prod.confirmar_recebimento_repasse(
+                            banco,int(d['os_id']),pid,None)
                         return self.redir('/financeiro')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
                         with ext.db(banco) as c:

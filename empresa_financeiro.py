@@ -34,6 +34,7 @@ def instalar(banco):
             data TEXT NOT NULL,
             descricao TEXT NOT NULL,
             categoria TEXT NOT NULL DEFAULT '',
+            finalidade TEXT NOT NULL DEFAULT '',
             valor_centavos INTEGER NOT NULL CHECK(valor_centavos > 0),
             prestador_id INTEGER,
             os_id INTEGER,
@@ -53,6 +54,15 @@ def instalar(banco):
         CREATE INDEX IF NOT EXISTS idx_empresa_mov_os
             ON empresa_movimentos(os_id,id);
         """)
+        colunas = {r['name'] for r in c.execute(
+            'PRAGMA table_info(empresa_movimentos)')}
+        if 'finalidade' not in colunas:
+            c.execute(
+                "ALTER TABLE empresa_movimentos ADD COLUMN "
+                "finalidade TEXT NOT NULL DEFAULT ''")
+        c.execute(
+            "UPDATE empresa_movimentos SET finalidade='Aporte inicial' "
+            "WHERE tipo='aporte' AND finalidade=''")
 
 
 def _centavos(valor):
@@ -92,7 +102,8 @@ def _inteiro_ou_nulo(valor):
 
 
 def registrar(banco, tipo, descricao, valor, data='', prestador_id=None,
-              os_id=None, categoria='', observacao='', criado_por='Desktop'):
+              os_id=None, categoria='', finalidade='', observacao='',
+              criado_por='Desktop'):
     """Register one confirmed cash movement.
 
     ``aporte`` needs an active investor. ``material`` may point to an OS only
@@ -109,6 +120,9 @@ def registrar(banco, tipo, descricao, valor, data='', prestador_id=None,
     prestador_id = _inteiro_ou_nulo(prestador_id)
     os_id = _inteiro_ou_nulo(os_id)
     categoria = str(categoria or '').strip()[:80] or CATEGORIAS_PADRAO[tipo]
+    finalidade = str(finalidade or '').strip()[:160]
+    if tipo == 'aporte' and not finalidade:
+        finalidade = 'Aporte inicial'
     observacao = str(observacao or '').strip()[:1000]
     criado_por = str(criado_por or 'Desktop').strip()[:120] or 'Desktop'
 
@@ -128,10 +142,10 @@ def registrar(banco, tipo, descricao, valor, data='', prestador_id=None,
                 raise ValueError('OS vinculada não encontrada.')
         return c.execute(
             'INSERT INTO empresa_movimentos'
-            '(tipo,data,descricao,categoria,valor_centavos,prestador_id,os_id,'
-            'observacao,ativo,criado_em,criado_por) '
-            'VALUES(?,?,?,?,?,?,?,?,1,?,?)',
-            (tipo, data_iso, descricao, categoria, valor_centavos,
+            '(tipo,data,descricao,categoria,finalidade,valor_centavos,'
+            'prestador_id,os_id,observacao,ativo,criado_em,criado_por) '
+            'VALUES(?,?,?,?,?,?,?,?,?,1,?,?)',
+            (tipo, data_iso, descricao, categoria, finalidade, valor_centavos,
              prestador_id, os_id, observacao, ext.agora(), criado_por)).lastrowid
 
 

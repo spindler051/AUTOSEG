@@ -529,8 +529,25 @@
     document.addEventListener('visibilitychange', agendarAutoRefresh);
     document.addEventListener('focusin', pausarAutoRefresh);
     document.addEventListener('focusout', () => window.setTimeout(agendarAutoRefresh, 0));
+    document.addEventListener('submit', pausarAutoRefresh, true);
+    window.addEventListener('pagehide', pausarAutoRefresh);
     agendarAutoRefresh();
   }
+
+  // A draft save can take a moment on a busy SQLite database. Pause the
+  // refresh and show progress so the page does not look frozen or reload
+  // before the POST completes.
+  document.addEventListener('submit', evento => {
+    pausarAutoRefresh();
+    const botao = evento.submitter;
+    if (!botao) return;
+    const acao = botao.getAttribute('formaction') || '';
+    if (!/\/rascunho\/salvar$/.test(acao)) return;
+    window.setTimeout(() => {
+      botao.disabled = true;
+      botao.textContent = 'SALVANDO...';
+    }, 0);
+  }, true);
 
   // Feedback do Portal do Prestador: diálogo global, sem sair da página.
   const abrirFeedback = document.getElementById('abrir-feedback');
