@@ -203,6 +203,33 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertNotIn(f'href="/os/{oid}/pdf"', html)
         self.assertNotIn('Baixar PDF publicado', html)
 
+    def test_preview_pdf_os_ativa_sem_publicar(self):
+        a = self._prestador('Técnico Preview A', email='preview.a@exemplo.com.br')
+        b = self._prestador('Técnico Preview B', email='preview.b@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Preview')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço em andamento',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente_b = self._login(base, 'preview.b@exemplo.com.br')
+        _, html = req(cliente_b, base, f'/os/{oid}')
+        self.assertIn(f'/os/{oid}/pdf-preview', html)
+        self.assertIn('Baixar preview do PDF', html)
+        pedido = urllib.request.Request(base + f'/os/{oid}/pdf-preview')
+        with cliente_b.open(pedido, timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'application/pdf')
+            self.assertTrue(resposta.read().startswith(b'%PDF'))
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute(
+                'SELECT COUNT(*) FROM os_documentos WHERE os_id=?', (oid,)).fetchone()[0], 0)
+            self.assertEqual(c.execute(
+                'SELECT status FROM ordens_servico WHERE id=?', (oid,)).fetchone()[0],
+                'Aberta')
+
     def test_fotos_sem_assumir_os(self):
         a = self._prestador('Técnico Foto A', email='foto.a@exemplo.com.br')
         b = self._prestador('Técnico Foto B', email='foto.b@exemplo.com.br')

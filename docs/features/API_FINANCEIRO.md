@@ -1,6 +1,6 @@
 # Provider finance API v1
 
-**Status:** implemented as `9.6.0-dev.23` and promoted to MAIN. Read-only.
+**Status:** implemented as `9.6.0-dev.24` and promoted to MAIN. Read-only.
 **Scope:** one authenticated AUTOSEG provider. It exposes that provider's own
 OS receivables, secondary-technician shares and repasses. It does not expose the
 personal-finance module, other providers, stock, clients of other providers or

@@ -1368,7 +1368,12 @@ class PortalPrestador:
                 elif d['status'] in fluxo.FIM:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="/os/{oid}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
-                if publicado and d['status'] in fluxo.FIM:
+                if d['status'] in ext.ATIVAS:
+                    docs=(botao('Baixar preview do PDF (não publicado)',
+                                f'/os/{oid}/pdf-preview','secondary')
+                        + '<p class="muted">Prévia para conferência do relatório atual. '
+                          'Não publica o PDF, não envia e-mail e não altera o status da OS.</p>')
+                elif publicado:
                     docs=(botao('Baixar PDF publicado',f'/os/{oid}/pdf')
                         +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
                     if d['status']=='Concluída':
@@ -1377,6 +1382,8 @@ class PortalPrestador:
                         docs+=(f'<form method="post" action="/os/{oid}/reenviar-email" style="display:inline">'
                                f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
                                '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
+                elif d['status'] in fluxo.FIM:
+                    docs='<p class="muted">O PDF ainda não foi publicado. Use “Gerar e publicar PDF” acima.</p>'
                 else:
                     docs='<p class="muted">O PDF e o rascunho de e-mail serão liberados após a conclusão/cancelamento e publicação do relatório.</p>'
                 itens_notas=''
@@ -1512,7 +1519,9 @@ class PortalPrestador:
                     title='Relatórios gerais e PDFs'; explanation='Histórico das OS e relatórios individuais com materiais, atividades e anexos.'
                     acao=lambda o:(botao('Baixar PDF',f'/os/{o["id"]}/pdf')
                                    if o['status'] in fluxo.FIM else
-                                   '<span class="muted">Após encerrar</span>')
+                                   (botao('Preview PDF',f'/os/{o["id"]}/pdf-preview','secondary')
+                                    if o['status'] in ext.ATIVAS else
+                                    '<span class="muted">Após encerrar</span>'))
                 rows=[(f'<a href="/os/{r["id"]}">{esc(r["numero_os"])}</a>',esc(r['cliente']),esc(r['status']),dinheiro(r['valor_total']),acao(r)) for r in oses]
                 resumo=(f'<div class="kpis"><div class="kpi"><span>Ordens de serviço</span><strong>{len(oses)}</strong></div>'
                         f'<div class="kpi"><span>Total exibido</span><strong>{dinheiro(sum(float(x["valor_total"] or 0) for x in oses))}</strong></div></div>') if tipo=='relatorios' else ''
@@ -1530,10 +1539,21 @@ class PortalPrestador:
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
 
             def documentos(self,s,oid,kind):
-                prod.controlar_pdf(banco,oid,s['pid'])
                 with ext.db(banco) as c:
                     o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
                     if not o: return self.erro('OS inexistente.',404,s)
+                if kind=='pdf-preview':
+                    # Preview is deliberately unpublished: no os_documentos row,
+                    # no e-mail, no status change. Any authenticated provider who
+                    # can open the OS may download the current draft.
+                    with LOCK_DOCS:
+                        arq=ext.gerar_pdf(banco,oid)
+                        with ext.db(banco) as c:
+                            neg.audit(c,s['pid'],'Preview de PDF gerado',oid,'pdf-preview')
+                        nome=f'{Path(arq).stem}_preview.pdf'
+                        return self.send_bytes(Path(arq).read_bytes(),
+                                               'application/pdf',filename=nome)
+                prod.controlar_pdf(banco,oid,s['pid'])
                 with LOCK_DOCS:
                     if kind in ('pdf','email'):
                         if o['status'] not in fluxo.FIM:
@@ -1679,7 +1699,7 @@ class PortalPrestador:
                         rascunho=prod.recuperar_rascunho(banco,oid,s['pid'])
                         if not rascunho:return self.erro('Nenhum rascunho salvo para esta OS.',404,s)
                         return self.os_form(s,oid,preenchimento=rascunho['dados'])
-                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','email','nota'):
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','pdf-preview','email','nota'):
                         return self.documentos(s,int(partes[1]),partes[2])
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit():
                         oid=int(partes[1]);nid=int(partes[3])

@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.24 — preview do PDF em OS ativa — 2026-11-05 — develop
+
+- **Preview do PDF:** OS ativa agora tem o botão **“Baixar preview do PDF (não publicado)”** na tela da OS e na lista de relatórios.
+- **Sem publicação:** o preview gera o PDF atual, mas não cria `os_documentos`, não envia e-mail, não publica ao cliente e não altera o status da OS.
+- **PDF final:** o link “Baixar PDF publicado” continua aparecendo somente após o encerramento e a publicação.
+- **Testes:** geração de preview por técnico não participante, resposta `application/pdf`, ausência de documento publicado e status inalterado.
+
 ## 9.6.0-dev.23 — feedbacks 23–25: legendas, PDF e envio AJAX — 2026-11-05 — develop
 
 - **Legendas colaborativas:** qualquer prestador ativo pode adicionar fotos e alterar legendas de fotos existentes sem assumir a OS, pela seção colaborativa.
