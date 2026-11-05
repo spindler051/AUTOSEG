@@ -491,5 +491,50 @@
     document.getElementById('adicionar-material-orcamento'),
     'orcamento-material-row', 'remover-material-orcamento', 50,
     'Limite de 50 materiais adicionais por orçamento.');
+
+  // Feedback do Portal do Prestador: diálogo global, sem sair da página.
+  const dialogoFeedback = document.getElementById('dialogo-feedback');
+  const abrirFeedback = document.getElementById('abrir-feedback');
+  if (dialogoFeedback && abrirFeedback) {
+    const formFeedback = document.getElementById('form-feedback');
+    const paginaFeedback = document.getElementById('feedback-pagina');
+    const mensagemFeedback = document.getElementById('feedback-mensagem');
+    const fecharFeedback = document.getElementById('fechar-feedback');
+    const csrfFeedback = formFeedback?.querySelector('input[name="csrf"]');
+    const marcarPagina = () => {
+      if (paginaFeedback) paginaFeedback.value = location.pathname.slice(0, 300) || '/';
+    };
+    const abrirDialogo = () => {
+      marcarPagina();
+      if (typeof dialogoFeedback.showModal === 'function') {
+        if (!dialogoFeedback.open) dialogoFeedback.showModal();
+      } else {
+        dialogoFeedback.setAttribute('open', '');
+      }
+      mensagemFeedback?.focus();
+      if (csrfFeedback?.value) {
+        const corpo = new URLSearchParams({
+          csrf: csrfFeedback.value,
+          pagina: paginaFeedback?.value || location.pathname.slice(0, 300) || '/'
+        });
+        fetch('/feedback/aberto', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: corpo,
+          credentials: 'same-origin',
+          keepalive: true
+        }).catch(() => {});
+      }
+    };
+    const fecharDialogo = () => {
+      if (typeof dialogoFeedback.close === 'function') dialogoFeedback.close();
+      else dialogoFeedback.removeAttribute('open');
+    };
+    abrirFeedback.addEventListener('click', abrirDialogo);
+    fecharFeedback?.addEventListener('click', fecharDialogo);
+    dialogoFeedback.addEventListener('click', evento => {
+      if (evento.target === dialogoFeedback) fecharDialogo();
+    });
+  }
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

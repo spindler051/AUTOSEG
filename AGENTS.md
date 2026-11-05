@@ -105,15 +105,20 @@ for human values.
 
 ## Telemetry
 
-The `telemetry/` package is a proposal skeleton, not wired into the app.
+The `telemetry/` package is wired only to the Provider Portal feedback channel,
+and only when `AUTOSEG_TELEMETRY=local` is set explicitly. General telemetry is
+still a proposal, not a general-purpose collection layer.
 
 - Collection must stay off by default.
 - Admin opt-in, user notice, retention, access audit and deletion/export are
-  required before any wiring.
+  required before enabling general telemetry or OTLP export.
 - Never add covert fingerprinting (canvas, WebGL, audio, font enumeration),
   form values, cookies, tokens, keystrokes, page content or screenshots.
-- Follow `docs/features/OPEN_TELEMETRY.md`; privacy/legal review is required
-  before production use.
+- Feedback events may contain IDs, sanitized page path and allowlisted
+  attributes; never the feedback text, provider name, raw IP or session secret.
+- Follow `docs/features/OPEN_TELEMETRY.md` and
+  `docs/features/FEEDBACK_PORTAL.md`; privacy/legal review is required before
+  production use.
 
 ## When unsure
 

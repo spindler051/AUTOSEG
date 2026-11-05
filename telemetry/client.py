@@ -1,7 +1,8 @@
 """No-op-by-default telemetry client.
 
-This client is not imported by the portals or GTK app. A future feature flag
-will decide whether to construct it and which sink to use.
+Only the Provider Portal feedback channel constructs this client today. A
+future feature flag can decide whether to instrument the other portals or the
+GTK app.
 """
 
 from __future__ import annotations

@@ -69,6 +69,8 @@ Development database and ports:
 - [Agent rules](AGENTS.md)
 - [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
 - [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
+- [Provider portal feedback channel](docs/features/FEEDBACK_PORTAL.md)
+- [Feedback DEV backlog](docs/feedback/PENDENCIAS_DEV.md)
 - [English migration plan](docs/ENGLISH_MIGRATION_PLAN.md)
 - [Naming and CLI contract](docs/NAMING_AND_CLI.md)
 - [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)

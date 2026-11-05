@@ -1,5 +1,30 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.17 — IA do feedback via OpenCode com provedor trocável — 2026-11-04 — develop
+
+- **Provedor padrão em DEV:** a resposta opcional do feedback agora usa o chat local do OpenCode por meio do endpoint transitório `/api/session/{id}/generate`; a pergunta e a resposta não são acrescentadas ao histórico da conversa.
+- **Troca de API sem tocar no fluxo:** a camada `feedback_ai.py` isola os provedores `opencode` e `deepseek` atrás de `generate(prompt)`. Para usar outra API, basta implementar o provedor, registrá-lo em `PROVIDERS` e mudar `AUTOSEG_FEEDBACK_AI_PROVIDER`; rotas, banco, UI e anonimização não mudam.
+- **Configuração local:** o chat e a URL do OpenCode ficam em `feedback_ia.local.json`, ignorado pelo Git; `feedback_ia.example.json` documenta o formato. A senha do serviço é lida de `~/.config/opencode/service.json` ou de variável de ambiente e nunca é gravada no banco ou nos logs.
+- **Fallback preservado:** sem sessão, sem credencial, com provedor desconhecido, IA desligada ou serviço indisponível, o feedback continua salvo e a tela mostra um aviso amigável.
+- **UI neutra:** o diálogo e o detalhe falam em “resposta da IA”, sem acoplar o texto ao nome do fornecedor.
+- **Testes:** `test_feedback_portal.py` cobre o endpoint transitório do OpenCode, autenticação Basic, seleção do DeepSeek, provedor desconhecido, IA desligada e ausência de sessão.
+- **Documentação:** `docs/features/FEEDBACK_PORTAL.md`, `docs/features/OPEN_TELEMETRY.md`, `docs/feedback/PENDENCIAS_DEV.md`, `docs/HUMAN_CENTERED_DECISIONS.md` e `telemetry/README.md` atualizados.
+- Nenhuma alteração no MAIN; implementação apenas em `develop`. Revisão jurídica/privacidade continua necessária antes de produção.
+
+## 9.6.0-dev.16 — canal de feedback do Portal do Prestador — 2026-11-04 — develop
+
+- **Botão global:** todas as páginas autenticadas do Portal do Prestador mostram **“Dê um feedback”**, com diálogo sem sair da tela; o Portal do Cliente e a página de login não exibem o canal.
+- **Registro de suporte:** cada envio guarda prestador, página (somente o caminho, sem query string), dispositivo, navegador, sistema, hash da sessão e IP minimizado. O IP completo só é gravado com `AUTOSEG_FEEDBACK_IP_MODE=full`.
+- **Resposta opcional por IA:** uma caixa permite pedir resposta do assistente configurado. A IA recebe apenas o texto anonimizado e o mapa de telas em `feedback_conhecimento.md`; sem configuração o feedback é salvo e a resposta fica indisponível.
+- **Anonimização:** CPF, CNPJ, e-mail, telefone, CEP, endereço e nomes após rótulos comuns são removidos antes de qualquer chamada externa. O texto original permanece apenas no banco local para revisão humana.
+- **Triagem humana:** administradores acessam `/feedback/recebidos`, filtram por situação, leem o contexto técnico e marcam **Pendente na DEV** apenas quando o relato identifica um problema ou melhoria real. A classificação da IA é uma sugestão.
+- **Backlog documentado:** `/feedback/pendencias.md` exporta somente relatos anonimizados e notas de triagem; o processo está em `docs/feedback/PENDENCIAS_DEV.md`. Nenhum item é commitado ou implantado automaticamente.
+- **Telemetria opcional:** eventos `feedback_open`, `feedback_submit`, `feedback_ai_reply`, `feedback_ai_error` e `feedback_triage` usam o contrato existente e só são gravados com `AUTOSEG_TELEMETRY=local`. A telemetria geral continua desligada por padrão.
+- **Sem efeitos colaterais:** feedback não cria OS, financeiro, estoque, e-mail ou nota fiscal; as tabelas são aditivas e o recurso pode ser desligado removendo as rotas.
+- **Testes:** novo `test_feedback_portal.py` cobre botão/diálogo, ausência no portal do cliente, anonimização, IA mockada, triagem, exportação, permissões e telemetria local.
+- **Documentação:** `docs/features/FEEDBACK_PORTAL.md`, `docs/feedback/PENDENCIAS_DEV.md`, `docs/features/OPEN_TELEMETRY.md` e `telemetry/README.md` atualizados.
+- Nenhuma alteração no MAIN; implementação apenas em `develop`. Revisão jurídica/privacidade ainda necessária antes de produção.
+
 ## 9.6.0-dev.15 — orçamento com vários itens e YAML — 2026-11-04 — develop
 
 - **Vários serviços:** o orçamento agora aceita uma lista de serviços do catálogo, cada um com sua quantidade, em vez de um único serviço.

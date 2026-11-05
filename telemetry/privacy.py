@@ -1,7 +1,7 @@
-"""Privacy helpers for the telemetry skeleton.
+"""Privacy helpers for telemetry and the feedback channel.
 
-These helpers are deliberately small and auditable. They are not wired into
-the portals or GTK app.
+These helpers are deliberately small and auditable. They are used by the
+feedback channel; general telemetry remains off by default.
 """
 
 from __future__ import annotations

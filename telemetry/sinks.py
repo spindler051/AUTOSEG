@@ -1,4 +1,4 @@
-"""Telemetry sinks. No sink is wired into the application yet."""
+"""Telemetry sinks. The feedback channel can opt into the local SQLite sink."""
 
 from __future__ import annotations
 

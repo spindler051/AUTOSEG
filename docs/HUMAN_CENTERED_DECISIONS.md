@@ -130,7 +130,32 @@ Review date / trigger:
 Use an ADR for irreversible choices. Use a short note in the playbook or issue
 for reversible experiments.
 
-## 8. What this means for the current questions
+## 8. Open privacy decision — feedback support record
+
+**Status:** deferred; DEV only until reviewed.
+
+**Context:** the Provider Portal feedback channel stores the authenticated
+provider, page, coarse device, session hash and minimized IP so support can
+investigate a report. The person sees a notice in the dialog and can submit
+without requesting an AI answer. The original text stays local; only an
+anonymized version is sent to the configured AI provider (the local OpenCode
+chat in DEV, or another API selected by configuration).
+
+**Options:**
+
+1. Keep the support record with the current notice, access control and
+   documented retention; require legal review before production.
+2. Remove the session hash and reduce the device fields to browser family only.
+3. Keep the channel but disable AI replies until a data-processing agreement and
+   retention policy exist.
+4. Disable the channel in production while keeping it in DEV.
+
+**Evidence needed:** LGPD/privacy review, real support use in DEV, and a clear
+retention/deletion owner. **Reversibility:** tables are additive and the routes
+can be removed without touching OS, finance, stock or fiscal records. **Trigger
+for decision:** before the first production deployment.
+
+## 8.1 What this means for the current questions
 
 The three open questions from the migration plan are not forgotten. They are
 recorded as deferred with explicit evidence triggers. Until then:
@@ -147,5 +172,7 @@ recorded as deferred with explicit evidence triggers. Until then:
 - `docs/PRODUCT_VISION.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
 - `docs/USER_FEEDBACK_GUIDE.md`
+- `docs/features/FEEDBACK_PORTAL.md`
+- `docs/features/OPEN_TELEMETRY.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `docs/GTK4_LINUX_MACOS.md`

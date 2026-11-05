@@ -1,7 +1,11 @@
 # Open telemetry and transparent session context — proposal
 
-**Status:** feature request / skeleton only.  
-**Default:** disabled. Nothing is collected or transmitted by this proposal.  
+**Status:** contracts and local sink implemented; only the Provider Portal
+feedback channel is wired, and only behind an explicit opt-in.
+
+**Default:** disabled. With `AUTOSEG_TELEMETRY` unset, nothing is collected or
+transmitted.
+
 **Scope:** operational diagnostics, abuse investigation and security review.
 
 This document describes a future, optional telemetry subsystem for AUTOSEG and
@@ -126,11 +130,18 @@ Never collect:
 - canvas/WebGL/audio/font fingerprints;
 - cross-site identifiers or advertising IDs.
 
+> This list applies to general telemetry events. The feedback channel is a
+> separate purpose-limited support record: it stores the authenticated provider,
+> page, device, minimized IP and session hash because that context is needed to
+> investigate the report. It is described in
+> [`FEEDBACK_PORTAL.md`](FEEDBACK_PORTAL.md) and still never stores form values,
+> passwords, cookies, page content or screenshots.
+
 ### Optional fields
 
 | Field | Purpose | Default | Notes |
 |---|---|---|---|
-| `event` | Event name | required | Allowlist only (page_view, login_success, login_failure, logout, error, security_event, admin_action). |
+| `event` | Event name | required | Allowlist only (page_view, login_success, login_failure, logout, error, security_event, admin_action, feedback_open, feedback_submit, feedback_ai_reply, feedback_ai_error, feedback_triage). |
 | `occurred_at` | Time | required | UTC ISO-8601. |
 | `session_id` | Correlate a visit | required | Random, rotated per session; not a permanent user ID. |
 | `page` | Flow context | required | Path only; strip query/fragment. No form values. |
@@ -165,8 +176,8 @@ Future export should use standard OTel concepts:
 | Mode | Behavior |
 |---|---|
 | `off` | Default. No event creation, no local storage, no export. |
-| `local` | Store events in the local SQLite database with retention. |
-| `otlp` | Export to an admin-configured OpenTelemetry endpoint, in addition to or instead of local storage. |
+| `local` | Store validated events in the local SQLite `telemetria_eventos` table. Currently emitted only by the feedback channel. |
+| `otlp` | Proposed. Export to an admin-configured OpenTelemetry endpoint. No exporter is installed yet: setting `otlp` without an endpoint falls back to `off`, and with an endpoint the feedback channel stays inert (no export, no local row). |
 
 Enabling `otlp` must be a separate explicit action with endpoint and retention
 shown to the admin.
@@ -193,29 +204,75 @@ shown to the admin.
 - Incident response procedure for accidental PII capture.
 - Tests proving disabled mode emits nothing.
 
-## 8. Implementation skeleton (not wired)
+## 8. Implementation status
 
-The repository contains a standalone skeleton under `telemetry/`:
+The repository contains the telemetry package under `telemetry/`:
 
-- configuration defaults to disabled;
+- configuration defaults to disabled; `TelemetryConfig.from_env()` reads explicit
+  `AUTOSEG_TELEMETRY*` variables and stays inert when none are set;
 - event allowlist and sensitive-key rejection;
 - path sanitization (strip query/fragment);
-- IP truncation helper;
+- IP truncation/hash helpers;
 - no-op sink by default;
+- `SQLiteSink` that stores validated events in `telemetria_eventos`;
 - in-memory sink for tests only.
 
-It is **not imported by the portals or GTK app** and does not collect anything.
-Wiring is a future feature request after policy/legal review.
+The package is imported by the Provider Portal feedback channel only. The GTK
+desktop app and the other portal routes are not wired.
+
+### 8.1 Current wiring: feedback channel
+
+The feedback feature is the first real consumer of the contract:
+
+- `POST /feedback/aberto` emits `feedback_open` when the dialog opens;
+- `POST /feedback` emits `feedback_submit` after the record is saved;
+- the optional AI call emits `feedback_ai_reply` or `feedback_ai_error`,
+  regardless of the configured provider;
+- admin triage emits `feedback_triage`.
+
+Events contain IDs, page path, actor type, coarse browser/OS/device and the
+allowlisted attributes described in
+[`FEEDBACK_PORTAL.md`](FEEDBACK_PORTAL.md). They never contain the feedback
+text, provider name, session cookie or raw IP. Emission is best-effort and can
+never interrupt the feedback flow.
+
+Write events with:
+
+```bash
+AUTOSEG_TELEMETRY=local ./INICIAR_AUTOSEG_DEV.command
+```
+
+The events are stored in `telemetria_eventos` in the same SQLite database. This
+is useful for correlating a feedback report with the page and session where it
+was opened, without enabling general page-view tracking.
+
+The feedback channel also stores its own purpose-limited support record (who,
+page, device, IP network/hash and session hash) because those fields are needed
+to investigate the report. That record exists independently of
+`AUTOSEG_TELEMETRY`; see `FEEDBACK_PORTAL.md` for its schema and retention. It is
+not general analytics and must be covered by the privacy notice and legal
+review before production use.
+
+Still missing from the original proposal:
+
+- admin settings page and user-facing notice for general telemetry;
+- automatic retention/deletion job for `telemetria_eventos`;
+- diagnostics dashboards and session correlation views;
+- OTLP exporter and endpoint configuration;
+- instrumentation of login, general page views, errors and security events;
+- a telemetry-specific data-subject export/deletion flow (the feedback channel
+  has its own admin JSON export).
 
 ## 9. Phases
 
-1. **Policy and legal review** — retention, notice, lawful basis, employee vs
-   customer distinction, data subject requests.
-2. **Local-only skeleton** — schema, off-by-default client, tests.
-3. **Admin settings and notice** — explicit enable, retention, delete/export.
-4. **Diagnostics dashboards** — error/session correlation, no raw PII.
-5. **Optional OTLP export** — endpoint configuration, redaction, tests.
-6. **Abuse controls** — rate limit/block workflows, separate from telemetry.
+1. **Policy and legal review** — pending. Required before production use.
+2. **Local-only skeleton** — done: schema, off-by-default client, local sink and
+   tests. Wired only to the feedback channel.
+3. **Admin settings and notice** — pending for general telemetry; the feedback
+   dialog has its own notice.
+4. **Diagnostics dashboards** — pending.
+5. **Optional OTLP export** — pending.
+6. **Abuse controls** — pending; separate from telemetry.
 
 ## 10. Open questions
 

@@ -10,6 +10,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import mimetypes
 import os
+import re
 import secrets
 import threading
 import time
@@ -25,6 +26,7 @@ import portal_negocios as neg
 import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
+import feedback_portal as feedback
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
 import estoque_materiais as estoque
@@ -77,6 +79,23 @@ CSS_MOBILE = """
 }
 """
 
+CSS_FEEDBACK = """
+.feedback-fab{position:fixed;right:22px;bottom:22px;z-index:1200;box-shadow:0 8px 24px #000a;border-radius:999px;padding:14px 20px}
+.feedback-dialog{width:min(680px,calc(100vw - 28px));max-height:calc(100vh - 50px);overflow:auto;border:2px solid #ffd400;border-radius:16px;background:#151515;color:#fff;padding:0;box-shadow:0 18px 60px #000d}
+.feedback-dialog::backdrop{background:#000c}
+.feedback-dialog form{padding:22px}
+.feedback-dialog h2{margin:0 0 6px;color:#ffd400}
+.feedback-dialog textarea{min-height:150px;resize:vertical}
+.feedback-dialog input[readonly]{background:#222;color:#c9c9c9;border-color:#555}
+.feedback-dialog .feedback-check{display:flex;gap:10px;align-items:flex-start;margin:16px 0;font-weight:600}
+.feedback-dialog .feedback-check input{width:22px;height:22px;min-height:22px;margin-top:2px;flex:0 0 auto}
+.feedback-dialog .feedback-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.feedback-dialog .feedback-actions button{margin:0}
+.feedback-dialog .feedback-privacidade{font-size:13px;line-height:1.5;color:#c9c9c9}
+@media(max-width:620px){.feedback-fab{right:12px;bottom:12px;padding:12px 16px;font-size:14px}.feedback-dialog form{padding:17px}}
+"""
+
+
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -127,14 +146,45 @@ def tabela(headers, rows):
     return '<div class="table-scroll"><table><thead><tr>'+''.join(f'<th>{esc(h)}</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+linha(cells)+'</tr>' for cells in rows)+'</tbody></table></div>'
 
 
+def _dialogo_feedback(usuario):
+    """Botão e diálogo globais do Portal do Prestador (nunca no portal do cliente)."""
+    if not usuario:
+        return ''
+    return f'''
+<button type="button" class="feedback-fab" id="abrir-feedback" aria-haspopup="dialog" aria-controls="dialogo-feedback">Dê um feedback</button>
+<dialog class="feedback-dialog" id="dialogo-feedback" aria-labelledby="feedback-titulo">
+  <form method="post" action="/feedback" id="form-feedback">
+    <input type="hidden" name="csrf" value="{esc(usuario.get('csrf',''))}">
+    <h2 id="feedback-titulo">Dê um feedback</h2>
+    <p class="muted">Conte o que funcionou, o que confundiu ou o que precisa melhorar nesta página.</p>
+    <label for="feedback-pagina">Página atual</label>
+    <input type="text" id="feedback-pagina" name="pagina" value="" readonly autocomplete="off">
+    <label for="feedback-mensagem">Seu feedback</label>
+    <textarea id="feedback-mensagem" name="mensagem" minlength="5" maxlength="4000" rows="6" required placeholder="Ex.: não encontrei onde alterar o preço do serviço; ou: o botão de iniciar OS não apareceu para mim."></textarea>
+    <label class="feedback-check" for="feedback-responder-ia">
+      <input type="checkbox" id="feedback-responder-ia" name="responder_ia" value="1">
+      <span>Pedir uma resposta da IA com base no conhecimento do AUTOSEG (opcional)</span>
+    </label>
+    <p class="muted feedback-privacidade">Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
+    <div class="feedback-actions">
+      <button type="submit">Enviar feedback</button>
+      <button type="button" class="secondary" id="fechar-feedback">Cancelar</button>
+    </div>
+  </form>
+</dialog>'''
+
+
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
     menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
+    if usuario and usuario.get('admin') and not cliente:
+        menus.append(('/feedback/recebidos','Feedbacks'))
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
          +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
     ambiente='DEV (testes)' if os.environ.get('AUTOSEG_DEV')=='1' else 'produção'
     footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
+    feedback_html=_dialogo_feedback(None if cliente else usuario)
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     if cliente:
@@ -167,7 +217,7 @@ form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;ove
 fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-{CSS_MOBILE}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}</body></html>'''
+{CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
 
 
 class PortalPrestador:
@@ -204,6 +254,7 @@ class PortalPrestador:
         cad9.instalar(banco)
         catalogo.instalar(banco)
         estoque.instalar(banco)
+        feedback.instalar(banco)
         # Repara chamados antigos que não receberam OS após falha/interrupção,
         # inclusive quando apenas o Portal do Prestador é iniciado.
         recuperadas=cad9.sincronizar_solicitacoes_pendentes(banco)
@@ -230,7 +281,7 @@ class PortalPrestador:
                 self.send_header('X-Frame-Options','DENY')
                 self.send_header('Referrer-Policy','no-referrer')
                 self.send_header('X-AUTOSEG-Portal',VERSAO_PORTAL)
-                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self'")
+                self.send_header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; img-src 'self'")
                 if filename:
                     fname=Path(filename).name
                     # RFC5987 evita injeção no cabeçalho; usa somente nome limpo.
@@ -405,6 +456,107 @@ class PortalPrestador:
                 corpo+=v9.barra_links('prestador')
                 corpo+='<div class="notice">As alterações são registradas com o prestador autenticado. E-mails e notas fiscais ainda dependem das APIs externas.</div>'
                 return self.pagina('Painel principal',corpo,s)
+
+            def feedback_admin(self,s,status_dev='',aviso='',erro=''):
+                if not s.get('admin'):
+                    raise PermissionError('Feedbacks recebidos são visíveis apenas para administradores.')
+                contagens=feedback.contagens(banco)
+                itens=feedback.listar(banco,status_dev=status_dev,limite=300)
+                kpis='<div class="kpis">'+''.join(
+                    f'<div class="kpi"><span>{esc(nome)}</span><strong>{int(contagens.get(nome,0))}</strong></div>'
+                    for nome in feedback.STATUS_TRIAGEM)+'</div>'
+                opcoes=[('','Todos os feedbacks')]+[(x,x) for x in feedback.STATUS_TRIAGEM]
+                filtro=('<form method="get" action="/feedback/recebidos">'
+                        +select('Filtrar por situação na DEV','status',opcoes,status_dev)
+                        +'<button type="submit">Filtrar</button></form>')
+                linhas=[]
+                for item in itens:
+                    resumo=re.sub(r'\s+',' ',item['mensagem_anonimizada']).strip()[:140]
+                    linhas.append((
+                        f'<a href="/feedback/{item["id"]}">FB-{item["id"]:04d}</a>',
+                        esc(item['criado_em']),esc(item['prestador_nome']),
+                        f'<code>{esc(item["pagina"])}</code>',esc(resumo),
+                        esc(item['categoria']),esc(item['urgencia']),
+                        f'<span class="tag">{esc(item["status_dev"])}</span>'))
+                aberturas=feedback.listar_aberturas(banco,limite=30)
+                linhas_aberturas=[(
+                    esc(x['criado_em']),esc(x['prestador_nome']),
+                    f'<code>{esc(x["pagina"])}</code>',esc(x['dispositivo']),
+                    esc(x['navegador']),esc(x['sistema'])) for x in aberturas]
+                aviso_html=f'<p class="good">{esc(aviso)}</p>' if aviso else ''
+                erro_html=f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                return self.pagina('Feedbacks recebidos',
+                    '<p class="muted">Canal interno de feedback do Portal do Prestador. '
+                    'A classificação da IA é uma sugestão; a decisão de registrar uma pendência na DEV é humana. '
+                    'O texto abaixo é a versão anonimizada.</p>'
+                    +aviso_html+erro_html
+                    +card('Resumo por situação',kpis)
+                    +card('Filtrar',filtro)
+                    +card('Feedbacks',
+                        '<p>'+botao('Baixar pendências da DEV (.md)','/feedback/pendencias.md','secondary')
+                        +botao('Exportar dados de feedback (.json)','/feedback/dados/exportar.json','secondary')+'</p>'
+                        +tabela(['ID','Recebido','Prestador','Página','Relato anonimizado','Categoria','Urgência','Situação na DEV'],linhas))
+                    +card('Aberturas recentes do canal',
+                        '<p class="muted">Registra quem abriu o diálogo, em qual página, com qual dispositivo e navegador. '
+                        'Serve para diagnosticar dificuldades de uso e correlação com erros.</p>'
+                        +tabela(['Quando','Prestador','Página','Dispositivo','Navegador','Sistema'],linhas_aberturas)),s)
+
+            def feedback_detalhe(self,s,fid):
+                item=feedback.obter(banco,fid)
+                if not item:
+                    return self.erro('Feedback não encontrado.',404,s)
+                if not s.get('admin') and int(item['prestador_id'])!=int(s['pid']):
+                    raise PermissionError('Este feedback pertence a outro prestador.')
+                resposta=''
+                if item['responder_ia']:
+                    if item['ia_status']=='ok':
+                        resposta=card('Resposta da IA',
+                            '<p class="notice">A IA pode errar. Ela não altera o sistema e não substitui a revisão humana.</p>'
+                            +f'<p style="white-space:pre-wrap">{esc(item["resposta_ia"])}</p>'
+                            +f'<p class="muted">Categoria sugerida: {esc(item["categoria"])} · '
+                            +f'Urgência sugerida: {esc(item["urgencia"])} · Confiança: {float(item["confianca"]):.0%}</p>'
+                            +((f'<p><b>Possível melhoria:</b> {esc(item["possivel_melhoria"])}</p>') if item['possivel_melhoria'] else ''))
+                    else:
+                        resposta=card('Resposta automática indisponível',
+                            f'<p class="warn">{esc(item["ia_erro"] or "A IA não respondeu.")}</p>'
+                            '<p>O feedback foi salvo e está disponível para análise humana.</p>')
+                admin=False
+                if s.get('admin'):
+                    admin=True
+                    opcoes=''.join(
+                        f'<option value="{esc(x)}" {"selected" if x==item["status_dev"] else ""}>{esc(x)}</option>'
+                        for x in feedback.STATUS_TRIAGEM)
+                    triagem=card('Triagem para a DEV',
+                        f'<form method="post" action="/feedback/{item["id"]}/triagem">{self.hidden(s)}'
+                        '<label for="c_status_dev">Situação</label>'
+                        f'<select id="c_status_dev" name="status_dev" required>{opcoes}</select>'
+                        +textarea('Nota da triagem (opcional)','nota_dev',item['nota_dev'],rows=4)
+                        +'<p class="muted">Use “Pendente na DEV” quando o relato identificou um problema real ou melhoria necessária. '
+                        'A IA não decide isso sozinha.</p>'
+                        +'<button type="submit">Salvar triagem</button></form>')
+                    meta=tabela(['Campo','Valor'],[
+                        ('IP completo (somente se configurado)',esc(item['ip'] or '—')),
+                        ('Rede truncada',esc(item['ip_rede'] or '—')),
+                        ('Hash do IP',esc(item['ip_hash'] or '—')),
+                        ('Hash da sessão',esc(item['sessao_hash'] or '—')),
+                        ('Navegador',esc(item['navegador'] or '—')),
+                        ('Sistema',esc(item['sistema'] or '—')),
+                        ('Dispositivo',esc(item['dispositivo'] or '—')),
+                        ('User-Agent',esc(item['user_agent'] or '—')),
+                        ('Texto anonimizado enviado à IA',esc(item['mensagem_anonimizada'] or '—')),
+                    ])
+                    detalhes=card('Contexto técnico (administrador)',meta)
+                else:
+                    triagem=''
+                    detalhes=''
+                return self.pagina(f'Feedback FB-{item["id"]:04d}',
+                    botao('← Voltar','/feedback/recebidos' if admin else '/','secondary')
+                    +card('Relato',
+                        f'<p class="muted">{esc(item["criado_em"])} · {esc(item["prestador_nome"])} · '
+                        f'<code>{esc(item["pagina"])}</code></p>'
+                        f'<p style="white-space:pre-wrap">{esc(item["mensagem"])}</p>'
+                        f'<p><span class="tag">{esc(item["status_dev"])}</span></p>')
+                    +resposta+triagem+detalhes,s)
 
             def servicos_lista(self,s):
                 termo=str(parse_qs(urlparse(self.path).query).get('q',[''])[0]).strip()[:100].casefold()
@@ -1328,6 +1480,34 @@ class PortalPrestador:
                         nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml','/modelos/orcamento.yaml':'modelo_orcamento.yaml'}[path]
                         arquivo=Path(__file__).parent/nome
                         return self.send_bytes(arquivo.read_bytes(),'application/x-yaml; charset=utf-8',filename=nome)
+                    if path=='/feedback/recebidos':
+                        if not s.get('admin'):
+                            raise PermissionError('Feedbacks recebidos são visíveis apenas para administradores.')
+                        qs=parse_qs(urlparse(self.path).query)
+                        status_dev=str(qs.get('status',[''])[0]).strip()
+                        if status_dev and status_dev not in feedback.STATUS_TRIAGEM:
+                            status_dev=''
+                        return self.feedback_admin(s,status_dev=status_dev)
+                    if path=='/feedback/pendencias.md':
+                        if not s.get('admin'):
+                            raise PermissionError('Pendências de feedback são visíveis apenas para administradores.')
+                        with ext.db(banco) as c:
+                            neg.audit(c,s['pid'],'Feedback exportado','pendencias','markdown')
+                        corpo=feedback.pendencias_markdown(banco).encode('utf-8')
+                        return self.send_bytes(corpo,'text/markdown; charset=utf-8',
+                                               filename='pendencias_feedback_dev.md')
+                    if path=='/feedback/dados/exportar.json':
+                        if not s.get('admin'):
+                            raise PermissionError('Exportação de feedback restrita a administradores.')
+                        with ext.db(banco) as c:
+                            neg.audit(c,s['pid'],'Feedback exportado','dados','json')
+                        corpo=json.dumps(feedback.exportar_dados(banco),ensure_ascii=False,
+                                         indent=2).encode('utf-8')
+                        return self.send_bytes(corpo,'application/json; charset=utf-8',
+                                               filename='feedback_export.json')
+                    partes_feedback=path.strip('/').split('/')
+                    if len(partes_feedback)==2 and partes_feedback[0]=='feedback' and partes_feedback[1].isdigit():
+                        return self.feedback_detalhe(s,int(partes_feedback[1]))
                     if path in ('/chamados','/organizacoes'):
                         return self.redir('/os' if path=='/chamados' else '/clientes')
                     if path in ('/clientes/responsaveis','/organizacoes/responsaveis'):
@@ -1408,7 +1588,9 @@ class PortalPrestador:
                         with LOCK_LOGIN:TENTATIVAS.pop(ip,None)
                         tok=secrets.token_urlsafe(36)
                         SESSOES[tok]={'pid':p['id'],'nome':p['nome'],'cred':p['senha_hash'],
-                                      'csrf':secrets.token_urlsafe(32),'exp':time.time()+28800}
+                                      'csrf':secrets.token_urlsafe(32),
+                                      'telemetry_session':secrets.token_urlsafe(18),
+                                      'exp':time.time()+28800}
                         return self.redir('/',self.cookie(tok))
                     s=self.sessao()
                     self.csrf(s,d)
@@ -1417,6 +1599,37 @@ class PortalPrestador:
                         if 'autosseg_session' in cookie:SESSOES.pop(cookie['autosseg_session'].value,None)
                         return self.redir('/',self.cookie('',True))
                     pid=s['pid']
+                    if path=='/feedback/aberto':
+                        pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
+                        meta=feedback.contexto(banco,s,
+                                               feedback.ip_requisicao(self.client_address[0],self.headers),
+                                               self.headers.get('User-Agent',''))
+                        feedback.registrar_abertura(banco,s,pagina,meta)
+                        return self.send_bytes(b'','text/plain; charset=utf-8',status=204)
+                    if path=='/feedback':
+                        pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
+                        meta=feedback.contexto(banco,s,
+                                               feedback.ip_requisicao(self.client_address[0],self.headers),
+                                               self.headers.get('User-Agent',''))
+                        try:
+                            fid,_=feedback.criar(
+                                banco,s,pagina,str(d.get('mensagem','')),
+                                str(d.get('responder_ia','')) in ('1','on','true','sim'),
+                                meta)
+                        except ValueError as erro:
+                            return self.pagina('Feedback não enviado',
+                                card('Não foi possível enviar',
+                                     f'<p class="bad">{esc(erro)}</p>'
+                                     '<p>Seu texto não foi perdido pelo sistema; volte e tente novamente.</p>'
+                                     +botao('Voltar ao início','/','secondary')),s,400)
+                        return self.redir(f'/feedback/{fid}')
+                    partes_feedback=path.strip('/').split('/')
+                    if len(partes_feedback)==3 and partes_feedback[0]=='feedback' and partes_feedback[1].isdigit() and partes_feedback[2]=='triagem':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem triar feedbacks.')
+                        feedback.triar(banco,int(partes_feedback[1]),str(d.get('status_dev','')),
+                                       str(d.get('nota_dev','')),s)
+                        return self.redir(f'/feedback/{int(partes_feedback[1])}')
                     if path.startswith('/chamados/') or path.startswith('/organizacoes/') or path=='/organizacoes/mesclar' or (path.startswith('/clientes/') and path.endswith('/desativar')):
                         return v9.post(self,path,d,banco,s)
                     partes=path.strip('/').split('/')

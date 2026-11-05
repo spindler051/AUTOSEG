@@ -20,6 +20,7 @@ __pycache__/
 *.pem
 *.key
 *.p12
+feedback_ia.local.json
 
 # Arquivos de clientes e relatórios
 anexos_os/

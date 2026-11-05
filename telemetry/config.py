@@ -1,5 +1,6 @@
 """Telemetry configuration. Defaults are deliberately inert."""
 
+import os
 from dataclasses import dataclass
 from typing import Literal
 
@@ -43,3 +44,43 @@ class TelemetryConfig:
     def active(self) -> bool:
         """True only when collection has been explicitly enabled."""
         return bool(self.enabled and self.mode != "off")
+
+    @classmethod
+    def from_env(cls) -> "TelemetryConfig":
+        """Build a config from explicit environment variables.
+
+        No variable is required. With none set, the result stays inert.
+        ``AUTOSEG_TELEMETRY`` accepts ``off``, ``local`` or ``otlp``.
+        """
+        mode = str(os.environ.get("AUTOSEG_TELEMETRY", "off")).strip().lower()
+        if mode not in ("off", "local", "otlp"):
+            mode = "off"
+        ip_setting = str(os.environ.get("AUTOSEG_TELEMETRY_IP", "")).strip().lower()
+        collect_ip = ip_setting in ("truncate", "hash", "1", "true", "yes")
+        ip_hash_key = str(os.environ.get("AUTOSEG_TELEMETRY_IP_KEY", ""))
+        ip_mode = "hash" if (ip_setting == "hash" and ip_hash_key) else "truncate"
+        try:
+            retention = int(os.environ.get("AUTOSEG_TELEMETRY_RETENTION_DAYS", "30"))
+        except ValueError:
+            retention = 30
+        endpoint = str(os.environ.get("AUTOSEG_TELEMETRY_OTLP_ENDPOINT", "")).strip()
+        if mode == "otlp" and not endpoint:
+            mode = "off"
+        return cls(
+            enabled=mode != "off",
+            mode=mode,
+            collect_ip=collect_ip,
+            ip_mode=ip_mode,
+            ip_hash_key=ip_hash_key,
+            collect_screen=str(
+                os.environ.get("AUTOSEG_TELEMETRY_SCREEN", "")
+            ).strip().lower() in ("1", "true", "yes"),
+            collect_user_agent=str(
+                os.environ.get("AUTOSEG_TELEMETRY_USER_AGENT", "1")
+            ).strip().lower() not in ("0", "false", "no"),
+            retention_days=retention,
+            otlp_endpoint=endpoint,
+            notice_version=str(
+                os.environ.get("AUTOSEG_TELEMETRY_NOTICE_VERSION", "")
+            ).strip(),
+        )

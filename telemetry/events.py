@@ -15,6 +15,11 @@ ALLOWED_EVENTS = frozenset({
     "error",
     "security_event",
     "admin_action",
+    "feedback_open",
+    "feedback_submit",
+    "feedback_ai_reply",
+    "feedback_ai_error",
+    "feedback_triage",
 })
 
 ALLOWED_ACTOR_TYPES = frozenset({"anonymous", "user", "admin", "system"})
@@ -27,6 +32,15 @@ ALLOWED_ATTRIBUTES = frozenset({
     "method",
     "route",
     "notice_version",
+    "prestador_id",
+    "feedback_id",
+    "abertura_id",
+    "category",
+    "urgency",
+    "ai_requested",
+    "ai_status",
+    "triage_status",
+    "status",
 })
 
 SENSITIVE_ATTRIBUTES = frozenset({
