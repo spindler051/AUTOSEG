@@ -4,6 +4,8 @@ import http.cookiejar
 import json
 import os
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 import urllib.error
@@ -91,6 +93,17 @@ class FeedbackPortalTest(unittest.TestCase):
         cliente = portal_prestador.layout('Teste', 'corpo', None, cliente=True)
         self.assertNotIn('abrir-feedback', cliente)
         self.assertNotIn('dialogo-feedback', cliente)
+
+    def test_active_os_page_uses_controlled_refresh_only(self):
+        status, _, html = request(self.browser, self.base + '/os')
+        self.assertEqual(status, 200)
+        texto = html.decode()
+        self.assertIn('Ordens de serviço ativas', texto)
+        self.assertNotIn('http-equiv="refresh"', texto)
+        self.assertIn('<meta name="autoseg-auto-refresh" content="20">', texto)
+        status, _, clientes = request(self.browser, self.base + '/clientes')
+        self.assertEqual(status, 200)
+        self.assertNotIn('autoseg-auto-refresh', clientes.decode())
 
     def test_feedback_sem_ia_nao_cria_os_nem_financeiro(self):
         status, _, html = self._enviar('O botão de iniciar OS não apareceu para mim.')
@@ -384,6 +397,17 @@ class ProvedorIATest(unittest.TestCase):
             resultado = feedback_ai.consult('texto', 'PROMPT')
         self.assertEqual(resultado['status'], 'desativada')
         post.assert_not_called()
+
+
+@unittest.skipUnless(shutil.which('node'), 'Node.js indisponível')
+class FeedbackJavascriptTest(unittest.TestCase):
+    def test_refresh_pause_and_draft_restore(self):
+        resultado = subprocess.run(
+            ['node', str(Path(__file__).with_name('test_portal_feedback.js'))],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(
+            resultado.returncode, 0,
+            resultado.stderr or resultado.stdout)
 
 
 if __name__ == '__main__':

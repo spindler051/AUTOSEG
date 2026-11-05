@@ -165,7 +165,7 @@ def _dialogo_feedback(usuario):
       <input type="checkbox" id="feedback-responder-ia" name="responder_ia" value="1">
       <span>Pedir uma resposta da IA com base no conhecimento do AUTOSEG (opcional)</span>
     </label>
-    <p class="muted feedback-privacidade">Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
+    <p class="muted feedback-privacidade">O texto digitado fica salvo apenas nesta aba até você enviar ou cancelar. Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
     <div class="feedback-actions">
       <button type="submit">Enviar feedback</button>
       <button type="button" class="secondary" id="fechar-feedback">Cancelar</button>
@@ -295,7 +295,9 @@ class PortalPrestador:
             def pagina(self,titulo,conteudo,s=None,status=200):
                 pagina=layout(titulo,conteudo,s)
                 if titulo=='Ordens de serviço ativas':
-                    pagina=pagina.replace('</head>','<meta http-equiv="refresh" content="20"></head>')
+                    # Inert marker: portal.js owns the timer and pauses it while
+                    # the feedback dialog is open or a form control is in use.
+                    pagina=pagina.replace('</head>','<meta name="autoseg-auto-refresh" content="20"></head>')
                 return self.responder(pagina,status)
 
             def cookie(self,tok,delete=False):

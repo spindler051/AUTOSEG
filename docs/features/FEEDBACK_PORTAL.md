@@ -1,6 +1,6 @@
 # Provider portal feedback channel — DEV design
 
-**Status:** implemented in `develop` as `9.6.0-dev.17`. Not deployed to MAIN.
+**Status:** implemented as `9.6.0-dev.18` and promoted to MAIN after validation.
 **Scope:** Portal do Prestador only. The Portal do Cliente must not show the
 button, the dialog or the routes.
 **Product goal:** give providers a direct, low-friction channel to report
@@ -28,6 +28,25 @@ does not submit.
 
 The login page has no feedback button because there is no authenticated
 provider identity and no CSRF session yet. This is intentional.
+
+### Draft and page refresh
+
+The **Ordens de serviço ativas** page used to reload itself every 20 seconds
+through `<meta http-equiv="refresh">`. That reload closed the native dialog and
+discarded any text being typed. The page now emits an inert
+`<meta name="autoseg-auto-refresh" content="20">`; `portal.js` schedules the
+reload and pauses it while:
+
+- the feedback dialog is open;
+- an `input`, `textarea` or `select` has focus;
+- the tab is hidden.
+
+The dialog saves the message and the AI checkbox in `sessionStorage` on every
+change and restores them after a reload or navigation in the same tab. If the
+dialog was open, it reopens with the draft. The draft is removed only after a
+successful submit (the server redirects to `/feedback/{id}`) or when the person
+clicks **Cancelar**. A validation error keeps the draft. The draft stays in the
+browser tab; it is not sent anywhere and is discarded when the tab closes.
 
 ## 2. Routes
 
@@ -283,12 +302,24 @@ stays in the local database; no production data is committed.
 - OTLP mode does not silently write local rows;
 - tunnel IP selection only for loopback connections;
 - short message rejection;
-- CPF/CNPJ/e-mail/phone/address anonymization.
+- CPF/CNPJ/e-mail/phone/address anonymization;
+- active OS page served without `http-equiv="refresh"`, with the inert
+  auto-refresh marker instead.
+
+`test_portal_feedback.js` (run by the Python suite when Node.js is available)
+covers the browser behavior:
+
+- auto-refresh pauses while the dialog is open or a field is focused;
+- draft and checkbox survive a reload and the dialog reopens;
+- successful submit clears the draft on `/feedback/{id}`;
+- a failed submit keeps the draft;
+- explicit cancel clears the draft.
 
 Run:
 
 ```bash
 .venv/bin/python test_feedback_portal.py
+node test_portal_feedback.js
 .venv/bin/python test_telemetry_skeleton.py
 .venv/bin/python test_rev12_correcoes.py
 .venv/bin/python test_orcamento_multiplo.py
@@ -310,7 +341,13 @@ Run:
    answer and the fallback behavior when the session is removed.
 8. Optionally set `AUTOSEG_FEEDBACK_AI_PROVIDER=deepseek` and
    `DEEPSEEK_API_KEY` to confirm the alternative backend.
-9. Confirm the Client Portal has no feedback button.
+9. On **Ordens de serviço ativas**, open the dialog, type without submitting and
+   wait more than 20 seconds: the page must not reload and the text must stay.
+10. Reload the page manually while the dialog is open: the dialog must reopen
+    with the same text and checkbox state.
+11. Submit successfully and confirm the draft is gone; repeat, click
+    **Cancelar**, and confirm the draft is gone as well.
+12. Confirm the Client Portal has no feedback button.
 
 ## 11. Rollback
 

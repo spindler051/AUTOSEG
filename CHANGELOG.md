@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.18 — feedback não se perde no auto-refresh da página de OS — 2026-11-04 — develop
+
+- **Sem `meta refresh`:** a página **Ordens de serviço ativas** deixou de usar `<meta http-equiv="refresh" content="20">`, que recarregava a página inteira e fechava o diálogo de feedback. O servidor agora emite um marcador inerte (`meta name="autoseg-auto-refresh"`).
+- **Refresh controlado:** `portal.js` agenda a atualização e a pausa enquanto o diálogo de feedback estiver aberto, houver campo de formulário em uso ou a aba estiver oculta. Ao fechar o diálogo ou sair do campo, o contador recomeça.
+- **Rascunho local:** o texto e a marcação de “resposta por IA” são salvos em `sessionStorage` a cada alteração e restaurados após recarregar ou navegar na mesma aba. Se o diálogo estava aberto, ele reabre com o texto.
+- **Limpeza segura:** o rascunho só é apagado após envio bem-sucedido (redirecionamento para `/feedback/{id}`) ou ao clicar em **Cancelar**. Erro de validação preserva o texto.
+- **Testes:** `test_portal_feedback.js` cobre pausa do refresh, restauração do rascunho, limpeza após envio, preservação após erro e cancelamento; `test_feedback_portal.py` verifica o HTML servido sem `http-equiv` e executa o teste Node.
+- Nenhuma alteração de banco ou de schema.
+
 ## 9.6.0-dev.17 — IA do feedback via OpenCode com provedor trocável — 2026-11-04 — develop
 
 - **Provedor padrão em DEV:** a resposta opcional do feedback agora usa o chat local do OpenCode por meio do endpoint transitório `/api/session/{id}/generate`; a pergunta e a resposta não são acrescentadas ao histórico da conversa.

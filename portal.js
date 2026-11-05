@@ -492,15 +492,86 @@
     'orcamento-material-row', 'remover-material-orcamento', 50,
     'Limite de 50 materiais adicionais por orçamento.');
 
-  // Feedback do Portal do Prestador: diálogo global, sem sair da página.
+  // Controlled auto-refresh: the server emits an inert meta marker instead of
+  // http-equiv="refresh". The timer is paused while a form control is focused,
+  // a dialog is open or the tab is hidden, so typing is never discarded.
+  const metaAutoRefresh = document.querySelector('meta[name="autoseg-auto-refresh"]');
   const dialogoFeedback = document.getElementById('dialogo-feedback');
+  let timerAutoRefresh = null;
+  const campoEmUso = () => {
+    const ativo = document.activeElement;
+    return !!ativo && /^(INPUT|TEXTAREA|SELECT)$/.test(ativo.tagName);
+  };
+  const dialogoAberto = () => {
+    if (!dialogoFeedback) return false;
+    return typeof dialogoFeedback.open === 'boolean'
+      ? dialogoFeedback.open
+      : dialogoFeedback.hasAttribute('open');
+  };
+  const podeAtualizarPagina = () => document.visibilityState !== 'hidden'
+    && !dialogoAberto()
+    && !campoEmUso();
+  const pausarAutoRefresh = () => {
+    if (timerAutoRefresh !== null) window.clearTimeout(timerAutoRefresh);
+    timerAutoRefresh = null;
+  };
+  const agendarAutoRefresh = () => {
+    pausarAutoRefresh();
+    if (!metaAutoRefresh || !podeAtualizarPagina()) return;
+    const segundos = Math.max(5, Number(metaAutoRefresh.getAttribute('content')) || 20);
+    timerAutoRefresh = window.setTimeout(() => {
+      timerAutoRefresh = null;
+      if (podeAtualizarPagina()) window.location.reload();
+      else agendarAutoRefresh();
+    }, segundos * 1000);
+  };
+  if (metaAutoRefresh) {
+    document.addEventListener('visibilitychange', agendarAutoRefresh);
+    document.addEventListener('focusin', pausarAutoRefresh);
+    document.addEventListener('focusout', () => window.setTimeout(agendarAutoRefresh, 0));
+    agendarAutoRefresh();
+  }
+
+  // Feedback do Portal do Prestador: diálogo global, sem sair da página.
   const abrirFeedback = document.getElementById('abrir-feedback');
   if (dialogoFeedback && abrirFeedback) {
     const formFeedback = document.getElementById('form-feedback');
     const paginaFeedback = document.getElementById('feedback-pagina');
     const mensagemFeedback = document.getElementById('feedback-mensagem');
     const fecharFeedback = document.getElementById('fechar-feedback');
+    const responderIaFeedback = document.getElementById('feedback-responder-ia');
     const csrfFeedback = formFeedback?.querySelector('input[name="csrf"]');
+    const CHAVE_RASCUNHO = 'autoseg:feedback:draft:v1';
+    const CHAVE_ENVIADO = 'autoseg:feedback:submitted:v1';
+    const RASCUNHO_VALIDO_MS = 10 * 60 * 1000;
+    const limparRascunho = () => {
+      try { sessionStorage.removeItem(CHAVE_RASCUNHO); } catch (_erro) {}
+    };
+    const lerRascunho = () => {
+      try {
+        const valor = JSON.parse(sessionStorage.getItem(CHAVE_RASCUNHO) || 'null');
+        return valor && typeof valor === 'object' ? valor : null;
+      } catch (_erro) {
+        return null;
+      }
+    };
+    const salvarRascunho = () => {
+      if (!mensagemFeedback) return;
+      const mensagem = mensagemFeedback.value.slice(0, 4000);
+      const responderIa = !!responderIaFeedback?.checked;
+      if (!mensagem && !responderIa) {
+        limparRascunho();
+        return;
+      }
+      try {
+        sessionStorage.setItem(CHAVE_RASCUNHO, JSON.stringify({
+          mensagem,
+          responder_ia: responderIa,
+          aberto: dialogoAberto(),
+          atualizado_em: Date.now()
+        }));
+      } catch (_erro) {}
+    };
     const marcarPagina = () => {
       if (paginaFeedback) paginaFeedback.value = location.pathname.slice(0, 300) || '/';
     };
@@ -511,6 +582,7 @@
       } else {
         dialogoFeedback.setAttribute('open', '');
       }
+      pausarAutoRefresh();
       mensagemFeedback?.focus();
       if (csrfFeedback?.value) {
         const corpo = new URLSearchParams({
@@ -527,13 +599,54 @@
       }
     };
     const fecharDialogo = () => {
-      if (typeof dialogoFeedback.close === 'function') dialogoFeedback.close();
-      else dialogoFeedback.removeAttribute('open');
+      if (typeof dialogoFeedback.close === 'function') {
+        dialogoFeedback.close();
+      } else {
+        dialogoFeedback.removeAttribute('open');
+        salvarRascunho();
+        window.setTimeout(agendarAutoRefresh, 0);
+      }
     };
+
+    // A draft survives reloads and navigation inside the same tab. It is only
+    // discarded after a successful submit or an explicit cancel.
+    try {
+      if (sessionStorage.getItem(CHAVE_ENVIADO) === '1'
+          && /^\/feedback\/\d+\/?$/.test(location.pathname)) {
+        sessionStorage.removeItem(CHAVE_ENVIADO);
+        limparRascunho();
+      }
+    } catch (_erro) {}
+    const rascunho = lerRascunho();
+    if (rascunho) {
+      if (mensagemFeedback && typeof rascunho.mensagem === 'string') {
+        mensagemFeedback.value = rascunho.mensagem.slice(0, 4000);
+      }
+      if (responderIaFeedback) responderIaFeedback.checked = !!rascunho.responder_ia;
+      const recente = Number(rascunho.atualizado_em) > Date.now() - RASCUNHO_VALIDO_MS;
+      if (rascunho.aberto && recente) abrirDialogo();
+    }
+
     abrirFeedback.addEventListener('click', abrirDialogo);
-    fecharFeedback?.addEventListener('click', fecharDialogo);
+    fecharFeedback?.addEventListener('click', () => {
+      if (mensagemFeedback) mensagemFeedback.value = '';
+      if (responderIaFeedback) responderIaFeedback.checked = false;
+      limparRascunho();
+      try { sessionStorage.removeItem(CHAVE_ENVIADO); } catch (_erro) {}
+      fecharDialogo();
+    });
     dialogoFeedback.addEventListener('click', evento => {
       if (evento.target === dialogoFeedback) fecharDialogo();
+    });
+    dialogoFeedback.addEventListener('close', () => {
+      salvarRascunho();
+      window.setTimeout(agendarAutoRefresh, 0);
+    });
+    mensagemFeedback?.addEventListener('input', salvarRascunho);
+    responderIaFeedback?.addEventListener('change', salvarRascunho);
+    window.addEventListener('pagehide', salvarRascunho);
+    formFeedback?.addEventListener('submit', () => {
+      try { sessionStorage.setItem(CHAVE_ENVIADO, '1'); } catch (_erro) {}
     });
   }
 }());
