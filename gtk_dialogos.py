@@ -19,6 +19,7 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import portal_negocios as neg
 import estoque_materiais as estoque
+import empresa_financeiro as empresa
 import catalogo_servicos as catalogo
 import importacao_yaml
 import completude
@@ -1414,7 +1415,7 @@ class DialogoMaterialEstoque(Adw.Dialog):
         grupo = Adw.PreferencesGroup()
         pagina.add(grupo)
         self.nome = ui.campo_entry(grupo, "Nome do material", registro.get("nome", ""))
-        self.sku = ui.campo_entry(grupo, "Código / SKU", registro.get("sku", ""))
+        self.sku = ui.campo_entry(grupo, "Código / SKU (opcional)", registro.get("sku", ""))
         self.unidade = ui.campo_entry(grupo, "Unidade de medida", registro.get("unidade", "un"))
         self.custo = ui.campo_entry(grupo, "Custo de compra (R$)",
                                     ui.dinheiro_texto((registro.get("custo_centavos") or 0) / 100))
@@ -1898,3 +1899,263 @@ class DialogoComposicao(Adw.Dialog):
         except Exception as erro:
             self.tabela.limpar()
             self.aviso.set_text(str(erro))
+
+
+def _data_br_empresa(valor):
+    try:
+        return datetime.strptime(str(valor), "%Y-%m-%d").strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        return str(valor or "")
+
+
+class DialogoCaixaEmpresa(Adw.Dialog):
+    """Company cash ledger kept apart from OS revenue, stock and rateios."""
+
+    def __init__(self, janela, ao_atualizar=None):
+        super().__init__()
+        self.janela = janela
+        self.ao_atualizar = ao_atualizar
+        empresa.instalar(BANCO)
+        self.set_title("Caixa e investimentos")
+        self.set_content_width(900)
+        self.set_content_height(700)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title="Caixa e investimentos"))
+        toolbar.add_top_bar(header)
+
+        pagina = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        pagina.set_margin_top(12)
+        pagina.set_margin_bottom(12)
+        pagina.set_margin_start(18)
+        pagina.set_margin_end(18)
+
+        cartoes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10,
+                          homogeneous=True)
+        cartao_capital, self.rotulo_capital, _ = ui.cartao(
+            "Capital investido", classe="accent")
+        cartao_despesas, self.rotulo_despesas, self.detalhe_despesas = ui.cartao(
+            "Despesas", classe="warning")
+        cartao_saldo, self.rotulo_saldo, _ = ui.cartao(
+            "Saldo em caixa", classe="success")
+        cartoes.append(cartao_capital)
+        cartoes.append(cartao_despesas)
+        cartoes.append(cartao_saldo)
+        pagina.append(cartoes)
+        self.rotulo_investidores = ui.legenda(
+            "Capital por investidor: sem aportes.")
+        self.rotulo_investidores.set_wrap(True)
+        pagina.append(self.rotulo_investidores)
+        pagina.append(ui.legenda(
+            "Receitas de OS continuam no Financeiro e não entram neste saldo. "
+            "Compra de material vinculada a uma OS é apenas referência e não "
+            "altera custo, estoque ou PDF da OS."))
+
+        self.tabela = ui.Tabela([
+            ("ID", 50, False, 0.5),
+            ("Data", 95, False, 0.5),
+            ("Tipo", 145, False, 0.0),
+            ("Pessoa / OS", 175, False, 0.0),
+            ("Descrição", 0, True, 0.0),
+            ("Categoria", 115, False, 0.0),
+            ("Valor", 110, False, 1.0),
+        ])
+        pagina.append(self.tabela.widget)
+
+        botoes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        botoes.append(ui.botao("Novo lançamento", self._novo,
+                               css="suggested-action"))
+        botoes.append(ui.botao("Arquivar selecionado", self._arquivar,
+                               css="destructive-action"))
+        botoes.append(ui.botao("Fechar", self.close))
+        pagina.append(botoes)
+
+        toolbar.set_content(pagina)
+        self.set_child(toolbar)
+        self._carregar()
+
+    def _carregar(self):
+        try:
+            resumo = empresa.resumo(BANCO)
+            movimentos = empresa.listar(BANCO)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Caixa da empresa", str(erro))
+            return
+        self.rotulo_capital.set_text(ui.brl(resumo["aportes_centavos"] / 100))
+        self.rotulo_despesas.set_text(ui.brl(resumo["despesas_centavos"] / 100))
+        self.rotulo_saldo.set_text(ui.brl(resumo["saldo_centavos"] / 100))
+        if resumo["por_investidor"]:
+            self.rotulo_investidores.set_text(
+                "Capital por investidor: " + " · ".join(
+                    f"{item['nome']}: {ui.brl(item['total_centavos'] / 100)}"
+                    for item in resumo["por_investidor"]))
+        else:
+            self.rotulo_investidores.set_text(
+                "Capital por investidor: sem aportes.")
+        self.detalhe_despesas.set_text(
+            f"Material {ui.brl(resumo['material_centavos'] / 100)} · "
+            f"API {ui.brl(resumo['api_centavos'] / 100)} · "
+            f"Outras {ui.brl(resumo['outras_despesas_centavos'] / 100)}")
+        linhas = []
+        for item in movimentos:
+            pessoa_os = " · ".join(
+                str(valor) for valor in
+                (item.get("prestador_nome"), item.get("numero_os")) if valor)
+            linhas.append((
+                item["id"],
+                _data_br_empresa(item["data"]),
+                empresa.TIPOS.get(item["tipo"], item["tipo"]),
+                pessoa_os or "—",
+                item["descricao"],
+                item["categoria"] or "—",
+                ui.brl(item["valor_centavos"] / 100),
+            ))
+        self.tabela.definir_linhas(linhas)
+        if self.ao_atualizar is not None:
+            self.ao_atualizar()
+
+    def _novo(self):
+        DialogoNovoMovimentoEmpresa(
+            self.janela, self._carregar).present(self.janela)
+
+    def _arquivar(self):
+        valores = self.tabela.selecionado()
+        if valores is None:
+            ui.aviso_erro(self.janela, "Seleção",
+                          "Selecione um lançamento para arquivar.")
+            return
+        ui.alerta(
+            self.janela, "Arquivar lançamento",
+            f"Arquivar o lançamento #{valores[0]}? O histórico será preservado.",
+            lambda: self._confirmar_arquivamento(valores[0]),
+            destrutivo=True, rotulo_ok="Arquivar")
+
+    def _confirmar_arquivamento(self, movimento_id):
+        try:
+            empresa.arquivar(BANCO, movimento_id, ator="Desktop")
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Caixa da empresa", str(erro))
+            return
+        self._carregar()
+        ui.toast(self.janela, "Lançamento arquivado; histórico preservado.")
+
+
+class DialogoNovoMovimentoEmpresa(Adw.Dialog):
+    """Simple entry form; no SKU, no stock movement and no OS cost change."""
+
+    def __init__(self, janela, ao_salvar=None):
+        super().__init__()
+        self.janela = janela
+        self.ao_salvar = ao_salvar
+        conexao = conectar_banco()
+        try:
+            self.prestadores = [dict(x) for x in conexao.execute(
+                "SELECT id,nome FROM prestadores "
+                "WHERE ativo=1 AND excluido=0 ORDER BY nome")]
+            self.oses = [dict(x) for x in conexao.execute(
+                "SELECT o.id,o.numero_os,c.nome cliente "
+                "FROM ordens_servico o LEFT JOIN clientes c ON c.id=o.cliente_id "
+                "ORDER BY o.id DESC LIMIT 300")]
+        finally:
+            conexao.close()
+        self.tipos = list(empresa.TIPOS.items())
+        self.codigos_tipo = [codigo for codigo, _ in self.tipos]
+        self.set_title("Novo lançamento da empresa")
+        self.set_content_width(620)
+        self.set_content_height(760)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(
+            title="Novo lançamento da empresa"))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(title="Lançamento")
+        pagina.add(grupo)
+        self.tipo = ui.campo_combo(
+            grupo, "Tipo de lançamento",
+            [rotulo for _, rotulo in self.tipos], 0)
+        self.data = ui.campo_entry(
+            grupo, "Data", datetime.now().strftime("%d/%m/%Y"))
+        self.pessoa = ui.campo_combo(
+            grupo, "Investidor (obrigatório no aporte)",
+            ["Nenhuma"] + [p["nome"] for p in self.prestadores], 0)
+        self.descricao = ui.campo_entry(grupo, "Descrição", "")
+        self._descricao_automatica = ""
+        self.categoria = ui.campo_entry(grupo, "Categoria", "Capital")
+        self.valor = ui.campo_entry(grupo, "Valor (R$)", "")
+        opcoes_os = ["Nenhuma"] + [
+            f"{o['numero_os']} — {o['cliente'] or 'sem cliente'}"
+            for o in self.oses]
+        self.os = ui.campo_combo(
+            grupo, "OS vinculada (opcional, só referência)", opcoes_os, 0)
+        self.observacao = ui.campo_texto(
+            grupo, "Observação (opcional)", "", altura=90)
+        aviso = ui.legenda(
+            "Aporte é capital permanente e não será extornado. Compra de "
+            "material sem SKU pode ser vinculada a uma OS apenas para "
+            "referência; nada é alterado na OS, no estoque ou no Financeiro.")
+        aviso.set_wrap(True)
+        grupo.add(_linha_custom(aviso))
+        toolbar.set_content(pagina)
+        rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        rodape.set_margin_top(10)
+        rodape.set_margin_bottom(10)
+        rodape.set_margin_start(18)
+        rodape.set_margin_end(18)
+        rodape.set_halign(Gtk.Align.END)
+        rodape.append(ui.botao("Cancelar", self.close))
+        rodape.append(ui.botao("Salvar lançamento", self._salvar,
+                               css="suggested-action"))
+        toolbar.add_bottom_bar(rodape)
+        self.set_child(toolbar)
+        self.tipo.connect("notify::selected", lambda *_args: self._atualizar_tipo())
+        self._atualizar_tipo()
+
+    def _codigo_tipo(self):
+        indice = int(self.tipo.get_selected())
+        if not 0 <= indice < len(self.codigos_tipo):
+            return self.codigos_tipo[0]
+        return self.codigos_tipo[indice]
+
+    def _atualizar_tipo(self):
+        codigo = self._codigo_tipo()
+        self.categoria.set_text(empresa.CATEGORIAS_PADRAO[codigo])
+        self.categoria.set_visible(codigo != "aporte")
+        self.os.set_visible(codigo == "material")
+        self.pessoa.set_title(
+            "Investidor (obrigatório)" if codigo == "aporte"
+            else "Pago por (opcional)")
+        atual = self.descricao.get_text().strip()
+        if not atual or atual == self._descricao_automatica:
+            self._descricao_automatica = empresa.TIPOS[codigo]
+            self.descricao.set_text(self._descricao_automatica)
+
+    def _salvar(self):
+        tipo = self._codigo_tipo()
+        prestador_id = None
+        indice_pessoa = int(self.pessoa.get_selected())
+        if indice_pessoa > 0 and indice_pessoa <= len(self.prestadores):
+            prestador_id = self.prestadores[indice_pessoa - 1]["id"]
+        os_id = None
+        if tipo == "material":
+            indice_os = int(self.os.get_selected())
+            if indice_os > 0 and indice_os <= len(self.oses):
+                os_id = self.oses[indice_os - 1]["id"]
+        try:
+            empresa.registrar(
+                BANCO, tipo=tipo,
+                descricao=self.descricao.get_text().strip(),
+                valor=self.valor.get_text().strip(),
+                data=self.data.get_text().strip(),
+                prestador_id=prestador_id,
+                os_id=os_id,
+                categoria=self.categoria.get_text().strip(),
+                observacao=self.observacao.get_texto(),
+                criado_por="Desktop")
+        except Exception as erro:
+            ui.aviso_erro(self, "Lançamento inválido", str(erro))
+            return
+        if self.ao_salvar is not None:
+            self.ao_salvar()
+        ui.toast(self.janela, "Lançamento salvo no caixa da empresa.")
+        self.close()

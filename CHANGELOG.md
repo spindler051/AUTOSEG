@@ -1,5 +1,17 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.19 — caixa da empresa dentro de Materiais e estoque — 2026-11-05 — develop
+
+- **Aportes de investidores:** a aba **Materiais e estoque** ganhou a seção **Caixa e investimentos**, com aporte de capital por investidor, sem devolução automática e sem misturar com receita de OS.
+- **Despesas da empresa:** compras de material, despesas com API (incluindo DeepSeek) e outras despesas, com data, categoria, valor e observação.
+- **Material sem SKU:** o campo SKU do cadastro de material passou a ser explicitamente opcional; o caixa não exige SKU, quantidade ou movimentação de estoque.
+- **OS apenas como referência:** uma compra de material pode ser vinculada a uma OS, mas isso não altera custo, estoque, financeiro ou PDF da OS.
+- **Saldo separado:** o resumo mostra capital investido, despesas e saldo; receitas de OS continuam no Financeiro e não entram nesse saldo.
+- **Histórico preservado:** lançamentos são arquivados, não apagados.
+- **Banco aditivo:** nova tabela `empresa_movimentos`, criada com `CREATE TABLE IF NOT EXISTS`; nenhuma tabela existente foi alterada.
+- **Testes:** `test_empresa_financeiro.py` cobre aportes, despesas, saldo, vínculo com OS sem alterar custo, validação e arquivamento.
+- **Documentação:** `docs/features/CAIXA_EMPRESA.md`.
+
 ## 9.6.0-dev.18 — feedback não se perde no auto-refresh da página de OS — 2026-11-04 — develop
 
 - **Sem `meta refresh`:** a página **Ordens de serviço ativas** deixou de usar `<meta http-equiv="refresh" content="20">`, que recarregava a página inteira e fechava o diálogo de feedback. O servidor agora emite um marcador inerte (`meta name="autoseg-auto-refresh"`).

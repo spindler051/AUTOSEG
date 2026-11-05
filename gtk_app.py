@@ -27,6 +27,7 @@ import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
 import estoque_materiais as estoque
+import empresa_financeiro as empresa
 import catalogo_servicos as catalogo
 import portal_negocios as neg
 import links_publicos as links9
@@ -94,6 +95,7 @@ class Janela(Adw.ApplicationWindow):
             aten.instalar(BANCO)
             cad9.instalar(BANCO)
             estoque.instalar(BANCO)
+            empresa.instalar(BANCO)
             catalogo.instalar(BANCO)
             composicao.instalar()
             composicao.instalar_banco(BANCO)
@@ -2126,6 +2128,12 @@ class Janela(Adw.ApplicationWindow):
         pagina = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.rotulo_estoque = ui.legenda("Carregando materiais…")
         pagina.append(ui.barra(self.rotulo_estoque))
+        self.rotulo_caixa = ui.legenda("Caixa da empresa: sem lançamentos.")
+        self.rotulo_caixa.set_hexpand(True)
+        pagina.append(ui.barra(
+            self.rotulo_caixa,
+            ui.botao("Caixa e investimentos", self._abrir_caixa_empresa,
+                     css="suggested-action")))
         self.busca_estoque = Gtk.SearchEntry(placeholder_text="Buscar por nome ou código")
         self.busca_estoque.set_hexpand(True)
         self.busca_estoque.connect("search-changed", lambda *_args: self.carregar_estoque())
@@ -2152,6 +2160,17 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_estoque(self):
+        if hasattr(self, "rotulo_caixa"):
+            try:
+                resumo = empresa.resumo(BANCO)
+                self.rotulo_caixa.set_text(
+                    "Caixa da empresa: capital "
+                    f"{ui.brl(resumo['aportes_centavos'] / 100)} · despesas "
+                    f"{ui.brl(resumo['despesas_centavos'] / 100)} · saldo "
+                    f"{ui.brl(resumo['saldo_centavos'] / 100)}")
+            except Exception:
+                self.rotulo_caixa.set_text(
+                    "Caixa da empresa: não foi possível carregar os lançamentos.")
         registros = estoque.listar(BANCO)
         termo = estoque._chave(self.busca_estoque.get_text()) if hasattr(
             self, "busca_estoque") else ""
@@ -2188,6 +2207,10 @@ class Janela(Adw.ApplicationWindow):
             ui.aviso_erro(self, "Seleção", "Selecione um material.")
             return None
         return valores
+
+    def _abrir_caixa_empresa(self):
+        dialogos.DialogoCaixaEmpresa(
+            self, ao_atualizar=self.carregar_estoque).present(self)
 
     def _novo_material(self):
         dialogos.DialogoMaterialEstoque(self).present(self)
