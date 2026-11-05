@@ -14,6 +14,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from PIL import Image
+
 import atendimento_os as aten
 import cadastros_v9 as cad
 import catalogo_servicos as cat
@@ -170,12 +172,51 @@ class CorrecoesRev12(unittest.TestCase):
                             'descricao': 'Portão da garagem não abre.',
                             'forma_pagamento': 'PIX'})
         self.assertEqual(status, 200)
+        self.assertIn('OS aberta com sucesso', html)
+        self.assertIn('Abrir OS', html)
+        self.assertNotIn('SALVAR RASCUNHO', html)
         with ext.db(self.db) as c:
             ordem = c.execute('SELECT cliente_id,status,descricao FROM ordens_servico '
                               'ORDER BY id DESC LIMIT 1').fetchone()
         self.assertEqual(ordem['cliente_id'], alfa)
         self.assertEqual(ordem['status'], 'Aberta')
         self.assertIn('Portão da garagem', ordem['descricao'])
+
+    def test_fotos_sem_assumir_os(self):
+        a = self._prestador('Técnico Foto A', email='foto.a@exemplo.com.br')
+        b = self._prestador('Técnico Foto B', email='foto.b@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Foto')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente_b = self._login(base, 'foto.b@exemplo.com.br')
+        _, html = req(cliente_b, base, f'/os/{oid}')
+        self.assertIn(f'action="/os/{oid}/fotos"', html)
+        self.assertIn('Adicionar fotos sem assumir a OS', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        buffer = io.BytesIO()
+        Image.new('RGB', (4, 4), 'red').save(buffer, 'PNG')
+        status, _ = multipart(
+            cliente_b, base, f'/os/{oid}/fotos',
+            [('csrf', token), ('foto_legenda[]', 'Foto do portão'),
+             ('foto_chave[]', 'chave-teste'), ('foto_visivel[]', '1')],
+            [('imagens_encerramento[]', 'portao.png', buffer.getvalue(), 'image/png')])
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            foto = c.execute('SELECT prestador_id FROM os_anexos WHERE os_id=?',
+                             (oid,)).fetchone()
+            legenda = c.execute('SELECT legenda FROM v9_anexos_visiveis v '
+                                'JOIN os_anexos a ON a.id=v.anexo_id WHERE a.os_id=?',
+                                (oid,)).fetchone()
+            responsavel = c.execute('SELECT prestador_id FROM os_responsaveis '
+                                    'WHERE os_id=?', (oid,)).fetchone()
+        self.assertEqual(foto['prestador_id'], b)
+        self.assertEqual(legenda['legenda'], 'Foto do portão')
+        self.assertEqual(responsavel['prestador_id'], a)
 
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):

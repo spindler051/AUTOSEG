@@ -167,6 +167,7 @@ def _dialogo_feedback(usuario):
       <span>Pedir uma resposta da IA com base no conhecimento do AUTOSEG (opcional)</span>
     </label>
     <p class="muted feedback-privacidade">O texto digitado fica salvo apenas nesta aba até você enviar ou cancelar. Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
+    <p class="muted" id="feedback-envio-status" role="status" aria-live="polite"></p>
     <div class="feedback-actions">
       <button type="submit">Enviar feedback</button>
       <button type="button" class="secondary" id="fechar-feedback">Cancelar</button>
@@ -699,7 +700,8 @@ class PortalPrestador:
                     +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
 
             def orcamento_form(self, s, erro='', cliente_id=None,
-                               servicos=None, materiais=None, aviso=''):
+                               servicos=None, materiais=None, aviso='',
+                               validade='30', condicoes=''):
                 """Orçamento com cliente, vários serviços e materiais adicionais."""
                 with ext.db(banco) as c:
                     clientes = c.execute(
@@ -836,6 +838,10 @@ class PortalPrestador:
                         + select('Cliente','cliente_id',opcoes_clientes,selecionado,required=True)
                         + secao_servicos
                         + secao_materiais
+                        + '<div class="col2"><div>'
+                        + campos_escuros('Validade do orçamento (dias)','validade',validade,kind='number')
+                        + '</div></div>'
+                        + textarea('Condições e observações (opcional)','condicoes',condicoes,rows=3)
                         + '<p><strong>Total estimado: <span id="total-orcamento">—</span></strong></p>'
                         + '<p class="notice">O PDF é apenas um orçamento estimativo. '
                           'Nenhuma ordem de serviço, cobrança ou movimentação de estoque é criada.</p>'
@@ -862,12 +868,13 @@ class PortalPrestador:
                              'materiais adicionais. Os preços vêm do catálogo e do estoque ativos.</p>'
                            + form), s)
 
-            def cliente_form(self,s,cid=None,preenchimento=None):
+            def cliente_form(self,s,cid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
                     x=c.execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone() if cid else None
                 if cid and not x: return self.erro('Cliente não encontrado.',404,s)
                 d=dict(x) if x else {}
                 if cid is None and preenchimento:d.update(preenchimento)
+                erro_html=card('YAML não aplicado',f'<p class="bad">{esc(erro)}</p>') if erro else ''
                 fields=[]
                 campos=[('nome','Nome / Razão social'),('documento','CPF / CNPJ'),('nome_fantasia','Nome fantasia'),
                     ('endereco','Logradouro'),('numero','Número'),('complemento','Complemento'),('bairro','Bairro'),
@@ -892,10 +899,12 @@ class PortalPrestador:
                 if not cid:
                     importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data">{self.hidden(s)}'
                        '<label for="importar-cliente-yaml">Preencher cadastro com arquivo YAML (até 64 KB)</label>'
-                       '<input type="file" id="importar-cliente-yaml" name="yaml" accept=".yaml,.yml" required>'
+                       '<input type="file" id="importar-cliente-yaml" name="yaml" accept=".yaml,.yml,.txt,text/yaml,text/plain" required>'
                        '<button type="submit" class="secondary">Pré-visualizar cadastro YAML</button></form>'
-                       '<p class="muted">Use o modelo pronto: <a href="/modelos/cadastro.yaml">Baixar YAML de cliente</a>. Revise antes de salvar.</p>')
-                    corpo=card('Importação assistida — apenas prestador',importar)+corpo
+                       '<p class="muted">Use o modelo pronto: <a href="/modelos/cadastro.yaml">Baixar YAML de cliente</a>. '
+                       'O nome do arquivo não importa; o conteúdo precisa ser YAML válido. '
+                       'Se o navegador mostrar ERR_UPLOAD_FILE_CHANGED, selecione o arquivo novamente sem movê-lo ou renomeá-lo.</p>')
+                    corpo=card('Importação assistida — apenas prestador',importar)+erro_html+corpo
                     if preenchimento:
                         corpo='<p class="notice">Dados importados para revisão. Confira nome, documento, vínculos e endereço antes de salvar.</p>'+corpo
                 if cid:
@@ -1046,6 +1055,9 @@ class PortalPrestador:
                 titulo=f'OS {d["numero_os"]}' if oid else 'Nova ordem de serviço'
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
                 corpo=botao('← Ordens de serviço','/os','secondary')
+                if oid:
+                    corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b> · '
+                    f'identificador interno do link: <code>/os/{oid}</code></p>'
                 if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
                 if preenchimento:
                     corpo+=('<p class="notice" id="yaml-importado-rev08" data-yaml-importado="1">'
@@ -1233,7 +1245,9 @@ class PortalPrestador:
                     pode_editar_fotos = (responsavel == s['pid'])
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
-                    corpo+='<p class="muted">Cada foto recebe uma legenda individual. A legenda é salva no SQLite, reaparece ao reabrir a OS e é incluída no PDF final.</p>'
+                    corpo+='<p class="muted">Para adicionar fotos: selecione os arquivos, escreva a legenda de cada um e clique em '
+                    'SALVAR RASCUNHO. A conclusão gera o PDF com as fotos e legendas. '
+                    'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>'
                     if anexos:
                         corpo+='<div class="fotos-rascunho">'
                         for a in anexos:
@@ -1257,7 +1271,8 @@ class PortalPrestador:
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>SALVAR RASCUNHO</b> para guardar fotos e legendas sem finalizar.</p></div>'
                     else:
-                        corpo+='<p class="notice">Assuma a OS para adicionar fotos e editar as legendas.</p>'
+                        corpo+='<p class="notice">Você pode adicionar fotos sem assumir a OS. '
+                        'Para editar legendas de fotos existentes, assuma a OS.</p>'
                     if pode_nota:
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
                         corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
@@ -1284,6 +1299,19 @@ class PortalPrestador:
                 if oid and d['status'] in ext.ATIVAS:
                     corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                 corpo+='</div></form>'
+                if oid and d['status'] in ext.ATIVAS and responsavel != s['pid']:
+                    corpo+=card('Adicionar fotos sem assumir a OS',
+                        '<p class="muted">As fotos já anexadas aparecem acima. '
+                        'Você pode enviar novas fotos e legendas mesmo sem ser o responsável; '
+                        'elas entram no relatório quando a OS for concluída.</p>'
+                        +f'<form method="post" action="/os/{oid}/fotos" enctype="multipart/form-data">{token}'
+                        +'<label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
+                        +'<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple '
+                         'accept="image/jpeg,image/png,image/webp">'
+                        +'<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
+                        +'<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
+                        +'<p class="muted">A prévia e o campo de legenda aparecem abaixo para cada foto.</p>'
+                        +'<button type="submit">Salvar fotos e legendas</button></form>')
                 if not oid:
                     corpo+='<p class="muted">Depois de salvar a OS, você poderá atribuir um prestador e, no encerramento, anexar imagens e publicar PDF.</p>'
                     return self.pagina(titulo,card('Dados da OS',corpo),s)
@@ -1710,8 +1738,14 @@ class PortalPrestador:
                     partes=path.strip('/').split('/')
                     if path=='/servicos/yaml':
                         arq=d.get('yaml')
-                        if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML de serviço.')
-                        return self.servico_form(s,preenchimento=yaml_import.servico(arq[0],arq[1]))
+                        if not isinstance(arq,tuple):
+                            return self.servico_form(
+                                s, erro='Selecione um arquivo YAML de serviço.')
+                        try:
+                            pre=yaml_import.servico(arq[0],arq[1])
+                        except ValueError as erro:
+                            return self.servico_form(s, erro=str(erro))
+                        return self.servico_form(s,preenchimento=pre)
                     if path=='/servicos/salvar':
                         sid=str(d.get('servico_id','')).strip()
                         try:catalogo.salvar(banco,d,int(sid) if sid else None)
@@ -1728,8 +1762,14 @@ class PortalPrestador:
                         return self.redir('/servicos')
                     if path=='/clientes/yaml':
                         arq=d.get('yaml')
-                        if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
-                        pre=yaml_import.cliente(arq[0],arq[1])
+                        if not isinstance(arq,tuple):
+                            return self.cliente_form(
+                                s, erro='Selecione um arquivo YAML. O nome do arquivo não importa; '
+                                        'o conteúdo precisa ser YAML válido.')
+                        try:
+                            pre=yaml_import.cliente(arq[0],arq[1])
+                        except ValueError as erro:
+                            return self.cliente_form(s, erro=str(erro))
                         return self.cliente_form(s,preenchimento=pre)
                     if path=='/orcamento/yaml':
                         arq=d.get('yaml')
@@ -1753,12 +1793,24 @@ class PortalPrestador:
                             cliente_id=int(str(d.get('cliente_id','')).strip())
                         except (TypeError,ValueError):
                             return self.orcamento_form(s,'Selecione o cliente.',None)
+                        try:
+                            validade=int(str(d.get('validade','30')).strip() or '30')
+                        except (TypeError,ValueError):
+                            return self.orcamento_form(
+                                s,'Informe a validade em dias (1 a 365).',cliente_id)
+                        if not 1<=validade<=365:
+                            return self.orcamento_form(
+                                s,'Informe a validade em dias (1 a 365).',cliente_id,
+                                validade=str(validade))
+                        condicoes=str(d.get('condicoes','')).strip()[:1000]
                         with ext.db(banco) as c:
                             cliente=c.execute('SELECT id,nome,documento FROM clientes '
                                               'WHERE id=? AND status!=\'Inativo\'',
                                               (cliente_id,)).fetchone()
                         if not cliente:
-                            return self.orcamento_form(s,'Cliente não encontrado.',cliente_id)
+                            return self.orcamento_form(
+                                s,'Cliente não encontrado.',cliente_id,
+                                validade=str(validade),condicoes=condicoes)
                         try:
                             itens=catalogo.itens_orcamento_formulario(banco,d)
                         except ValueError as erro:
@@ -1768,23 +1820,27 @@ class PortalPrestador:
                                 brutos={'servicos':None,'materiais':None}
                             return self.orcamento_form(
                                 s,str(erro),cliente_id=cliente_id,
-                                servicos=brutos['servicos'],materiais=brutos['materiais'])
+                                servicos=brutos['servicos'],materiais=brutos['materiais'],
+                                validade=str(validade),condicoes=condicoes)
                         try:
                             if len(itens['servicos'])==1 and not itens['materiais']:
                                 servico=itens['servicos'][0]
                                 pdf=catalogo.pdf_orcamento(
                                     banco,servico['id'],servico['quantidade'],
                                     cliente=cliente['nome'],
-                                    cliente_documento=cliente['documento'] or '')
+                                    cliente_documento=cliente['documento'] or '',
+                                    validade=validade,condicoes=condicoes)
                                 nome_pdf=f'Orcamento_{cliente_id}_{servico["id"]}.pdf'
                             else:
                                 pdf=catalogo.pdf_orcamento_itens(
-                                    banco,cliente['nome'],cliente['documento'] or '',itens)
+                                    banco,cliente['nome'],cliente['documento'] or '',itens,
+                                    validade=validade,condicoes=condicoes)
                                 nome_pdf=f'Orcamento_{cliente_id}.pdf'
                         except ValueError as erro:
                             return self.orcamento_form(
                                 s,str(erro),cliente_id=cliente_id,
-                                servicos=itens['servicos'],materiais=itens['materiais'])
+                                servicos=itens['servicos'],materiais=itens['materiais'],
+                                validade=str(validade),condicoes=condicoes)
                         return self.send_bytes(pdf,'application/pdf',filename=nome_pdf)
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='yaml':
                         oid=int(partes[1]);arq=d.get('yaml')
@@ -1835,7 +1891,17 @@ class PortalPrestador:
                         prestador_id=str(d.get('prestador_id','')).strip()
                         if prestador_id:
                             ext.atribuir(banco,oid,int(prestador_id),ator=f'Prestador {s["nome"]}')
-                        return self.redir(f'/os/{oid}')
+                        with ext.db(banco) as c:
+                            numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                                              (oid,)).fetchone() or {'numero_os': oid})['numero_os']
+                        return self.pagina('OS aberta com sucesso',
+                            card('OS aberta com sucesso',
+                                f'<p class="good">A OS <b>{esc(numero)}</b> foi criada como <b>Aberta</b>.</p>'
+                                '<p class="muted">Você não precisa preencher o atendimento agora. '
+                                'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
+                                +botao('Abrir OS',f'/os/{oid}')
+                                +botao('Abrir outra OS rápida','/os/rapida','secondary')
+                                +botao('Voltar às OS','/os','secondary')),s)
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
                         return self.redir(f'/os/{oid}')
@@ -1848,6 +1914,35 @@ class PortalPrestador:
                             if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                 raise PermissionError('Somente o técnico responsável ou administrador edita a legenda do anexo.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
+                        return self.redir(f'/os/{oid}')
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='fotos':
+                        oid=int(partes[1])
+                        with ext.db(banco) as c:
+                            os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                               (oid,)).fetchone()
+                        if not os_atual or os_atual['status'] not in ext.ATIVAS:
+                            raise ValueError('Somente OS ativas podem receber fotos.')
+                        def _lista(valor):
+                            if valor is None:return []
+                            return valor if isinstance(valor,list) else [valor]
+                        imagens=_lista(d.get('imagens_encerramento[]'))
+                        legendas=_lista(d.get('foto_legenda[]'))
+                        chaves=_lista(d.get('foto_chave[]'))
+                        visiveis=_lista(d.get('foto_visivel[]'))
+                        imagens=[x for x in imagens if isinstance(x,tuple) and x[1]]
+                        if not imagens:
+                            raise ValueError('Selecione ao menos uma foto.')
+                        if len(imagens)>10:
+                            raise ValueError('Envie no máximo 10 fotos por vez.')
+                        with ext.db(banco) as c:
+                            c.execute('BEGIN IMMEDIATE')
+                            for i,(nome,conteudo) in enumerate(imagens):
+                                ext.registrar_imagem_transacao(
+                                    c,oid,pid,nome,conteudo,
+                                    permitir_colaboracao=True,
+                                    chave=chaves[i] if i<len(chaves) else None,
+                                    legenda=legendas[i] if i<len(legendas) else '',
+                                    visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])

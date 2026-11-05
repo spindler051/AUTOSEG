@@ -19,8 +19,9 @@ def carregar(nome, conteudo):
         from yaml.events import AliasEvent
     except ImportError as exc:
         raise ValueError('Instale PyYAML: python -m pip install -r requirements.txt') from exc
-    if not str(nome).lower().endswith(('.yaml', '.yml')):
-        raise ValueError('Envie um arquivo .yaml ou .yml.')
+    # The filename is informational. The content, size and UTF-8 validation
+    # below are what matter; this avoids rejecting valid YAML renamed by the
+    # user or exported without an extension.
     if not isinstance(conteudo, bytes) or not 1 <= len(conteudo) <= LIMITE_BYTES:
         raise ValueError('Arquivo YAML vazio ou maior que 64 KB.')
     try:

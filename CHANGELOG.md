@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.22 — feedbacks 9–22: YAML, orçamento, OS rápida e fotos — 2026-11-05 — develop
+
+- **YAML sem dependência do nome:** a importação de cliente e serviço não exige mais extensão `.yaml/.yml` no nome do arquivo; o conteúdo é validado e erros aparecem na própria tela, com orientação para `ERR_UPLOAD_FILE_CHANGED`.
+- **Orçamento mais completo:** validade em dias e condições/observações opcionais no formulário e no PDF.
+- **OS rápida sem formulário automático:** após criar, o prestador vê “OS aberta com sucesso” com link para abrir depois, em vez de cair no formulário de preenchimento.
+- **Fotos sem assumir a OS:** qualquer prestador ativo pode adicionar fotos e legendas por um formulário colaborativo; a responsabilidade da OS não muda. A edição de legendas existentes continua com o responsável.
+- **Identificação da OS:** a tela mostra o número da OS e o identificador interno do link (`/os/{id}`), reduzindo a confusão entre OS-0023 e `/os/25`.
+- **Feedback com estado de envio:** o diálogo mostra “Enviando...” ou “Aguardando IA...” e o auto-refresh permanece pausado, evitando a sensação de congelamento.
+- **Testes:** importação YAML sem extensão, orçamento com validade/condições, OS rápida com tela de sucesso, fotos por técnico não responsável e regressões de feedback/OS.
+- **Fora do MAIN:** correções apenas em `develop`; o MAIN permanece em `9.6.0-dev.20`.
+
 ## 9.6.0-dev.21 — API financeira somente leitura — 2026-11-05 — develop
 
 - **API `/api/v1`:** expõe o financeiro do prestador autenticado — resumo, lançamentos de OS, rateios como técnico secundário e repasses a pagar — em JSON, com valores em centavos inteiros, datas ISO, paginação por cursor e OpenAPI 3.1.

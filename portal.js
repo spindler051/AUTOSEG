@@ -664,6 +664,18 @@
     window.addEventListener('pagehide', salvarRascunho);
     formFeedback?.addEventListener('submit', () => {
       try { sessionStorage.setItem(CHAVE_ENVIADO, '1'); } catch (_erro) {}
+      const pediuIa = !!responderIaFeedback?.checked;
+      const status = document.getElementById('feedback-envio-status');
+      const enviar = formFeedback.querySelector('button[type="submit"]');
+      if (status) {
+        status.textContent = pediuIa
+          ? 'Enviando feedback e aguardando a resposta da IA...'
+          : 'Enviando feedback...';
+      }
+      if (enviar) {
+        enviar.disabled = true;
+        enviar.textContent = pediuIa ? 'Aguardando IA...' : 'Enviando...';
+      }
     });
   }
 }());

@@ -97,7 +97,8 @@ class OrcamentoMultiplo(unittest.TestCase):
                          'id="lista-materiais-orcamento"', 'id="modelo-servico-orcamento"',
                          'id="modelo-material-orcamento"', 'id="yaml-orcamento"',
                          '/modelos/orcamento.yaml', 'name="servico_id[]"',
-                         'name="material_id[]"', 'total-orcamento'):
+                         'name="material_id[]"', 'name="validade"',
+                         'name="condicoes"', 'total-orcamento'):
             self.assertIn(marcador, texto)
         _, _, modelo = request(self.browser, self.base + '/modelos/orcamento.yaml')
         self.assertIn('MODELO OFICIAL DE ORÇAMENTO', modelo.decode())
@@ -108,12 +109,16 @@ class OrcamentoMultiplo(unittest.TestCase):
             ('servico_id[]', str(self.s1)), ('servico_qtd[]', '1'),
             ('servico_id[]', str(self.s2)), ('servico_qtd[]', '2'),
             ('material_id[]', str(self.m1)), ('material_qtd[]', '3'),
+            ('validade', '45'),
+            ('condicoes', 'Pagamento em 30 dias após a aprovação.'),
         ])
         self.assertIn('Serviço Um', texto)
         self.assertIn('Serviço Dois', texto)
         self.assertIn('Material Um', texto)
         self.assertIn('Materiais adicionais', texto)
         self.assertIn('235,00', texto)
+        self.assertIn('Validade: 45 dia(s)', texto)
+        self.assertIn('Pagamento em 30 dias após a aprovação', texto)
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0], 0)
             self.assertEqual(c.execute('SELECT COUNT(*) FROM financeiro').fetchone()[0], 0)

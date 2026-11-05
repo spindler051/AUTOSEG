@@ -412,7 +412,8 @@ def itens_orcamento_formulario(banco, d):
     return montar_itens_orcamento(banco, linhas['servicos'], linhas['materiais'])
 
 
-def pdf_orcamento_itens(banco, cliente, cliente_documento, itens):
+def pdf_orcamento_itens(banco, cliente, cliente_documento, itens,
+                        validade=30, condicoes=''):
     """PDF de orçamento com vários serviços e materiais adicionais."""
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
@@ -450,7 +451,9 @@ def pdf_orcamento_itens(banco, cliente, cliente_documento, itens):
         Spacer(1, 10),
         par('AUTOSEG — CNPJ ' + marca.CNPJ_PRINCIPAL),
         par('Emitido em: ' + datetime.now().strftime('%d/%m/%Y %H:%M')),
+        par('Validade: ' + str(int(validade)) + ' dia(s)'),
         par('Solicitante: ' + nome_cliente + (' — ' + doc_formato if doc_formato else '')),
+        *([par('Condições e observações: ' + str(condicoes)[:1000])] if condicoes else []),
         Spacer(1, 12),
     ])
 
@@ -538,7 +541,8 @@ def pdf_orcamento_itens(banco, cliente, cliente_documento, itens):
     return bio.getvalue()
 
 
-def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente',cliente_documento=''):
+def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente',cliente_documento='',
+                  validade=30,condicoes=''):
     """Gera orçamento não vinculante e sem dados financeiros confidenciais."""
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet
@@ -573,7 +577,10 @@ def pdf_orcamento(banco,identificador,quantidade=1,cliente='Cliente',cliente_doc
     content.extend([Spacer(1,10),
              par('AUTOSEG — CNPJ '+marca.CNPJ_PRINCIPAL),
              par('Emitido em: '+datetime.now().strftime('%d/%m/%Y %H:%M')),
-             par('Solicitante: '+nome_cliente + (' — '+doc_formato if doc_formato else '')),Spacer(1,12),
+             par('Validade: '+str(int(validade))+' dia(s)'),
+             par('Solicitante: '+nome_cliente + (' — '+doc_formato if doc_formato else '')),
+             *([par('Condições e observações: '+str(condicoes)[:1000])] if condicoes else []),
+             Spacer(1,12),
              Paragraph(escape(servico['nome']),styles['Heading2']),par(servico['descricao'] or 'Serviço conforme catálogo'),Spacer(1,12)])
     linhas=[[par('Item'),par('Qtde.'),par('Total')],
             [par('Mão de obra: '+servico['nome']),str(dados['quantidade']),reais(dados['subtotal_servico'])]]

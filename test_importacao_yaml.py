@@ -72,6 +72,18 @@ materiais:
     assert dados[0]["valor_total"] == 25.0
 
 
+def test_cliente_yaml_nao_depende_do_nome_do_arquivo():
+    conteudo = """versao: 1
+cliente:
+  nome: Cliente Sem Extensão
+  tipo_pessoa: Física
+  status: Prospect
+""".encode()
+    for nome in ('cadastro', 'cadastro.txt', 'CADASTRO.YAML'):
+        dados = imp.cliente(nome, conteudo)
+        assert dados["nome"] == "Cliente Sem Extensão"
+
+
 def test_modelos_vazios():
     for modelo in (
         imp.MODELO_CLIENTE_VAZIO,
