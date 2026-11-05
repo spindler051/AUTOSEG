@@ -190,10 +190,20 @@ class ServidorPortal:
                 self.end_headers()
 
             def erro(self, mensagem, status=400):
+                destino = '/'
+                try:
+                    ref = urlparse(self.headers.get('Referer', ''))
+                    host = self.headers.get('Host', '').lower()
+                    if (ref.scheme in ('http', 'https') and ref.netloc.lower() == host
+                            and ref.path.startswith('/') and not ref.path.startswith('//')):
+                        destino = ref.path + (('?' + ref.query) if ref.query else '')
+                except (ValueError, TypeError):
+                    pass
                 return self.responder(
                     cliente.pagina_texto('Operação não concluída',
                                          '<p class="bad">' + html.escape(str(mensagem)) + '</p>'
-                                         '<p><a href="/">Voltar ao início</a></p>'), status)
+                                         '<p><a href="' + html.escape(destino, quote=True)
+                                         + '">Voltar à página anterior</a></p>'), status)
 
             # ---------- entrada ----------
             def form(self):

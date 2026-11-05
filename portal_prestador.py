@@ -362,8 +362,23 @@ class PortalPrestador:
                     return {k:(v if k.endswith('[]') else v[0]) for k,v in parsed.items()}
                 raise ValueError('Formato de formulário não suportado.')
 
+            def voltar_url(self):
+                """Return the same-origin page that submitted the form, not home."""
+                try:
+                    ref=urlparse(self.headers.get('Referer',''))
+                    host=self.headers.get('Host','').lower()
+                    if (ref.scheme in ('http','https') and ref.netloc.lower()==host
+                            and ref.path.startswith('/') and not ref.path.startswith('//')):
+                        return ref.path + (('?'+ref.query) if ref.query else '')
+                except (ValueError,TypeError):
+                    pass
+                return '/'
+
             def erro(self,msg,status=400,s=None):
-                return self.pagina('Operação não concluída',card('Aviso',f'<p class="bad">{esc(msg)}</p><p><a href="/">Voltar ao início</a></p>'),s,status)
+                destino=esc(self.voltar_url())
+                return self.pagina('Operação não concluída',
+                    card('Aviso',f'<p class="bad">{esc(msg)}</p>'
+                         f'<p><a href="{destino}">Voltar à página anterior</a></p>'),s,status)
 
             def login(self):
                 return self.pagina('Acesso do prestador',card('Entrar',
@@ -1121,7 +1136,7 @@ class PortalPrestador:
                                 d[k]=v
                 except Exception:
                     rasc_salvo = None
-                corpo+=f'<form method="post" action="{action}" id="form-os" enctype="multipart/form-data">{token}'
+                corpo+=f'<form method="post" action="{action}" id="form-os" data-ajax-preserve="1" enctype="multipart/form-data">{token}'
                 if d.get('composicao_yaml'):
                     import json as _json_comp
                     corpo+=('<input type="hidden" name="composicao_yaml" value="'
@@ -1322,8 +1337,8 @@ class PortalPrestador:
                     corpo+=card('Adicionar fotos e legendas sem assumir a OS',
                         '<p class="muted">Você pode enviar novas fotos e alterar legendas '
                         'mesmo sem ser o responsável; elas entram no relatório quando a OS for concluída.</p>'
+                        +f'<form method="post" action="/os/{oid}/fotos" data-ajax-preserve="1" enctype="multipart/form-data">{token}'
                         +('<h3>Legendas das fotos existentes</h3>'+existentes if existentes else '')
-                        +f'<form method="post" action="/os/{oid}/fotos" enctype="multipart/form-data">{token}'
                         +'<label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
                         +'<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple '
                          'accept="image/jpeg,image/png,image/webp">'
@@ -1720,6 +1735,8 @@ class PortalPrestador:
 
             def do_POST(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
+                quer_json = ('application/json' in self.headers.get('Accept','')
+                             or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                 try:
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
@@ -1763,8 +1780,6 @@ class PortalPrestador:
                         meta=feedback.contexto(banco,s,
                                                feedback.ip_requisicao(self.client_address[0],self.headers),
                                                self.headers.get('User-Agent',''))
-                        quer_json = ('application/json' in self.headers.get('Accept','')
-                                     or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                         try:
                             _,item=feedback.criar(
                                 banco,s,pagina,str(d.get('mensagem','')),
@@ -1780,7 +1795,7 @@ class PortalPrestador:
                                 card('Não foi possível enviar',
                                      f'<p class="bad">{esc(erro)}</p>'
                                      '<p>Seu texto não foi perdido pelo sistema; volte e tente novamente.</p>'
-                                     +botao('Voltar ao início','/','secondary')),s,400)
+                                     +botao('Voltar à página anterior',self.voltar_url(),'secondary')),s,400)
                         if quer_json:
                             return self.send_bytes(
                                 json.dumps({
@@ -2214,10 +2229,25 @@ class PortalPrestador:
                         neg.financeiro_receber(banco,int(partes[1]),pid)
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
-                except PermissionError as e:return self.erro(str(e),403,self.sessao())
-                except (KeyError,ValueError,TypeError) as e:return self.erro(str(e),400,self.sessao())
+                except PermissionError as e:
+                    if quer_json:
+                        return self.send_bytes(
+                            json.dumps({'ok':False,'error':str(e)},ensure_ascii=False).encode(),
+                            'application/json; charset=utf-8',status=403)
+                    return self.erro(str(e),403,self.sessao())
+                except (KeyError,ValueError,TypeError) as e:
+                    if quer_json:
+                        return self.send_bytes(
+                            json.dumps({'ok':False,'error':str(e)},ensure_ascii=False).encode(),
+                            'application/json; charset=utf-8',status=400)
+                    return self.erro(str(e),400,self.sessao())
                 except Exception:
                     LOG.exception('Erro POST %s',path)
+                    if quer_json:
+                        return self.send_bytes(
+                            json.dumps({'ok':False,'error':'Falha interna ao salvar. Consulte o log.'},
+                                       ensure_ascii=False).encode(),
+                            'application/json; charset=utf-8',status=500)
                     return self.erro('Falha interna ao salvar. Consulte o log.',500,self.sessao())
 
         try:

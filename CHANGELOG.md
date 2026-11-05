@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.25 — erros de formulário em toast e legendas corrigidas — 2026-11-05 — develop
+
+- **Legendas de fotos:** os campos de legenda das fotos existentes agora ficam dentro do formulário colaborativo; salvar apenas a legenda não retorna mais “selecione uma foto”.
+- **Erros sem perder dados:** formulários da OS e de fotos são enviados por AJAX; erros de validação/permissão voltam em JSON e aparecem como toast, mantendo o formulário, os textos e os arquivos selecionados na página.
+- **Sem página de erro:** o servidor responde JSON para requisições `X-Requested-With: XMLHttpRequest`/`Accept: application/json`. O fallback HTML agora tem **“Voltar à página anterior”** em vez de “Voltar ao início”.
+- **Testes:** edição de legenda por técnico não responsável, erro JSON sem navegação e regressões de OS/feedback.
+
 ## 9.6.0-dev.24 — preview do PDF em OS ativa — 2026-11-05 — develop
 
 - **Preview do PDF:** OS ativa agora tem o botão **“Baixar preview do PDF (não publicado)”** na tela da OS e na lista de relatórios.

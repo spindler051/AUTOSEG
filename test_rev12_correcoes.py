@@ -281,6 +281,19 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(alterada['legenda'], 'Legenda alterada pelo colaborador')
         self.assertEqual(alterada['visivel'], 0)
 
+        # Erro de validação nesse formulário deve voltar como JSON/toast, sem
+        # navegar para uma página de erro.
+        corpo = urllib.parse.urlencode({'csrf': token}).encode()
+        pedido = urllib.request.Request(
+            base + f'/os/{oid}/fotos', corpo,
+            headers={'X-Requested-With': 'XMLHttpRequest',
+                     'Accept': 'application/json'})
+        with self.assertRaises(urllib.error.HTTPError) as falha:
+            cliente_b.open(pedido, timeout=30)
+        self.assertEqual(falha.exception.code, 400)
+        dados = json.loads(falha.exception.read())
+        self.assertIn('Selecione uma foto ou altere uma legenda', dados['error'])
+
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):
         outro = self._prestador('Prestador Outro', documento='11222333000181')

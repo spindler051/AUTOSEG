@@ -1,6 +1,73 @@
 // AUTOSEG Portal v6: interface sem dependências externas.
 (function () {
   'use strict';
+
+  // Toast global para erros de formulário: nunca navega para uma página de
+  // erro e preserva o que o usuário digitou/selecionou.
+  const mostrarAvisoGlobal = texto => {
+    const aviso = document.getElementById('feedback-toast');
+    if (!aviso) {
+      window.alert(texto);
+      return;
+    }
+    aviso.textContent = texto;
+    aviso.hidden = false;
+    window.clearTimeout(mostrarAvisoGlobal.timer);
+    mostrarAvisoGlobal.timer = window.setTimeout(() => {
+      aviso.hidden = true;
+    }, 6000);
+  };
+
+  document.querySelectorAll('form[data-ajax-preserve]').forEach(form => {
+    form.addEventListener('submit', async evento => {
+      if (evento.defaultPrevented || !window.fetch || !window.FormData) return;
+      evento.preventDefault();
+      const submitter = evento.submitter;
+      const action = submitter?.formAction || form.action;
+      const method = (submitter?.formMethod || form.method || 'post').toUpperCase();
+      const dados = new FormData(form);
+      if (submitter?.name && !dados.has(submitter.name)) {
+        dados.append(submitter.name, submitter.value);
+      }
+      const textoOriginal = submitter?.textContent;
+      if (submitter) {
+        submitter.disabled = true;
+        submitter.textContent = 'SALVANDO...';
+      }
+      try {
+        const resposta = await fetch(action, {
+          method,
+          body: dados,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin'
+        });
+        if (resposta.redirected) {
+          window.location.assign(resposta.url);
+          return;
+        }
+        if (!resposta.ok) {
+          let mensagem = 'Não foi possível salvar.';
+          try {
+            const corpo = await resposta.json();
+            mensagem = corpo.error || corpo.message || mensagem;
+          } catch (_erro) {}
+          throw new Error(mensagem);
+        }
+        // Sucesso sem redirecionamento (ex.: rascunho salvo): recarrega a OS.
+        window.location.reload();
+      } catch (erro) {
+        mostrarAvisoGlobal(erro.message || 'Não foi possível salvar. Tente novamente.');
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = textoOriginal || 'Salvar';
+        }
+      }
+    });
+  });
+
   const form = document.getElementById('form-os');
   if (form) {
 
