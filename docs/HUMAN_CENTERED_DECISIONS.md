@@ -93,6 +93,16 @@ documentation, characterization tests or reversible cleanup.
 The table is deliberately written so the project can keep moving without
 pretending these questions are answered.
 
+### 5.1 Deferred multi-client and local-first decisions
+
+The long-term multi-client direction (CLI, Qt, native iOS/Android, local-only,
+LAN group, central server and P2P) is documented in
+`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. The following choices remain deferred
+until there is evidence: reference client, Qt/mobile scope, P2P versus central
+authority, E2E encryption versus server-side document generation, and the Rust
+scope. Reversible groundwork and documentation are allowed; no new client or
+sync implementation should start before GTK/web parity and a protocol v0 exist.
+
 ## 6. How AI agents must behave
 
 1. Do not make an irreversible product/architecture decision alone.
@@ -176,3 +186,4 @@ recorded as deferred with explicit evidence triggers. Until then:
 - `docs/features/OPEN_TELEMETRY.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `docs/GTK4_LINUX_MACOS.md`
+- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`

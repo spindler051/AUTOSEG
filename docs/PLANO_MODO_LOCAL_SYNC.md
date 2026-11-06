@@ -5,6 +5,10 @@
 totalmente offline, sincronize na mesma rede local quando possível e envie as
 mudanças para o servidor quando ele voltar.
 
+> **Visão geral multicliente:** `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
+> Este documento detalha o sync; a visão descreve os modos de operação, os
+> clientes, os custos e os limites do produto.
+
 ---
 
 ## 1. Resumo executivo

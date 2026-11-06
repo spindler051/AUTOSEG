@@ -35,6 +35,28 @@ and what the next small step is. Update it in the same PR that changes a slice.
 | ADR/architecture docs | Started | `workaholic/docs/` |
 | Production integration | Clients only | `integracao/clientes.py` |
 
+## Client and sync direction
+
+This is a planning inventory, not an authorization to start all clients. The
+high-level vision, cost drivers and likely infeasible parts are in
+`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
+
+| Capability | Status | Next step |
+|---|---|---|
+| GTK desktop | current AUTOSEG UI | reach web parity for provider operations; keep SQL out of the UI |
+| Web provider portal | current | extract application services; keep it as a client, not the center |
+| Web client portal | current | keep online-first; do not promise offline yet |
+| CLI | prototype (Workaholic) | read-only commands over services; then safe writes with `--dry-run` |
+| Qt desktop | not started | decide after GTK parity and real demand |
+| iOS native | not started | PWA or one native platform first; protocol must be stable |
+| Android native | not started | same as iOS; one mobile platform at a time |
+| Local-only mode | partial | backup/restore, export/import and offline startup tests |
+| Protocol v0 | not started | application contract + conformance tests; no network |
+| Hub sync | not started | server authority; two devices + visible conflicts |
+| LAN group sync | not started | only after hub sync is stable |
+| P2P/WAN | not started | only if a real need is proven; relay/E2E/security review |
+| Light/dark mode | partial | GTK follows the system; web is dark-only; add tokens and a manual toggle |
+
 ## Decision log
 
 | Date | Decision | Reason |

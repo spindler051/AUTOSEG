@@ -325,6 +325,10 @@ libadwaita da distribuição não aplica `accent-color` sozinho:
 
 Isso é configuração de sistema/usuário, não do AUTOSEG.
 
+> **Planejado:** um seletor explícito de tema claro/escuro no app e no portal
+> web, com preferência do sistema + opção manual. A direção multicliente e os
+> limites estão em `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
+
 ## Normas GNOME
 
 A Human Interface Guidelines é baixada para `docs/gnome-hig/` (espelho

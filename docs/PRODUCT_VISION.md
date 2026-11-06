@@ -48,6 +48,15 @@ must stay small. Bug fixes and generic features should flow upstream. A flavor
 should add configuration, schemas, modules, translations and branding — not a
 second copy of the application.
 
+### 2.2 Multi-client and local-first direction
+
+The family is expected to grow beyond GTK and the web portals: CLI, Qt, native
+iOS and native Android are candidates, with local-only, local-group, central
+server and peer-to-peer modes. The high-level direction, cost drivers and the
+parts that are likely infeasible are documented in
+`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. That document is planning only and
+does not authorize a big-bang rewrite.
+
 ## 3. Design principles
 
 1. **Engine is not UI.** Workaholic owns records and rules; GTK, CLI and future
@@ -347,3 +356,4 @@ Names, organization and repository boundaries remain open.
 - `docs/MIGRACAO_MODULAR.md`
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
+- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
