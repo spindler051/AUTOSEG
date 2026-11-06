@@ -9,6 +9,7 @@
 - **Fotos:** o botão “+ Adicionar mais fotos” permanece disponível após o envio; a aba e a rolagem são preservadas.
 - **Rateio pós-conclusão:** OS concluída ganhou a seção Rateio e repasses para incluir, editar ou remover parcelas de técnicos secundários, com validação do total e bloqueio depois de envio/confirmação.
 - **Cancelamento de pagamento:** o financeiro ganhou “Cancelar pagamento”; o lançamento sai das listas e dos totais, preservando o histórico. A OS-0012 do Parque Ganzo foi cancelada manualmente.
+- **Correções ao vivo:** horas e valores com vírgula são normalizados antes do cálculo; rascunhos antigos com vírgula foram convertidos; o menu mobile ficou compacto, sem nome duplicado e sem rolagem; a barra de ações não cobre mais o conteúdo; Em rota e Iniciar OS aparecem também no topo da OS.
 - **Testes:** `test_rev12_correcoes.py` (47 OK, 1 skipped), `test_feedback_portal.py` + `test_api_financeiro.py` + `test_meu_auto_financeiro.py` (40 OK), `test_produtividade_rev07.py` + `test_gmail_integracao.py` (16 OK), `test_autoseg_melhorias.py` + `test_composicao.py` + `test_pdf_relatorio.py` (41 OK).
 
 ## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop

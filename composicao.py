@@ -335,7 +335,16 @@ def calcular(total_centavos=None, materiais_centavos=0, horas=None,
     mao_obra = None if mao_obra_centavos is None else int(mao_obra_centavos)
     if mao_obra is not None and mao_obra < 0:
         raise ValueError("O valor de mão de obra não pode ser negativo.")
-    horas = None if horas in (None, "") else float(horas)
+    if horas in (None, ""):
+        horas = None
+    else:
+        texto_horas = str(horas).strip().replace(" ", "")
+        if "," in texto_horas:
+            texto_horas = texto_horas.replace(".", "").replace(",", ".")
+        try:
+            horas = float(texto_horas)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Horas inválidas. Use, por exemplo, 1,5.") from exc
     if horas is not None and horas < 0:
         raise ValueError("As horas não podem ser negativas.")
 

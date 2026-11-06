@@ -1173,11 +1173,32 @@
       window.clearTimeout(timerAuto);
       timerAuto = window.setTimeout(salvarAuto, 900);
     };
+    const camposNumericos = [
+      'valor_mao_obra', 'valor_materiais_manual', 'custo_materiais',
+      'valor_total_override', 'material_qtd[]', 'material_unit[]',
+      'rateio_valor[]', 'rateio_manual_valor'
+    ];
+    const normalizarNumero = valor => {
+      const texto = String(valor ?? '').trim().replace(/R\$/g, '').replace(/\s/g, '');
+      if (!texto || !texto.includes(',')) return texto;
+      return texto.replace(/\./g, '').replace(',', '.');
+    };
+    const dadosRascunho = () => {
+      const dados = new FormData(formAuto);
+      ['nota_fiscal', 'imagens_encerramento[]', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
+      camposNumericos.forEach(nome => {
+        if (!dados.has(nome)) return;
+        const valores = dados.getAll(nome).map(valor =>
+          typeof valor === 'string' ? normalizarNumero(valor) : valor);
+        dados.delete(nome);
+        valores.forEach(valor => dados.append(nome, valor));
+      });
+      return dados;
+    };
     const salvarAuto = async () => {
       if (salvandoAuto) { agendarAuto(); return; }
       salvandoAuto = true;
-      const dados = new FormData(formAuto);
-      ['nota_fiscal', 'imagens_encerramento[]', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
+      const dados = dadosRascunho();
       if (statusAuto) statusAuto.textContent = 'Salvando rascunho…';
       try {
         const resposta = await fetch(urlAuto, {
@@ -1214,9 +1235,7 @@
       if (!timerAuto) return;
       window.clearTimeout(timerAuto);
       try {
-        const dados = new FormData(formAuto);
-        ['nota_fiscal', 'imagens_encerramento[]', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
-        if (navigator.sendBeacon) navigator.sendBeacon(urlAuto, dados);
+        if (navigator.sendBeacon) navigator.sendBeacon(urlAuto, dadosRascunho());
       } catch (_erro) {}
     });
   }
@@ -1437,6 +1456,37 @@
     });
     document.addEventListener('keydown', evento => {
       if (evento.key === 'Escape') fecharMenu();
+    });
+  }
+  // Ajustes mobile: menu compacto sem rolagem e barra de ações sem cobrir conteúdo.
+  if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
+    const ajustes = document.createElement('style');
+    ajustes.id = 'ajustes-mobile-app';
+    ajustes.textContent = `
+@media(max-width:980px){
+  .side-mobile-head>div{display:none!important}
+  body.menu-open #side-nav.open{overflow:hidden!important;padding:10px 16px 82px!important;gap:2px!important}
+  body.menu-open #side-nav.open .side-group{gap:0!important}
+  body.menu-open #side-nav.open .side-label{display:none!important}
+  body.menu-open #side-nav.open .side-link{min-height:38px!important;padding:0 10px!important;font-size:14px!important}
+  body.menu-open #side-nav.open .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}
+  body.menu-open .side-foot{padding:8px 16px!important}
+  body.menu-open .side-foot .side-user{padding:0!important}
+  body.menu-open .side-foot .side-tool{min-height:28px!important}
+  body.ui-app .os-form-app .actions{position:static!important;margin-bottom:28px!important}
+  body.ui-app .os-form-app{padding-bottom:80px!important}
+}`;
+    document.head.appendChild(ajustes);
+  }
+  // Em rota / Iniciar OS também no topo da OS, para acesso imediato.
+  const formTopo = document.getElementById('form-os');
+  const acoesTopo = document.querySelector('.os-ticket-actions');
+  if (formTopo && acoesTopo) {
+    formTopo.querySelectorAll('.os-status-actions button[formaction$="/em-rota"],'
+      + '.os-status-actions button[formaction$="/iniciar"]').forEach(origem => {
+      const botao = origem.cloneNode(true);
+      botao.setAttribute('form', 'form-os');
+      acoesTopo.prepend(botao);
     });
   }
   document.querySelectorAll('button[data-mover]').forEach(botao => {

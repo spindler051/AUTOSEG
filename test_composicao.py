@@ -10,6 +10,10 @@ import composicao
 
 
 class ComposicaoTest(unittest.TestCase):
+    def test_horas_aceita_virgula(self):
+        comp = composicao.calcular(total_centavos=60000, materiais_centavos=0, horas="1,5")
+        self.assertEqual(comp["total_centavos"], 60000)
+
     def setUp(self):
         self.anterior = os.environ.get("AUTOSEG_BASE")
         self.pasta = tempfile.TemporaryDirectory()

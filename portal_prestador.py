@@ -463,9 +463,20 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .side-menu-toggle{display:inline-flex}
   body.ui-app .side-nav{display:none;position:fixed;inset:0;z-index:1000;flex-direction:column;gap:6px;height:100dvh;max-height:none;overflow-y:auto;padding:18px 20px 104px;background:var(--u-side)}
   body.ui-app .side-nav.open{display:flex}
-  body.ui-app .side-mobile-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 4px 18px;margin-bottom:8px;border-bottom:1px solid var(--u-line)}
+  body.ui-app .side-mobile-head{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:0 4px 10px;margin-bottom:4px;border-bottom:1px solid var(--u-line)}
+  body.ui-app .side-mobile-head>div{display:none}
   body.ui-app .side-mobile-head strong{display:block;font:500 16px/1.3 var(--u-font)}
   body.ui-app .side-mobile-head span{display:block;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+  body.ui-app.menu-open .side-nav.open{overflow:hidden;padding:10px 16px 82px;gap:2px}
+  body.ui-app.menu-open .side-nav.open .side-group{gap:0}
+  body.ui-app.menu-open .side-nav.open .side-label{display:none}
+  body.ui-app.menu-open .side-nav.open .side-link{min-height:38px;padding:0 10px;font-size:14px}
+  body.ui-app.menu-open .side-nav.open .side-link svg{width:18px;height:18px;flex:0 0 18px}
+  body.ui-app.menu-open .side-foot{padding:8px 16px}
+  body.ui-app.menu-open .side-foot .side-user{padding:0}
+  body.ui-app.menu-open .side-foot .side-tool{min-height:28px}
+  body.ui-app .os-form-app .actions{position:static;margin-bottom:28px}
+  body.ui-app .os-form-app{padding-bottom:80px}
   body.ui-app #fechar-side-nav{width:40px;height:40px;min-height:40px;padding:0;border:1px solid var(--u-line-2);border-radius:10px;background:var(--u-raised);color:var(--u-text);font-size:22px;line-height:1}
   body.ui-app .side-group{flex-direction:column;gap:2px}
   body.ui-app .side-label{display:block;margin:14px 12px 6px;color:var(--u-muted);font-size:12px}
@@ -540,6 +551,13 @@ def esc(s):
 
 def dinheiro(v):
     return neg.dinheiro(v)
+
+
+def numero_seguro(v):
+    try: return neg.numero(v)
+    except (TypeError,ValueError): return 0.0
+
+
 def data_curta(valor):
     texto=str(valor or '').strip()
     if len(texto)>=10 and texto[4]=='-' and texto[7]=='-':
@@ -2003,7 +2021,7 @@ class PortalPrestador:
                        'O custo real dos materiais é interno e não entra no total cobrado.</p>'
                 corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
                 corpo+='<div>'+campos_escuros('Total negociado (R$), opcional — substitui a soma','valor_total_override',
-                  (d.get('valor_total') if d and abs(float(d.get('valor_total') or 0)-float(d.get('valor_mao_obra') or 0)-float(d.get('valor_materiais') or 0))>0.009 else ''))+'</div></div>'
+                  (d.get('valor_total') if d and abs(numero_seguro(d.get('valor_total'))-numero_seguro(d.get('valor_mao_obra'))-numero_seguro(d.get('valor_materiais')))>0.009 else ''))+'</div></div>'
                 corpo+=campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')
                 if solicitacao:
                     corpo+=f'<input type="hidden" name="descricao" value="{esc(solicitacao["descricao_original"])}">'
