@@ -341,7 +341,7 @@ def financeiro_pessoal(banco,pid):
             JOIN ordens_servico o ON o.id=f.os_id
             JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=f.os_id
-            WHERE e.prestador_id=? ORDER BY f.id DESC""",(pid,))]
+            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY f.id DESC""",(pid,))]
         meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
             r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,
@@ -352,7 +352,7 @@ def financeiro_pessoal(banco,pid):
             JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
-            WHERE r.tecnico_id=? ORDER BY r.os_id DESC""",(pid,))]
+            WHERE r.tecnico_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY r.os_id DESC""",(pid,))]
         repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
             r.tecnico_id,t.nome tecnico,r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,
@@ -364,7 +364,7 @@ def financeiro_pessoal(banco,pid):
             JOIN prestadores t ON t.id=r.tecnico_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
-            WHERE e.prestador_id=? ORDER BY r.os_id DESC""",(pid,))]
+            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY r.os_id DESC""",(pid,))]
         return {'brutos_proprios':proprio,'receber_de_colegas':meus,'repassar_a_colegas':repassar}
 
 

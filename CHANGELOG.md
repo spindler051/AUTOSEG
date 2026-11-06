@@ -5,7 +5,7 @@
 - **Financeiro:** dados bancários passam a ser o primeiro bloco; “Lançamentos das OS em que participo” une OSs finalizadas e OSs em que o prestador é técnico secundário; duas colunas visíveis (A receber / Confirmar recebimento e Recebidos) com migração automática ao confirmar. O card separado de produção secundária foi absorvido.
 - **Repasses:** “Repasses a outros técnicos” continua no financeiro do finalizador; ao registrar envio, o item aparece na coluna A receber do técnico secundário e, após confirmação, migra para Recebidos.
 - **Fotos:** reordenação com botões subir/descer; “Incluir no PDF” agora é checkbox; a ordem é persistida e usada no PDF.
-- **OS:** o cartão Andamento foi unido ao bloco Situação do atendimento na aba Identificação e deixou de aparecer nas outras abas; administradores podem arquivar OS ativas ou concluídas preservando histórico.
+- **OS:** o cartão Andamento foi unido ao bloco Situação do atendimento na aba Identificação e deixou de aparecer nas outras abas; administradores podem arquivar OS ativas ou concluídas preservando histórico. OS arquivadas deixam de aparecer nas listas operacionais e nos lançamentos financeiros/API, mas os registros continuam no banco para auditoria.
 - **Navegação:** cards da home, financeiro, nomes de clientes e linhas de OS ficaram clicáveis; a navegação mobile do unslop passou a ser vertical, sem rolagem horizontal.
 - **Total previsto:** layout separado em uma linha própria, com valor destacado e sem quebra.
 - **Feedback:** o formulário passa a anexar um diagnóstico técnico da tela (modo, aba, viewport, posição, total previsto e texto principal), visível na administração; o layout do Total previsto também foi corrigido.

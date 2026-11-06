@@ -315,7 +315,7 @@ def _meta(limite, linhas, chave):
 
 def _lancamentos(banco, pid, query):
     limite, cursor = _paginacao(query)
-    where = ['e.prestador_id=?']
+    where = ['e.prestador_id=?','COALESCE(o.arquivada,0)=0']
     params = [int(pid)]
     status = str(query.get('status', [''])[0]).strip()[:40]
     if status:
@@ -378,7 +378,7 @@ def _lancamentos(banco, pid, query):
 
 def _rateios(banco, pid, query):
     limite, cursor = _paginacao(query)
-    where = ['r.tecnico_id=?']
+    where = ['r.tecnico_id=?','COALESCE(o.arquivada,0)=0']
     params = [int(pid)]
     if cursor:
         where.append('r.os_id<?')
@@ -434,7 +434,7 @@ def _rateios(banco, pid, query):
 
 def _repasses(banco, pid, query):
     limite, cursor = _paginacao(query)
-    where = ['e.prestador_id=?']
+    where = ['e.prestador_id=?','COALESCE(o.arquivada,0)=0']
     params = [int(pid)]
     if cursor:
         where.append('r.os_id<?')
