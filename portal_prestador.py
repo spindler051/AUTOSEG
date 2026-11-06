@@ -1100,7 +1100,7 @@ class PortalPrestador:
                 ]
                 filtro_ordem=('<form method="get" action="/os" class="actions">'
                     '<label for="c_ordem">Ordenar por</label>'
-                    '<select id="c_ordem" name="ordem" onchange="this.form.submit()">'
+                    '<select id="c_ordem" name="ordem">'
                     +''.join(f'<option value="{esc(k)}" {"selected" if ordem==k else ""}>{esc(v)}</option>'
                              for k,v in opcoes_ordem)
                     +'</select></form>')

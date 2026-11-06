@@ -1173,6 +1173,31 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('versao: 1', texto)
         self.assertIn('Diagnóstico exportado', texto)
 
+    def test_admin_cancela_os_de_outro(self):
+        a = self._prestador('Técnico Cancelar A', email='cancelar.a@exemplo.com.br')
+        b = self._prestador('Admin Cancelar B', email='cancelar.b@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Cancelar Admin')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço a cancelar pelo admin',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        with ext.db(self.db) as c:
+            numero = c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                               (oid,)).fetchone()['numero_os']
+        cancelamento = dict(dados)
+        cancelamento.update({
+            'cancelar_os': '1', 'confirmar_numero_os': numero,
+            'motivo_encerramento': 'Cancelamento administrativo.',
+            'relatorio_tecnico': 'OS cancelada pelo administrador.',
+        })
+        neg.os_salvar(self.db, cancelamento, b, oid)
+        with ext.db(self.db) as c:
+            status = c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                               (oid,)).fetchone()['status']
+        self.assertEqual(status, 'Cancelada')
+
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""
         pid = self._prestador()

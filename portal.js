@@ -1282,6 +1282,10 @@
     }
   }
 
+  const ordenarOS = document.getElementById('c_ordem');
+  if (ordenarOS) {
+    ordenarOS.addEventListener('change', () => ordenarOS.form?.submit());
+  }
   const menuToggle = document.getElementById('toggle-side-nav');
   const menuLateral = document.getElementById('side-nav');
   if (menuToggle && menuLateral) {

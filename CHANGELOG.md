@@ -9,7 +9,7 @@
 - **Menu mobile:** no unslop, a navegação mobile fica dentro de um botão **☰ Menu** com lista vertical no estilo de configurações do Android, em vez de uma lista aberta no topo.
 - **Lista de OS:** o filtro de ordenação aplica automaticamente, sem botão Aplicar; novas opções **Última alteração** e **Última abertura (lida por mim)**. Abrir uma OS registra a leitura por prestador.
 - **YAML na criação:** as telas de OS rápida (após escolher o cliente) e OS completa oferecem importação antes de criar, sem salvar automaticamente.
-- **Testes:** `test_rev12_correcoes.py` (39 OK, 1 skipped), `test_composicao.py` (28 OK), `test_feedback_portal.py` (25 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (4 OK), `test_produtividade_rev07.py` (9 OK) e `test_importacao_yaml.py` (OK).
+- **Testes:** `test_rev12_correcoes.py` (40 OK, 1 skipped), `test_composicao.py` (28 OK), `test_feedback_portal.py` (25 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (4 OK), `test_produtividade_rev07.py` (9 OK) e `test_importacao_yaml.py` (OK).
 
 ## 9.6.0-dev.31 — financeiro por OS em que participo e feedbacks recentes — 2026-11-06 — develop
 
