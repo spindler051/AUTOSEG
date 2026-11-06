@@ -1442,7 +1442,9 @@
       document.body.style.width = '';
       const voltar = scrollMenu;
       scrollMenu = 0;
-      if (typeof window.scrollTo === 'function') window.scrollTo(0, voltar);
+      if (typeof window.scrollTo === 'function') {
+        window.requestAnimationFrame(() => window.scrollTo(0, voltar));
+      }
       menuToggle.setAttribute('aria-expanded', 'false');
     };
     const medirRodape = () => {
