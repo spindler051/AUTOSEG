@@ -1841,6 +1841,10 @@ class PortalPrestador:
                         corpo+=(f'<p><span class="tag">{esc(d["status"])}</span> · '
                                 f'Responsável: <b>{esc(nome_resp)}</b> · Participantes: '
                                 f'{esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>')
+                    if s.get('admin') and not arquivada and d['status'] not in ext.ATIVAS:
+                        corpo+=(f'<form method="post" action="/os/{oid}/arquivar" '
+                                f'data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">'
+                                f'{token}<button type="submit" class="danger">Arquivar OS</button></form>')
                 if oid and unslop:
                     corpo+='</div>'
                 if not cl:

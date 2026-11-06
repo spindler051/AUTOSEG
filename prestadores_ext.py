@@ -327,8 +327,6 @@ def arquivar_os(banco,os_id,pid,ator=None,motivo=''):
         o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não encontrada.')
         if o['arquivada']:return False
-        if o['status'] not in ATIVAS:
-            raise ValueError('Somente OS ativas podem ser arquivadas; OS encerradas ficam no histórico.')
         motivo=str(motivo or '').strip()[:500]
         descricao='OS arquivada pelo administrador; histórico preservado.'
         if motivo:descricao+=' Motivo: '+motivo

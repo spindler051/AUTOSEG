@@ -1112,6 +1112,26 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('OS arquivada', html)
         self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
 
+    def test_admin_arquiva_os_concluida(self):
+        a = self._prestador('Técnico Arquivar Concluída', email='arquivar.concluida@exemplo.com.br')
+        b = self._prestador('Admin Arquivar Concluída', email='arquivar.admin@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Arquivar Concluída')
+        dados = {'cliente_id': str(cid), 'descricao': 'OS concluída errada',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Concluída' WHERE id=?", (oid,))
+        self.assertTrue(ext.arquivar_os(self.db, oid, b, ator='Admin teste',
+                                        motivo='OS concluída errada'))
+        with ext.db(self.db) as c:
+            row = c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                            (oid,)).fetchone()
+        self.assertEqual(row['status'], 'Concluída')
+        self.assertEqual(row['arquivada'], 1)
+
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""
         pid = self._prestador()
