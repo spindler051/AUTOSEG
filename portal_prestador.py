@@ -426,6 +426,7 @@ body.ui-unslop .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100
   body.ui-unslop .side-link{white-space:nowrap;min-height:36px;padding:0 12px}
   body.ui-unslop .side-link svg{display:none}
   body.ui-unslop .side-foot{display:none}
+  body.ui-unslop .feedback-fab{display:inline-flex}
   body.ui-unslop main{margin:0;padding:28px 20px 80px}
   body.ui-unslop footer{margin-left:0;padding:14px 20px}
   body.ui-unslop .unslop-credit{padding:0 20px 18px}

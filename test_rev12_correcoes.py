@@ -252,6 +252,7 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Situação do atendimento', html)
         self.assertIn('class="app-side"', html)
         self.assertIn('Baixar preview do PDF', html)
+        self.assertIn('body.ui-unslop .feedback-fab{display:inline-flex}', html)
 
         _, html = req(classico, base, '/login', {
             'email': 'unslop@exemplo.com.br',

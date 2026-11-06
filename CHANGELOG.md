@@ -1,5 +1,10 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.29 — feedback no mobile unslop — 2026-11-06 — develop
+
+- **Feedback no mobile:** no modo unslop em telas de até 980 px, o rodapé da sidebar fica oculto e o botão flutuante estava com `display:none`; agora o botão **Dê um feedback** volta a aparecer no canto inferior direito. No modo clássico ele já aparecia.
+- **Teste:** a página unslop da OS verifica a regra responsiva que mantém o botão de feedback visível no mobile.
+
 ## 9.6.0-dev.28 — feedbacks 27–35, paridade do desktop e CI — 2026-11-06 — develop
 
 - **Feedbacks 27–35:** correções de usabilidade e segurança no Portal do Prestador.
