@@ -1435,10 +1435,16 @@
       document.body.classList.remove('menu-open');
       menuToggle.setAttribute('aria-expanded', 'false');
     };
+    const medirRodape = () => {
+      const rodape = document.querySelector('.side-foot');
+      const altura = rodape ? Math.ceil(rodape.getBoundingClientRect().height) : 0;
+      document.documentElement.style.setProperty('--menu-foot-h', `${altura}px`);
+    };
     const abrirMenu = () => {
       menuLateral.classList.add('open');
       document.body.classList.add('menu-open');
       menuToggle.setAttribute('aria-expanded', 'true');
+      window.requestAnimationFrame(medirRodape);
     };
     menuToggle.addEventListener('click', evento => {
       evento.stopPropagation();
@@ -1457,6 +1463,9 @@
     document.addEventListener('keydown', evento => {
       if (evento.key === 'Escape') fecharMenu();
     });
+    window.addEventListener('resize', () => {
+      if (menuLateral.classList.contains('open')) medirRodape();
+    });
   }
   // Ajustes mobile: menu compacto sem rolagem e barra de ações sem cobrir conteúdo.
   const podeCriarElemento = typeof document.createElement === 'function';
@@ -1466,7 +1475,7 @@
     ajustes.textContent = `
 @media(max-width:980px){
   .side-mobile-head>div{display:none!important}
-  body.menu-open #side-nav.open{overflow:hidden!important;padding:10px 16px 82px!important;gap:2px!important}
+  body.menu-open #side-nav.open{height:calc(100dvh - var(--menu-foot-h, 0px))!important;bottom:auto!important;overflow:hidden!important;padding:10px 16px 12px!important;gap:2px!important}
   body.menu-open #side-nav.open .side-group{flex:1 1 auto;justify-content:space-evenly;gap:0!important}
   body.menu-open #side-nav.open .side-label{display:none!important}
   body.menu-open #side-nav.open .side-link{flex:1 1 0;min-height:0!important;padding:0 12px!important;font-size:16px!important}
@@ -1474,6 +1483,7 @@
   body.menu-open .side-foot{padding:8px 16px!important}
   body.menu-open .side-foot .side-user{padding:0!important}
   body.menu-open .side-foot .side-tool{min-height:28px!important}
+  body.menu-open .feedback-fab{display:none!important}
   body.ui-app .os-form-app .actions{position:static!important;margin-bottom:28px!important}
   body.ui-app .os-form-app{padding-bottom:80px!important}
 }
