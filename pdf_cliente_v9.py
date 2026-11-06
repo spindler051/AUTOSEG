@@ -45,6 +45,7 @@ def gerar(banco,os_id):
         mats=c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
+        atendimento=c.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_atendimentos'").fetchone() else None
         comp=composicao.de_json(os_['composicao_json']) if 'composicao_json' in os_.keys() else None
         if not comp or int(comp.get('total_centavos',0))!=composicao.centavos_de_reais(os_['valor_total']):
             try:
@@ -101,7 +102,16 @@ def gerar(banco,os_id):
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
     linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
     linhas.append(S('02  ATENDIMENTO REALIZADO'))
-    if detalhes and any(detalhes[x] for x in ('diagnostico','execucao','resultado')):
+    # OS pendente: o e-mail/PDF deve levar o relatório técnico completo que o
+    # prestador escreveu, não apenas o resumo em três campos. OS já encerradas
+    # continuam com o comportamento anterior.
+    relato_pendente=''
+    if os_['status']=='Pendente':
+        relato_pendente=((atendimento['rascunho'] if atendimento else '') or
+                         (enc['relatorio'] if enc else '')).strip()
+    if relato_pendente:
+        linhas.append(P(relato_pendente))
+    elif detalhes and any(detalhes[x] for x in ('diagnostico','execucao','resultado')):
         for label,field in [('Diagnóstico','diagnostico'),('Serviço executado','execucao'),('Resultado e testes','resultado')]:
             if detalhes[field]:linhas.append(P(label+': '+detalhes[field]))
     elif enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
