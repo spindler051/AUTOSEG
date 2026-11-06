@@ -859,7 +859,8 @@ class PortalPrestador:
             def log_message(self,formato,*args):
                 LOG.info('%s %s',self.address_string(),formato%args)
 
-            def send_bytes(self,data,mime='text/html; charset=utf-8',filename=None,status=200,cookie=None):
+            def send_bytes(self,data,mime='text/html; charset=utf-8',filename=None,status=200,
+                           cookie=None,inline=False):
                 self.send_response(status)
                 self.send_header('Content-Type',mime)
                 self.send_header('Content-Length',str(len(data)))
@@ -872,7 +873,8 @@ class PortalPrestador:
                 if filename:
                     fname=Path(filename).name
                     # RFC5987 evita injeção no cabeçalho; usa somente nome limpo.
-                    self.send_header('Content-Disposition',f"attachment; filename*=UTF-8''{quote(fname)}")
+                    disposicao='inline' if inline else 'attachment'
+                    self.send_header('Content-Disposition',f"{disposicao}; filename*=UTF-8''{quote(fname)}")
                 if cookie:self.send_header('Set-Cookie',cookie)
                 self.end_headers();self.wfile.write(data)
 
@@ -2171,13 +2173,32 @@ class PortalPrestador:
                         corpo+='Desmarque para usar alta qualidade no PDF.</p>'
                         corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/fotos" formnovalidate>Salvar fotos e legendas</button>'
                     if pode_nota:
+                        nota_atual=notas_fiscais[-1] if notas_fiscais else None
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
-                        corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
-                        corpo+='<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" accept="application/pdf">'
-                        corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/nota-fiscal" formnovalidate>Anexar nota fiscal</button>'
-                        corpo+='<div style="margin-top:12px;padding:12px;border:1px solid #E2B800;border-radius:8px;background:#2a2617">'
-                        corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> Não precisa de nota fiscal</label>'
-                        corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
+                        if nota_atual:
+                            nid=int(nota_atual['id'])
+                            corpo+=(f'<p class="good" id="nota-fiscal-status">PDF anexado: '
+                                    f'<b>{esc(nota_atual["nome_original"])}</b></p>'
+                                    f'<a class="btn secondary" href="/os/{oid}/nota-fiscal/{nid}/preview" '
+                                    'target="_blank" rel="noopener">Visualizar PDF</a> '
+                                    f'<a class="btn secondary" href="/os/{oid}/nota-fiscal/{nid}">Baixar PDF</a> '
+                                    '<button type="submit" class="danger" '
+                                    f'formaction="/os/{oid}/nota-fiscal/{nid}/remover" formnovalidate '
+                                    'data-confirm="Remover o PDF anexado?">Remover PDF</button>'
+                                    '<p class="muted">Para substituir, remova o PDF atual e escolha outro arquivo.</p>')
+                        else:
+                            corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
+                            corpo+=(f'<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" '
+                                    'accept="application/pdf" data-auto-upload-nf '
+                                    f'data-upload-url="/os/{oid}/nota-fiscal">')
+                            corpo+=('<p class="muted" id="nota-fiscal-auto-status" data-nf-status>'
+                                    'O PDF será anexado automaticamente ao escolher o arquivo '
+                                    'e o rascunho será salvo.</p>')
+                            corpo+=(f'<noscript><button class="secondary" type="submit" '
+                                    f'formaction="/os/{oid}/nota-fiscal" formnovalidate>Enviar PDF</button></noscript>')
+                            corpo+='<div style="margin-top:12px;padding:12px;border:1px solid #E2B800;border-radius:8px;background:#2a2617">'
+                            corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> Não precisa de nota fiscal</label>'
+                            corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
                 nota_acoes=('Preencha os dados para criar a OS.' if not oid else
@@ -2267,17 +2288,25 @@ class PortalPrestador:
                     docs='<p class="muted">O PDF e o rascunho de e-mail serão liberados após a conclusão/cancelamento e publicação do relatório.</p>'
                 itens_notas=''
                 for nota in notas_fiscais:
-                    itens_notas+=(f'<p><a href="/os/{oid}/nota-fiscal/{nota["id"]}">Baixar {esc(nota["nome_original"])}</a>'
+                    itens_notas+=(f'<p><b>{esc(nota["nome_original"])}</b> '
+                                  f'<a href="/os/{oid}/nota-fiscal/{nota["id"]}/preview" target="_blank" '
+                                  'rel="noopener">Visualizar</a> · '
+                                  f'<a href="/os/{oid}/nota-fiscal/{nota["id"]}">Baixar</a>'
                                   f' <small>{esc(nota["criado_em"])}</small></p>')
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
                 upload_nf=''
                 if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not unslop or d['status'] not in ext.ATIVAS) and not arquivada:
-                    upload_nf=(f'<form method="post" action="/os/{oid}/nota-fiscal" enctype="multipart/form-data" style="margin-top:10px">'
+                    upload_nf=(f'<form id="form-nota-fiscal-upload" method="post" action="/os/{oid}/nota-fiscal" '
+                               'enctype="multipart/form-data" style="margin-top:10px">'
                                f'{token}'
                                '<label for="nota-fiscal-concluida">Anexar / atualizar nota fiscal (PDF, até 20 MB)</label>'
-                               '<input type="file" id="nota-fiscal-concluida" name="nota_fiscal" accept="application/pdf" required>'
-                               '<button type="submit" class="secondary">Anexar nota fiscal</button></form>')
+                               '<input type="file" id="nota-fiscal-concluida" name="nota_fiscal" '
+                               'accept="application/pdf" required data-auto-upload-nf '
+                               f'data-upload-url="/os/{oid}/nota-fiscal">'
+                               '<p class="muted" id="nota-fiscal-concluida-status" data-nf-status>'
+                               'O PDF será anexado automaticamente ao escolher o arquivo.</p>'
+                               '<noscript><button type="submit" class="secondary">Enviar PDF</button></noscript></form>')
                 corpo+=card('Notas fiscais da OS',
                             itens_notas +
                             '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão e em cada reenvio. '
@@ -2714,6 +2743,14 @@ class PortalPrestador:
                         return self.os_form(s,oid,preenchimento=rascunho['dados'])
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','pdf-preview','email','nota'):
                         return self.documentos(s,int(partes[1]),partes[2])
+                    if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='preview':
+                        oid=int(partes[1]);nid=int(partes[3])
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=s['pid'] and not cad9.prestador_admin(banco,s['pid']):
+                                raise PermissionError('Nota fiscal restrita ao responsável ou administrador.')
+                        registro,caminho=ext.obter_nota_fiscal(banco,oid,nid)
+                        return self.send_bytes(Path(caminho).read_bytes(),'application/pdf',
+                                               filename=registro['nome_original'],inline=True)
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit():
                         oid=int(partes[1]);nid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3151,6 +3188,16 @@ class PortalPrestador:
                             return self.redir(f'/os/{resultado["os_id"]}')
                         pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'])
                         return self.redir('/pj-publicas')
+                    if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='remover':
+                        oid=int(partes[1]);nid=int(partes[3])
+                        with ext.db(banco) as c:
+                            if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+                                raise PermissionError('Somente o responsável ou administrador pode remover nota fiscal.')
+                        ext.remover_nota_fiscal(banco,oid,nid,pid,ator=s['nome'])
+                        if quer_json:
+                            return self.send_bytes(json.dumps({'ok':True}).encode(),
+                                                   'application/json; charset=utf-8')
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal':
                         oid=int(partes[1])
                         arquivo=d.get('nota_fiscal')
@@ -3160,20 +3207,24 @@ class PortalPrestador:
                             if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                 raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
                         # Anexar a NF não deve apagar os campos já preenchidos no formulário.
-                        try:
-                            dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
-                            ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                        dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+                        if dados_rasc:
                             try:
-                                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
-                                                     str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-                            except Exception:
-                                pass
-                            if str(d.get('relatorio_tecnico','')).strip():
-                                with ext.db(banco) as c:
-                                    aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
-                        except Exception as falha:
-                            LOG.exception('Falha ao preservar rascunho ao anexar NF na OS %s', oid)
-                        ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                                ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                                try:
+                                    cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+                                                         str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+                                except Exception:
+                                    pass
+                                if str(d.get('relatorio_tecnico','')).strip():
+                                    with ext.db(banco) as c:
+                                        aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+                            except Exception as falha:
+                                LOG.exception('Falha ao preservar rascunho ao anexar NF na OS %s', oid)
+                        nota_id=ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                        if quer_json:
+                            return self.send_bytes(json.dumps({'ok':True,'nota_id':nota_id}).encode(),
+                                                   'application/json; charset=utf-8')
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]

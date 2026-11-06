@@ -931,6 +931,33 @@ def obter_nota_fiscal(banco, os_id, nota_id):
     return dict(r), str(caminho)
 
 
+def remover_nota_fiscal(banco, os_id, nota_id, pid=None, ator=None):
+    """Remove o PDF anexado e preserva o histórico da OS.
+
+    A permissão (responsável ou administrador) é conferida pela camada web.
+    """
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:
+            raise ValueError('OS não encontrada.')
+        if o['status'] not in ATIVAS:
+            raise ValueError('A nota fiscal só pode ser removida enquanto a OS está ativa.')
+        r=c.execute('SELECT nome_original,caminho FROM os_notas_fiscais WHERE id=? AND os_id=?',
+                    (nota_id,os_id)).fetchone()
+        if not r:
+            raise ValueError('Nota fiscal não encontrada.')
+        c.execute('DELETE FROM os_notas_fiscais WHERE id=? AND os_id=?',(nota_id,os_id))
+        evento(c,os_id,'Nota fiscal removida',Path(r['nome_original']).name[:150],pid,ator or 'Prestador')
+    try:
+        caminho=Path(r['caminho']).resolve()
+        if caminho.is_relative_to(NOTAS.resolve()) and caminho.is_file():
+            caminho.unlink()
+    except OSError:
+        pass
+    return True
+
+
 def ultima_nota_fiscal(banco, os_id):
     with db(banco) as c:
         r = c.execute('SELECT * FROM os_notas_fiscais WHERE os_id=? ORDER BY id DESC LIMIT 1',

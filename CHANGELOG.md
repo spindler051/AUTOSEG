@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.35 — CNPJ do prestador no PDF e nota fiscal automática — 2026-11-06 — develop
+
+- **CNPJ no PDF:** o relatório usa o CNPJ do prestador responsável quando ele está no cadastro (`prestadores.documento`) ou nos dados bancários/cadastrais unificados; sem CNPJ, mantém o CNPJ padrão da AUTOSEG. O CNPJ explícito do cadastro tem prioridade.
+- **Nota fiscal automática:** ao escolher o PDF em Fechamento, o arquivo é anexado automaticamente, sem botão extra, e o rascunho é salvo na mesma ação.
+- **Fechamento:** após o anexo, a seção mostra “PDF anexado”, nome do arquivo, **Visualizar**, **Baixar** e **Remover PDF**; o botão de remover só aparece quando há PDF anexado.
+- **Continuidade:** salvar rascunho ou anexar nota fiscal mantém a aba e a posição de rolagem da OS, em vez de voltar ao início.
+- **Testes:** `test_rev12_correcoes.py` (43 OK, 1 skipped), `test_pdf_relatorio.py` + `test_gmail_integracao.py` (11 OK), `test_importacao_yaml.py` + `test_autoseg_melhorias.py` + `test_composicao.py` (37 OK).
+
 ## 9.6.0-dev.34 — urgência na OS rápida e atalhos na home — 2026-11-06 — develop
 
 - **OS rápida:** após escolher o cliente, a criação agora permite selecionar a **Urgência** (Baixa, Normal ou Alta). O valor é gravado na OS e aparece no formulário completo.

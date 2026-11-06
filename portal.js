@@ -1167,11 +1167,20 @@
     const paineis = Array.from(formUnslop.children)
       .filter(elemento => elemento.tagName === 'FIELDSET');
     if (paineis.length > 1) {
+      const chaveEstadoOS = 'autoseg:os-estado:' + location.pathname;
+      let estadoOS = {};
+      try {
+        estadoOS = JSON.parse(sessionStorage.getItem(chaveEstadoOS) || '{}') || {};
+      } catch (_erro) {
+        estadoOS = {};
+      }
+      let indiceAtivo = 0;
       const abas = document.createElement('div');
       abas.className = 'os-tabs';
       abas.setAttribute('role', 'tablist');
       abas.setAttribute('aria-label', 'Seções da ordem de serviço');
       const ativar = indice => {
+        indiceAtivo = indice;
         paineis.forEach((painel, i) => {
           painel.hidden = i !== indice;
           painel.setAttribute('aria-hidden', i === indice ? 'false' : 'true');
@@ -1233,7 +1242,22 @@
         abas.children[destino].focus();
       });
       formUnslop.insertBefore(abas, paineis[0]);
-      ativar(0);
+      const indiceInicial = Number.isInteger(estadoOS.aba)
+        && estadoOS.aba >= 0 && estadoOS.aba < paineis.length ? estadoOS.aba : 0;
+      ativar(indiceInicial);
+      if (Number.isFinite(estadoOS.scroll) && estadoOS.scroll > 0) {
+        requestAnimationFrame(() => window.scrollTo(0, estadoOS.scroll));
+      }
+      const salvarEstadoOS = () => {
+        try {
+          sessionStorage.setItem(chaveEstadoOS, JSON.stringify({
+            aba: indiceAtivo,
+            scroll: window.scrollY
+          }));
+        } catch (_erro) {}
+      };
+      window.addEventListener('pagehide', salvarEstadoOS);
+      window.addEventListener('beforeunload', salvarEstadoOS);
 
       const modelo = formUnslop.querySelector('.os-service-model');
       if (modelo && paineis[0]) {
@@ -1286,6 +1310,44 @@
   if (ordenarOS) {
     ordenarOS.addEventListener('change', () => ordenarOS.form?.submit());
   }
+  document.querySelectorAll('input[data-auto-upload-nf]').forEach(campoNf => {
+    campoNf.addEventListener('change', async () => {
+      const arquivo = campoNf.files && campoNf.files[0];
+      if (!arquivo) return;
+      const form = campoNf.closest('form');
+      const url = campoNf.dataset.uploadUrl;
+      if (!form || !url) return;
+      const status = form.querySelector('[data-nf-status]');
+      const dados = new FormData(form);
+      campoNf.disabled = true;
+      if (status) {
+        status.textContent = `Anexando ${arquivo.name} e salvando rascunho…`;
+      }
+      try {
+        const resposta = await fetch(url, {
+          method: 'POST', body: dados, credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        });
+        let corpo = {};
+        try { corpo = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !corpo.ok) {
+          throw new Error(corpo.error || 'Não foi possível anexar o PDF da nota fiscal.');
+        }
+        window.location.reload();
+      } catch (erro) {
+        campoNf.disabled = false;
+        campoNf.value = '';
+        if (status) {
+          status.textContent = erro.message || 'Não foi possível anexar o PDF.';
+        } else {
+          mostrarAvisoGlobal(erro.message || 'Não foi possível anexar o PDF.');
+        }
+      }
+    });
+  });
   const menuToggle = document.getElementById('toggle-side-nav');
   const menuLateral = document.getElementById('side-nav');
   if (menuToggle && menuLateral) {

@@ -15,6 +15,18 @@ def data_br(valor):
 def brl(v):
     return 'R$ '+f'{float(v or 0):,.2f}'.replace(',','@').replace('.',',').replace('@','.')
 
+def _cnpj_no_texto(texto):
+    """Extrai um CNPJ formatado ou de 14 dígitos de dados cadastrais livres."""
+    texto=str(texto or '')
+    for padrao in (r'CNPJ[^\d]{0,30}(\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})',
+                   r'\b(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})\b',
+                   r'\b(\d{14})\b'):
+        for achado in re.finditer(padrao,texto,re.IGNORECASE):
+            cnpj=identidade.formatar_cnpj(achado.group(1))
+            if cnpj:
+                return cnpj
+    return ''
+
 def gerar(banco,os_id):
     from reportlab.platypus import SimpleDocTemplate,Paragraph,Spacer,Table,TableStyle,Image as PdfImage,KeepTogether
     from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
@@ -28,7 +40,7 @@ def gerar(banco,os_id):
         if not os_:raise ValueError('Ordem de serviço não encontrada.')
         sol=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_solicitacoes'").fetchone() else None
         enc=c.execute('SELECT relatorio,motivo,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_encerramentos'").fetchone() else None
-        resp=c.execute('SELECT p.nome,p.documento FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
+        resp=c.execute('SELECT p.id,p.nome,p.documento FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
         mats=c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
@@ -56,8 +68,15 @@ def gerar(banco,os_id):
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
     # Filhos da composição declarativa: recuados e em cinza para diferenciar do pai.
     Pfilho=lambda s:Paragraph('&nbsp;&nbsp;&nbsp;&nbsp;<font color="#555555">— '+escape(str(s or ''))+'</font>',estilo['AutosegCorpoV9'])
-    # CNPJ do prestador: usa o cadastrado; se não houver, usa o CNPJ principal.
+    # CNPJ do prestador: usa o documento quando for CNPJ; senão procura um
+    # CNPJ nos dados bancários/cadastrais unificados. Sem CNPJ, usa o principal.
     cnpj_prestador = identidade.formatar_cnpj(resp['documento']) if resp else ''
+    if not cnpj_prestador and resp:
+        try:
+            config=ext.obter_config_prestador(banco,resp['id'])
+            cnpj_prestador=_cnpj_no_texto(config.get('dados_bancarios_texto',''))
+        except Exception:
+            cnpj_prestador=''
     if not cnpj_prestador:
         cnpj_prestador = identidade.CNPJ_PRINCIPAL
     prestador_texto = (resp['nome'] if resp else 'Não informado') + ' — CNPJ ' + cnpj_prestador

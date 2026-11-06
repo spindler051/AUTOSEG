@@ -620,6 +620,28 @@ class CorrecoesRev12(unittest.TestCase):
             self.db, self._os_concluida(sem_doc, cid_sem)))
         self.assertIn('23.864.393/0001-87', texto)
 
+        # Documento é CPF, mas o CNPJ está nos dados bancários/cadastrais.
+        cpf_com_cnpj = self._prestador('Prestador CPF com CNPJ',
+                                       documento='87820030097')
+        cid_cpf = self._cliente(cpf_com_cnpj, 'Cliente CPF com CNPJ')
+        ext.salvar_config_prestador(self.db, cpf_com_cnpj, {
+            'dados_bancarios_texto': 'Dados da conta\nCNPJ: 52.204.907/0001-76\nPIX: chave-teste'})
+        texto = texto_pdf(pdf_cliente_v9.gerar(
+            self.db, self._os_concluida(cpf_com_cnpj, cid_cpf)))
+        self.assertIn('52.204.907/0001-76', texto)
+        self.assertNotIn('23.864.393/0001-87', texto)
+
+        # CNPJ explícito no cadastro do prestador prevalece sobre o texto.
+        cnpj_explicito = self._prestador('Prestador CNPJ Explícito',
+                                         documento='11222333000181')
+        cid_explicito = self._cliente(cnpj_explicito, 'Cliente CNPJ Explícito')
+        ext.salvar_config_prestador(self.db, cnpj_explicito, {
+            'dados_bancarios_texto': 'CNPJ: 52.204.907/0001-76'})
+        texto = texto_pdf(pdf_cliente_v9.gerar(
+            self.db, self._os_concluida(cnpj_explicito, cid_explicito)))
+        self.assertIn('11.222.333/0001-81', texto)
+        self.assertNotIn('52.204.907/0001-76', texto)
+
     def test_prestadores_podem_repetir_cnpj(self):
         primeiro = self._prestador('Prestador A')
         segundo = self._prestador('Prestador B')
@@ -814,6 +836,9 @@ class CorrecoesRev12(unittest.TestCase):
         servidor, base = self._servidor()
         cliente = self._login(base)
         token = self._csrf(base, cliente, oid)
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('data-auto-upload-nf', html)
+        self.assertIn(f'data-upload-url="/os/{oid}/nota-fiscal"', html)
         campos = [('csrf', token), ('cliente_id', str(cid)), ('descricao', 'Serviço'),
                   ('tecnico', 'T'), ('forma_pagamento', 'PIX'), ('valor_mao_obra', '10'),
                   ('materiais_presentes', '1'), ('v9_execucao', 'Execução preservada'),
@@ -825,6 +850,23 @@ class CorrecoesRev12(unittest.TestCase):
         rasc = ext.obter_rascunho_web(self.db, oid, pid)
         self.assertEqual(rasc.get('v9_execucao'), 'Execução preservada')
         self.assertEqual(rasc.get('relatorio_tecnico'), 'Relato preservado')
+        with ext.db(self.db) as c:
+            nota = c.execute('SELECT id,caminho FROM os_notas_fiscais WHERE os_id=? '
+                             'ORDER BY id DESC LIMIT 1', (oid,)).fetchone()
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('PDF anexado', html)
+        self.assertIn(f'/os/{oid}/nota-fiscal/{nota["id"]}/preview', html)
+        self.assertIn(f'/os/{oid}/nota-fiscal/{nota["id"]}/remover', html)
+        with cliente.open(base + f'/os/{oid}/nota-fiscal/{nota["id"]}/preview',
+                          timeout=20) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'application/pdf')
+            self.assertIn('inline', resposta.headers.get('Content-Disposition', ''))
+        status, _ = req(cliente, base, f'/os/{oid}/nota-fiscal/{nota["id"]}/remover',
+                        {'csrf': token})
+        self.assertEqual(status, 200)
+        self.assertIsNone(ext.ultima_nota_fiscal(self.db, oid))
+        self.assertFalse(Path(nota['caminho']).exists())
 
     def test_rascunho_salva_nota_fiscal_anexada(self):
         pid = self._prestador()
