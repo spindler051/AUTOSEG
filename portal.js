@@ -1167,6 +1167,7 @@
     const paineis = Array.from(formUnslop.children)
       .filter(elemento => elemento.tagName === 'FIELDSET');
     if (paineis.length > 1) {
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
       const chaveEstadoOS = 'autoseg:os-estado:' + location.pathname;
       let estadoOS = {};
       try {

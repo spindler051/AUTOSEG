@@ -2295,6 +2295,10 @@ class PortalPrestador:
                                   f' <small>{esc(nota["criado_em"])}</small></p>')
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
+                else:
+                    rotulo_nf=('PDF anexado' if len(notas_fiscais)==1
+                               else f'{len(notas_fiscais)} PDFs anexados')
+                    itens_notas=f'<p class="good">{rotulo_nf}</p>'+itens_notas
                 upload_nf=''
                 if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not unslop or d['status'] not in ext.ATIVAS) and not arquivada:
                     upload_nf=(f'<form id="form-nota-fiscal-upload" method="post" action="/os/{oid}/nota-fiscal" '
