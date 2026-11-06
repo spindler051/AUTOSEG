@@ -434,7 +434,8 @@ def _rateios(banco, pid, query):
 
 def _repasses(banco, pid, query):
     limite, cursor = _paginacao(query)
-    where = ['e.prestador_id=?','COALESCE(o.arquivada,0)=0']
+    where = ['e.prestador_id=?','COALESCE(o.arquivada,0)=0',
+             "EXISTS (SELECT 1 FROM financeiro f WHERE f.os_id=r.os_id AND f.status='Recebido')"]
     params = [int(pid)]
     if cursor:
         where.append('r.os_id<?')

@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop
+
+- **Meu Auto Financeiro:** módulo de finanças pessoais/familiares separado do Financeiro da empresa, disponível em `/auto-financeiro` no mesmo Portal do Prestador e no mesmo túnel. Usa a sessão do prestador; familiares entram por convite.
+- **Menu:** item **Meu Auto Financeiro** no menu lateral, nos atalhos da Visão geral e no aplicativo GTK.
+- **Dados próprios:** saldo individual/familiar, extrato, receitas e despesas, salários, contas compartilhadas, empréstimos, comprovantes e convites ficam em `meu_auto_financeiro.db`; os comprovantes em `meu_auto_financeiro_comprovantes/`.
+- **Conciliação:** recebimentos AUTOSEG só entram quando o cliente é confirmado como recebido; repasses entram apenas no valor já confirmado pelo técnico secundário. O módulo não altera OS, financeiro, estoque nem rateios do AUTOSEG.
+- **Links públicos:** o painel de links mostra também a rota `/auto-financeiro` do portal do prestador.
+- **Testes:** `test_meu_auto_financeiro.py` (6 OK), `test_rev12_correcoes.py` (44 OK, 1 skipped), `test_api_financeiro.py` (8 OK), `test_feedback_portal.py` (25 OK) e `test_rev05_seguro.py` (5 OK).
+
 ## 9.6.0-dev.36 — repasses somente após recebimento do cliente — 2026-11-06 — develop
 
 - **Repasses a outros técnicos:** a seção só mostra OS cujo recebimento do cliente já foi confirmado pelo finalizador. Antes disso, o envio do repasse fica bloqueado.

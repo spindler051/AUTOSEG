@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import api_financeiro as api
 import fluxo_os
+import portal_negocios as neg
 import prestadores_ext as ext
 import produtividade_os as prod
 from banco import criar_banco
@@ -146,6 +147,11 @@ class ApiFinanceiroTest(unittest.TestCase):
         self.assertEqual(item['status'], 'a_receber')
         status, _, dados = self._json('/api/v1/financeiro/repasses', self.token_a)
         self.assertEqual(status, 200)
+        self.assertEqual(dados['data'], [])
+
+        neg.financeiro_receber(self.db, self.financeiro_id, self.a)
+        status, _, dados = self._json('/api/v1/financeiro/repasses', self.token_a)
+        self.assertEqual(status, 200)
         self.assertEqual(dados['data'][0]['a_enviar_centavos'], 30000)
 
         prod.confirmar_repasse(self.db, self.os_id, self.a, self.b, None)
@@ -175,12 +181,18 @@ class ApiFinanceiroTest(unittest.TestCase):
         self.assertEqual(resumo['moeda'], 'BRL')
         self.assertEqual(resumo['os_a_receber_centavos'], 70000)
         self.assertEqual(resumo['os_recebido_centavos'], 0)
-        self.assertEqual(resumo['repasses_a_pagar_centavos'], 30000)
+        self.assertEqual(resumo['repasses_a_pagar_centavos'], 0)
         self.assertEqual(resumo['total_a_receber_centavos'], 70000)
         status, _, dados = self._json('/api/v1/financeiro/resumo', self.token_b)
         resumo = dados['data']
         self.assertEqual(resumo['repasses_a_receber_centavos'], 30000)
         self.assertEqual(resumo['total_recebido_centavos'], 0)
+        neg.financeiro_receber(self.db, self.financeiro_id, self.a)
+        _, _, dados = self._json('/api/v1/financeiro/resumo', self.token_a)
+        resumo = dados['data']
+        self.assertEqual(resumo['os_a_receber_centavos'], 0)
+        self.assertEqual(resumo['os_recebido_centavos'], 70000)
+        self.assertEqual(resumo['repasses_a_pagar_centavos'], 30000)
 
     def test_cursor_pagination_has_no_duplicates(self):
         with ext.db(self.db) as c:

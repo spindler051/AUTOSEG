@@ -344,6 +344,8 @@ class Janela(Adw.ApplicationWindow):
         atalhos.append(ui.botao("Nova OS", lambda: self.nova_os(), icone="document-new-symbolic"))
         atalhos.append(ui.botao("Abrir portal do cliente", self._abrir_portal_navegador,
                                 icone="web-browser-symbolic"))
+        atalhos.append(ui.botao("Meu Auto Financeiro", self._abrir_meu_auto_financeiro,
+                                icone="accessories-calculator-symbolic"))
         atalhos.append(ui.botao("Preparar e-mail", self._email_admin))
         atalhos.append(ui.botao("Rascunho fiscal", self._nota_admin))
         caixa.append(atalhos)
@@ -1187,6 +1189,14 @@ class Janela(Adw.ApplicationWindow):
             return
         finally:
             conexao.close()
+        def conciliar_recebimento():
+            try:
+                import meu_auto_financeiro as maf
+                maf.sincronizar_todos(BANCO)
+            except Exception as erro:
+                print('Recebimento salvo no AUTOSEG; conciliação financeira pendente:', erro)
+        threading.Thread(target=conciliar_recebimento, daemon=True,
+                         name='AUTOSEG-Conciliacao-GTK').start()
         self.carregar_financeiro()
         self._atualizar_inicio()
         ui.toast(self, "Lançamento marcado como recebido.")
@@ -1338,6 +1348,13 @@ class Janela(Adw.ApplicationWindow):
 
         ui.DialogoEscolha(self, "Selecionar OS", "Ordem de serviço", list(mapa),
                           escolher).present(self)
+
+    def _abrir_meu_auto_financeiro(self):
+        if not self.url_prestador:
+            ui.aviso_erro(self, 'Meu Auto Financeiro',
+                          self.aviso_prestador or 'Portal do Prestador indisponível.')
+            return
+        ui.abrir_uri(self.url_prestador.rstrip('/') + '/auto-financeiro', self)
 
     def _abrir_portal_prestador(self):
         if not self.url_prestador:

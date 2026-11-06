@@ -28,6 +28,7 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import feedback_portal as feedback
 import api_financeiro as api_fin
+import meu_auto_financeiro as maf
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
 import composicao
@@ -714,6 +715,7 @@ def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,ba
                           ('/clientes', 'Clientes', 'users')]),
             ('Gestão', [('/servicos', 'Serviços e valores', 'wrench'),
                         ('/financeiro', 'Financeiro', 'wallet'),
+                        ('/auto-financeiro', 'Meu Auto Financeiro', 'wallet'),
                         ('/notas', 'Notas fiscais', 'receipt'),
                         ('/emails', 'E-mails', 'mail')]),
             ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
@@ -760,7 +762,7 @@ def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,ba
 
 
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
-    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
+    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/auto-financeiro','Meu Auto Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     if usuario and usuario.get('admin') and not cliente:
         menus.append(('/feedback/recebidos','Feedbacks'))
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
@@ -813,6 +815,7 @@ class PortalPrestador:
         self.porta=int(os.environ.get('PRESTADOR_PORT',porta))
         self.servidor=None
         self.thread=None
+        self._maf_stop=threading.Event()
 
     def iniciar(self):
         banco=self.banco
@@ -842,6 +845,7 @@ class PortalPrestador:
         estoque.instalar(banco)
         feedback.instalar(banco)
         api_fin.instalar(banco)
+        maf.instalar()
         # Repara chamados antigos que não receberam OS após falha/interrupção,
         # inclusive quando apenas o Portal do Prestador é iniciado.
         recuperadas=cad9.sincronizar_solicitacoes_pendentes(banco)
@@ -1146,6 +1150,7 @@ class PortalPrestador:
                     recentes_html=tabela(['OS','Cliente','Status','Valor','Abertura'],linhas)
                     atalhos=[('Clientes','/clientes','users'),
                              ('Serviços e valores','/servicos','wrench'),
+                             ('Meu Auto Financeiro','/auto-financeiro','wallet'),
                              ('Notas fiscais','/notas','receipt'),
                              ('Histórico e relatórios','/historico','history')]
                     atalhos_html=''.join(
@@ -1180,7 +1185,7 @@ class PortalPrestador:
                        ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',cl['total'])]
                 k='<div class="kpis">'+''.join(f'<div class="kpi"><span>{esc(n)}</span><strong>{esc(v)}</strong></div>' for n,v in indic)+'</div>'
                 corpo=f'<p>Olá, <b>{esc(s["nome"])}</b>. Acesso completo às funcionalidades operacionais, com auditoria.</p>{k}'
-                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
+                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Meu Auto Financeiro','/auto-financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
                 corpo+=card('Acesso rápido',''.join(botao(t,url) for t,url in atalhos))
                 corpo+=v9.barra_links('prestador')
                 corpo+='<div class="notice">As alterações são registradas com o prestador autenticado. E-mails e notas fiscais ainda dependem das APIs externas.</div>'
@@ -2628,6 +2633,8 @@ class PortalPrestador:
                         return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
                     s=self.sessao()
+                    if path=='/auto-financeiro' or path.startswith('/auto-financeiro/'):
+                        return maf.GET(self,path,s,banco)
                     if not s:return self.login()
                     if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml','/modelos/orcamento.yaml'):
                         nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml','/modelos/orcamento.yaml':'modelo_orcamento.yaml'}[path]
@@ -2788,6 +2795,25 @@ class PortalPrestador:
                 try:
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
+                    if path=='/auto-financeiro' or path.startswith('/auto-financeiro/'):
+                        try: tamanho=int(self.headers.get('Content-Length','0'))
+                        except ValueError: tamanho=0
+                        if tamanho>5*1024*1024:
+                            return self.erro('Formulário financeiro ultrapassa 5 MB.',413)
+                        d=self.form()
+                        origem=self.headers.get('Origin','')
+                        if origem:
+                            parsed=urlparse(origem)
+                            if (parsed.hostname is None
+                                    or parsed.netloc.lower()!=self.headers.get('Host','').lower()
+                                    or parsed.scheme not in ('http','https')):
+                                return self.erro('Origem do formulário não autorizada.',403)
+                        try:
+                            return maf.POST(self,path,self.sessao(),banco,d)
+                        except PermissionError as erro:
+                            return maf._fail(self,str(erro),status=403)
+                        except (ValueError,TypeError,KeyError,OverflowError) as erro:
+                            return maf._fail(self,str(erro),status=400)
                     d=self.form()
                     if path=='/prestadores' or path.startswith('/prestadores/'):
                         return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop. '
@@ -3366,12 +3392,17 @@ class PortalPrestador:
                         prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
                         return self.redir('/financeiro')
                     if path=='/financeiro/repasse':
+                        secundario=int(d['secundario_id'])
                         prod.confirmar_repasse(
-                            banco,int(d['os_id']),pid,int(d['secundario_id']),None)
+                            banco,int(d['os_id']),pid,secundario,None)
+                        try:maf.sincronizar_prestador(banco,secundario)
+                        except Exception:LOG.exception('Repasse confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     if path=='/financeiro/repasse/confirmar':
                         prod.confirmar_recebimento_repasse(
                             banco,int(d['os_id']),pid,None)
+                        try:maf.sincronizar_prestador(banco,pid)
+                        except Exception:LOG.exception('Repasse recebido, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
                         with ext.db(banco) as c:
@@ -3379,6 +3410,8 @@ class PortalPrestador:
                                 WHERE f.id=? AND con.prestador_id=?''',(int(partes[1]),pid)).fetchone()
                         if not autorizado:raise PermissionError('Financeiro restrito ao técnico finalizador.')
                         neg.financeiro_receber(banco,int(partes[1]),pid)
+                        try:maf.sincronizar_prestador(banco,pid)
+                        except Exception:LOG.exception('Recebimento confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
                 except PermissionError as e:
@@ -3414,6 +3447,17 @@ class PortalPrestador:
         self.porta=self.servidor.server_port
         self.thread=threading.Thread(target=self.servidor.serve_forever,daemon=True)
         self.thread.start()
+        self._maf_stop.clear()
+        def conciliar_periodicamente():
+            while not self._maf_stop.wait(15):
+                try:
+                    if maf.sincronizar_todos(banco):
+                        LOG.warning('Meu Auto Financeiro: algumas contas não conciliaram; nova tentativa em 15s.')
+                except Exception:
+                    LOG.exception('Erro de conciliação automática do Meu Auto Financeiro.')
+        self._maf_thread=threading.Thread(target=conciliar_periodicamente,
+            daemon=True,name='AUTOSEG-MeuAutoFinanceiro-Sync')
+        self._maf_thread.start()
         host_exibido='127.0.0.1' if self.host in ('0.0.0.0','::') else self.host
         return f'http://{host_exibido}:{self.porta}'
 
@@ -3427,5 +3471,6 @@ class PortalPrestador:
             return f'http://127.0.0.1:{self.porta}'
 
     def parar(self):
+        self._maf_stop.set()
         if self.servidor:
             self.servidor.shutdown();self.servidor.server_close();self.servidor=None

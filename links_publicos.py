@@ -52,8 +52,16 @@ def quadro_html():
         link=(f'<a href="{html.escape(url,quote=True)}" rel="noopener noreferrer" target="_blank">{html.escape(url)}</a>'
               if url else '<span class="muted">Sem link público verificado</span>')
         parts.append(f'<div><b>{html.escape(nome)} · {porta}</b><p style="overflow-wrap:anywhere">{link}</p></div>')
+    prestador=s.get(PORTAS[1],{}).get('url','')
+    finance_url=prestador.rstrip('/')+'/auto-financeiro' if prestador else ''
+    finance_link=(f'<a href="{html.escape(finance_url,quote=True)}" rel="noopener noreferrer" '
+                  f'target="_blank">{html.escape(finance_url)}</a>' if finance_url else
+                  '<span class="muted">Disponível quando o túnel do prestador estiver ativo</span>')
+    parts.append(f'<div><b>Meu Auto Financeiro · rota do prestador</b>'
+                 f'<p style="overflow-wrap:anywhere">{finance_link}</p></div>')
     return ('<section class="card"><h2>Links públicos atuais</h2>'+''.join(parts)+
-        '<small>Os links são obtidos dos processos Cloudflare ativos. Em DEV, use somente dados fictícios; o login do AUTOSEG continua necessário.</small></section>')
+        '<small>Os links são obtidos dos processos Cloudflare ativos. Em DEV, use somente dados fictícios; o login do AUTOSEG continua necessário. '
+        'Não publique dados financeiros reais por Quick Tunnel sem uma camada adicional de controle de acesso.</small></section>')
 
 # URLs de túneis iniciados em outros Terminais podem ser informadas manualmente.
 # Só são exibidas como atuais após verificação HTTP recente, nunca por mera leitura de texto.
