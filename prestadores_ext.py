@@ -352,6 +352,46 @@ def validar_imagem(conteudo):
     return formato, {'JPEG':'.jpg','PNG':'.png','WEBP':'.webp'}[formato]
 
 
+def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+    """Gira uma foto existente em 90° no sentido horário, sem duplicá-la."""
+    from PIL import Image, ImageOps
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:raise ValueError('OS não existe.')
+        if o['status'] not in ATIVAS:
+            raise ValueError('OS encerrada: não é permitido girar fotos.')
+        if pid is not None:
+            p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
+            if not p:raise PermissionError('Prestador inativo.')
+        a=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE id=? AND os_id=?',
+                    (anexo_id,os_id)).fetchone()
+        if not a:raise ValueError('Foto não encontrada.')
+        caminho=Path(a['caminho'])
+        if not caminho.is_file():raise ValueError('Arquivo da foto não encontrado.')
+        temporario=caminho.with_name(caminho.name+'.girando')
+        try:
+            with Image.open(caminho) as original:
+                formato=original.format or 'JPEG'
+                imagem=ImageOps.exif_transpose(original)
+                imagem=imagem.rotate(-90,expand=True)
+                if formato=='JPEG':
+                    imagem=imagem.convert('RGB')
+                imagem.save(temporario,format=formato)
+            os.replace(temporario,caminho)
+        except Exception as erro:
+            temporario.unlink(missing_ok=True)
+            raise ValueError('Não foi possível girar a foto.') from erro
+        digest=hashlib.sha256(caminho.read_bytes()).hexdigest()
+        c.execute('UPDATE os_anexos SET sha256=? WHERE id=?',(digest,anexo_id))
+        nome_ator=ator
+        if pid is not None:
+            p=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()
+            if p:nome_ator=p['nome']
+        evento(c,os_id,'Foto girada',Path(a['nome_original']).name[:150],pid,nome_ator)
+        return str(caminho)
+
+
 def _legenda_normalizada(texto):
     return str(texto or '').strip()[:160]
 

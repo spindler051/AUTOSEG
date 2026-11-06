@@ -287,6 +287,36 @@ class ComposicaoBancoTest(unittest.TestCase):
         self.assertEqual(sum(item["valor_centavos"] for item in comp["componentes"]), 20000)
 
 
+    def test_recalcular_tudo_preserva_base_modular_da_os(self):
+        comp = composicao.calcular_os(
+            total_centavos=60000, materiais_centavos=6575,
+            mao_obra_centavos=10000, base_percentuais="visita")
+        with sqlite3.connect(self.db) as conexao:
+            conexao.execute("INSERT INTO clientes(nome,status) VALUES('Cliente','Ativo')")
+            cliente_id = conexao.execute("SELECT id FROM clientes").fetchone()[0]
+            conexao.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
+                "valor_materiais,valor_mao_obra,tempo_horas,base_percentuais,"
+                "composicao_json,forma_pagamento,data_abertura) "
+                "VALUES(?,?,'Pendente',?,?,?,?,?,?,?,?)",
+                ("OS-MOD", cliente_id, 600, 65.75, 100, 0, "visita",
+                 composicao.para_json(comp), "PIX", "06/11/2026"))
+            os_id = conexao.execute("SELECT id FROM ordens_servico").fetchone()[0]
+        totais = composicao.recalcular_tudo(self.db)
+        self.assertEqual(totais["os"], 1)
+        with sqlite3.connect(self.db) as conexao:
+            base, texto = conexao.execute(
+                "SELECT base_percentuais,composicao_json FROM ordens_servico WHERE id=?",
+                (os_id,)).fetchone()
+        salvo = json.loads(texto)
+        self.assertEqual(base, "visita")
+        self.assertEqual(salvo["base_percentuais"], "visita")
+        visita = next(x for x in salvo["componentes"] if x["id"] == "visita")
+        self.assertEqual(len(visita["filhos"]), 3)
+        self.assertEqual(salvo["total_centavos"], 60000)
+        self.assertEqual(sum(x["valor_centavos"] for x in salvo["componentes"]), 60000)
+
+
 class ComposicaoOSTest(unittest.TestCase):
     def _config_os(self):
         return {"versao": 1, "componentes": [

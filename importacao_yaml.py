@@ -110,6 +110,10 @@ def _materiais_os_lista(materiais):
         item = str(material['item']).strip()
         if len(item) > 180:
             raise ValueError(f'Material {indice}: campo "item" excede 180 caracteres.')
+        unidade = str(material.get('unidade', 'un') or 'un').strip()
+        if len(unidade) > 40:
+            raise ValueError(
+                f'Material {indice}: campo "unidade" excede 40 caracteres.')
         if 'quantidade' not in material or material.get('quantidade') in (None, ''):
             raise ValueError(
                 f'Material {indice}: campo "quantidade" não informado.'
@@ -131,6 +135,7 @@ def _materiais_os_lista(materiais):
         resposta.append({
             'item': item,
             'quantidade': float(quantidade),
+            'unidade': unidade,
             'valor_unitario': float(valor),
             'valor_total': float(quantidade * valor),
         })
@@ -496,5 +501,6 @@ versao: 1
 materiais:
   - item: ""
     quantidade: 1
+    unidade: un
     valor_unitario: 0
 """

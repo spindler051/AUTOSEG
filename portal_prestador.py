@@ -44,6 +44,8 @@ VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 
 
 CSS_MOBILE = """
+.page-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.page-actions .btn,.page-actions button{margin:0}
 .lista-organizacoes-pj{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .lista-organizacoes-pj .resultado-organizacao{margin:0}
 .resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}
@@ -68,6 +70,8 @@ CSS_MOBILE = """
   tbody td { display: block; border: 0; padding: 6px 8px; min-width: 0 !important; white-space: normal; overflow-wrap: anywhere; }
   tbody td::before { content: attr(data-label) ": "; color: #ffd400; font-weight: 700; }
   .col2 { grid-template-columns: 1fr; }
+  .os-status-block { display: block; }
+  .os-status-block button { width: 100%; margin-top: 8px; }
   .material-row { grid-template-columns: 1fr 1fr; }
   .material-row > div:first-child { grid-column: 1 / -1; }
   .actions button, .actions .btn, .stack button, .stack .btn { width: 100%; margin: 6px 0; }
@@ -94,6 +98,11 @@ CSS_FEEDBACK = """
 .feedback-dialog .feedback-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
 .feedback-dialog .feedback-actions button{margin:0}
 .feedback-dialog .feedback-privacidade{font-size:13px;line-height:1.5;color:#c9c9c9}
+.cancel-dialog .cancel-step{padding:22px}
+.cancel-dialog .cancel-step h2{margin:0 0 8px}
+.cancel-dialog .cancel-step p{margin:0 0 12px}
+.cancel-dialog .cancel-step textarea{min-height:110px}
+.os-status-block{margin:0 0 16px;padding:12px;border:1px solid #444;border-radius:8px}
 .feedback-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1300;max-width:min(560px,calc(100vw - 28px));background:#1e1e1e;border:1px solid #ffd400;border-radius:10px;color:#fff;padding:12px 16px;box-shadow:0 10px 30px #000c}
 @media(max-width:620px){.feedback-fab{right:12px;bottom:12px;padding:12px 16px;font-size:14px}.feedback-dialog form{padding:17px}}
 .ui-switch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px;font-size:13px;color:#bbb}
@@ -340,6 +349,14 @@ body.ui-unslop .actions-note{flex:1 1 auto;min-width:0;overflow:hidden;color:var
 body.ui-unslop .actions-buttons{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 body.ui-unslop .actions-buttons button,body.ui-unslop .actions-buttons .btn{width:auto!important;margin:0!important}
 body.ui-unslop .os-form-unslop .actions .notice{margin:0;font-size:12px}
+body.ui-unslop .os-status-block{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;align-items:end;margin:0 0 18px;padding:14px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
+body.ui-unslop .os-status-block label{grid-column:1/-1;margin:0}
+body.ui-unslop .os-status-block p{grid-column:1/-1;margin:0;color:var(--u-muted);font-size:12px;line-height:1.5}
+body.ui-unslop .os-status-block button{min-height:40px}
+body.ui-unslop .cancel-dialog .cancel-step{padding:24px}
+body.ui-unslop .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
+body.ui-unslop .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
+body.ui-unslop .cancel-dialog .cancel-step textarea{min-height:110px}
 body.ui-unslop .os-tools{margin-top:20px;border-top:1px solid var(--u-line);padding-top:16px}
 body.ui-unslop .os-tools summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 body.ui-unslop .os-tools summary:hover{color:var(--u-text-2)}
@@ -432,6 +449,8 @@ body.ui-unslop .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100
   body.ui-unslop .os-workflow .card:first-child{grid-column:auto}
   body.ui-unslop .os-main{padding:20px}
   body.ui-unslop .col2{grid-template-columns:1fr}
+  body.ui-unslop .os-status-block{grid-template-columns:1fr}
+  body.ui-unslop .os-status-block button{width:100%}
   body.ui-unslop .material-row{grid-template-columns:1fr 1fr}
   body.ui-unslop .material-row>div:first-child{grid-column:1/-1}
   body.ui-unslop .material-row button{grid-column:1/-1;width:100%}
@@ -543,26 +562,38 @@ def tabela(headers, rows):
     return '<div class="table-scroll"><table><thead><tr>'+''.join(f'<th>{esc(h)}</th>' for h in headers)+'</tr></thead><tbody>'+''.join('<tr>'+linha(cells)+'</tr>' for cells in rows)+'</tbody></table></div>'
 
 
-def _dialogo_feedback(usuario):
+def _dialogo_feedback(usuario, banco=None):
     """Botão e diálogo globais do Portal do Prestador (nunca no portal do cliente)."""
     if not usuario:
         return ''
+    rascunho = None
+    if banco:
+        try:
+            rascunho = feedback.ultimo_rascunho(banco, usuario)
+        except Exception:
+            rascunho = None
+    mensagem_rascunho = esc(rascunho.get('mensagem') or '') if rascunho else ''
+    responder_marcado = ' checked' if rascunho and rascunho.get('responder_ia') else ''
+    rascunho_id = str(rascunho.get('id') or '') if rascunho else ''
     return f'''
 <button type="button" class="feedback-fab" id="abrir-feedback" aria-haspopup="dialog" aria-controls="dialogo-feedback">Dê um feedback</button>
 <dialog class="feedback-dialog" id="dialogo-feedback" aria-labelledby="feedback-titulo">
   <form method="post" action="/feedback" id="form-feedback">
     <input type="hidden" name="csrf" value="{esc(usuario.get('csrf',''))}">
+    <input type="hidden" name="rascunho_id" id="feedback-rascunho-id" value="{rascunho_id}">
+    <input type="hidden" name="ui_mode" id="feedback-ui-mode" value="">
+    <input type="hidden" name="aba" id="feedback-aba" value="">
     <h2 id="feedback-titulo">Dê um feedback</h2>
     <p class="muted">Conte o que funcionou, o que confundiu ou o que precisa melhorar nesta página.</p>
     <label for="feedback-pagina">Página atual</label>
     <input type="text" id="feedback-pagina" name="pagina" value="" readonly autocomplete="off">
     <label for="feedback-mensagem">Seu feedback</label>
-    <textarea id="feedback-mensagem" name="mensagem" minlength="5" maxlength="4000" rows="6" required placeholder="Ex.: não encontrei onde alterar o preço do serviço; ou: o botão de iniciar OS não apareceu para mim."></textarea>
+    <textarea id="feedback-mensagem" name="mensagem" minlength="5" maxlength="4000" rows="6" required placeholder="Ex.: não encontrei onde alterar o preço do serviço; ou: o botão de iniciar OS não apareceu para mim.">{mensagem_rascunho}</textarea>
     <label class="feedback-check" for="feedback-responder-ia">
-      <input type="checkbox" id="feedback-responder-ia" name="responder_ia" value="1">
+      <input type="checkbox" id="feedback-responder-ia" name="responder_ia" value="1"{responder_marcado}>
       <span>Pedir uma resposta da IA com base no conhecimento do AUTOSEG (opcional)</span>
     </label>
-    <p class="muted feedback-privacidade">O texto digitado fica salvo apenas nesta aba até você enviar ou cancelar. Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
+    <p class="muted feedback-privacidade">O texto digitado aqui é salvo automaticamente como feedback incompleto, mesmo que você não clique em enviar; ao enviar, ele vira um feedback completo. Use Cancelar para descartar o rascunho. Ao enviar, registramos seu usuário, a página, o navegador, o dispositivo e o endereço IP (a rede é truncada por padrão) para diagnóstico e segurança. Se você pedir resposta por IA, o texto é anonimizado antes de sair do servidor. A IA pode errar e não altera o sistema; o feedback fica para revisão humana.</p>
     <p class="muted" id="feedback-envio-status" role="status" aria-live="polite"></p>
     <div class="feedback-actions">
       <button type="submit">Enviar feedback</button>
@@ -614,9 +645,9 @@ def chip_status(status):
             f'{esc(status)}</span>')
 
 
-def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False):
+def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
     """Experimental interface: a quiet work-order shell around the same flow."""
-    base=layout(titulo,corpo,usuario,nonce,cliente)
+    base=layout(titulo,corpo,usuario,nonce,cliente,banco)
     login=not usuario or cliente
     body_class='ui-unslop'+(' ui-login' if login else '')
     base=base.replace('<body>',f'<body class="{body_class}">',1)
@@ -671,7 +702,7 @@ def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False):
     return base
 
 
-def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
+def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
     menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     if usuario and usuario.get('admin') and not cliente:
         menus.append(('/feedback/recebidos','Feedbacks'))
@@ -681,7 +712,7 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
     us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
     ambiente='DEV (testes)' if os.environ.get('AUTOSEG_DEV')=='1' else 'produção'
     footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
-    feedback_html=_dialogo_feedback(None if cliente else usuario)
+    feedback_html=_dialogo_feedback(None if cliente else usuario, banco)
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
     if cliente:
@@ -802,9 +833,10 @@ class PortalPrestador:
             def pagina(self,titulo,conteudo,s=None,status=200):
                 if self.ui_unslop():
                     pagina=layout_unslop(titulo,conteudo,s,
-                                         path=urlparse(self.path).path)
+                                         path=urlparse(self.path).path,
+                                         banco=banco)
                 else:
-                    pagina=layout(titulo,conteudo,s)
+                    pagina=layout(titulo,conteudo,s,banco=banco)
                 if titulo=='Ordens de serviço ativas':
                     # Inert marker: portal.js owns the timer and pauses it while
                     # the feedback dialog is open or a form control is in use.
@@ -1010,7 +1042,7 @@ class PortalPrestador:
                     +'<button type="submit">Aplicar</button></form>')
                 return self.pagina('Ordens de serviço ativas',
                     '<p class="muted">Todos os prestadores veem as OS abertas, iniciadas e pendentes, mesmo quando atribuídas a outros.</p>'
-                    +f'<p>{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</p>'
+                    +f'<div class="page-actions">{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</div>'
                     +filtro_ordem
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
@@ -1103,12 +1135,14 @@ class PortalPrestador:
                         esc(item['criado_em']),esc(item['prestador_nome']),
                         f'<code>{esc(item["pagina"])}</code>',esc(resumo),
                         esc(item['categoria']),esc(item['urgencia']),
+                        f'{esc(item.get("ui_mode") or "—")} / {esc(item.get("aba") or "—")}',
                         f'<span class="tag">{esc(item["status_dev"])}</span>'))
                 aberturas=feedback.listar_aberturas(banco,limite=30)
                 linhas_aberturas=[(
                     esc(x['criado_em']),esc(x['prestador_nome']),
-                    f'<code>{esc(x["pagina"])}</code>',esc(x['dispositivo']),
-                    esc(x['navegador']),esc(x['sistema'])) for x in aberturas]
+                    f'<code>{esc(x["pagina"])}</code>',
+                    f'{esc(x.get("ui_mode") or "—")} / {esc(x.get("aba") or "—")}',
+                    esc(x['dispositivo']),esc(x['navegador']),esc(x['sistema'])) for x in aberturas]
                 aviso_html=f'<p class="good">{esc(aviso)}</p>' if aviso else ''
                 erro_html=f'<p class="bad">{esc(erro)}</p>' if erro else ''
                 return self.pagina('Feedbacks recebidos',
@@ -1121,11 +1155,11 @@ class PortalPrestador:
                     +card('Feedbacks',
                         '<p>'+botao('Baixar pendências da DEV (.md)','/feedback/pendencias.md','secondary')
                         +botao('Exportar dados de feedback (.json)','/feedback/dados/exportar.json','secondary')+'</p>'
-                        +tabela(['ID','Recebido','Prestador','Página','Relato anonimizado','Categoria','Urgência','Situação na DEV'],linhas))
+                        +tabela(['ID','Recebido','Prestador','Página','Relato anonimizado','Categoria','Urgência','Interface / aba','Situação na DEV'],linhas))
                     +card('Aberturas recentes do canal',
                         '<p class="muted">Registra quem abriu o diálogo, em qual página, com qual dispositivo e navegador. '
                         'Serve para diagnosticar dificuldades de uso e correlação com erros.</p>'
-                        +tabela(['Quando','Prestador','Página','Dispositivo','Navegador','Sistema'],linhas_aberturas)),s)
+                        +tabela(['Quando','Prestador','Página','Interface / aba','Dispositivo','Navegador','Sistema'],linhas_aberturas)),s)
 
             def feedback_detalhe(self,s,fid):
                 item=feedback.obter(banco,fid)
@@ -1161,6 +1195,7 @@ class PortalPrestador:
                         'A IA não decide isso sozinha.</p>'
                         +'<button type="submit">Salvar triagem</button></form>')
                     meta=tabela(['Campo','Valor'],[
+                        ('Interface / aba',f'{esc(item.get("ui_mode") or "—")} / {esc(item.get("aba") or "—")}'),
                         ('IP completo (somente se configurado)',esc(item['ip'] or '—')),
                         ('Rede truncada',esc(item['ip_rede'] or '—')),
                         ('Hash do IP',esc(item['ip_hash'] or '—')),
@@ -1304,7 +1339,10 @@ class PortalPrestador:
                 navegacao=f'<p class="muted">{total} cliente(s) encontrado(s). Página {pagina}.</p>'
                 if pagina>1:navegacao+=botao('Anterior','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina-1}),'secondary')
                 if offset+len(rows)<total:navegacao+=botao('Próximos clientes','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina+1}),'secondary')
-                return self.pagina('Clientes',botao('+ Novo cliente','/clientes/novo')+botao('Novo orçamento','/orcamento','secondary')+botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')
+                return self.pagina('Clientes','<div class="page-actions">'
+                    +botao('+ Novo cliente','/clientes/novo')
+                    +botao('Novo orçamento','/orcamento','secondary')
+                    +botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')+'</div>'
                     +card('Pesquisar clientes',pesquisa)
                     +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
 
@@ -1493,9 +1531,9 @@ class PortalPrestador:
                     ('administradora_email','E-mail da imobiliária / administradora')]
                 for k,t in campos:
                     fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
-                corpo=(f'<p>{botao("← Clientes","/clientes","secondary")}'
+                corpo=(f'<div class="page-actions">{botao("← Clientes","/clientes","secondary")}'
                     + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
-                    + f'</p><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
+                    + f'</div><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
                     '<div class="col2"><div>'
                     +select('Tipo de pessoa','tipo_pessoa',[(z,z) for z in ('Jurídica','Física')],d.get('tipo_pessoa') or 'Jurídica')
                     +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
@@ -1703,7 +1741,7 @@ class PortalPrestador:
                         f'<div><span>Fotos</span><strong>{len(anexos)}</strong></div>'
                         '</div></div>'
                         f'<div class="os-ticket-actions"><a class="btn secondary" href="/os/{oid}/pdf-preview">'
-                        +icone('file')+'Preview do PDF</a></div>'
+                        +icone('file')+'Baixar preview do PDF</a></div>'
                         '</section>')
                 if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
                 if preenchimento:
@@ -1785,6 +1823,7 @@ class PortalPrestador:
                     corpo+=('<input type="hidden" name="composicao_yaml" value="'
                             +esc(_json_comp.dumps(d['composicao_yaml'],ensure_ascii=False))+'">')
                 servicos_ativos=catalogo.listar(banco,ativos=True)
+                bloco_modelo=''
                 if servicos_ativos:
                     import json
                     js_json=json.dumps([{'id':v['id'],'nome':v['nome'],
@@ -1799,11 +1838,56 @@ class PortalPrestador:
                        +f'<script type="application/json" id="catalogo-os-json">{js_json}</script>')
                     if unslop:
                         bloco_modelo='<div class="os-service-model">'+bloco_modelo+'</div>'
-                    corpo+=bloco_modelo
                 corpo+='<input type="hidden" name="materiais_presentes" value="1">'
                 if oid:
                     corpo+=f'<input type="hidden" name="_versao_os" value="{esc(d.get("atualizado_em") or "") }">'
-                corpo+='<fieldset><legend>Identificação e serviço</legend><div class="col2"><div>'
+                cliente_nome_cancel=next((x['nome'] for x in cl if x['id']==d.get('cliente_id')),'')
+                status_bloco=''
+                cancelar_dialogo=''
+                if oid and d['status'] in ext.ATIVAS:
+                    status_atual='Pendente' if d['status']=='Pendente' else ''
+                    status_bloco=('<div class="os-status-block">'
+                        +select('Situação do atendimento','acao_status',
+                            [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído')],
+                            status_atual,required=True)
+                        +'<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>'
+                        +'<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
+                         'Para cancelar, use o botão vermelho e confirme o número da OS.</p>'
+                        +'</div>')
+                    cancelar_dialogo=(
+                        f'<dialog class="feedback-dialog cancel-dialog" id="dialogo-cancelar-os" '
+                        f'data-numero-os="{esc(d["numero_os"])}">'
+                        '<div class="cancel-step" data-step="1">'
+                        f'<h2>Cancelar {esc(d["numero_os"])}</h2>'
+                        f'<p class="muted">{esc(cliente_nome_cancel)} · Total {dinheiro(d.get("valor_total") or 0)}</p>'
+                        '<label for="cancelar-motivo">Por que a OS será cancelada?</label>'
+                        '<textarea id="cancelar-motivo" name="motivo_encerramento" rows="4" '
+                        'maxlength="2000" placeholder="Descreva o motivo do cancelamento..."></textarea>'
+                        '<p class="muted">O motivo fica no histórico e é enviado ao cliente.</p>'
+                        '<div class="feedback-actions">'
+                        '<button type="button" class="secondary" data-fechar-cancelar>Voltar</button>'
+                        '<button type="button" class="danger" data-proximo-cancelar>Continuar</button>'
+                        '</div></div>'
+                        '<div class="cancel-step" data-step="2" hidden>'
+                        '<h2>Confirmar cancelamento</h2>'
+                        f'<p class="notice"><b>{esc(d["numero_os"])}</b> · {esc(cliente_nome_cancel)}<br>'
+                        f'Total {dinheiro(d.get("valor_total") or 0)}</p>'
+                        '<p>Para confirmar, digite o número da OS exatamente como aparece acima.</p>'
+                        '<label for="confirmar-numero-os">Número da OS</label>'
+                        f'<input id="confirmar-numero-os" name="confirmar_numero_os" autocomplete="off" '
+                        f'placeholder="{esc(d["numero_os"])}">'
+                        '<p class="bad" id="cancelar-erro" hidden></p>'
+                        '<div class="feedback-actions">'
+                        '<button type="button" class="secondary" data-voltar-cancelar>Voltar</button>'
+                        '<button type="submit" class="danger" name="cancelar_os" value="1" formnovalidate>'
+                        'Cancelar OS definitivamente</button>'
+                        '</div></div></dialog>')
+                corpo+='<fieldset><legend>Identificação e serviço</legend>'
+                corpo+=status_bloco
+                corpo+=cancelar_dialogo
+                if bloco_modelo:
+                    corpo+=bloco_modelo
+                corpo+='<div class="col2"><div>'
                 if solicitacao:
                     nome_cliente_solicitacao=next((x['nome'] for x in cl if x['id']==solicitacao['cliente_id']),'')
                     corpo+=('<p class="notice"><strong>Chamado de origem — somente leitura</strong><br>'
@@ -1885,6 +1969,22 @@ class PortalPrestador:
                 corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p>'
                 corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
+                if oid and d['status'] in ext.ATIVAS and contatos_os:
+                    selecionados_d = d.get('destinatario_sel[]') or []
+                    if isinstance(selecionados_d, str):
+                        selecionados_d = [selecionados_d]
+                    selecionados_d = [str(x) for x in selecionados_d if str(x).strip()]
+                    if not selecionados_d:
+                        selecionados_d = ['cliente', 'sindico']
+                    corpo+='<fieldset><legend>Destinatários do relatório</legend>'
+                    corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
+                    for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
+                        email=contatos_os.get(chave) or ''
+                        if email:
+                            marcado=' checked' if chave in selecionados_d else ''
+                            corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
+                    corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@imobiliaria.com.br"></label>'
+                    corpo+='<p class="muted">A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
                 corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
                 corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
@@ -1894,36 +1994,14 @@ class PortalPrestador:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
                     else:
                         corpo+='<p class="warn">OS ainda não iniciada. Assumir uma OS não inicia o atendimento automaticamente.</p>'
-                corpo+=textarea('Motivo — obrigatório para serviço cancelado','motivo_encerramento','',rows=3)
-                if oid and d['status'] in ext.ATIVAS:
-                    corpo+='<p class="notice">Selecione a situação e confirme uma única vez. OS pendente permanece ativa; concluída/cancelada publica PDF para o cliente.</p>'
-                    corpo+=select('Situação do atendimento','acao_status',
-                        [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído'),('Cancelada','Cancelado')],
-                        '',required=True)
-                    if contatos_os:
-                        selecionados_d = d.get('destinatario_sel[]') or []
-                        if isinstance(selecionados_d, str):
-                            selecionados_d = [selecionados_d]
-                        selecionados_d = [str(x) for x in selecionados_d if str(x).strip()]
-                        if not selecionados_d:
-                            selecionados_d = ['cliente', 'sindico']
-                        corpo+='<fieldset><legend>Destinatários do relatório</legend>'
-                        corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
-                        for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
-                            email=contatos_os.get(chave) or ''
-                            if email:
-                                marcado=' checked' if chave in selecionados_d else ''
-                                corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
-                        corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@imobiliaria.com.br"></label>'
-                        corpo+='<p class="muted">A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
-                    if responsavel==s['pid']:
-                        corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
-                        corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
-                        opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
-                        for i in range(3):
-                            corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
-                            corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
-                        corpo+='</div>'
+                if oid and d['status'] in ext.ATIVAS and responsavel==s['pid']:
+                    corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
+                    corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
+                    opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
+                    for i in range(3):
+                        corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
+                        corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
+                    corpo+='</div>'
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS:
                     pode_editar_fotos = (responsavel == s['pid'])
@@ -1948,7 +2026,8 @@ class PortalPrestador:
                             if pode_editar_fotos:
                                 corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
                                     +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
-                                    +select('Incluir no PDF','anexo_visivel[]',[('1','Sim — incluir no PDF'),('0','Não — ocultar por privacidade')],vis))
+                                    +select('Incluir no PDF','anexo_visivel[]',[('1','Sim — incluir no PDF'),('0','Não — ocultar por privacidade')],vis)
+                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
                             corpo+='</div></div>'
@@ -1986,7 +2065,7 @@ class PortalPrestador:
                 else:
                     if d['status'] in ext.ATIVAS:
                         if responsavel==s['pid']:
-                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar"{" formnovalidate" if unslop else ""}>{rotulo_salvar}</button>'
+                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar" formnovalidate>{rotulo_salvar}</button>'
                             corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                         else:
                             corpo+=('<span class="notice">Esta OS está com outro responsável. '
@@ -2016,7 +2095,8 @@ class PortalPrestador:
                             +'<label>Incluir no PDF<select name="anexo_visivel[]">'
                             +f'<option value="1" {"selected" if incluido=="1" else ""}>Sim — incluir</option>'
                             +f'<option value="0" {"selected" if incluido=="0" else ""}>Não — ocultar por privacidade</option>'
-                            +'</select></label></div>')
+                            +'</select></label>'
+                            +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button></div>')
                     corpo+=card('Adicionar fotos e legendas sem assumir a OS',
                         '<p class="muted">Você pode enviar novas fotos e alterar legendas '
                         'mesmo sem ser o responsável; elas entram no relatório quando a OS for concluída.</p>'
@@ -2069,10 +2149,14 @@ class PortalPrestador:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="/os/{oid}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
                 if d['status'] in ext.ATIVAS:
-                    docs=(botao('Baixar preview do PDF (não publicado)',
-                                f'/os/{oid}/pdf-preview','secondary')
-                        + '<p class="muted">Prévia para conferência do relatório atual. '
-                          'Não publica o PDF, não envia e-mail e não altera o status da OS.</p>')
+                    if unslop:
+                        docs=('<p class="muted">Use o botão <b>Baixar preview do PDF</b> na ficha '
+                              'da OS. A prévia não publica, não envia e-mail e não altera o status.</p>')
+                    else:
+                        docs=(botao('Baixar preview do PDF (não publicado)',
+                                    f'/os/{oid}/pdf-preview','secondary')
+                              + '<p class="muted">Prévia para conferência do relatório atual. '
+                                'Não publica o PDF, não envia e-mail e não altera o status da OS.</p>')
                 elif publicado:
                     docs=(botao('Baixar PDF publicado',f'/os/{oid}/pdf')
                         +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
@@ -2533,23 +2617,49 @@ class PortalPrestador:
                         if 'autosseg_session' in cookie:SESSOES.pop(cookie['autosseg_session'].value,None)
                         return self.redir('/',self.cookie('',True))
                     pid=s['pid']
+                    def _meta_feedback():
+                        meta=feedback.contexto(
+                            banco,s,
+                            feedback.ip_requisicao(self.client_address[0],self.headers),
+                            self.headers.get('User-Agent',''))
+                        meta['ui_mode']=str(d.get('ui_mode') or ('unslop' if self.ui_unslop() else 'classic'))[:20]
+                        meta['aba']=str(d.get('aba') or '')[:80]
+                        return meta
+                    if path=='/telemetria/ui':
+                        pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
+                        meta=_meta_feedback()
+                        feedback.registrar_ui(banco,s,pagina,
+                                              str(d.get('ui_mode','')),
+                                              str(d.get('aba','')),meta)
+                        return self.send_bytes(b'','text/plain; charset=utf-8',status=204)
                     if path=='/feedback/aberto':
                         pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
-                        meta=feedback.contexto(banco,s,
-                                               feedback.ip_requisicao(self.client_address[0],self.headers),
-                                               self.headers.get('User-Agent',''))
+                        meta=_meta_feedback()
                         feedback.registrar_abertura(banco,s,pagina,meta)
                         return self.send_bytes(b'','text/plain; charset=utf-8',status=204)
+                    if path in ('/feedback/rascunho','/feedback/rascunho/descartar'):
+                        pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
+                        meta=_meta_feedback()
+                        rascunho_id=d.get('rascunho_id')
+                        if path.endswith('/descartar'):
+                            removidos=feedback.descartar_rascunho(banco,s,rascunho_id)
+                            dados={'ok':True,'removidos':removidos}
+                        else:
+                            fid=feedback.salvar_rascunho(
+                                banco,s,pagina,str(d.get('mensagem','')),
+                                str(d.get('responder_ia','')) in ('1','on','true','sim'),
+                                meta,rascunho_id)
+                            dados={'ok':True,'id':fid}
+                        return self.send_bytes(json.dumps(dados,ensure_ascii=False).encode(),
+                                               'application/json; charset=utf-8')
                     if path=='/feedback':
                         pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
-                        meta=feedback.contexto(banco,s,
-                                               feedback.ip_requisicao(self.client_address[0],self.headers),
-                                               self.headers.get('User-Agent',''))
+                        meta=_meta_feedback()
                         try:
                             _,item=feedback.criar(
                                 banco,s,pagina,str(d.get('mensagem','')),
                                 str(d.get('responder_ia','')) in ('1','on','true','sim'),
-                                meta)
+                                meta,d.get('rascunho_id'))
                         except ValueError as erro:
                             if quer_json:
                                 return self.send_bytes(
@@ -2753,6 +2863,10 @@ class PortalPrestador:
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
                         return self.redir(f'/os/{oid}')
+                    if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
+                        oid=int(partes[1]);aid=int(partes[3])
+                        ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='publico':
                         oid=int(partes[1]);aid=int(partes[3])
                         with ext.db(banco) as c:
@@ -2897,7 +3011,10 @@ class PortalPrestador:
                                 except Exception as e:
                                     LOG.exception('Falha ao salvar rascunho da OS %s', oid)
                                     return self.erro(str(e),400,s)
-                            acao_status = str(d.get('acao_status',''))
+                            cancelar_os = str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
+                            acao_status = 'Cancelada' if cancelar_os else str(d.get('acao_status',''))
+                            d = dict(d)
+                            d['acao_status'] = acao_status
                             if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
                                 d = dict(d); d['modo_envio'] = 'encerrar'
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')

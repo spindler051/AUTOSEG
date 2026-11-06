@@ -251,7 +251,7 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Ficha da OS', html)
         self.assertIn('Situação do atendimento', html)
         self.assertIn('class="app-side"', html)
-        self.assertIn('Preview do PDF', html)
+        self.assertIn('Baixar preview do PDF', html)
 
         _, html = req(classico, base, '/login', {
             'email': 'unslop@exemplo.com.br',
@@ -344,6 +344,78 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(filhos['Custos operacionais e tecnológicos'], 2500)
         self.assertEqual(filhos['Margem de risco e contingência'], 2500)
         self.assertEqual(sum(valores.values()), 45000)
+
+    def test_encerramento_preserva_composicao_modular(self):
+        pid = self._prestador('Técnico Encerramento', email='encerramento@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Encerramento')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço modular concluído',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '100', 'valor_materiais_manual': '65',
+            'valor_total_override': '450', 'materiais_presentes': '1',
+            'aplicar_composicao': '1', 'base_percentuais': 'visita',
+            'relatorio_tecnico': 'Serviço concluído no teste.',
+            'v9_execucao': 'exec', 'acao_status': 'Concluída',
+        }
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            config = composicao.carregar()
+            config['componentes'] = [
+                c for c in config['componentes'] if c['id'] != 'deslocamento']
+            for componente in config['componentes']:
+                if componente['id'] == 'risco':
+                    componente['valor'] = 10
+                if componente['id'] == 'hora_tecnica':
+                    componente['minimo_centavos'] = 10000
+            composicao.salvar(config)
+            oid = neg.os_salvar(self.db, dados, pid)
+            with ext.db(self.db) as c:
+                os_ = c.execute(
+                    'SELECT status,valor_materiais,valor_mao_obra,valor_total,'
+                    'base_percentuais,composicao_json FROM ordens_servico WHERE id=?',
+                    (oid,)).fetchone()
+        self.assertEqual(os_['status'], 'Concluída')
+        self.assertAlmostEqual(float(os_['valor_materiais']), 65.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_mao_obra']), 135.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_total']), 450.0, places=2)
+        comp = json.loads(os_['composicao_json'])
+        self.assertEqual(comp['base_percentuais'], 'visita')
+        valores = {x['nome']: x['valor_centavos'] for x in comp['componentes']}
+        self.assertEqual(valores['Mão de obra / hora técnica'], 13500)
+        visita = next(x for x in comp['componentes'] if x['id'] == 'visita')
+        self.assertEqual(len(visita['filhos']), 3)
+        self.assertEqual(sum(valores.values()), 45000)
+
+    def test_cancelamento_exige_numero_da_os(self):
+        pid = self._prestador('Técnico Cancelamento', email='cancelamento@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Cancelamento')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço a cancelar',
+            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+            'materiais_presentes': '1', 'acao_status': 'salvar',
+        }
+        oid = neg.os_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            numero = c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                               (oid,)).fetchone()['numero_os']
+        cancelamento = dict(dados)
+        cancelamento.update({
+            'cancelar_os': '1', 'motivo_encerramento': 'Cliente desistiu.',
+            'relatorio_tecnico': 'Cancelamento solicitado pelo cliente.',
+            'confirmar_numero_os': 'OS-ERRADA',
+        })
+        with self.assertRaises(ValueError):
+            neg.os_salvar(self.db, cancelamento, pid, oid)
+        with ext.db(self.db) as c:
+            self.assertEqual(
+                c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                          (oid,)).fetchone()['status'], 'Aberta')
+        cancelamento['confirmar_numero_os'] = numero
+        neg.os_salvar(self.db, cancelamento, pid, oid)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                            (oid,)).fetchone()
+        self.assertEqual(os_['status'], 'Cancelada')
 
     def test_pdf_nao_abre_pagina_de_erro_em_os_ativa(self):
         pid = self._prestador()

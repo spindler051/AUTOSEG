@@ -41,6 +41,8 @@ ALLOWED_ATTRIBUTES = frozenset({
     "ai_status",
     "triage_status",
     "status",
+    "ui_mode",
+    "tab",
 })
 
 SENSITIVE_ATTRIBUTES = frozenset({

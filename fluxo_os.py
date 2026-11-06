@@ -122,9 +122,12 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
               (('Motivo: '+motivo+' | ') if motivo else '')+'Relatório: '+relato,
               prestador_id,ator)
     try:
-        # Composição declarativa (vinda do YAML/agente) é preservada no encerramento.
+        # Composições declarativas e modulares (calcular_os) já são
+        # autoritativas e não podem ser recalculadas pela regra legada no
+        # encerramento; isso apagaria a base e os filhos da visita.
         existente=composicao.de_json(o['composicao_json']) if 'composicao_json' in o.keys() else None
-        if not (existente and existente.get('declarativa')):
+        if not (existente and (existente.get('declarativa')
+                               or existente.get('base_percentuais'))):
             comp=composicao.calcular(
                 total_centavos=composicao.centavos_de_reais(o['valor_total']),
                 materiais_centavos=composicao.centavos_de_reais(o['valor_materiais']),

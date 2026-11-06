@@ -1,5 +1,21 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.28 — feedbacks 27–35, paridade do desktop e CI — 2026-11-06 — develop
+
+- **Feedbacks 27–35:** correções de usabilidade e segurança no Portal do Prestador.
+- **Rotação de fotos:** o PDF agora aplica a orientação EXIF (fotos de celular não saem mais giradas em 90°) e cada foto de OS ativa tem o botão **Girar 90°**, sem duplicar o anexo.
+- **Feedback incompleto:** o texto digitado é salvo automaticamente como feedback incompleto no servidor, restaurado ao reabrir/recaregar e convertido no mesmo registro ao enviar. Cancelar descarta o rascunho; não há duplicatas.
+- **Modo e aba:** feedbacks e aberturas guardam `ui_mode` e `aba`; o OpenTelemetry local registra `page_view` com modo e aba ativa. A administração mostra os dois campos.
+- **Cancelamento de OS:** a situação fica no topo da aba Identificação e não oferece mais “Cancelado”. O cancelamento é um botão vermelho com diálogo em duas etapas (motivo + número da OS), validado também no servidor. O campo Motivo saiu da aba Situação.
+- **Destinatários do relatório:** movidos para o topo da aba Situação.
+- **Preview do PDF:** uma única ação na ficha da OS em unslop, com o texto **Baixar preview do PDF**; a interface clássica mantém o link no cartão de documentos.
+- **Espaçamento unslop:** grupos de ações (Novo cliente, Novo orçamento, Nova OS) usam um contêiner com espaçamento consistente.
+- **Paridade do desktop:** o GTK preserva a base modular ao salvar OS do portal, não sobrescreve o total negociado ao editar materiais e mantém a unidade dos materiais. Composições declarativas são protegidas.
+- **Encerramento e recálculo:** concluir/cancelar preserva composições modulares; `recalcular_tudo` recalcula OSs na mesma base e mantém composições declarativas ou que não fecham com a nova configuração.
+- **CI:** a main passa a rodar as suites atuais (`test_composicao`, `test_rev12_correcoes`, `test_feedback_portal`, `test_api_financeiro`, `test_autoseg_melhorias`, `test_pdf_relatorio` e `test_importacao_yaml.py`); o teste legado v9.4.1 deixa de ser executado.
+- **Testes:** `test_rev12_correcoes.py` (34 OK, 1 skipped), `test_composicao.py` (28 OK), `test_feedback_portal.py` (25 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (4 OK) e `test_importacao_yaml.py` (OK).
+- **Publicação:** pendente de deploy na MAIN.
+
 ## 9.6.0-dev.27 — interface experimental unslop — 2026-11-05 — develop
 
 - **Toggle no login:** a página de acesso do prestador ganhou **Ativar unslop**; com o modo ativo, mostra **Desativar unslop**. A preferência fica no cookie `autosseg_ui` e a interface atual continua sendo o padrão. O link aceita `next` e volta à mesma página mesmo com `Referrer-Policy: no-referrer`.
@@ -10,11 +26,14 @@
 - **Materiais com unidade livre:** a quantidade pode ficar vazia (item sem quantidade fixa; o valor informado vira o total do item). A unidade aceita sugestões (un, m, cm, mm, g, kg, L, ml, par, rolo, caixa, pacote) ou qualquer texto arbitrário. A unidade é persistida em `materiais_os.unidade` e aparece no PDF e no e-mail; o estoque ignora itens sem quantidade.
 - **Composição modular por base:** `composicao.calcular_os` aceita bases configuradas no `composicao.yaml`: `total` (percentuais em linhas próprias) ou `visita` (percentuais dentro da visita). Cada base declara `componente` ou `campo` e `cobertura: separado|incluido`; um novo campo futuro entra como nova base, sem `if` no código. A OS escolhe a base no formulário, com padrão global configurável. O total negociado é autoritativo e não recebe desconto automático: se não cobrir a hora mínima de R$ 100,00, o formulário recusa com mensagem e pede ajuste. OS de garantia/cortesia com mão de obra zero mantêm o comportamento anterior.
 - **Prévia da composição no formulário:** `GET /composicao/simular` devolve a composição; o formulário mostra o total e os componentes antes de salvar. O total negociado continua autoritativo.
-- **Correção manual na MAIN — OS-0023:** caixa de passagem R$ 49,25; cabo 1 m; tubo termo retrátil 5 cm e R$ 5,00 no total; materiais R$ 65,00; base dos percentuais = visita mínima; visita R$ 250,00 incluindo administrativo R$ 25,00, operacional R$ 25,00 e risco R$ 25,00; hora técnica R$ 135,00; total R$ 450,00. Sem desconto. Os nomes não usam mais “sem quantidade fixa”. Backup: `backups/dados_antes_composicao_visita_os0023_20261105_231929.db`. Feedback registrado em `portal_feedback` id 26.
+- **Correção manual na MAIN — OS-0023:** caixa de passagem R$ 49,25; cabo 1 m; tubo termo retrátil 5 cm e R$ 5,00 no total; materiais R$ 65,00; base dos percentuais = visita mínima; visita R$ 250,00 incluindo administrativo R$ 25,00, operacional R$ 25,00 e risco R$ 25,00; hora técnica R$ 135,00; total R$ 450,00. Sem desconto. Ajuste posterior do usuário: caixa R$ 50,00, materiais R$ 65,75 e hora técnica R$ 134,25, mantendo o total e os percentuais. Os nomes não usam mais “sem quantidade fixa”. Backups: `backups/dados_antes_composicao_visita_os0023_20261105_231929.db` e `backups/dados_antes_quantidade_livre_os0023_20261105_233717.db`. Feedback registrado em `portal_feedback` id 26.
 - **Financeiro e listas:** tabelas com ações discretas, filtros secundários, grade de cartões e cabeçalhos de tabela em 12 px. O visual clássico e o portal do cliente não mudam.
 - **Rollback imediato:** `/ui/classic` restaura a interface atual e volta à mesma página; a documentação está em `docs/features/UNSLOP_UI.md`.
-- **Testes:** `test_rev12_correcoes.py` (32 OK, 1 skipped), `test_composicao.py` (27 OK), `test_feedback_portal.py` (22 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK) e `test_pdf_relatorio.py` (3 OK).
-- **Fora do MAIN:** experimental apenas em `develop`; o MAIN continua na interface atual.
+- **Paridade do desktop:** ao editar uma OS com composição modular, o aplicativo GTK preserva a base (`total`/`visita`) e recalcula com `calcular_os`, em vez de regravar a composição pela regra legada. OSs antigas, sem a marca modular no JSON, mantêm o comportamento explícito de materiais + mão de obra. A unidade dos materiais também é carregada e regravada; quantidade vazia continua vazia.
+- **Encerramento seguro:** concluir ou cancelar uma OS não recalcula mais uma composição modular pela regra legada; a base e os filhos da visita são preservados.
+- **Importação YAML:** materiais de OS aceitam `unidade` opcional (padrão `un`), sem perder a unidade ao importar.
+- **Testes:** `test_rev12_correcoes.py` (33 OK, 1 skipped), `test_composicao.py` (27 OK), `test_feedback_portal.py` (22 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (3 OK) e `test_importacao_yaml.py` (OK).
+- **Publicação:** a `develop` foi publicada na `main` em `de2e123` (`9.6.0-dev.27`), com backup do banco e do `composicao.yaml` antes do deploy.
 
 ## 9.6.0-dev.26 — mensagem real dos erros e permissão da OS — 2026-11-05 — develop
 

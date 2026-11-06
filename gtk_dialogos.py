@@ -261,7 +261,7 @@ class DialogoMaterial(Adw.Dialog):
         self.ao_salvar = ao_salvar
         self.set_title("Editar material" if atual else "Adicionar material")
         self.set_content_width(480)
-        self.set_content_height(360)
+        self.set_content_height(410)
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
         header.set_title_widget(Adw.WindowTitle(
@@ -271,8 +271,14 @@ class DialogoMaterial(Adw.Dialog):
         grupo = Adw.PreferencesGroup()
         pagina.add(grupo)
         self.item = ui.campo_entry(grupo, "Item / descrição", (atual or {}).get("item", ""))
-        self.quantidade = ui.campo_entry(grupo, "Quantidade",
-                                          ui.quantidade_texto((atual or {}).get("quantidade", 1)))
+        quantidade = (atual or {}).get("quantidade")
+        texto_quantidade = ("1" if atual is None else
+                            "" if quantidade is None else
+                            ui.quantidade_texto(quantidade))
+        self.quantidade = ui.campo_entry(grupo, "Quantidade (opcional)", texto_quantidade)
+        self.unidade = ui.campo_entry(
+            grupo, "Unidade de medida (opcional)",
+            "un" if atual is None else str((atual or {}).get("unidade") or ""))
         self.valor = ui.campo_entry(grupo, "Valor unitário (R$)",
                                      ui.dinheiro_texto((atual or {}).get("valor_unitario", 0)))
         toolbar.set_content(pagina)
@@ -289,16 +295,20 @@ class DialogoMaterial(Adw.Dialog):
 
     def _salvar(self):
         item = self.item.get_text().strip()
-        qtd = ui.numero(self.quantidade.get_text())
+        texto_qtd = self.quantidade.get_text().strip()
+        qtd = ui.numero(texto_qtd) if texto_qtd else None
         valor = ui.numero(self.valor.get_text())
+        unidade = self.unidade.get_text().strip()[:40]
         if not item:
             ui.aviso_erro(self.parent, "Item obrigatório", "Informe a descrição do material.")
             return
-        if qtd <= 0:
-            ui.aviso_erro(self.parent, "Quantidade inválida", "A quantidade deve ser maior que zero.")
+        if qtd is not None and qtd <= 0:
+            ui.aviso_erro(self.parent, "Quantidade inválida",
+                          "Informe uma quantidade maior que zero ou deixe o campo vazio.")
             return
-        self.ao_salvar({"item": item, "quantidade": qtd, "valor_unitario": valor,
-                        "valor_total": qtd * valor})
+        self.ao_salvar({"item": item, "quantidade": qtd, "unidade": unidade,
+                        "valor_unitario": valor,
+                        "valor_total": (qtd or 0) * valor})
         self.close()
 
 
@@ -349,10 +359,54 @@ class DialogoEstoqueOS(Adw.Dialog):
         self.ao_adicionar({
             "item": produto["nome"],
             "quantidade": qtd,
+            "unidade": str(produto.get("unidade") or "un").strip(),
             "valor_unitario": produto["venda_centavos"] / 100,
             "valor_total": qtd * produto["venda_centavos"] / 100,
         })
         self.close()
+
+
+def _os_tem_composicao_modular(dados):
+    """True quando a OS guardou uma composição modular autoritativa."""
+    dados = dados or {}
+    base = str(dados.get("base_percentuais") or "").strip()
+    comp_atual = composicao.de_json(dados.get("composicao_json"))
+    return bool(base and isinstance(comp_atual, dict)
+                and comp_atual.get("base_percentuais"))
+
+
+def _composicao_da_os(dados, total, materiais, mao_obra, tempo_horas):
+    """Recalcula a composição preservando a base modular usada pela OS.
+
+    OSs criadas ou editadas pelo portal guardam a base em ``base_percentuais``.
+    Ao salvar pelo desktop, usar a mesma base mantém os filhos da visita e os
+    percentuais. OSs antigas, sem base, continuam com a regra explícita
+    (materiais + mão de obra) que o desktop sempre usou.
+    """
+    base = str((dados or {}).get("base_percentuais") or "").strip()
+    comp_atual = composicao.de_json((dados or {}).get("composicao_json"))
+    if isinstance(comp_atual, dict) and comp_atual.get("declarativa"):
+        raise ValueError(
+            "Esta OS usa composição declarativa. Edite-a pelo portal para "
+            "preservar os componentes.")
+    total_centavos = composicao.centavos_de_reais(total)
+    materiais_centavos = composicao.centavos_de_reais(materiais)
+    mao_obra_centavos = composicao.centavos_de_reais(mao_obra)
+    # O JSON modular carrega a própria base. OSs antigas (ou salvas com
+    # "Aplicar composição" desmarcado) não têm essa marca e continuam na
+    # regra explícita do desktop.
+    if _os_tem_composicao_modular(dados):
+        return composicao.calcular_os(
+            total_centavos=total_centavos,
+            materiais_centavos=materiais_centavos,
+            mao_obra_centavos=mao_obra_centavos,
+            horas=tempo_horas,
+            base_percentuais=base), base
+    return composicao.calcular(
+        total_centavos=total_centavos,
+        materiais_centavos=materiais_centavos,
+        horas=tempo_horas,
+        mao_obra_centavos=mao_obra_centavos), ""
 
 
 class DialogoOS(Adw.Dialog):
@@ -386,7 +440,7 @@ class DialogoOS(Adw.Dialog):
                 if self.dados is None:
                     raise ValueError("OS não encontrada.")
                 self.materiais = [dict(x) for x in conexao.execute(
-                    "SELECT item,quantidade,valor_unitario,valor_total FROM materiais_os "
+                    "SELECT item,quantidade,unidade,valor_unitario,valor_total FROM materiais_os "
                     "WHERE os_id=? ORDER BY id", (self.os_id,))]
                 if self.dados.get("origem") == "Portal":
                     original = conexao.execute(
@@ -608,11 +662,15 @@ class DialogoOS(Adw.Dialog):
         linhas = []
         total = 0.0
         for material in self.materiais:
-            qtd = float(material.get("quantidade") or 0)
+            qtd = material.get("quantidade")
             valor = float(material.get("valor_unitario") or 0)
-            subtotal = qtd * valor
+            subtotal = (float(qtd) if qtd is not None else 0.0) * valor
             total += subtotal
-            linhas.append((material.get("item", ""), ui.quantidade_texto(qtd),
+            unidade = str(material.get("unidade") or "").strip()
+            texto_qtd = "—" if qtd is None else ui.quantidade_texto(qtd)
+            if qtd is not None and unidade:
+                texto_qtd += f" {unidade}"
+            linhas.append((material.get("item", ""), texto_qtd,
                            ui.brl(valor), ui.brl(subtotal)))
         self.tabela_materiais.definir_linhas(linhas)
         self.total_materiais.set_text(f"Total em materiais: {ui.brl(total)}")
@@ -631,7 +689,11 @@ class DialogoOS(Adw.Dialog):
         if not self.materiais:
             materiais = ui.numero(self.materiais_valor.get_text())
         total = mao + materiais
-        self.total.set_text(ui.dinheiro_texto(total))
+        # Em OS com composição modular o total é negociado; não sobrescrever
+        # ao mexer em materiais ou mão de obra. O usuário ainda pode editar o
+        # campo total diretamente.
+        if not _os_tem_composicao_modular(self.dados):
+            self.total.set_text(ui.dinheiro_texto(total))
 
     def _ver_composicao(self):
         try:
@@ -804,11 +866,21 @@ class DialogoOS(Adw.Dialog):
         custo_materiais = ui.numero(self.custo_materiais.get_text())
         total = ui.numero(self.total.get_text()) or (mao_obra + materiais)
         tempo_horas = ui.numero(self.tempo_horas.get_text())
-        comp = composicao.calcular(
-            total_centavos=composicao.centavos_de_reais(total),
-            materiais_centavos=composicao.centavos_de_reais(materiais),
-            horas=tempo_horas,
-            mao_obra_centavos=composicao.centavos_de_reais(mao_obra))
+        try:
+            comp, base_percentuais = _composicao_da_os(
+                self.dados, total, materiais, mao_obra, tempo_horas)
+        except ValueError as erro:
+            ui.aviso_erro(self.janela, "Composição do valor", str(erro))
+            return
+        if base_percentuais:
+            total = comp["total_centavos"] / 100
+            componente_hora = next(
+                (x for x in comp["componentes"] if x.get("modo") == "hora"), None)
+            if componente_hora is not None:
+                mao_obra = componente_hora["valor_centavos"] / 100
+        base_persistida = (base_percentuais
+                           or str((self.dados or {}).get("base_percentuais") or "").strip()
+                           or "total")
         comp_json = composicao.para_json(comp)
         composicao.instalar_banco(BANCO)
         observacoes = self.observacoes.get_texto()
@@ -856,8 +928,8 @@ class DialogoOS(Adw.Dialog):
                         cliente_id = original["cliente_id"]
                         descricao = original["descricao_original"]
                 materiais_anteriores = [dict(m) for m in cursor.execute(
-                    "SELECT item,quantidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id",
-                    (self.os_id,)).fetchall()]
+                    "SELECT item,quantidade,unidade,valor_unitario FROM materiais_os "
+                    "WHERE os_id=? ORDER BY id", (self.os_id,)).fetchall()]
 
             if self.os_id is None:
                 numero_os = proximo_numero_os(cursor)
@@ -865,12 +937,13 @@ class DialogoOS(Adw.Dialog):
                     """INSERT INTO ordens_servico
                     (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
                      valor_materiais,custo_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
-                     dados_incompletos,tempo_horas,composicao_json,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?)""",
+                     dados_incompletos,tempo_horas,composicao_json,base_percentuais,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?,?)""",
                     (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
                      tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
-                     tempo_horas, comp_json, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                     tempo_horas, comp_json, base_persistida,
+                     datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 os_salvo_id = cursor.lastrowid
                 aten.registrar_solicitacao(cursor, os_salvo_id, cliente_id, descricao,
                                            observacoes, "App")
@@ -879,26 +952,34 @@ class DialogoOS(Adw.Dialog):
                     """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
                     valor_mao_obra=?,valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,
                     urgencia=?,observacoes=?,dados_incompletos=?,tempo_horas=?,
-                    composicao_json=?,atualizado_em=? WHERE id=?""",
+                    composicao_json=?,base_percentuais=?,atualizado_em=? WHERE id=?""",
                     (cliente_id, tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
                      ui.valor_combo(self.urgencia), observacoes, dados_incompletos,
-                     tempo_horas, comp_json,
+                     tempo_horas, comp_json, base_persistida,
                      datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
                 os_salvo_id = self.os_id
 
-            anteriores = [(m["item"], float(m["quantidade"] or 0), float(m["valor_unitario"] or 0))
+            anteriores = [(m["item"],
+                           None if m["quantidade"] is None else float(m["quantidade"]),
+                           str(m["unidade"] or ""),
+                           float(m["valor_unitario"] or 0))
                           for m in materiais_anteriores]
-            atuais = [(m.get("item", ""), float(m.get("quantidade") or 0),
+            atuais = [(m.get("item", ""),
+                       None if m.get("quantidade") is None else float(m.get("quantidade")),
+                       str(m.get("unidade") or ""),
                        float(m.get("valor_unitario") or 0)) for m in self.materiais]
             if anteriores != atuais:
                 cursor.execute("DELETE FROM materiais_os WHERE os_id=?", (os_salvo_id,))
                 for material in self.materiais:
-                    qtd = float(material.get("quantidade") or 0)
+                    qtd = material.get("quantidade")
+                    qtd = None if qtd is None else float(qtd)
                     valor = float(material.get("valor_unitario") or 0)
+                    unidade = str(material.get("unidade") or "").strip()[:40]
                     cursor.execute(
-                        "INSERT INTO materiais_os(os_id,item,quantidade,valor_unitario,valor_total) "
-                        "VALUES(?,?,?,?,?)",
-                        (os_salvo_id, material.get("item", ""), qtd, valor, qtd * valor))
+                        "INSERT INTO materiais_os(os_id,item,quantidade,unidade,"
+                        "valor_unitario,valor_total) VALUES(?,?,?,?,?,?)",
+                        (os_salvo_id, material.get("item", ""), qtd, unidade,
+                         valor, (qtd or 0) * valor))
             estoque.reconciliar_os_conexao(cursor, os_salvo_id, "Desktop")
 
             if anterior is not None:

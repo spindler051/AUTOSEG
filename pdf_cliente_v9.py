@@ -21,7 +21,7 @@ def gerar(banco,os_id):
     from reportlab.lib.enums import TA_CENTER,TA_RIGHT
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from PIL import Image
+    from PIL import Image, ImageOps
     import io
     with ext.db(banco) as c:
         os_=c.execute('SELECT o.*,cl.nome cliente,cl.documento cliente_documento FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
@@ -135,6 +135,9 @@ def gerar(banco,os_id):
             if not p.is_file():continue
             try:
                 with Image.open(p) as im:
+                    # Aplica a orientação EXIF: o navegador já gira a prévia,
+                    # mas o PDF precisa do mesmo resultado.
+                    im=ImageOps.exif_transpose(im)
                     # Resolução preservada para tela e impressão; reduz apenas
                     # imagens maiores que o limite, mantendo a proporção.
                     im.thumbnail((1400, 1400));buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=85);buf.seek(0)

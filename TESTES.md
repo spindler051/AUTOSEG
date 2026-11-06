@@ -1,4 +1,37 @@
-# Testes executados — v9.1
+# Testes executados — AUTOSEG
+
+## Estado atual (nov/2026)
+
+Execute na raiz do projeto, com o ambiente virtual:
+
+```bash
+./.venv/bin/python -m unittest test_composicao
+./.venv/bin/python -m unittest test_rev12_correcoes
+./.venv/bin/python -m unittest test_feedback_portal
+./.venv/bin/python -m unittest test_api_financeiro
+./.venv/bin/python -m unittest test_autoseg_melhorias
+./.venv/bin/python -m unittest test_pdf_relatorio
+./.venv/bin/python test_importacao_yaml.py
+```
+
+Essas suites usam banco, arquivos e portas temporárias; não gravam em
+`dados.db`. Cobrem composição modular, fluxo da OS, unidades de materiais,
+PDF, feedback e API financeira.
+
+O CI da `main` executa exatamente essa lista em passos separados. O CI da
+`develop` executa `test_versionador`, `test_produtividade_rev07`,
+`test_composicao`, `test_autoseg_melhorias` e `test_importacao_yaml.py`.
+
+### Testes legados (não executar no CI)
+
+- `test_v94_correcoes.py` e `test_portal_v4.py`: pertencem ao portal antigo
+  v9.4.1 e não acompanham a rota atual `/cliente`.
+- `test_autoseg_http_novo.py`: depende de uma versão anterior do servidor HTTP.
+
+Eles ficam preservados como referência histórica. Não indicam regressão da
+versão atual.
+
+## Histórico — v9.1
 
 - Compilação dos módulos Python: OK.
 - HTTP local com SQLite temporário e dados fictícios: OK.

@@ -2117,8 +2117,12 @@ class Janela(Adw.ApplicationWindow):
             ui.aviso_erro(self, "Recalcular composições", str(erro))
             return
         self.carregar_composicao()
-        ui.toast(self, f"Composições atualizadas: {totais['servicos']} serviço(s), "
-                       f"{totais['os']} OS aberta(s).")
+        mensagem = (f"Composições atualizadas: {totais['servicos']} serviço(s), "
+                    f"{totais['os']} OS aberta(s).")
+        if totais.get("preservadas"):
+            mensagem += (f" {totais['preservadas']} OS mantida(s) por composição "
+                         "declarativa ou base que não fecha com a nova configuração.")
+        ui.toast(self, mensagem)
 
     # ------------------------------------------------------------------
     # Estoque de materiais

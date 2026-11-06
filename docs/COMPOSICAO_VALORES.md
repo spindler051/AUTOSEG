@@ -174,8 +174,14 @@ existir, calcula na hora com a configuração atual.
 
 - Serviço cadastrado/alterado: grava a composição do preço + materiais.
 - OS criada/alterada: grava a composição do valor total.
-- OS encerrada: recalcula e grava a composição antes de publicar o PDF.
-- `Recalcular` na tela de composição atualiza serviços e OS abertas.
+- OS encerrada: preserva composições modulares (`calcular_os`) e declarativas;
+  recalcula pela regra legada apenas quando não há composição autoritativa.
+- `Recalcular` na tela de composição atualiza serviços e OS abertas. OSs com
+  base modular são recalculadas na mesma base; declarativas e OSs que não
+  fecham com a nova configuração são preservadas e contadas como mantidas.
+- Desktop e portal usam a mesma decisão: uma OS com JSON modular continua
+  modular ao ser editada no GTK; OSs antigas mantêm a regra explícita de
+  materiais + mão de obra.
 
 ## PDFs
 

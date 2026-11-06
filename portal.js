@@ -18,13 +18,33 @@
     }, 6000);
   };
 
+  const csrfGlobal = document.querySelector('input[name="csrf"]')?.value || '';
+  const modoUi = () => (document.body?.classList?.contains('ui-unslop') ? 'unslop' : 'classic');
+  const abaAtiva = () => (document.querySelector('.os-tab.active')?.textContent || '')
+    .replace(/\s+/g, ' ').trim().replace(/^\d+\s*/, '');
+  const registrarUi = (aba = abaAtiva()) => {
+    if (!csrfGlobal || typeof FormData === 'undefined'
+        || !document.getElementById('dialogo-feedback')) return;
+    const corpo = new FormData();
+    corpo.append('csrf', csrfGlobal);
+    corpo.append('pagina', location.pathname || '/');
+    corpo.append('ui_mode', modoUi());
+    corpo.append('aba', aba || '');
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon('/telemetria/ui', corpo);
+      else fetch('/telemetria/ui', {
+        method: 'POST', body: corpo, credentials: 'same-origin'
+      }).catch(() => {});
+    } catch (_erro) {}
+  };
+
   document.querySelectorAll('form[data-ajax-preserve]').forEach(form => {
     form.addEventListener('submit', async evento => {
       if (evento.defaultPrevented || !window.fetch || !window.FormData) return;
       evento.preventDefault();
       const submitter = evento.submitter;
-      const action = submitter?.formAction || form.action;
-      const method = (submitter?.formMethod || form.method || 'post').toUpperCase();
+      const action = submitter?.getAttribute('formaction') || form.action;
+      const method = (submitter?.getAttribute('formmethod') || form.method || 'post').toUpperCase();
       const dados = new FormData(form);
       if (submitter?.name && !dados.has(submitter.name)) {
         dados.append(submitter.name, submitter.value);
@@ -758,9 +778,65 @@
     const fecharFeedback = document.getElementById('fechar-feedback');
     const responderIaFeedback = document.getElementById('feedback-responder-ia');
     const csrfFeedback = formFeedback?.querySelector('input[name="csrf"]');
+    const idRascunho = document.getElementById('feedback-rascunho-id');
+    const uiModeFeedback = document.getElementById('feedback-ui-mode');
+    const abaFeedback = document.getElementById('feedback-aba');
     const CHAVE_RASCUNHO = 'autoseg:feedback:draft:v1';
     const CHAVE_ENVIADO = 'autoseg:feedback:submitted:v1';
     const RASCUNHO_VALIDO_MS = 10 * 60 * 1000;
+    let timerRascunhoServidor = null;
+    let descartarAoFechar = false;
+    const corpoRascunhoServidor = () => {
+      if (typeof FormData === 'undefined') return null;
+      const corpo = new FormData();
+      if (csrfFeedback?.value) corpo.append('csrf', csrfFeedback.value);
+      corpo.append('pagina', paginaFeedback?.value || location.pathname.slice(0, 300) || '/');
+      corpo.append('mensagem', mensagemFeedback?.value || '');
+      if (responderIaFeedback?.checked) corpo.append('responder_ia', '1');
+      corpo.append('ui_mode', modoUi());
+      corpo.append('aba', abaAtiva());
+      if (idRascunho?.value) corpo.append('rascunho_id', idRascunho.value);
+      return corpo;
+    };
+    const salvarRascunhoServidor = (beacon = false) => {
+      if (!formFeedback || !mensagemFeedback) return;
+      const corpo = corpoRascunhoServidor();
+      if (!corpo) return;
+      try {
+        if (beacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          navigator.sendBeacon('/feedback/rascunho', corpo);
+          return;
+        }
+        if (typeof fetch === 'undefined') return;
+        fetch('/feedback/rascunho', {
+          method: 'POST',
+          body: corpo,
+          credentials: 'same-origin',
+          keepalive: !!beacon
+        }).then(resposta => resposta.ok ? resposta.json() : null)
+          .then(dados => {
+            if (dados && dados.id && idRascunho) idRascunho.value = String(dados.id);
+          }).catch(() => {});
+      } catch (_erro) {}
+    };
+    const agendarRascunhoServidor = () => {
+      if (typeof FormData === 'undefined') return;
+      window.clearTimeout(timerRascunhoServidor);
+      timerRascunhoServidor = window.setTimeout(() => salvarRascunhoServidor(false), 900);
+    };
+    const descartarRascunhoServidor = () => {
+      if (!formFeedback) return;
+      window.clearTimeout(timerRascunhoServidor);
+      const corpo = corpoRascunhoServidor();
+      if (!corpo || typeof fetch === 'undefined') return;
+      fetch('/feedback/rascunho/descartar', {
+        method: 'POST',
+        body: corpo,
+        credentials: 'same-origin',
+        keepalive: true
+      }).catch(() => {});
+      if (idRascunho) idRascunho.value = '';
+    };
     const limparRascunho = () => {
       try { sessionStorage.removeItem(CHAVE_RASCUNHO); } catch (_erro) {}
     };
@@ -778,6 +854,7 @@
       const responderIa = !!responderIaFeedback?.checked;
       if (!mensagem && !responderIa) {
         limparRascunho();
+        if (idRascunho) idRascunho.value = '';
         return;
       }
       try {
@@ -794,6 +871,8 @@
     };
     const abrirDialogo = () => {
       marcarPagina();
+      if (uiModeFeedback) uiModeFeedback.value = modoUi();
+      if (abaFeedback) abaFeedback.value = abaAtiva();
       if (typeof dialogoFeedback.showModal === 'function') {
         if (!dialogoFeedback.open) dialogoFeedback.showModal();
       } else {
@@ -804,7 +883,9 @@
       if (csrfFeedback?.value) {
         const corpo = new URLSearchParams({
           csrf: csrfFeedback.value,
-          pagina: paginaFeedback?.value || location.pathname.slice(0, 300) || '/'
+          pagina: paginaFeedback?.value || location.pathname.slice(0, 300) || '/',
+          ui_mode: modoUi(),
+          aba: abaAtiva()
         });
         fetch('/feedback/aberto', {
           method: 'POST',
@@ -846,6 +927,8 @@
 
     abrirFeedback.addEventListener('click', abrirDialogo);
     fecharFeedback?.addEventListener('click', () => {
+      descartarAoFechar = true;
+      descartarRascunhoServidor();
       if (mensagemFeedback) mensagemFeedback.value = '';
       if (responderIaFeedback) responderIaFeedback.checked = false;
       limparRascunho();
@@ -856,12 +939,26 @@
       if (evento.target === dialogoFeedback) fecharDialogo();
     });
     dialogoFeedback.addEventListener('close', () => {
-      salvarRascunho();
+      if (descartarAoFechar) {
+        descartarAoFechar = false;
+      } else {
+        salvarRascunho();
+        salvarRascunhoServidor(true);
+      }
       window.setTimeout(agendarAutoRefresh, 0);
     });
-    mensagemFeedback?.addEventListener('input', salvarRascunho);
-    responderIaFeedback?.addEventListener('change', salvarRascunho);
-    window.addEventListener('pagehide', salvarRascunho);
+    mensagemFeedback?.addEventListener('input', () => {
+      salvarRascunho();
+      agendarRascunhoServidor();
+    });
+    responderIaFeedback?.addEventListener('change', () => {
+      salvarRascunho();
+      salvarRascunhoServidor(false);
+    });
+    window.addEventListener('pagehide', () => {
+      salvarRascunho();
+      salvarRascunhoServidor(true);
+    });
     const mostrarAvisoFeedback = texto => {
       const aviso = document.getElementById('feedback-toast');
       if (!aviso) return;
@@ -919,7 +1016,17 @@
           sessionStorage.removeItem(CHAVE_RASCUNHO);
           sessionStorage.removeItem(CHAVE_ENVIADO);
         } catch (_erro) {}
+        window.clearTimeout(timerRascunhoServidor);
         formFeedback.reset();
+        if (mensagemFeedback) mensagemFeedback.value = '';
+        if (responderIaFeedback) responderIaFeedback.checked = false;
+        if (idRascunho) idRascunho.value = '';
+        if (enviar) {
+          enviar.disabled = false;
+          enviar.textContent = 'Enviar feedback';
+        }
+        if (status) status.textContent = '';
+        descartarAoFechar = true;
         fecharDialogo();
         const numero = String(dados.id || '').padStart(4, '0');
         mostrarAvisoFeedback(dados.ia_status === 'ok'
@@ -937,6 +1044,84 @@
         delete formFeedback.dataset.enviando;
       }
     });
+  }
+
+  // Cancelamento de OS: motivo em duas etapas e confirmação pelo número.
+  const dialogoCancelar = document.getElementById('dialogo-cancelar-os');
+  const abrirCancelar = document.getElementById('abrir-cancelar-os');
+  if (dialogoCancelar && abrirCancelar) {
+    const passos = Array.from(dialogoCancelar.querySelectorAll('.cancel-step'));
+    const motivoCancelar = document.getElementById('cancelar-motivo');
+    const confirmarNumero = document.getElementById('confirmar-numero-os');
+    const erroCancelar = document.getElementById('cancelar-erro');
+    const mostrarPasso = numero => {
+      passos.forEach(passo => {
+        passo.hidden = passo.dataset.step !== String(numero);
+      });
+    };
+    const limparCancelar = () => {
+      if (motivoCancelar) motivoCancelar.value = '';
+      if (confirmarNumero) confirmarNumero.value = '';
+      if (erroCancelar) {
+        erroCancelar.hidden = true;
+        erroCancelar.textContent = '';
+      }
+      mostrarPasso(1);
+    };
+    const fecharCancelar = () => {
+      if (typeof dialogoCancelar.close === 'function') dialogoCancelar.close();
+      else dialogoCancelar.removeAttribute('open');
+    };
+    abrirCancelar.addEventListener('click', () => {
+      limparCancelar();
+      if (typeof dialogoCancelar.showModal === 'function') {
+        if (!dialogoCancelar.open) dialogoCancelar.showModal();
+      } else {
+        dialogoCancelar.setAttribute('open', '');
+      }
+      motivoCancelar?.focus();
+    });
+    dialogoCancelar.querySelector('[data-fechar-cancelar]')?.addEventListener('click', fecharCancelar);
+    dialogoCancelar.querySelector('[data-proximo-cancelar]')?.addEventListener('click', () => {
+      if (!(motivoCancelar?.value || '').trim()) {
+        mostrarAvisoGlobal('Descreva o motivo do cancelamento antes de continuar.');
+        motivoCancelar?.focus();
+        return;
+      }
+      if (erroCancelar) erroCancelar.hidden = true;
+      mostrarPasso(2);
+      confirmarNumero?.focus();
+    });
+    dialogoCancelar.querySelector('[data-voltar-cancelar]')?.addEventListener('click', () => {
+      mostrarPasso(1);
+      motivoCancelar?.focus();
+    });
+    dialogoCancelar.addEventListener('click', evento => {
+      if (evento.target === dialogoCancelar) fecharCancelar();
+    });
+    document.getElementById('form-os')?.addEventListener('submit', evento => {
+      const submitter = evento.submitter;
+      if (!submitter || submitter.name !== 'cancelar_os') return;
+      if (!(motivoCancelar?.value || '').trim()) {
+        evento.preventDefault();
+        evento.stopImmediatePropagation();
+        mostrarPasso(1);
+        mostrarAvisoGlobal('Descreva o motivo do cancelamento antes de continuar.');
+        motivoCancelar?.focus();
+        return;
+      }
+      const esperado = (dialogoCancelar.dataset.numeroOs || '').trim();
+      if ((confirmarNumero?.value || '').trim() !== esperado) {
+        evento.preventDefault();
+        evento.stopImmediatePropagation();
+        mostrarPasso(2);
+        if (erroCancelar) {
+          erroCancelar.hidden = false;
+          erroCancelar.textContent = 'Digite exatamente o número da OS para confirmar.';
+        }
+        confirmarNumero?.focus();
+      }
+    }, true);
   }
 
   // Interface unslop: transforma os fieldsets da OS em seções navegáveis.
@@ -990,7 +1175,10 @@
         const rotulo = document.createElement('span');
         rotulo.textContent = nome;
         botao.append(numero, rotulo);
-        botao.addEventListener('click', () => ativar(indice));
+        botao.addEventListener('click', () => {
+          ativar(indice);
+          registrarUi();
+        });
         abas.appendChild(botao);
       });
       abas.addEventListener('keydown', evento => {
@@ -1004,13 +1192,18 @@
         if (destino === null) return;
         evento.preventDefault();
         ativar(destino);
+        registrarUi();
         abas.children[destino].focus();
       });
       formUnslop.insertBefore(abas, paineis[0]);
       ativar(0);
 
       const modelo = formUnslop.querySelector('.os-service-model');
-      if (modelo && paineis[0]) paineis[0].prepend(modelo);
+      if (modelo && paineis[0]) {
+        const statusBloco = paineis[0].querySelector('.os-status-block');
+        if (statusBloco) statusBloco.after(modelo);
+        else if (!paineis[0].contains(modelo)) paineis[0].prepend(modelo);
+      }
 
       // O fechamento pertence à aba de situação, não à de fotos.
       const painelSituacao = paineis.find(painel =>
@@ -1055,5 +1248,6 @@
   document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
     document.getElementById('abrir-feedback')?.click();
   });
+  registrarUi();
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

@@ -851,6 +851,7 @@ def instalar_banco(banco=None):
             ("catalogo_servicos", "composicao_json", "TEXT"),
             ("ordens_servico", "tempo_horas", "REAL DEFAULT 0"),
             ("ordens_servico", "composicao_json", "TEXT"),
+            ("ordens_servico", "base_percentuais", "TEXT NOT NULL DEFAULT 'total'"),
         ):
             colunas = [linha[1] for linha in conexao.execute(f"PRAGMA table_info({tabela})")]
             if colunas and coluna not in colunas:
@@ -858,13 +859,18 @@ def instalar_banco(banco=None):
 
 
 def recalcular_tudo(banco=None):
-    """Recalcula serviços e OS abertas com a configuração atual."""
+    """Recalcula serviços e OS abertas, preservando composições autoritativas.
+
+    OSs com base modular são recalculadas na mesma base. Composições
+    declarativas e OSs que não fecham com a nova configuração são mantidas e
+    contadas em ``preservadas``.
+    """
     caminho = str(banco or _banco_padrao())
     if not Path(caminho).is_file():
-        return {"servicos": 0, "os": 0}
+        return {"servicos": 0, "os": 0, "preservadas": 0}
     instalar_banco(caminho)
     config = carregar()
-    servicos = ordens = 0
+    servicos = ordens = preservadas = 0
     with sqlite3.connect(caminho, timeout=20) as conexao:
         for linha in conexao.execute(
                 """SELECT id,nome,preco_servico_centavos,materiais_json,tempo_horas
@@ -887,16 +893,40 @@ def recalcular_tudo(banco=None):
                 (para_json(composicao), identificador))
             servicos += 1
         for linha in conexao.execute(
-                """SELECT id,valor_mao_obra,valor_total,valor_materiais,tempo_horas
+                """SELECT id,valor_mao_obra,valor_total,valor_materiais,tempo_horas,
+                          base_percentuais,composicao_json
                    FROM ordens_servico WHERE status IN ('Aberta','Iniciada','Pendente')"""):
-            identificador, mao_reais, total_reais, materiais_reais, tempo = linha
-            composicao = calcular(
-                total_centavos=centavos_de_reais(total_reais),
-                materiais_centavos=centavos_de_reais(materiais_reais),
-                horas=tempo, config=config,
-                mao_obra_centavos=centavos_de_reais(mao_reais))
+            (identificador, mao_reais, total_reais, materiais_reais, tempo,
+             base, comp_json) = linha
+            existente = de_json(comp_json)
+            if isinstance(existente, dict) and existente.get("declarativa"):
+                # Composição declarativa não é recalculável pela configuração
+                # global; preservar os componentes definidos no YAML.
+                preservadas += 1
+                continue
+            try:
+                if (str(base or "").strip()
+                        and isinstance(existente, dict)
+                        and existente.get("base_percentuais")):
+                    composicao = calcular_os(
+                        total_centavos=centavos_de_reais(total_reais),
+                        materiais_centavos=centavos_de_reais(materiais_reais),
+                        mao_obra_centavos=centavos_de_reais(mao_reais),
+                        horas=tempo, base_percentuais=str(base),
+                        config=config)
+                else:
+                    composicao = calcular(
+                        total_centavos=centavos_de_reais(total_reais),
+                        materiais_centavos=centavos_de_reais(materiais_reais),
+                        horas=tempo, config=config,
+                        mao_obra_centavos=centavos_de_reais(mao_reais))
+            except ValueError:
+                # A nova configuração não fecha esta OS; manter a composição
+                # anterior em vez de gravar um valor inconsistente.
+                preservadas += 1
+                continue
             conexao.execute(
                 "UPDATE ordens_servico SET composicao_json=? WHERE id=?",
                 (para_json(composicao), identificador))
             ordens += 1
-    return {"servicos": servicos, "os": ordens}
+    return {"servicos": servicos, "os": ordens, "preservadas": preservadas}

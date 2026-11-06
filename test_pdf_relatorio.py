@@ -3,12 +3,15 @@
 Verifica que a linha TOTAL não expõe tags HTML literais (regressão do bug
 ``<b>TOTAL</b>``) e que o valor total é renderizado corretamente.
 """
+import io
 import json
 import os
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+
+from PIL import Image
 
 import prestadores_ext as ext
 
@@ -43,6 +46,10 @@ class PdfRelatorioTest(unittest.TestCase):
         self.pasta = tempfile.TemporaryDirectory()
         os.environ["AUTOSEG_BASE"] = self.pasta.name
         self.db = Path(self.pasta.name) / "teste.db"
+        ext.ANEXOS = Path(self.pasta.name) / "anexos"
+        ext.RELATORIOS = Path(self.pasta.name) / "relatorios"
+        ext.ANEXOS.mkdir(exist_ok=True)
+        ext.RELATORIOS.mkdir(exist_ok=True)
         import banco
         import fluxo_os
         import atendimento_os
@@ -95,6 +102,23 @@ class PdfRelatorioTest(unittest.TestCase):
         texto = "\n".join((p.extract_text() or "") for p in leitor.pages)
         self.assertIn("R$ 1.158,33", texto)
         self.assertIn("100,00%", texto)
+
+    def test_pdf_respeita_orientacao_exif_da_foto(self):
+        imagem = Image.new("RGB", (120, 60), (200, 30, 30))
+        exif = Image.Exif()
+        exif[274] = 6  # rotação de 90° no EXIF, comum em fotos de celular
+        buffer = io.BytesIO()
+        imagem.save(buffer, format="JPEG", exif=exif)
+        with ext.db(self.db) as conexao:
+            ext.registrar_imagem_transacao(
+                conexao, 10, None, "foto-celular.jpg", buffer.getvalue(),
+                permitir_colaboracao=True)
+        caminho = ext.gerar_pdf(self.db, 10)
+        from pypdf import PdfReader
+        leitor = PdfReader(str(caminho))
+        dimensoes = [pagina_imagem.image.size
+                     for pagina in leitor.pages for pagina_imagem in pagina.images]
+        self.assertIn((60, 120), dimensoes)
 
     def test_composicao_soma_total(self):
         # Garante que a composição da OS-0010 soma exatamente o total.

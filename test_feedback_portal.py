@@ -302,6 +302,74 @@ class FeedbackPortalTest(unittest.TestCase):
             self.assertEqual(c.execute('SELECT COUNT(*) FROM portal_feedback').fetchone()[0], 0)
 
 
+class FeedbackRascunhoTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_feedback_draft_')
+        self.db = str(Path(self.tmp.name) / 'teste.db')
+        criar_banco(self.db)
+        feedback.instalar(self.db)
+        self.sessao = {
+            'pid': 1, 'nome': 'Prestador Rascunho', 'csrf': 'x',
+            'telemetry_session': 'sessao-teste',
+        }
+        self.meta = {
+            'ui_mode': 'unslop', 'aba': '02Materiais',
+            'sessao_hash': 'hash-teste', 'navegador': 'Chrome',
+            'sistema': 'macOS', 'dispositivo': 'computador',
+        }
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_rascunho_vira_feedback_completo_sem_duplicar(self):
+        fid = feedback.salvar_rascunho(
+            self.db, self.sessao, '/os/25', 'Texto ainda incompleto',
+            False, self.meta)
+        self.assertIsNotNone(fid)
+        item = feedback.obter(self.db, fid)
+        self.assertEqual(item['status'], 'Incompleto')
+        self.assertEqual(item['status_dev'], 'Incompleto')
+        self.assertEqual(item['ui_mode'], 'unslop')
+        self.assertEqual(item['aba'], '02Materiais')
+        self.assertEqual(feedback.ultimo_rascunho(self.db, self.sessao)['id'], fid)
+
+        mesmo_id, completo = feedback.criar(
+            self.db, self.sessao, '/os/25', 'Texto ainda incompleto',
+            False, self.meta, rascunho_id=fid)
+        self.assertEqual(mesmo_id, fid)
+        self.assertEqual(completo['status'], 'Novo')
+        self.assertEqual(completo['status_dev'], 'Aguardando triagem')
+        with ext.db(self.db) as conexao:
+            total = conexao.execute(
+                "SELECT COUNT(*) FROM portal_feedback").fetchone()[0]
+        self.assertEqual(total, 1)
+        self.assertIsNone(feedback.ultimo_rascunho(self.db, self.sessao))
+
+    def test_telemetria_registra_modo_e_aba(self):
+        with patch.dict(os.environ, {'AUTOSEG_TELEMETRY': 'local'}):
+            feedback.registrar_ui(
+                self.db, self.sessao, '/os/25', 'unslop', '02Materiais',
+                self.meta)
+        with ext.db(self.db) as conexao:
+            row = conexao.execute(
+                "SELECT payload_json FROM telemetria_eventos "
+                "ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertIsNotNone(row)
+        payload = json.loads(row['payload_json'])
+        self.assertEqual(payload['event'], 'page_view')
+        self.assertEqual(payload['attributes']['ui_mode'], 'unslop')
+        self.assertEqual(payload['attributes']['tab'], '02Materiais')
+
+    def test_cancelar_descarta_rascunho(self):
+        fid = feedback.salvar_rascunho(
+            self.db, self.sessao, '/os/25', 'Rascunho descartado',
+            False, self.meta)
+        self.assertEqual(feedback.descartar_rascunho(
+            self.db, self.sessao, fid), 1)
+        self.assertIsNone(feedback.obter(self.db, fid))
+        self.assertIsNone(feedback.ultimo_rascunho(self.db, self.sessao))
+
+
 class AnonimizacaoTest(unittest.TestCase):
     def test_remove_documentos_contatos_e_endereco(self):
         original = ('João Silva, CPF 123.456.789-01, CNPJ 12.345.678/0001-95, '

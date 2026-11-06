@@ -159,7 +159,8 @@ def os_salvar(banco,d,pid,oid=None):
     if forma not in OS_FORMAS: raise ValueError('Forma de pagamento inválida.')
     observacoes=texto(d,'observacoes')
     relato=texto(d,'relatorio_tecnico',5000)
-    acao=texto(d,'acao_status',30)
+    cancelar=str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
+    acao='Cancelada' if cancelar else texto(d,'acao_status',30)
     if acao not in ('salvar','Pendente','Concluída','Cancelada'):
         raise ValueError('Operação inválida.')
     if acao!='salvar' and not relato:
@@ -167,6 +168,8 @@ def os_salvar(banco,d,pid,oid=None):
     motivo=texto(d,'motivo_encerramento',2000)
     if acao in ('Cancelada','Não realizada') and not motivo:
         raise ValueError('O motivo é obrigatório para cancelar ou indicar não realização.')
+    if cancelar and oid is None:
+        raise ValueError('Não é possível cancelar uma OS que ainda não foi salva.')
     imagens=[x for x in d.get('imagens_encerramento[]',[]) if isinstance(x,tuple) and x[0]]
     imagem=d.get('imagem_encerramento')
     if imagem and isinstance(imagem,tuple) and imagem[0]:imagens.append(imagem)
@@ -270,6 +273,11 @@ def os_salvar(banco,d,pid,oid=None):
         else:
             old=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone()
             if not old: raise ValueError('OS não existe.')
+            if cancelar:
+                confirmacao=texto(d,'confirmar_numero_os',40).strip()
+                if confirmacao != str(old['numero_os'] or '').strip():
+                    raise ValueError('O número da OS digitado não confere. '
+                                     'Digite exatamente o número mostrado para confirmar o cancelamento.')
             versao=d.get('_versao_os')
             if versao is not None and str(versao)!=(old['atualizado_em'] or ''):
                 raise ValueError('Esta OS foi atualizada por outra pessoa. Reabra a tela antes de salvar para evitar perda de dados.')

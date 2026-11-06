@@ -35,6 +35,7 @@ LIMITE_IA_HORA = 20
 
 STATUS_TRIAGEM = (
     'Aguardando triagem',
+    'Incompleto',
     'Pendente na DEV',
     'Em correção',
     'Corrigido na DEV',
@@ -51,6 +52,8 @@ CREATE TABLE IF NOT EXISTS portal_feedback (
     prestador_id INTEGER NOT NULL,
     prestador_nome TEXT NOT NULL,
     pagina TEXT NOT NULL,
+    ui_mode TEXT NOT NULL DEFAULT '',
+    aba TEXT NOT NULL DEFAULT '',
     mensagem TEXT NOT NULL,
     mensagem_anonimizada TEXT NOT NULL,
     responder_ia INTEGER NOT NULL DEFAULT 0,
@@ -84,6 +87,8 @@ CREATE TABLE IF NOT EXISTS portal_feedback_aberturas (
     prestador_id INTEGER NOT NULL,
     prestador_nome TEXT NOT NULL,
     pagina TEXT NOT NULL,
+    ui_mode TEXT NOT NULL DEFAULT '',
+    aba TEXT NOT NULL DEFAULT '',
     ip TEXT NOT NULL DEFAULT '',
     ip_rede TEXT NOT NULL DEFAULT '',
     ip_hash TEXT NOT NULL DEFAULT '',
@@ -129,6 +134,11 @@ def instalar(banco: str | Path) -> None:
     """Cria as tabelas do feedback sem alterar tabelas existentes."""
     with ext.db(banco) as c:
         c.executescript(SCHEMA)
+        for tabela in ('portal_feedback', 'portal_feedback_aberturas'):
+            colunas = [r[1] for r in c.execute(f'PRAGMA table_info({tabela})')]
+            for coluna in ('ui_mode', 'aba'):
+                if colunas and coluna not in colunas:
+                    c.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} TEXT NOT NULL DEFAULT ''")
     instalar_telemetria(banco)
 
 
@@ -327,11 +337,12 @@ def registrar_abertura(banco: str | Path, s: dict, pagina: str, meta: dict) -> i
     with ext.db(banco) as c:
         cur = c.execute(
             """INSERT INTO portal_feedback_aberturas(
-                   prestador_id,prestador_nome,pagina,ip,ip_rede,ip_hash,sessao_hash,
-                   user_agent,navegador,sistema,dispositivo,criado_em)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   prestador_id,prestador_nome,pagina,ui_mode,aba,ip,ip_rede,ip_hash,
+                   sessao_hash,user_agent,navegador,sistema,dispositivo,criado_em)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 int(s['pid']), str(s.get('nome') or ''), pagina,
+                str(meta.get('ui_mode') or ''), str(meta.get('aba') or ''),
                 meta.get('ip', ''), meta.get('ip_rede', ''), meta.get('ip_hash', ''),
                 meta.get('sessao_hash', ''), meta.get('user_agent', ''),
                 meta.get('navegador', ''), meta.get('sistema', ''),
@@ -340,8 +351,24 @@ def registrar_abertura(banco: str | Path, s: dict, pagina: str, meta: dict) -> i
         )
         abertura_id = int(cur.lastrowid)
     _emitir(banco, s, 'feedback_open', pagina, meta,
-            {'prestador_id': int(s['pid']), 'abertura_id': abertura_id})
+            {'prestador_id': int(s['pid']), 'abertura_id': abertura_id,
+             'ui_mode': str(meta.get('ui_mode') or ''),
+             'tab': str(meta.get('aba') or '')})
     return abertura_id
+
+
+def registrar_ui(banco: str | Path, s: dict, pagina: str, ui_mode: str,
+                 aba: str, meta: dict) -> None:
+    """Registra a sessão e a aba ativa para correlação com feedbacks."""
+    if not s or not s.get('pid'):
+        return
+    pagina = _pagina(pagina)
+    meta = meta or {}
+    _emitir(banco, s, 'page_view', pagina, meta, {
+        'prestador_id': int(s['pid']),
+        'ui_mode': str(ui_mode or '')[:20],
+        'tab': str(aba or '')[:80],
+    })
 
 
 def _limite_ia(banco: str | Path, prestador_id: int) -> bool:
@@ -413,7 +440,8 @@ def consultar_ia(mensagem_anonimizada: str, pagina: str) -> dict:
 
 
 def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
-          responder_ia: bool, meta: dict) -> tuple[int, dict]:
+          responder_ia: bool, meta: dict,
+          rascunho_id=None) -> tuple[int, dict]:
     if not s or not s.get('pid'):
         raise PermissionError('Entre no Portal do Prestador para enviar feedback.')
     texto = str(mensagem or '').strip()
@@ -427,26 +455,68 @@ def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
     responder_ia = bool(responder_ia)
 
     with ext.db(banco) as c:
-        cur = c.execute(
-            """INSERT INTO portal_feedback(
-                   prestador_id,prestador_nome,pagina,mensagem,mensagem_anonimizada,
-                   responder_ia,ip,ip_rede,ip_hash,sessao_hash,user_agent,navegador,
-                   sistema,dispositivo,criado_em,atualizado_em)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                int(s['pid']), str(s.get('nome') or ''), pagina, texto, anonimo,
-                1 if responder_ia else 0, meta.get('ip', ''), meta.get('ip_rede', ''),
-                meta.get('ip_hash', ''), meta.get('sessao_hash', ''),
-                meta.get('user_agent', ''), meta.get('navegador', ''),
-                meta.get('sistema', ''), meta.get('dispositivo', ''), agora(), agora(),
-            ),
-        )
-        fid = int(cur.lastrowid)
+        fid = None
+        if rascunho_id:
+            try:
+                rid = int(rascunho_id)
+            except (TypeError, ValueError):
+                rid = 0
+            if rid:
+                row = c.execute(
+                    "SELECT id FROM portal_feedback WHERE id=? AND prestador_id=? "
+                    "AND status='Incompleto'", (rid, int(s['pid']))).fetchone()
+                if row:
+                    fid = int(row['id'])
+        if fid is None:
+            row = c.execute(
+                "SELECT id FROM portal_feedback WHERE prestador_id=? "
+                "AND status='Incompleto' ORDER BY id DESC LIMIT 1",
+                (int(s['pid']),)).fetchone()
+            if row:
+                fid = int(row['id'])
+        if fid is not None:
+            c.execute(
+                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,
+                       mensagem=?,mensagem_anonimizada=?,
+                       responder_ia=?,status='Novo',status_dev='Aguardando triagem',
+                       categoria='Não classificada',urgencia='Não classificada',
+                       possivel_melhoria='',confianca=0,resposta_ia='',
+                       ia_status='nao_solicitada',ia_erro='',respondido_em=NULL,
+                       ip=?,ip_rede=?,ip_hash=?,sessao_hash=?,user_agent=?,navegador=?,
+                       sistema=?,dispositivo=?,atualizado_em=? WHERE id=?""",
+                (pagina, meta.get('ui_mode', ''), meta.get('aba', ''),
+                 texto, anonimo, 1 if responder_ia else 0,
+                 meta.get('ip', ''), meta.get('ip_rede', ''), meta.get('ip_hash', ''),
+                 meta.get('sessao_hash', ''), meta.get('user_agent', ''),
+                 meta.get('navegador', ''), meta.get('sistema', ''),
+                 meta.get('dispositivo', ''), agora(), fid))
+            c.execute(
+                "DELETE FROM portal_feedback WHERE prestador_id=? "
+                "AND status='Incompleto' AND id<>?", (int(s['pid']), fid))
+        else:
+            cur = c.execute(
+                """INSERT INTO portal_feedback(
+                       prestador_id,prestador_nome,pagina,ui_mode,aba,mensagem,
+                       mensagem_anonimizada,responder_ia,ip,ip_rede,ip_hash,sessao_hash,
+                       user_agent,navegador,sistema,dispositivo,criado_em,atualizado_em)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    int(s['pid']), str(s.get('nome') or ''), pagina,
+                    meta.get('ui_mode', ''), meta.get('aba', ''), texto, anonimo,
+                    1 if responder_ia else 0, meta.get('ip', ''), meta.get('ip_rede', ''),
+                    meta.get('ip_hash', ''), meta.get('sessao_hash', ''),
+                    meta.get('user_agent', ''), meta.get('navegador', ''),
+                    meta.get('sistema', ''), meta.get('dispositivo', ''), agora(), agora(),
+                ),
+            )
+            fid = int(cur.lastrowid)
 
     _emitir(banco, s, 'feedback_submit', pagina, meta, {
         'prestador_id': int(s['pid']),
         'feedback_id': fid,
         'ai_requested': 1 if responder_ia else 0,
+        'ui_mode': str(meta.get('ui_mode') or ''),
+        'tab': str(meta.get('aba') or ''),
     })
 
     if responder_ia:
@@ -492,6 +562,120 @@ def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
         })
 
     return fid, obter(banco, fid)
+
+
+def salvar_rascunho(banco: str | Path, s: dict, pagina: str, mensagem: str,
+                    responder_ia: bool, meta: dict,
+                    rascunho_id=None) -> int | None:
+    """Salva um feedback incompleto, sem classificá-lo nem chamar a IA.
+
+    Um único rascunho por prestador é mantido. Ao enviar, ``criar`` atualiza
+    essa mesma linha, evitando duplicatas.
+    """
+    if not s or not s.get('pid'):
+        raise PermissionError('Entre no Portal do Prestador para salvar o feedback.')
+    texto = str(mensagem or '').strip()
+    pagina = _pagina(pagina)
+    meta = meta or {}
+    with ext.db(banco) as c:
+        if not texto:
+            if rascunho_id:
+                try:
+                    rid = int(rascunho_id)
+                except (TypeError, ValueError):
+                    rid = 0
+                if rid:
+                    c.execute("DELETE FROM portal_feedback WHERE id=? "
+                              "AND prestador_id=? AND status='Incompleto'",
+                              (rid, int(s['pid'])))
+            else:
+                c.execute("DELETE FROM portal_feedback WHERE prestador_id=? "
+                          "AND status='Incompleto'", (int(s['pid']),))
+            return None
+        texto = texto[:MAX_MENSAGEM]
+        anonimo = anonimizar(texto)
+        fid = None
+        if rascunho_id:
+            try:
+                rid = int(rascunho_id)
+            except (TypeError, ValueError):
+                rid = 0
+            if rid:
+                row = c.execute(
+                    "SELECT id FROM portal_feedback WHERE id=? AND prestador_id=? "
+                    "AND status='Incompleto'", (rid, int(s['pid']))).fetchone()
+                if row:
+                    fid = int(row['id'])
+        if fid is None:
+            row = c.execute(
+                "SELECT id FROM portal_feedback WHERE prestador_id=? "
+                "AND status='Incompleto' ORDER BY id DESC LIMIT 1",
+                (int(s['pid']),)).fetchone()
+            if row:
+                fid = int(row['id'])
+        if fid is not None:
+            c.execute(
+                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,
+                       mensagem=?,mensagem_anonimizada=?,responder_ia=?,
+                       ip=?,ip_rede=?,ip_hash=?,sessao_hash=?,
+                       user_agent=?,navegador=?,sistema=?,dispositivo=?,atualizado_em=?
+                   WHERE id=?""",
+                (pagina, meta.get('ui_mode', ''), meta.get('aba', ''),
+                 texto, anonimo, 1 if responder_ia else 0,
+                 meta.get('ip', ''), meta.get('ip_rede', ''), meta.get('ip_hash', ''),
+                 meta.get('sessao_hash', ''), meta.get('user_agent', ''),
+                 meta.get('navegador', ''), meta.get('sistema', ''),
+                 meta.get('dispositivo', ''), agora(), fid))
+        else:
+            cur = c.execute(
+                """INSERT INTO portal_feedback(
+                       prestador_id,prestador_nome,pagina,ui_mode,aba,mensagem,
+                       mensagem_anonimizada,responder_ia,status,status_dev,ip,ip_rede,
+                       ip_hash,sessao_hash,user_agent,navegador,sistema,dispositivo,
+                       criado_em,atualizado_em)
+                   VALUES(?,?,?,?,?,?,?,?,'Incompleto','Incompleto',?,?,?,?,?,?,?,?,?,?)""",
+                (int(s['pid']), str(s.get('nome') or ''), pagina,
+                 meta.get('ui_mode', ''), meta.get('aba', ''), texto, anonimo,
+                 1 if responder_ia else 0, meta.get('ip', ''), meta.get('ip_rede', ''),
+                 meta.get('ip_hash', ''), meta.get('sessao_hash', ''),
+                 meta.get('user_agent', ''), meta.get('navegador', ''),
+                 meta.get('sistema', ''), meta.get('dispositivo', ''), agora(), agora()))
+            fid = int(cur.lastrowid)
+        c.execute("DELETE FROM portal_feedback WHERE prestador_id=? "
+                  "AND status='Incompleto' AND id<>?", (int(s['pid']), fid))
+    return fid
+
+
+def descartar_rascunho(banco: str | Path, s: dict, rascunho_id=None) -> int:
+    """Descarta o rascunho do prestador (botão Cancelar)."""
+    if not s or not s.get('pid'):
+        raise PermissionError('Entre no Portal do Prestador para descartar o feedback.')
+    with ext.db(banco) as c:
+        if rascunho_id:
+            try:
+                rid = int(rascunho_id)
+            except (TypeError, ValueError):
+                rid = 0
+            if rid:
+                cur = c.execute("DELETE FROM portal_feedback WHERE id=? "
+                                "AND prestador_id=? AND status='Incompleto'",
+                                (rid, int(s['pid'])))
+                return int(cur.rowcount or 0)
+        cur = c.execute("DELETE FROM portal_feedback WHERE prestador_id=? "
+                        "AND status='Incompleto'", (int(s['pid']),))
+        return int(cur.rowcount or 0)
+
+
+def ultimo_rascunho(banco: str | Path, s: dict) -> dict | None:
+    """Devolve o rascunho mais recente do prestador, se existir."""
+    if not s or not s.get('pid'):
+        return None
+    with ext.db(banco) as c:
+        row = c.execute(
+            "SELECT id,mensagem,responder_ia,pagina FROM portal_feedback "
+            "WHERE prestador_id=? AND status='Incompleto' "
+            "ORDER BY id DESC LIMIT 1", (int(s['pid']),)).fetchone()
+    return dict(row) if row else None
 
 
 def obter(banco: str | Path, fid: int) -> dict | None:
