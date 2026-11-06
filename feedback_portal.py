@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS portal_feedback (
     pagina TEXT NOT NULL,
     ui_mode TEXT NOT NULL DEFAULT '',
     aba TEXT NOT NULL DEFAULT '',
+    diagnostico_json TEXT NOT NULL DEFAULT '',
     mensagem TEXT NOT NULL,
     mensagem_anonimizada TEXT NOT NULL,
     responder_ia INTEGER NOT NULL DEFAULT 0,
@@ -136,7 +137,7 @@ def instalar(banco: str | Path) -> None:
         c.executescript(SCHEMA)
         for tabela in ('portal_feedback', 'portal_feedback_aberturas'):
             colunas = [r[1] for r in c.execute(f'PRAGMA table_info({tabela})')]
-            for coluna in ('ui_mode', 'aba'):
+            for coluna in ('ui_mode', 'aba', 'diagnostico_json'):
                 if colunas and coluna not in colunas:
                     c.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} TEXT NOT NULL DEFAULT ''")
     instalar_telemetria(banco)
@@ -476,7 +477,7 @@ def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
                 fid = int(row['id'])
         if fid is not None:
             c.execute(
-                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,
+                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,diagnostico_json=?,
                        mensagem=?,mensagem_anonimizada=?,
                        responder_ia=?,status='Novo',status_dev='Aguardando triagem',
                        categoria='Não classificada',urgencia='Não classificada',
@@ -485,7 +486,7 @@ def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
                        ip=?,ip_rede=?,ip_hash=?,sessao_hash=?,user_agent=?,navegador=?,
                        sistema=?,dispositivo=?,atualizado_em=? WHERE id=?""",
                 (pagina, meta.get('ui_mode', ''), meta.get('aba', ''),
-                 texto, anonimo, 1 if responder_ia else 0,
+                 meta.get('diagnostico', ''), texto, anonimo, 1 if responder_ia else 0,
                  meta.get('ip', ''), meta.get('ip_rede', ''), meta.get('ip_hash', ''),
                  meta.get('sessao_hash', ''), meta.get('user_agent', ''),
                  meta.get('navegador', ''), meta.get('sistema', ''),
@@ -496,13 +497,14 @@ def criar(banco: str | Path, s: dict, pagina: str, mensagem: str,
         else:
             cur = c.execute(
                 """INSERT INTO portal_feedback(
-                       prestador_id,prestador_nome,pagina,ui_mode,aba,mensagem,
-                       mensagem_anonimizada,responder_ia,ip,ip_rede,ip_hash,sessao_hash,
+                       prestador_id,prestador_nome,pagina,ui_mode,aba,diagnostico_json,
+                       mensagem,mensagem_anonimizada,responder_ia,ip,ip_rede,ip_hash,sessao_hash,
                        user_agent,navegador,sistema,dispositivo,criado_em,atualizado_em)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     int(s['pid']), str(s.get('nome') or ''), pagina,
-                    meta.get('ui_mode', ''), meta.get('aba', ''), texto, anonimo,
+                    meta.get('ui_mode', ''), meta.get('aba', ''), meta.get('diagnostico', ''),
+                    texto, anonimo,
                     1 if responder_ia else 0, meta.get('ip', ''), meta.get('ip_rede', ''),
                     meta.get('ip_hash', ''), meta.get('sessao_hash', ''),
                     meta.get('user_agent', ''), meta.get('navegador', ''),
@@ -615,13 +617,13 @@ def salvar_rascunho(banco: str | Path, s: dict, pagina: str, mensagem: str,
                 fid = int(row['id'])
         if fid is not None:
             c.execute(
-                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,
+                """UPDATE portal_feedback SET pagina=?,ui_mode=?,aba=?,diagnostico_json=?,
                        mensagem=?,mensagem_anonimizada=?,responder_ia=?,
                        ip=?,ip_rede=?,ip_hash=?,sessao_hash=?,
                        user_agent=?,navegador=?,sistema=?,dispositivo=?,atualizado_em=?
                    WHERE id=?""",
                 (pagina, meta.get('ui_mode', ''), meta.get('aba', ''),
-                 texto, anonimo, 1 if responder_ia else 0,
+                 meta.get('diagnostico', ''), texto, anonimo, 1 if responder_ia else 0,
                  meta.get('ip', ''), meta.get('ip_rede', ''), meta.get('ip_hash', ''),
                  meta.get('sessao_hash', ''), meta.get('user_agent', ''),
                  meta.get('navegador', ''), meta.get('sistema', ''),
@@ -629,13 +631,14 @@ def salvar_rascunho(banco: str | Path, s: dict, pagina: str, mensagem: str,
         else:
             cur = c.execute(
                 """INSERT INTO portal_feedback(
-                       prestador_id,prestador_nome,pagina,ui_mode,aba,mensagem,
-                       mensagem_anonimizada,responder_ia,status,status_dev,ip,ip_rede,
+                       prestador_id,prestador_nome,pagina,ui_mode,aba,diagnostico_json,
+                       mensagem,mensagem_anonimizada,responder_ia,status,status_dev,ip,ip_rede,
                        ip_hash,sessao_hash,user_agent,navegador,sistema,dispositivo,
                        criado_em,atualizado_em)
-                   VALUES(?,?,?,?,?,?,?,?,'Incompleto','Incompleto',?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES(?,?,?,?,?,?,?,?,?,'Incompleto','Incompleto',?,?,?,?,?,?,?,?,?,?)""",
                 (int(s['pid']), str(s.get('nome') or ''), pagina,
-                 meta.get('ui_mode', ''), meta.get('aba', ''), texto, anonimo,
+                 meta.get('ui_mode', ''), meta.get('aba', ''), meta.get('diagnostico', ''),
+                 texto, anonimo,
                  1 if responder_ia else 0, meta.get('ip', ''), meta.get('ip_rede', ''),
                  meta.get('ip_hash', ''), meta.get('sessao_hash', ''),
                  meta.get('user_agent', ''), meta.get('navegador', ''),

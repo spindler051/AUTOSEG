@@ -582,6 +582,14 @@
       if (!window.confirm(form.dataset.confirm)) e.preventDefault();
     });
   });
+  document.querySelectorAll('button[data-confirm]').forEach(botao => {
+    botao.addEventListener('click', evento => {
+      if (!window.confirm(botao.getAttribute('data-confirm'))) {
+        evento.preventDefault();
+        evento.stopImmediatePropagation();
+      }
+    });
+  });
 
   // Máscaras visuais de documentos, sem alterar a validação do servidor.
   function mascaraDocumento(valor) {
@@ -781,6 +789,32 @@
     const idRascunho = document.getElementById('feedback-rascunho-id');
     const uiModeFeedback = document.getElementById('feedback-ui-mode');
     const abaFeedback = document.getElementById('feedback-aba');
+    const diagnosticoFeedback = document.getElementById('feedback-diagnostico');
+    const coletarDiagnostico = () => {
+      if (!diagnosticoFeedback) return;
+      const total = document.getElementById('total-previsto');
+      const composicao = document.getElementById('composicao-prevista');
+      const retangulo = elemento => {
+        if (!elemento) return null;
+        const r = elemento.getBoundingClientRect();
+        return {x: Math.round(r.x), y: Math.round(r.y),
+                w: Math.round(r.width), h: Math.round(r.height)};
+      };
+      try {
+        diagnosticoFeedback.value = JSON.stringify({
+          path: location.pathname,
+          ui_mode: modoUi(),
+          aba: abaAtiva(),
+          viewport: {w: innerWidth, h: innerHeight, dpr: devicePixelRatio},
+          scroll: {x: scrollX, y: scrollY},
+          total_previsto: total?.textContent || '',
+          total_rect: retangulo(total),
+          composicao_rect: retangulo(composicao),
+          composicao_texto: (composicao?.innerText || '').slice(0, 2000),
+          texto_principal: (document.querySelector('main')?.innerText || '').slice(0, 2500)
+        });
+      } catch (_erro) {}
+    };
     const CHAVE_RASCUNHO = 'autoseg:feedback:draft:v1';
     const CHAVE_ENVIADO = 'autoseg:feedback:submitted:v1';
     const RASCUNHO_VALIDO_MS = 10 * 60 * 1000;
@@ -795,6 +829,7 @@
       if (responderIaFeedback?.checked) corpo.append('responder_ia', '1');
       corpo.append('ui_mode', modoUi());
       corpo.append('aba', abaAtiva());
+      corpo.append('diagnostico', diagnosticoFeedback?.value || '');
       if (idRascunho?.value) corpo.append('rascunho_id', idRascunho.value);
       return corpo;
     };
@@ -873,6 +908,7 @@
       marcarPagina();
       if (uiModeFeedback) uiModeFeedback.value = modoUi();
       if (abaFeedback) abaFeedback.value = abaAtiva();
+      coletarDiagnostico();
       if (typeof dialogoFeedback.showModal === 'function') {
         if (!dialogoFeedback.open) dialogoFeedback.showModal();
       } else {
@@ -996,6 +1032,7 @@
       evento.preventDefault();
       if (formFeedback.dataset.enviando === '1') return;
       formFeedback.dataset.enviando = '1';
+      coletarDiagnostico();
       prepararEnvio();
       try {
         const resposta = await fetch('/feedback', {
@@ -1247,6 +1284,15 @@
 
   document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
     document.getElementById('abrir-feedback')?.click();
+  });
+  document.querySelectorAll('table tbody tr').forEach(tr => {
+    const link = tr.querySelector('td:first-child a[href^="/os/"]');
+    if (!link) return;
+    tr.classList.add('row-link');
+    tr.addEventListener('click', evento => {
+      if (evento.target.closest('a,button,input,select,label,form')) return;
+      window.location.assign(link.href);
+    });
   });
   registrarUi();
 }());

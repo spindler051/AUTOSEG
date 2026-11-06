@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.31 — financeiro por OS em que participo e feedbacks recentes — 2026-11-06 — develop
+
+- **Financeiro:** dados bancários passam a ser o primeiro bloco; “Lançamentos das OS em que participo” une OSs finalizadas e OSs em que o prestador é técnico secundário; duas colunas visíveis (A receber / Confirmar recebimento e Recebidos) com migração automática ao confirmar. O card separado de produção secundária foi absorvido.
+- **Repasses:** “Repasses a outros técnicos” continua no financeiro do finalizador; ao registrar envio, o item aparece na coluna A receber do técnico secundário e, após confirmação, migra para Recebidos.
+- **Fotos:** reordenação com botões subir/descer; “Incluir no PDF” agora é checkbox; a ordem é persistida e usada no PDF.
+- **OS:** o cartão Andamento foi unido ao bloco Situação do atendimento na aba Identificação e deixou de aparecer nas outras abas; administradores podem arquivar OS ativas preservando histórico.
+- **Navegação:** cards da home, financeiro, nomes de clientes e linhas de OS ficaram clicáveis; a navegação mobile do unslop passou a ser vertical, sem rolagem horizontal.
+- **Total previsto:** layout separado em uma linha própria, com valor destacado e sem quebra.
+- **Feedback:** o formulário passa a anexar um diagnóstico técnico da tela (modo, aba, viewport, posição, total previsto e texto principal), visível na administração; o layout do Total previsto também foi corrigido.
+- **Testes:** `test_rev12_correcoes.py` (37 OK, 1 skipped), `test_composicao.py` (28 OK), `test_feedback_portal.py` (25 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (4 OK), `test_produtividade_rev07.py` (9 OK) e `test_importacao_yaml.py` (OK).
+
 ## 9.6.0-dev.30 — fotos da OS sem texto de atribuição — 2026-11-06 — develop
 
 - **Fotos da OS:** o editor normal de fotos e legendas aparece para o responsável e para administradores, dentro da aba Fotos. Foi removido o cartão extra e todas as mensagens sobre “assumir/atribuir a OS”. Administradores editam fotos e legendas livremente; a responsabilidade da OS não muda e a conclusão continua com o responsável.

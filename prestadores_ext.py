@@ -69,7 +69,8 @@ def instalar(banco):
         CREATE TABLE IF NOT EXISTS os_anexos (
             id INTEGER PRIMARY KEY AUTOINCREMENT, os_id INTEGER NOT NULL,
             prestador_id INTEGER, nome_original TEXT NOT NULL, caminho TEXT NOT NULL,
-            tipo TEXT NOT NULL, criado_em TEXT NOT NULL);
+            tipo TEXT NOT NULL, criado_em TEXT NOT NULL,
+            ordem INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS os_conclusoes (
             os_id INTEGER PRIMARY KEY, prestador_id INTEGER NOT NULL,
             relato TEXT NOT NULL, informado_em TEXT NOT NULL, aprovado_em TEXT);
@@ -128,6 +129,8 @@ def instalar(banco):
             colunas_os={r[1] for r in c.execute('PRAGMA table_info(ordens_servico)').fetchall()}
             if 'base_percentuais' not in colunas_os:
                 c.execute("ALTER TABLE ordens_servico ADD COLUMN base_percentuais TEXT NOT NULL DEFAULT 'total'")
+            if 'arquivada' not in colunas_os:
+                c.execute("ALTER TABLE ordens_servico ADD COLUMN arquivada INTEGER NOT NULL DEFAULT 0")
         # REV05: exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
@@ -138,6 +141,9 @@ def instalar(banco):
             c.execute('ALTER TABLE os_anexos ADD COLUMN chave TEXT')
         if 'sha256' not in col_anexos:
             c.execute('ALTER TABLE os_anexos ADD COLUMN sha256 TEXT')
+        if 'ordem' not in col_anexos:
+            c.execute('ALTER TABLE os_anexos ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0')
+        c.execute('UPDATE os_anexos SET ordem=id WHERE ordem=0')
         c.execute('CREATE INDEX IF NOT EXISTS idx_anexos_os_chave ON os_anexos(os_id,chave)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_anexos_os_sha ON os_anexos(os_id,sha256)')
         c.execute('''CREATE TABLE IF NOT EXISTS v9_anexos_visiveis(
@@ -241,7 +247,7 @@ def listar_os_compartilhadas(banco, ordem='status'):
     with db(banco) as c:
         return [dict(x) for x in c.execute(f"""
             SELECT o.id, o.numero_os, o.status, o.descricao, o.data_abertura,
-                   cl.nome AS cliente,
+                   o.cliente_id, cl.nome AS cliente,
                    r.prestador_id AS responsavel_id,
                    p.nome AS responsavel,
                    (SELECT GROUP_CONCAT(nome, ', ') FROM (
@@ -254,6 +260,7 @@ def listar_os_compartilhadas(banco, ordem='status'):
             LEFT JOIN os_responsaveis r ON r.os_id=o.id
             LEFT JOIN prestadores p ON p.id=r.prestador_id
             WHERE o.status IN ('Aberta','Iniciada','Pendente')
+              AND COALESCE(o.arquivada,0)=0
             ORDER BY {clausula}
         """).fetchall()]
 
@@ -311,6 +318,25 @@ def assumir(banco,os_id,pid):
                f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
         return True
 
+def arquivar_os(banco,os_id,pid,ator=None,motivo=''):
+    """Arquiva uma OS ativa sem apagar dados; admin only, com evento."""
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        if pid is None or not c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone():
+            raise PermissionError('Somente administradores podem arquivar OS.')
+        o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:raise ValueError('OS não encontrada.')
+        if o['arquivada']:return False
+        if o['status'] not in ATIVAS:
+            raise ValueError('Somente OS ativas podem ser arquivadas; OS encerradas ficam no histórico.')
+        motivo=str(motivo or '').strip()[:500]
+        descricao='OS arquivada pelo administrador; histórico preservado.'
+        if motivo:descricao+=' Motivo: '+motivo
+        c.execute('UPDATE ordens_servico SET arquivada=1,atualizado_em=? WHERE id=?',(agora(),os_id))
+        evento(c,os_id,'OS arquivada',descricao,pid,ator or 'Administrador')
+        return True
+
+
 def acesso(c,os_id,pid):
     """Legado: acesso operacional (mutação) apenas ao responsável atual."""
     return responsavel_atual(c,os_id)==pid
@@ -357,10 +383,12 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
     from PIL import Image, ImageOps
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
             raise ValueError('OS encerrada: não é permitido girar fotos.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
         if pid is not None:
             p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
             if not p:raise PermissionError('Prestador inativo.')
@@ -390,6 +418,47 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
             if p:nome_ator=p['nome']
         evento(c,os_id,'Foto girada',Path(a['nome_original']).name[:150],pid,nome_ator)
         return str(caminho)
+
+
+def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
+    """Move uma foto uma posição para cima/baixo dentro da mesma OS."""
+    direcao=str(direcao or '').strip().lower()
+    if direcao not in ('up','down'):
+        raise ValueError('Direção de ordenação inválida.')
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:raise ValueError('OS não existe.')
+        if o['status'] not in ATIVAS:
+            raise ValueError('OS encerrada: não é permitido reordenar fotos.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone()) if pid is not None else False
+        if pid is not None and responsavel_atual(c,os_id)!=pid and not admin:
+            raise PermissionError('Somente o responsável ou administrador edita fotos.')
+        atual=c.execute('SELECT id,ordem,nome_original FROM os_anexos WHERE id=? AND os_id=?',
+                        (anexo_id,os_id)).fetchone()
+        if not atual:raise ValueError('Foto não encontrada.')
+        if direcao=='up':
+            vizinho=c.execute('''SELECT id,ordem FROM os_anexos WHERE os_id=?
+                AND (ordem<? OR (ordem=? AND id<?)) ORDER BY ordem DESC,id DESC LIMIT 1''',
+                (os_id,atual['ordem'],atual['ordem'],atual['id'])).fetchone()
+        else:
+            vizinho=c.execute('''SELECT id,ordem FROM os_anexos WHERE os_id=?
+                AND (ordem>? OR (ordem=? AND id>?)) ORDER BY ordem,id LIMIT 1''',
+                (os_id,atual['ordem'],atual['ordem'],atual['id'])).fetchone()
+        if not vizinho:
+            return False
+        c.execute('UPDATE os_anexos SET ordem=? WHERE id=?',(vizinho['ordem'],atual['id']))
+        c.execute('UPDATE os_anexos SET ordem=? WHERE id=?',(atual['ordem'],vizinho['id']))
+        nome_ator=ator
+        if pid is not None:
+            p=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()
+            if p:nome_ator=p['nome']
+        evento(c,os_id,'Foto reordenada',
+               f'{Path(atual["nome_original"]).name[:150]} movida para {"cima" if direcao=="up" else "baixo"}.',
+               pid,nome_ator)
+        return True
 
 
 def _legenda_normalizada(texto):
@@ -449,9 +518,11 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
     destino=ANEXOS/(secrets.token_hex(16)+extensao)
     destino.write_bytes(conteudo)
     try:
-        cur=c.execute('''INSERT INTO os_anexos(os_id,prestador_id,nome_original,caminho,tipo,criado_em,chave,sha256)
-                         VALUES(?,?,?,?,?,?,?,?)''',
-                  (os_id,pid,Path(nome).name[:150],str(destino),formato,agora(),chave,digest))
+        ordem=c.execute('SELECT COALESCE(MAX(ordem),0)+1 FROM os_anexos WHERE os_id=?',
+                        (os_id,)).fetchone()[0]
+        cur=c.execute('''INSERT INTO os_anexos(os_id,prestador_id,nome_original,caminho,tipo,criado_em,chave,sha256,ordem)
+                         VALUES(?,?,?,?,?,?,?,?,?)''',
+                  (os_id,pid,Path(nome).name[:150],str(destino),formato,agora(),chave,digest,ordem))
         definir_legenda_anexo_c(c,os_id,cur.lastrowid,legenda,visivel)
         ator='Administrador'
         if pid is not None:
@@ -489,7 +560,7 @@ def gerar_pdf(banco,os_id):
         responsavel=c.execute('SELECT p.nome FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
         participantes=c.execute('SELECT p.nome FROM os_prestadores op JOIN prestadores p ON p.id=op.prestador_id WHERE op.os_id=? ORDER BY p.nome',(os_id,)).fetchall()
         eventos=c.execute('SELECT criado_em,ator,acao,descricao FROM os_eventos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
-        anexos=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        anexos=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE os_id=? ORDER BY ordem,id',(os_id,)).fetchall()
         materiais=c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status,valor FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         tem_encerramento=c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_encerramentos'").fetchone()

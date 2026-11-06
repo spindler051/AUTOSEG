@@ -507,12 +507,16 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(legenda['legenda'], 'Foto do portão')
         self.assertEqual(responsavel['prestador_id'], a)
 
+        _, html = req(cliente_b, base, f'/os/{oid}')
+        self.assertIn('name="anexo_incluir[]"', html)
+        self.assertIn(f'formaction="/os/{oid}/anexo/{foto["id"]}/mover"', html)
+
         # O mesmo técnico não responsável pode alterar a legenda depois.
         status, _ = req(cliente_b, base, f'/os/{oid}/fotos', {
             'csrf': token,
             'anexo_id[]': [str(foto['id'])],
             'anexo_legenda[]': ['Legenda alterada pelo colaborador'],
-            'anexo_visivel[]': ['0'],
+            'anexo_incluir_modo': '1',
         })
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
@@ -992,28 +996,39 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('A receber (minha produção)</span><strong>R$ 700,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('Dados bancários', html)
+        self.assertIn('Lançamentos das OS em que participo', html)
+        self.assertIn('A receber / Confirmar recebimento', html)
+        self.assertIn('Recebidos', html)
+        self.assertIn('finance-columns', html)
         self.assertIn('Minha parcela', html)
+        self.assertLess(html.index('Dados bancários'), html.index('Lançamentos das OS em que participo'))
+        self.assertIn(f'action="/financeiro/{fid}/receber"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         req(cliente_a, base, f'/financeiro/{fid}/receber', {'csrf': token})
         _, html = req(cliente_a, base, '/financeiro')
         self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 700,00</strong>', html)
+        self.assertNotIn(f'action="/financeiro/{fid}/receber"', html)
 
         cliente_b = self._login(base, 'tecnico.b@exemplo.com.br')
         status, html = req(cliente_b, base, '/financeiro')
         self.assertEqual(status, 200)
         self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
-        self.assertIn('Minha produção como técnico secundário', html)
+        self.assertIn('Lançamentos das OS em que participo', html)
+        self.assertIn('Aguardando envio', html)
+        self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
 
         prod.confirmar_repasse(self.db, oid, a, b, '300,00')
         _, html = req(cliente_b, base, '/financeiro')
         self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
-        self.assertIn('Confirmar que recebi', html)
+        self.assertIn('action="/financeiro/repasse/confirmar"', html)
         prod.confirmar_recebimento_repasse(self.db, oid, b)
         _, html = req(cliente_b, base, '/financeiro')
         self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 300,00</strong>', html)
+        self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
 
     def test_nao_admin_nao_edita_fotos_de_outro(self):
         a = self._prestador('Técnico Foto Responsável', email='foto.resp@exemplo.com.br')
@@ -1039,6 +1054,63 @@ class CorrecoesRev12(unittest.TestCase):
             [('csrf', token)], [('imagens_encerramento[]', 'foto.png',
                                  buffer.getvalue(), 'image/png')])
         self.assertEqual(status, 403)
+
+    def test_reordenar_fotos_atualiza_ordem(self):
+        pid = self._prestador('Técnico Ordem', email='ordem@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Ordem')
+        dados = {'cliente_id': str(cid), 'descricao': 'Fotos ordenadas',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        with ext.db(self.db) as c:
+            for indice, cor in enumerate(((40, 0, 0), (0, 80, 0)), start=1):
+                buffer = io.BytesIO()
+                Image.new('RGB', (4, 4), cor).save(buffer, 'PNG')
+                ext.registrar_imagem_transacao(
+                    c, oid, pid, f'foto-{indice}.png', buffer.getvalue(),
+                    permitir_colaboracao=True)
+            ids = [r['id'] for r in c.execute(
+                'SELECT id FROM os_anexos WHERE os_id=? ORDER BY ordem,id', (oid,))]
+        self.assertEqual(len(ids), 2)
+        ext.mover_anexo(self.db, oid, ids[1], 'up', pid)
+        with ext.db(self.db) as c:
+            ordem = [r['id'] for r in c.execute(
+                'SELECT id FROM os_anexos WHERE os_id=? ORDER BY ordem,id', (oid,))]
+        self.assertEqual(ordem, [ids[1], ids[0]])
+
+    def test_admin_arquiva_os_sem_apagar_historico(self):
+        a = self._prestador('Técnico Arquivar A', email='arquivar.a@exemplo.com.br')
+        b = self._prestador('Técnico Arquivar B', email='arquivar.b@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Arquivar')
+        dados = {'cliente_id': str(cid), 'descricao': 'OS criada errada',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        with self.assertRaises(PermissionError):
+            ext.arquivar_os(self.db, oid, a)
+        self.assertTrue(ext.arquivar_os(self.db, oid, b, ator='Admin teste',
+                                        motivo='OS criada errada'))
+        with ext.db(self.db) as c:
+            row = c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                            (oid,)).fetchone()
+            evento = c.execute("SELECT acao FROM os_eventos WHERE os_id=? "
+                               "AND acao='OS arquivada'", (oid,)).fetchone()
+        self.assertEqual(row['status'], 'Aberta')
+        self.assertEqual(row['arquivada'], 1)
+        self.assertIsNotNone(evento)
+        ids = [x['id'] for x in ext.listar_os_compartilhadas(self.db, 'status')]
+        self.assertNotIn(oid, ids)
+        with self.assertRaises(ValueError):
+            neg.os_salvar(self.db, dados, a, oid)
+        _, base = self._servidor()
+        cliente_b = self._login(base, 'arquivar.b@exemplo.com.br')
+        _, html = req(cliente_b, base, f'/os/{oid}')
+        self.assertIn('OS arquivada', html)
+        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
 
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""

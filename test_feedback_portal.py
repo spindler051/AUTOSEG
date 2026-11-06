@@ -316,6 +316,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
             'ui_mode': 'unslop', 'aba': '02Materiais',
             'sessao_hash': 'hash-teste', 'navegador': 'Chrome',
             'sistema': 'macOS', 'dispositivo': 'computador',
+            'diagnostico': '{"total_previsto":"R$ 450,00"}',
         }
 
     def tearDown(self):
@@ -331,6 +332,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
         self.assertEqual(item['status_dev'], 'Incompleto')
         self.assertEqual(item['ui_mode'], 'unslop')
         self.assertEqual(item['aba'], '02Materiais')
+        self.assertIn('R$ 450,00', item['diagnostico_json'])
         self.assertEqual(feedback.ultimo_rascunho(self.db, self.sessao)['id'], fid)
 
         mesmo_id, completo = feedback.criar(

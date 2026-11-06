@@ -80,9 +80,11 @@ def instalar(banco):
 
 
 def _os_ativa_responsavel(c,os_id,pid):
-    os_=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    os_=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     if not os_ or os_['status'] not in ext.ATIVAS:
         raise ValueError('OS não está ativa.')
+    if 'arquivada' in os_.keys() and os_['arquivada']:
+        raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
     if ext.responsavel_atual(c,os_id)!=pid:
         raise PermissionError('Somente o técnico atribuído pode alterar esta OS.')
     return os_
@@ -330,28 +332,35 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
 def financeiro_pessoal(banco,pid):
     """Detalha obrigações internas sem somar repasses ao faturamento bruto."""
     with ext.db(banco) as c:
-        proprio=[dict(r) for r in c.execute("""SELECT f.os_id,o.numero_os,f.valor,
+        proprio=[dict(r) for r in c.execute("""SELECT f.id financeiro_id,f.os_id,o.numero_os,
+            f.valor,f.forma_pagamento,f.vencimento,f.data_pagamento,
+            cl.nome cliente,
             COALESCE((SELECT SUM(r.valor_centavos) FROM produtividade_rateios r
                       WHERE r.os_id=f.os_id),0) partes_centavos,f.status
             FROM financeiro f
             JOIN ordens_servico o ON o.id=f.os_id
+            JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=f.os_id
             WHERE e.prestador_id=? ORDER BY f.id DESC""",(pid,))]
-        meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.valor_centavos,
+        meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
+            r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,
             COALESCE(p.enviado_centavos,0) enviado_centavos,
             p.enviado_em,p.confirmado_em,e.prestador_id de_tecnico
             FROM produtividade_rateios r
             JOIN ordens_servico o ON o.id=r.os_id
+            JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
             WHERE r.tecnico_id=? ORDER BY r.os_id DESC""",(pid,))]
-        repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,r.tecnico_id,t.nome tecnico,
-            r.valor_centavos,COALESCE(p.pago_centavos,0) pago_centavos,
+        repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
+            r.tecnico_id,t.nome tecnico,r.valor_centavos,
+            COALESCE(p.pago_centavos,0) pago_centavos,
             COALESCE(p.enviado_centavos,0) enviado_centavos,
             p.enviado_em,p.confirmado_em
             FROM produtividade_rateios r
             JOIN ordens_servico o ON o.id=r.os_id
+            JOIN clientes cl ON cl.id=o.cliente_id
             JOIN prestadores t ON t.id=r.tecnico_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id

@@ -44,7 +44,7 @@ def gerar(banco,os_id):
                 comp=None
         anexos=[]
         if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_anexos_visiveis'").fetchone():
-            anexos=c.execute('''SELECT a.caminho,a.nome_original,COALESCE(v.legenda,'') AS legenda FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id WHERE a.os_id=? AND COALESCE(v.visivel,1)=1 ORDER BY a.id''',(os_id,)).fetchall()
+            anexos=c.execute('''SELECT a.caminho,a.nome_original,COALESCE(v.legenda,'') AS legenda FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id WHERE a.os_id=? AND COALESCE(v.visivel,1)=1 ORDER BY a.ordem,a.id''',(os_id,)).fetchall()
     estilo=getSampleStyleSheet()
     preto=colors.HexColor('#171717');amarelo=colors.HexColor('#E2B800');cinza=colors.HexColor('#666666')
     estilo.add(ParagraphStyle(name='AutosegTituloV9',fontName='Helvetica-Bold',fontSize=14,leading=18,textColor=preto,spaceAfter=8))

@@ -283,6 +283,8 @@ def os_salvar(banco,d,pid,oid=None):
                 raise ValueError('Esta OS foi atualizada por outra pessoa. Reabra a tela antes de salvar para evitar perda de dados.')
             if old['status'] not in ext.ATIVAS:
                 raise ValueError('OS encerrada. Para corrigir um documento já publicado, utilize o desktop e publique nova versão.')
+            if 'arquivada' in old.keys() and old['arquivada']:
+                raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
             original=c.execute('SELECT cliente_id,descricao_original,observacoes_originais FROM os_solicitacoes WHERE os_id=?',(oid,)).fetchone()
             if original:
                 cliente_id=original['cliente_id']

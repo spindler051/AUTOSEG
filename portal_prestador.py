@@ -46,6 +46,28 @@ VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 CSS_MOBILE = """
 .page-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
 .page-actions .btn,.page-actions button{margin:0}
+.finance-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;margin:16px 0}
+.finance-columns .card{margin:0}
+.finance-list{display:flex;flex-direction:column;gap:10px}
+.finance-item{border:1px solid #3b3b3b;border-radius:10px;padding:12px 14px;background:#1b1b1b}
+.finance-item-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.finance-item-os{font-weight:700}
+.finance-item-type{font-size:12px;color:#bbb}
+.finance-item-client{margin:4px 0;color:#ddd;overflow-wrap:anywhere}
+.finance-item-values{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:8px 0 4px}
+.finance-item-values span{font-size:12px;color:#aaa}
+.finance-item-values strong{font-size:18px;color:#ffd400}
+.finance-item-detail{margin:4px 0;font-size:12px;color:#aaa;overflow-wrap:anywhere}
+.finance-item-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}
+.finance-item-foot form{margin:0}
+.finance-item-foot button{min-height:36px;padding:8px 12px;font-size:13px}
+.foto-incluir{display:flex!important;align-items:center;gap:8px;margin:8px 0;font-weight:600}
+.foto-incluir input{width:18px;height:18px;min-height:0}
+.row-link{cursor:pointer}
+.total-previsto-linha{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0 8px;padding:12px 14px;border:1px solid #444;border-radius:8px;background:#1b1b1b}
+.total-previsto-linha>span{color:#bbb;font-size:13px}
+.total-previsto-linha strong{font-size:20px;color:#ffd400;white-space:nowrap}
+@media(max-width:980px){.finance-columns{grid-template-columns:1fr}}
 .lista-organizacoes-pj{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .lista-organizacoes-pj .resultado-organizacao{margin:0}
 .resultado-organizacao{border:1px solid #666;border-radius:13px;padding:18px 20px;margin:14px 0;background:#202020}
@@ -182,9 +204,14 @@ body.ui-unslop .composicao-preview span{min-width:0}
 body.ui-unslop .composicao-preview b{color:var(--u-text-2);font-weight:400}
 body.ui-unslop .composicao-preview .aviso{grid-column:1/-1;color:var(--u-warn)}
 body.ui-unslop .composicao-preview .filho{padding-left:16px;color:var(--u-muted)}
+body.ui-unslop .total-previsto-linha{border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);padding:12px 14px}
+body.ui-unslop .total-previsto-linha>span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-unslop .total-previsto-linha strong{color:var(--u-accent);font:500 20px/1.2 var(--u-mono)}
 body.ui-unslop .foto-rascunho{display:grid!important;grid-template-columns:120px minmax(0,1fr)!important;gap:16px!important;align-items:start!important;margin:12px 0!important;padding:12px!important;border:1px solid var(--u-line)!important;border-radius:10px!important;background:var(--u-card-2)!important}
 body.ui-unslop .foto-rascunho img{width:120px!important;height:90px!important;object-fit:cover!important;border-radius:8px!important}
 body.ui-unslop .foto-rascunho label{margin-top:10px}
+body.ui-unslop .foto-incluir{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:500}
+body.ui-unslop .foto-incluir input{width:16px;height:16px;min-height:0}
 body.ui-unslop #nota-fiscal-upload>div[style]{border:1px solid var(--u-line)!important;background:var(--u-card-2)!important;border-radius:10px!important}
 body.ui-unslop #nota-fiscal-upload{margin-top:8px!important;border-top:0!important;padding-top:0!important}
 body.ui-unslop #nota-fiscal-upload>label[style]{font-weight:500!important;color:var(--u-text)!important}
@@ -255,6 +282,10 @@ body.ui-unslop .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1
 body.ui-unslop .stat{display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-height:100px;padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
 body.ui-unslop .stat span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 body.ui-unslop .stat strong{color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+body.ui-unslop .stat:hover{border-color:var(--u-line-2);background:var(--u-card-2)}
+body.ui-unslop .finance-figures{text-decoration:none}
+body.ui-unslop .finance-figures:hover strong{color:var(--u-accent)}
+body.ui-unslop a.home-note:hover{color:var(--u-accent)}
 body.ui-unslop .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
 body.ui-unslop .home-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
 body.ui-unslop .panel{padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
@@ -297,7 +328,7 @@ body.ui-unslop .os-ticket-stats strong{display:block;color:var(--u-text);font:50
 body.ui-unslop .os-ticket-stats .money{color:var(--u-accent);font-family:var(--u-mono);font-variant-numeric:tabular-nums}
 body.ui-unslop .os-ticket-actions{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:8px;padding:24px;border-left:1px solid var(--u-line)}
 body.ui-unslop .os-ticket-actions .btn{min-height:36px;font-size:12px;white-space:nowrap}
-body.ui-unslop .os-workflow{display:grid;grid-template-columns:1fr .8fr 1.2fr;gap:16px;margin:0 0 20px}
+body.ui-unslop .os-workflow{display:grid;grid-template-columns:1fr .8fr;gap:16px;margin:0 0 20px}
 body.ui-unslop .os-work-status{order:-2}
 body.ui-unslop .os-work-draft{order:-1}
 body.ui-unslop .os-workflow .card{margin:0;padding:20px;border-radius:16px}
@@ -353,6 +384,10 @@ body.ui-unslop .os-status-block{display:grid;grid-template-columns:minmax(0,1fr)
 body.ui-unslop .os-status-block label{grid-column:1/-1;margin:0}
 body.ui-unslop .os-status-block p{grid-column:1/-1;margin:0;color:var(--u-muted);font-size:12px;line-height:1.5}
 body.ui-unslop .os-status-block button{min-height:40px}
+body.ui-unslop .os-status-current{color:var(--u-text-2)}
+body.ui-unslop .os-status-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+body.ui-unslop .os-status-actions p{flex:1 1 100%;margin:0;font-size:12px}
+body.ui-unslop .os-status-actions button{min-height:36px}
 body.ui-unslop .cancel-dialog .cancel-step{padding:24px}
 body.ui-unslop .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
 body.ui-unslop .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
@@ -370,6 +405,15 @@ body.ui-unslop .finance-grid .card{margin:0}
 body.ui-unslop .finance-grid .card h2{font-size:15px}
 body.ui-unslop .finance-note{margin:0 0 20px;color:var(--u-text-2);font-size:12px;line-height:1.6}
 body.ui-unslop .finance-note strong{color:var(--u-text)}
+body.ui-unslop .finance-columns .card{margin:0;padding:20px;border-radius:16px}
+body.ui-unslop .finance-item{padding:16px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
+body.ui-unslop .finance-item-os{color:var(--u-text);font:500 15px/1.3 var(--u-font)}
+body.ui-unslop .finance-item-type{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
+body.ui-unslop .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13px;overflow-wrap:anywhere}
+body.ui-unslop .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
+body.ui-unslop .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
+body.ui-unslop .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
+body.ui-unslop .finance-item-foot .tag{margin:0}
 
 /* login */
 body.ui-unslop.ui-login main{min-height:100vh;max-width:none;margin:0;padding:0}
@@ -420,10 +464,10 @@ body.ui-unslop .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100
   body.ui-unslop .side-brand{flex-direction:row;align-items:center;gap:10px}
   body.ui-unslop .side-brand img{height:28px}
   body.ui-unslop .side-brand span{display:none}
-  body.ui-unslop .side-nav{flex-direction:row;gap:4px;overflow-x:auto;padding:0 0 4px}
-  body.ui-unslop .side-group{flex-direction:row;gap:4px}
-  body.ui-unslop .side-label{display:none}
-  body.ui-unslop .side-link{white-space:nowrap;min-height:36px;padding:0 12px}
+  body.ui-unslop .side-nav{flex-direction:column;gap:2px;max-height:42vh;overflow-y:auto;overflow-x:visible;padding:0}
+  body.ui-unslop .side-group{flex-direction:column;gap:2px}
+  body.ui-unslop .side-label{display:block;margin:8px 12px 4px;color:var(--u-muted)}
+  body.ui-unslop .side-link{white-space:normal;min-height:32px;padding:0 12px}
   body.ui-unslop .side-link svg{display:none}
   body.ui-unslop .side-foot{display:none}
   body.ui-unslop .feedback-fab{display:inline-flex}
@@ -584,6 +628,7 @@ def _dialogo_feedback(usuario, banco=None):
     <input type="hidden" name="rascunho_id" id="feedback-rascunho-id" value="{rascunho_id}">
     <input type="hidden" name="ui_mode" id="feedback-ui-mode" value="">
     <input type="hidden" name="aba" id="feedback-aba" value="">
+    <input type="hidden" name="diagnostico" id="feedback-diagnostico" value="">
     <h2 id="feedback-titulo">Dê um feedback</h2>
     <p class="muted">Conte o que funcionou, o que confundiu ou o que precisa melhorar nesta página.</p>
     <label for="feedback-pagina">Página atual</label>
@@ -1007,6 +1052,7 @@ class PortalPrestador:
                             FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
                             LEFT JOIN os_documentos d ON d.os_id=o.id AND d.tipo='relatorio_pdf'
                             WHERE o.status NOT IN ('Aberta','Iniciada','Pendente')
+                              AND COALESCE(o.arquivada,0)=0
                             GROUP BY o.id ORDER BY o.id DESC LIMIT 500''').fetchall()
                     rows=[]
                     for x in lista:
@@ -1029,7 +1075,8 @@ class PortalPrestador:
                             if ext.em_rota_atual(c, x['id']): estado='Em rota'
                     except Exception:
                         pass
-                    rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
+                    rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',
+                        f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>',
                         f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
                 opcoes_ordem=[
@@ -1053,25 +1100,29 @@ class PortalPrestador:
                         SUM(CASE WHEN status='Aberta' THEN 1 ELSE 0 END) abertas,
                         SUM(CASE WHEN status='Iniciada' THEN 1 ELSE 0 END) iniciadas,
                         SUM(CASE WHEN status='Pendente' THEN 1 ELSE 0 END) pendentes,
-                        SUM(CASE WHEN status='Concluída' THEN 1 ELSE 0 END) concluidas FROM ordens_servico''').fetchone()
+                        SUM(CASE WHEN status='Concluída' THEN 1 ELSE 0 END) concluidas
+                        FROM ordens_servico WHERE COALESCE(arquivada,0)=0''').fetchone()
                     f=c.execute('''SELECT SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END) recebido,
                         SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END) pendente FROM financeiro''').fetchone()
                     cl=c.execute("SELECT COUNT(*) total FROM clientes WHERE status!='Inativo'").fetchone()
-                    recentes=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,cl.nome cliente
+                    recentes=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,
+                        o.cliente_id,cl.nome cliente
                         FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
+                        WHERE COALESCE(o.arquivada,0)=0
                         ORDER BY o.id DESC LIMIT 6''').fetchall()
                 if self.ui_unslop():
-                    def stat(rotulo,valor):
-                        return (f'<div class="stat"><span>{esc(rotulo)}</span>'
-                                f'<strong>{esc(valor)}</strong></div>')
-                    stats=(stat('OS abertas',o['abertas'] or 0)
-                           +stat('OS iniciadas',o['iniciadas'] or 0)
-                           +stat('OS pendentes',o['pendentes'] or 0)
-                           +stat('OS concluídas',o['concluidas'] or 0))
+                    def stat(rotulo,valor,href):
+                        return (f'<a class="stat" href="{href}"><span>{esc(rotulo)}</span>'
+                                f'<strong>{esc(valor)}</strong></a>')
+                    stats=(stat('OS abertas',o['abertas'] or 0,'/os')
+                           +stat('OS iniciadas',o['iniciadas'] or 0,'/os')
+                           +stat('OS pendentes',o['pendentes'] or 0,'/os')
+                           +stat('OS concluídas',o['concluidas'] or 0,'/historico'))
                     linhas=[]
                     for x in recentes:
                         linhas.append((f'<a href="/os/{int(x["id"])}">{esc(x["numero_os"])}</a>',
-                                       esc(x['cliente']),chip_status(x['status']),
+                                       f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>',
+                                       chip_status(x['status']),
                                        f'<span class="mono">{dinheiro(x["valor_total"])}</span>',
                                        f'<span class="mono">{esc(data_curta(x["data_abertura"]))}</span>'))
                     recentes_html=tabela(['OS','Cliente','Status','Valor','Abertura'],linhas)
@@ -1093,13 +1144,13 @@ class PortalPrestador:
                            f'<aside class="home-rail">'
                            f'<section class="panel"><div class="panel-head"><h2>Financeiro</h2>'
                            f'<a href="/financeiro">Abrir</a></div>'
-                           f'<div class="finance-figures">'
+                           f'<a class="finance-figures" href="/financeiro">'
                            f'<div><span>A receber</span><strong class="accent">{dinheiro(f["pendente"] or 0)}</strong></div>'
                            f'<div><span>Recebido</span><strong>{dinheiro(f["recebido"] or 0)}</strong></div>'
-                           f'</div></section>'
+                           f'</a></section>'
                            f'<section class="panel"><div class="panel-head"><h2>Atalhos</h2></div>'
                            f'{atalhos_html}</section>'
-                           f'<p class="home-note">Clientes ativos: {int(cl["total"] or 0)}</p>'
+                           f'<a class="home-note" href="/clientes">Clientes ativos: {int(cl["total"] or 0)}</a>'
                            f'</aside></div>'
                            f'<div class="home-links">{v9.barra_links("prestador")}</div>'
                            f'<p class="home-note">As alterações são registradas com o prestador autenticado. '
@@ -1208,9 +1259,14 @@ class PortalPrestador:
                         ('Texto anonimizado enviado à IA',esc(item['mensagem_anonimizada'] or '—')),
                     ])
                     detalhes=card('Contexto técnico (administrador)',meta)
+                    diag=item.get('diagnostico_json') or ''
+                    diagnostico=(card('Diagnóstico da tela',
+                        '<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">'
+                        +esc(diag)+'</pre>') if diag else '')
                 else:
                     triagem=''
                     detalhes=''
+                    diagnostico=''
                 return self.pagina(f'Feedback FB-{item["id"]:04d}',
                     botao('← Voltar','/feedback/recebidos' if admin else '/','secondary')
                     +card('Relato',
@@ -1218,7 +1274,7 @@ class PortalPrestador:
                         f'<code>{esc(item["pagina"])}</code></p>'
                         f'<p style="white-space:pre-wrap">{esc(item["mensagem"])}</p>'
                         f'<p><span class="tag">{esc(item["status_dev"])}</span></p>')
-                    +resposta+triagem+detalhes,s)
+                    +resposta+triagem+detalhes+diagnostico,s)
 
             def feedback_confirmacao(self,s,item):
                 """Confirmação direta após o envio; nunca mostra a triagem."""
@@ -1659,7 +1715,7 @@ class PortalPrestador:
                     anexos=c.execute('''SELECT a.id,a.nome_original,a.criado_em,a.tipo,
                         COALESCE(v.legenda,'') legenda,COALESCE(v.visivel,1) visivel
                         FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id
-                        WHERE a.os_id=? ORDER BY a.id''',(oid,)).fetchall() if oid else []
+                        WHERE a.os_id=? ORDER BY a.ordem,a.id''',(oid,)).fetchall() if oid else []
                     responsavel=ext.responsavel_atual(c,oid) if oid else None
                     prestadores=c.execute('SELECT id,nome,email FROM prestadores WHERE ativo=1 ORDER BY nome').fetchall()
                     detalhes=c.execute('SELECT * FROM v9_detalhes_os WHERE os_id=?',(oid,)).fetchone() if oid else None
@@ -1673,6 +1729,7 @@ class PortalPrestador:
                     contatos_os=prod.contatos_email_os(banco,oid) if oid else None
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
+                arquivada=bool(d.get('arquivada'))
                 if preenchimento:
                     # YAML é um modelo: preenche apenas campos vazios por padrão.
                     # A escolha explícita "substituir" é necessária para sobrescrever.
@@ -1763,7 +1820,7 @@ class PortalPrestador:
                                'Ao iniciar uma OS sem responsável, ela será atribuída a você com registro explícito.')
                 if oid and unslop:
                     corpo+='<div class="os-workflow">'
-                if oid and d['status'] in ext.ATIVAS:
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
                     importar=(f'<form method="post" action="/os/{oid}/yaml" enctype="multipart/form-data">{token}'
                       '<label for="importar-relatorio-yaml">Preencher relatório com arquivo YAML (até 64 KB)</label>'
                       '<input type="file" id="importar-relatorio-yaml" name="yaml" accept=".yaml,.yml" required>'
@@ -1777,28 +1834,13 @@ class PortalPrestador:
                             +'<p class="muted">Os dados salvos no servidor são recarregados ao abrir a OS.</p></section>')
                 if oid:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
-                    if unslop:
-                        corpo+='<section class="card os-work-status"><h2>Andamento</h2>'
-                    corpo+=f'<p><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b> · Participantes: {esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>'
-                    if d['status'] in ext.ATIVAS:
-                        iniciado = bool(andamento and andamento['iniciado_em'])
-                        if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente'):
-                            corpo+=f'<form method="post" action="/os/{oid}/assumir">{token}<button type="submit" class="secondary">{rotulo_assumir}</button></form>'
-                            corpo+='<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>'
-                        if responsavel in (None, s['pid']) and not iniciado:
-                            if em_rota:
-                                corpo+=f'<p class="notice">{aviso_rota}</p>'
-                                corpo+=f'<form method="post" action="/os/{oid}/cancelar-rota">{token}<button type="submit" class="secondary">{rotulo_cancelar_rota}</button></form>'
-                            else:
-                                corpo+=f'<form method="post" action="/os/{oid}/em-rota">{token}<button type="submit" class="secondary">{rotulo_em_rota}</button></form>'
-                            corpo+=f'<form method="post" action="/os/{oid}/iniciar">{token}<button type="submit" class="iniciar-atendimento">{rotulo_iniciar}</button></form>'
-                            corpo+=f'<p class="muted">{texto_iniciar}</p>'
-                        elif iniciado:
-                            corpo+='<p class="good">Atendimento iniciado em '+esc(andamento['iniciado_em'])+' por '+esc(andamento['ator_inicio'])+'.</p>'
-                        elif responsavel is not None and responsavel != s['pid']:
-                            corpo+='<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>'
-                    if unslop:
-                        corpo+='</section>'
+                    if arquivada:
+                        corpo+='<p class="notice">OS arquivada pelo administrador; somente leitura. '
+                        corpo+='O histórico permanece preservado.</p>'
+                    elif d['status'] not in ext.ATIVAS:
+                        corpo+=(f'<p><span class="tag">{esc(d["status"])}</span> · '
+                                f'Responsável: <b>{esc(nome_resp)}</b> · Participantes: '
+                                f'{esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>')
                 if oid and unslop:
                     corpo+='</div>'
                 if not cl:
@@ -1845,16 +1887,40 @@ class PortalPrestador:
                 cliente_nome_cancel=next((x['nome'] for x in cl if x['id']==d.get('cliente_id')),'')
                 status_bloco=''
                 cancelar_dialogo=''
-                if oid and d['status'] in ext.ATIVAS:
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
                     status_atual='Pendente' if d['status']=='Pendente' else ''
-                    status_bloco=('<div class="os-status-block">'
-                        +select('Situação do atendimento','acao_status',
-                            [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído')],
-                            status_atual,required=True)
-                        +'<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>'
-                        +'<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
-                         'Para cancelar, use o botão vermelho e confirme o número da OS.</p>'
-                        +'</div>')
+                    iniciado=bool(andamento and andamento['iniciado_em'])
+                    bloco=['<div class="os-status-block">']
+                    bloco.append(
+                        f'<p class="os-status-current"><span class="tag">{esc(d["status"])}</span> · '
+                        f'Responsável: <b>{esc(nome_resp)}</b> · Participantes: '
+                        f'{esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>')
+                    bloco.append(select('Situação do atendimento','acao_status',
+                        [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído')],
+                        status_atual,required=True))
+                    bloco.append('<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>')
+                    bloco.append('<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
+                                 'Para cancelar, use o botão vermelho e confirme o número da OS.</p>')
+                    bloco.append('<div class="os-status-actions">')
+                    if s.get('admin'):
+                        bloco.append(f'<button type="submit" class="danger" formaction="/os/{oid}/arquivar" formnovalidate data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">Arquivar OS</button>')
+                    if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente'):
+                        bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/assumir" formnovalidate>{rotulo_assumir}</button>')
+                        bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
+                    if responsavel in (None, s['pid']) and not iniciado:
+                        if em_rota:
+                            bloco.append(f'<p class="notice">{aviso_rota}</p>')
+                            bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/cancelar-rota" formnovalidate>{rotulo_cancelar_rota}</button>')
+                        else:
+                            bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/em-rota" formnovalidate>{rotulo_em_rota}</button>')
+                        bloco.append(f'<button type="submit" class="iniciar-atendimento" formaction="/os/{oid}/iniciar" formnovalidate>{rotulo_iniciar}</button>')
+                        bloco.append(f'<p class="muted">{texto_iniciar}</p>')
+                    elif iniciado:
+                        bloco.append(f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}.</p>')
+                    elif responsavel is not None and responsavel != s['pid']:
+                        bloco.append('<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>')
+                    bloco.append('</div></div>')
+                    status_bloco=''.join(bloco)
                     cancelar_dialogo=(
                         f'<dialog class="feedback-dialog cancel-dialog" id="dialogo-cancelar-os" '
                         f'data-numero-os="{esc(d["numero_os"])}">'
@@ -1967,7 +2033,7 @@ class PortalPrestador:
                 corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
                 corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
                 corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
-                corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p>'
+                corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
                 corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
                 if oid and d['status'] in ext.ATIVAS and contatos_os:
@@ -1990,7 +2056,7 @@ class PortalPrestador:
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
                 corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',d.get('relatorio_tecnico',(andamento['rascunho'] if andamento else '')) or '',rows=4)
-                if oid and d['status'] in ext.ATIVAS:
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
                     if andamento and andamento['iniciado_em']:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
                     else:
@@ -2004,7 +2070,7 @@ class PortalPrestador:
                         corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
                     corpo+='</div>'
                 corpo+='</fieldset>'
-                if oid and d['status'] in ext.ATIVAS:
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
                     pode_editar_fotos = (responsavel == s['pid']) or bool(s.get('admin'))
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
@@ -2016,6 +2082,8 @@ class PortalPrestador:
                     else:
                         corpo+=('<p class="muted">Somente o responsável ou administrador pode '
                                 'adicionar fotos e alterar legendas.</p>')
+                    if pode_editar_fotos:
+                        corpo+='<input type="hidden" name="anexo_incluir_modo" value="1">'
                     if anexos:
                         corpo+='<div class="fotos-rascunho">'
                         for a in anexos:
@@ -2025,9 +2093,12 @@ class PortalPrestador:
                                 +'<img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto da OS" loading="lazy" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
                                 +'<div>')
                             if pode_editar_fotos:
+                                marcado=' checked' if vis=='1' else ''
                                 corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
                                     +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
-                                    +select('Incluir no PDF','anexo_visivel[]',[('1','Sim — incluir no PDF'),('0','Não — ocultar por privacidade')],vis)
+                                    +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
+                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/mover" name="direcao" value="up" formnovalidate title="Mover para cima">↑</button>'
+                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/mover" name="direcao" value="down" formnovalidate title="Mover para baixo">↓</button>'
                                     +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
@@ -2050,8 +2121,6 @@ class PortalPrestador:
                         corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
-                if oid and not unslop:
-                    corpo+=f'<p style="margin-top:16px"><span class="tag">{esc(d["status"])}</span> · Responsável: <b>{esc(nome_resp)}</b></p>'
                 nota_acoes=('Preencha os dados para criar a OS.' if not oid else
                             f'{d["status"]} · {d["numero_os"]}')
                 if unslop:
@@ -2062,7 +2131,9 @@ class PortalPrestador:
                 if not oid:
                     corpo+='<button class="secondary" name="modo_envio" value="salvar" type="submit">Criar OS</button>'
                 else:
-                    if d['status'] in ext.ATIVAS:
+                    if arquivada:
+                        corpo+='<span class="notice">OS arquivada: edição bloqueada. O histórico permanece preservado.</span>'
+                    elif d['status'] in ext.ATIVAS:
                         if responsavel==s['pid']:
                             corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar" formnovalidate>{rotulo_salvar}</button>'
                             corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
@@ -2080,7 +2151,7 @@ class PortalPrestador:
                         return self.pagina(titulo,corpo+'</div></div>',s)
                     return self.pagina(titulo,card('Dados da OS',corpo),s)
                 # Atribuição e desatribuição administrativas são exclusivas do desktop.
-                if d['status'] in ext.ATIVAS and not unslop:
+                if d['status'] in ext.ATIVAS and not unslop and not arquivada:
                     corpo+=card('Atribuição',f'<p>Responsável atual: <b>{esc(next((p["nome"] for p in prestadores if p["id"]==responsavel),"Não atribuído"))}</b></p>'
                         '<p class="muted">Prestadores podem assumir apenas OS não atribuídas. Transferências são feitas no desktop.</p>')
                 if anexos and d['status'] not in ext.ATIVAS:
@@ -2142,7 +2213,7 @@ class PortalPrestador:
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
                 upload_nf=''
-                if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not unslop or d['status'] not in ext.ATIVAS):
+                if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not unslop or d['status'] not in ext.ATIVAS) and not arquivada:
                     upload_nf=(f'<form method="post" action="/os/{oid}/nota-fiscal" enctype="multipart/form-data" style="margin-top:10px">'
                                f'{token}'
                                '<label for="nota-fiscal-concluida">Anexar / atualizar nota fiscal (PDF, até 20 MB)</label>'
@@ -2171,36 +2242,95 @@ class PortalPrestador:
                 return self.pagina(titulo,card('Dados e execução da OS',corpo),s)
 
             def financeiro(self,s):
-                with ext.db(banco) as c:
-                    reg=c.execute('''SELECT f.*,o.numero_os,cl.nome cliente FROM financeiro f
-                        JOIN ordens_servico o ON o.id=f.os_id JOIN clientes cl ON cl.id=f.cliente_id
-                        JOIN os_encerramentos con ON con.os_id=f.os_id AND con.prestador_id=?
-                        ORDER BY f.id DESC''',(s['pid'],)).fetchall()
                 pessoal=prod.financeiro_pessoal(banco,s['pid'])
-                partes_por_os={item['os_id']:item['partes_centavos']/100
-                               for item in pessoal['brutos_proprios']}
-                linhas=[]
-                for x in reg:
-                    acao=(f'<form method="post" action="/financeiro/{x["id"]}/receber" data-confirm="Confirma que o valor foi realmente recebido?">{self.hidden(s)}'
-                          '<button type="submit">Confirmar recebimento</button></form>') if x['status']!='Recebido' else '<span class="good">Recebido</span>'
-                    minha_parcela=float(x['valor'] or 0)-partes_por_os.get(x['os_id'],0)
-                    linhas.append((f'<a href="/os/{x["os_id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
-                        dinheiro(x['valor']),dinheiro(minha_parcela),
-                        esc(x['forma_pagamento']),esc(x['status']),esc(x['vencimento'] or ''),acao))
-                banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
                 token=self.hidden(s)
-                extras=card('Dados bancários para e-mail de cobrança',
+                banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
+
+                def _item_finalizador(x):
+                    bruto=float(x['valor'] or 0)
+                    repasses=float(x['partes_centavos'] or 0)/100
+                    meu=bruto-repasses
+                    recebido=x['status']=='Recebido'
+                    detalhe=(f'Bruto {dinheiro(bruto)} · Repasses {dinheiro(repasses)} · '
+                             f'{x.get("forma_pagamento") or "—"} · venc. {x.get("vencimento") or "—"}')
+                    if recebido:
+                        acao='<span class="good">Recebido</span>'
+                    else:
+                        acao=(f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/receber" '
+                              'data-confirm="Confirma que o valor foi realmente recebido?">'
+                              f'{token}<button type="submit">Confirmar recebimento</button></form>')
+                    return {'tipo':'Finalizei','os_id':x['os_id'],'numero_os':x['numero_os'],
+                            'cliente':x.get('cliente') or '','meu':meu,
+                            'status':'Recebido' if recebido else 'A receber',
+                            'detalhe':detalhe,'acao':acao,'recebido':recebido}
+
+                def _item_secundario(x):
+                    valor=float(x['valor_centavos'] or 0)/100
+                    pago=float(x['pago_centavos'] or 0)/100
+                    enviado=float(x['enviado_centavos'] or 0)/100
+                    recebido=pago>=valor-0.009
+                    if recebido:
+                        status='Recebido'
+                        detalhe=f'Repasse · confirmado em {x.get("confirmado_em") or "—"}'
+                        acao='<span class="good">Recebido</span>'
+                    else:
+                        status='A receber'
+                        pendente=max(0,enviado-pago)
+                        if pendente>0:
+                            detalhe=f'Repasse · {dinheiro(pago)} confirmado · {dinheiro(pendente)} aguardando você'
+                            acao=(f'<form method="post" action="/financeiro/repasse/confirmar">{token}'
+                                  f'<input type="hidden" name="os_id" value="{int(x["os_id"])}">'
+                                  '<button type="submit">Confirmar que recebi</button></form>')
+                        elif enviado<=0:
+                            detalhe='Repasse · aguardando envio do finalizador'
+                            acao='<span class="warn">Aguardando envio</span>'
+                        else:
+                            detalhe='Repasse · aguardando confirmação'
+                            acao='<span class="warn">Aguardando confirmação</span>'
+                    return {'tipo':'Secundário','os_id':x['os_id'],'numero_os':x['numero_os'],
+                            'cliente':x.get('cliente') or '','meu':valor,
+                            'status':status,'detalhe':detalhe,'acao':acao,'recebido':recebido}
+
+                lancamentos=[_item_finalizador(x) for x in pessoal['brutos_proprios']]
+                lancamentos+=[_item_secundario(x) for x in pessoal['receber_de_colegas']]
+                # OS de garantia/cortesia sem parcela própria não poluem a lista.
+                lancamentos=[x for x in lancamentos if x['meu']>0.009]
+                a_receber=[x for x in lancamentos if not x['recebido']]
+                recebidos=[x for x in lancamentos if x['recebido']]
+
+                def _item_html(item):
+                    return ('<article class="finance-item">'
+                            '<div class="finance-item-top">'
+                            f'<a class="finance-item-os" href="/os/{int(item["os_id"])}">{esc(item["numero_os"])}</a>'
+                            f'<span class="finance-item-type">{esc(item["tipo"])}</span>'
+                            '</div>'
+                            f'<p class="finance-item-client">{esc(item["cliente"])}</p>'
+                            '<div class="finance-item-values"><span>Minha parcela</span>'
+                            f'<strong>{dinheiro(item["meu"])}</strong></div>'
+                            f'<p class="finance-item-detail">{esc(item["detalhe"])}</p>'
+                            f'<div class="finance-item-foot"><span class="tag">{esc(item["status"])}</span>'
+                            f'{item["acao"]}</div></article>')
+
+                def _coluna(titulo,itens,vazio):
+                    conteudo=''.join(_item_html(x) for x in itens) or f'<p class="muted">{vazio}</p>'
+                    return (f'<section class="card finance-col"><h2>{esc(titulo)}</h2>'
+                            f'<div class="finance-list">{conteudo}</div></section>')
+
+                colunas=('<div class="finance-columns">'
+                         +_coluna('A receber / Confirmar recebimento',a_receber,'Nenhum lançamento a receber.')
+                         +_coluna('Recebidos',recebidos,'Nenhum lançamento recebido.')
+                         +'</div>')
+                banco_card=card('Dados bancários para e-mail de cobrança',
                     f'<form method="post" action="/financeiro/banco/salvar">{token}'
                     +textarea('Dados bancários / Pix (texto livre)','dados_bancarios',banco_texto,rows=5)
-                    +'<button type="submit">Salvar meus dados bancários</button></form>')
-                dividas=[]
+                    +'<button type="submit">Salvar meus dados bancários</button></form>'
+                    +'<p class="muted">Primeiro passo do financeiro: mantenha seus dados atualizados para o e-mail de cobrança.</p>')
+                repasses=[]
                 for item in pessoal['repassar_a_colegas']:
                     confirmado=item['pago_centavos']
                     enviado=item['enviado_centavos']
                     a_enviar=item['valor_centavos']-confirmado-enviado
                     if a_enviar>0:
-                        # O valor já foi definido no rateio; o finalizador apenas
-                        # registra o envio integral. Quem recebe é que confirma.
                         acao=(f'<form method="post" action="/financeiro/repasse">{token}'
                               +f'<input type="hidden" name="os_id" value="{int(item["os_id"])}">'
                               +f'<input type="hidden" name="secundario_id" value="{int(item["tecnico_id"])}">'
@@ -2209,77 +2339,51 @@ class PortalPrestador:
                         acao='<span class="warn">Aguardando confirmação do colega</span>'
                     else:
                         acao='<span class="good">Confirmado pelo colega</span>'
-                    dividas.append((esc(item['numero_os']),esc(item['tecnico']),
-                                   dinheiro(item['valor_centavos']/100),
-                                   dinheiro(confirmado/100),dinheiro(enviado/100),
-                                   dinheiro(a_enviar/100),acao))
-                extras+=card('Repasses a outros técnicos',
-                    '<p class="muted">O valor da parcela já foi definido no rateio. '
-                    'Registre o envio; o colega confirma o recebimento no financeiro dele.</p>'
+                    repasses.append((esc(item['numero_os']),esc(item['tecnico']),
+                                     dinheiro(item['valor_centavos']/100),
+                                     dinheiro(confirmado/100),dinheiro(enviado/100),
+                                     dinheiro(a_enviar/100),acao))
+                repasses_card=card('Repasses a outros técnicos',
+                    '<p class="muted">O valor da parcela já foi definido no rateio. Registre o envio; '
+                    'o colega confirma o recebimento na coluna A receber do financeiro dele.</p>'
                     +tabela(['OS','Colega','Parcela','Confirmado','Aguardando confirmação',
-                             'A enviar','Ação'],dividas))
-                meus=[]
-                for x in pessoal['receber_de_colegas']:
-                    confirmado=x['pago_centavos']
-                    enviado=x['enviado_centavos']
-                    pendente=max(0,enviado-confirmado)
-                    acao=''
-                    if pendente>0:
-                        acao=(f'<form method="post" action="/financeiro/repasse/confirmar">{token}'
-                              +f'<input type="hidden" name="os_id" value="{int(x["os_id"])}">'
-                              +'<button type="submit">Confirmar que recebi</button></form>')
-                    meus.append((esc(x['numero_os']),dinheiro(x['valor_centavos']/100),
-                                 dinheiro(confirmado/100),dinheiro(pendente/100),
-                                 dinheiro((x['valor_centavos']-confirmado)/100),acao))
-                extras+=card('Minha produção como técnico secundário',
-                    '<p class="muted">O valor só entra como recebido depois da sua confirmação.</p>'
-                    +tabela(['OS','Valor','Confirmado','Aguardando confirmação','Restante','Ação'],meus))
-                extras+=card('Minha parcela nas OS que eu finalizei',
-                    tabela(['OS','Cobrado da imobiliária','Repasses devidos','Minha parcela'],
-                        [(esc(x['numero_os']),dinheiro(x['valor']),dinheiro(x['partes_centavos']/100),
-                          dinheiro(float(x['valor'])-x['partes_centavos']/100))
-                          for x in pessoal['brutos_proprios']]))
-                # O KPI é a produção PRÓPRIA do prestador, não o bruto da imobiliária:
-                # no encerramento, desconta os rateios dos técnicos secundários;
-                # nos rateios em que ele é secundário, soma a parcela dele.
-                a_receber=0.0
-                recebido=0.0
+                             'A enviar','Ação'],repasses))
+                a_receber_total=0.0
+                recebido_total=0.0
                 for item in pessoal['brutos_proprios']:
                     parte=float(item['valor'] or 0)-item['partes_centavos']/100
                     if item['status']=='Recebido':
-                        recebido+=parte
+                        recebido_total+=parte
                     elif item['status']=='Aguardando pagamento':
-                        a_receber+=parte
+                        a_receber_total+=parte
                 for item in pessoal['receber_de_colegas']:
-                    recebido+=item['pago_centavos']/100
-                    a_receber+=(item['valor_centavos']-item['pago_centavos'])/100
-                a_receber=round(a_receber,2)
-                recebido=round(recebido,2)
+                    recebido_total+=item['pago_centavos']/100
+                    a_receber_total+=(item['valor_centavos']-item['pago_centavos'])/100
+                a_receber_total=round(a_receber_total,2)
+                recebido_total=round(recebido_total,2)
                 if self.ui_unslop():
                     rotulo_a='A receber';rotulo_r='Recebido'
-                    return self.pagina('Financeiro',
-                        f'<div class="finance-head"><p class="page-meta">{esc(s["nome"])} · produção própria</p></div>'
-                        f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span><strong>{dinheiro(a_receber)}</strong></div>'
-                        f'<div class="kpi"><span>{rotulo_r}</span><strong>{dinheiro(recebido)}</strong></div></div>'
-                        +'<p class="finance-note"><strong>PIX não comprova recebimento.</strong> '
-                        'Confirme apenas depois de verificar o pagamento.</p>'
-                        +'<p class="finance-note">Os lançamentos mostram o valor bruto cobrado da imobiliária. '
-                        'Os indicadores acima mostram somente a sua parcela, já descontados os rateios dos técnicos secundários.</p>'
-                        +card('Lançamentos financeiros das OS que eu finalizei',
-                            tabela(['OS','Cliente','Valor bruto','Minha parcela','Forma','Status','Vencimento','Ação'],linhas))
-                        +'<div class="finance-grid">'+extras+'</div>',s)
-                return self.pagina('Financeiro',f'<div class="kpis"><div class="kpi"><span>A receber (minha produção)</span><strong>{dinheiro(a_receber)}</strong></div>'
-                    f'<div class="kpi"><span>Recebido (minha produção)</span><strong>{dinheiro(recebido)}</strong></div></div>'
-                    +'<p class="notice">A forma de pagamento PIX não comprova recebimento. Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
-                    +'<p class="muted">Os lançamentos abaixo mostram o valor bruto cobrado da imobiliária. '
-                    'Os KPIs acima mostram somente a sua parcela, já descontados os rateios dos técnicos secundários.</p>'
-                    +card('Lançamentos financeiros das OS que eu finalizei',
-                        tabela(['OS','Cliente','Valor bruto','Minha parcela','Forma','Status','Vencimento','Ação'],linhas))+extras,s)
+                    cabecalho=f'<div class="finance-head"><p class="page-meta">{esc(s["nome"])} · produção própria</p></div>'
+                else:
+                    rotulo_a='A receber (minha produção)';rotulo_r='Recebido (minha produção)'
+                    cabecalho=''
+                corpo=(cabecalho
+                    +banco_card
+                    +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span><strong>{dinheiro(a_receber_total)}</strong></div>'
+                    +f'<div class="kpi"><span>{rotulo_r}</span><strong>{dinheiro(recebido_total)}</strong></div></div>'
+                    +'<p class="notice">A forma de pagamento PIX não comprova recebimento. '
+                    'Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
+                    +'<p class="muted">A lista mostra a sua parcela nas OS em que você participou, '
+                    'como finalizador ou técnico secundário. O valor bruto e os repasses aparecem no detalhe de cada item.</p>'
+                    +'<h2>Lançamentos das OS em que participo</h2>'
+                    +colunas+repasses_card)
+                return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):
                 with ext.db(banco) as c:
                     oses=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,c.nome cliente
-                        FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id ORDER BY o.id DESC LIMIT 500''').fetchall()
+                        FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id
+                        WHERE COALESCE(o.arquivada,0)=0 ORDER BY o.id DESC LIMIT 500''').fetchall()
                 if tipo=='emails':
                     title='E-mails para clientes'; explanation='Gere um rascunho .eml com o PDF anexado. Nenhum e-mail será enviado automaticamente.'
                     acao=lambda o:(botao('Preparar .eml',f'/os/{o["id"]}/email')
@@ -2589,6 +2693,7 @@ class PortalPrestador:
                             self.headers.get('User-Agent',''))
                         meta['ui_mode']=str(d.get('ui_mode') or ('unslop' if self.ui_unslop() else 'classic'))[:20]
                         meta['aba']=str(d.get('aba') or '')[:80]
+                        meta['diagnostico']=str(d.get('diagnostico') or '')[:8000]
                         return meta
                     if path=='/telemetria/ui':
                         pagina=str(d.get('pagina') or urlparse(self.headers.get('Referer','')).path or '/')[:300]
@@ -2828,6 +2933,10 @@ class PortalPrestador:
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
                         return self.redir(f'/os/{oid}')
+                    if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='mover':
+                        oid=int(partes[1]);aid=int(partes[3])
+                        ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
                         oid=int(partes[1]);aid=int(partes[3])
                         with ext.db(banco) as c:
@@ -2849,13 +2958,15 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='fotos':
                         oid=int(partes[1])
                         with ext.db(banco) as c:
-                            os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                            os_atual=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
                                                (oid,)).fetchone()
                             admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
                             if ext.responsavel_atual(c,oid)!=pid and not admin:
                                 raise PermissionError('Somente o responsável ou administrador edita fotos e legendas.')
                         if not os_atual or os_atual['status'] not in ext.ATIVAS:
                             raise ValueError('Somente OS ativas podem receber fotos.')
+                        if 'arquivada' in os_atual.keys() and os_atual['arquivada']:
+                            raise ValueError('OS arquivada: edição bloqueada.')
                         def _lista(valor):
                             if valor is None:return []
                             return valor if isinstance(valor,list) else [valor]
@@ -2866,6 +2977,8 @@ class PortalPrestador:
                         anexo_ids=_lista(d.get('anexo_id[]'))
                         anexo_legendas=_lista(d.get('anexo_legenda[]'))
                         anexo_visiveis=_lista(d.get('anexo_visivel[]'))
+                        anexo_incluidos={str(x).strip() for x in _lista(d.get('anexo_incluir[]')) if str(x).strip()}
+                        modo_checkbox=str(d.get('anexo_incluir_modo',''))=='1'
                         imagens=[x for x in imagens if isinstance(x,tuple) and x[1]]
                         if not imagens and not anexo_ids:
                             raise ValueError('Selecione uma foto ou altere uma legenda.')
@@ -2885,10 +2998,15 @@ class PortalPrestador:
                                     anexo_id=int(anexo_id)
                                 except (TypeError,ValueError):
                                     continue
+                                if modo_checkbox:
+                                    visivel=1 if str(anexo_id) in anexo_incluidos else 0
+                                else:
+                                    visivel=(str(anexo_visiveis[i])!='0'
+                                             if i<len(anexo_visiveis) else 1)
                                 ext.definir_legenda_anexo_c(
                                     c,oid,anexo_id,
                                     anexo_legendas[i] if i<len(anexo_legendas) else '',
-                                    str(anexo_visiveis[i])!='0' if i<len(anexo_visiveis) else 1)
+                                    visivel)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])
@@ -2948,6 +3066,10 @@ class PortalPrestador:
                         return self.redir(f'/os/{oid}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
+                        if acao=='arquivar':
+                            ext.arquivar_os(banco,oid,pid,ator=s['nome'],
+                                            motivo=str(d.get('motivo_arquivamento','')))
+                            return self.redir('/os')
                         if acao=='rota':
                             prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
                             return self.redir(f'/os/{oid}')
