@@ -1029,6 +1029,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_b = self._login(base, 'foto.comum@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertNotIn('Salvar fotos e legendas', html)
+        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
         self.assertIn('Somente o responsável ou administrador', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
