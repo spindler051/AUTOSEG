@@ -146,6 +146,7 @@ def criar_banco(caminho=None):
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "custo_materiais", "REAL DEFAULT 0")
     adicionar_coluna_se_nao_existir(cursor, "materiais_os", "unidade", "TEXT NOT NULL DEFAULT ''")
+    adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "base_percentuais", "TEXT NOT NULL DEFAULT 'total'")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_cliente ON ordens_servico(cliente_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status)")

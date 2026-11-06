@@ -223,11 +223,44 @@ def validar(config):
             if posicoes[nome] >= posicoes[componente["id"]]:
                 raise ValueError(
                     f"Fórmula de {componente['id']} só pode usar componentes anteriores.")
+    bases_brutas = config.get("bases_percentuais")
+    if not isinstance(bases_brutas, dict) or not bases_brutas:
+        bases_brutas = {"total": {"nome": "Total da OS", "cobertura": "separado"}}
+    bases = {}
+    for chave, bruto in bases_brutas.items():
+        chave = str(chave or "").strip()
+        if not chave:
+            raise ValueError("Base de percentuais sem identificador.")
+        if not isinstance(bruto, dict):
+            raise ValueError(f"Base de percentuais inválida: {chave}")
+        cobertura = str(bruto.get("cobertura") or "separado")
+        if cobertura not in ("separado", "incluido"):
+            raise ValueError(f"Cobertura inválida na base {chave}: {cobertura}")
+        componente = str(bruto.get("componente") or "").strip()
+        campo = str(bruto.get("campo") or "").strip()
+        if componente and campo:
+            raise ValueError(f"Base {chave} não pode ter componente e campo ao mesmo tempo.")
+        if chave != "total" and not componente and not campo:
+            raise ValueError(f"Base {chave} precisa de componente ou campo.")
+        bases[chave] = {
+            "nome": str(bruto.get("nome") or chave),
+            "cobertura": cobertura,
+            "componente": componente,
+            "campo": campo,
+        }
+    if "total" not in bases:
+        bases["total"] = {"nome": "Total da OS", "cobertura": "separado",
+                          "componente": "", "campo": ""}
+    padrao = str(config.get("base_percentuais_padrao") or "total")
+    if padrao not in bases:
+        padrao = "total"
     return {
         "versao": 1,
         "moeda": str(config.get("moeda") or "BRL"),
         "horas_padrao": float(_numero(config.get("horas_padrao", 1.0), "Horas padrão")),
         "componentes": normalizados,
+        "bases_percentuais": bases,
+        "base_percentuais_padrao": padrao,
     }
 
 
@@ -425,35 +458,17 @@ def calcular(total_centavos=None, materiais_centavos=0, horas=None,
     }
 
 
-def _distribuir_percentuais(total_centavos, componentes):
-    """Divide o residual entre os percentuais, proporcional às taxas."""
-    if not componentes:
-        return {}
-    pesos = [Decimal(str(c.get("valor", 0))) for c in componentes]
-    soma = sum(pesos)
-    if soma <= 0:
-        pesos = [Decimal(1) for _ in componentes]
-        soma = Decimal(len(componentes))
-    valores = [int(Decimal(total_centavos) * p / soma) for p in pesos]
-    resto = int(total_centavos) - sum(valores)
-    for i in range(max(0, resto)):
-        valores[i % len(valores)] += 1
-    return {c["id"]: v for c, v in zip(componentes, valores)}
-
-
 def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
                 horas=None, tipo_servico="", config=None,
-                hora_minima_centavos=10000):
-    """Composição de uma OS com os componentes padrão e hora técnica residual.
+                hora_minima_centavos=10000, base_percentuais=None, campos=None):
+    """Composição da OS com bases de percentuais configuráveis.
 
-    Materiais, componentes fixos e percentuais seguem ``composicao.yaml``. A
-    hora técnica recebe o que sobrar do total depois dos demais componentes e
-    nunca fica abaixo do mínimo configurado (R$ 100,00 por padrão). Se o total
-    informado não comportar esse mínimo, ele é elevado ao menor valor válido e
-    a composição traz um aviso.
-
-    Quando não há mão de obra (OS de garantia/cortesia), mantém o
-    comportamento explícito anterior: somente materiais e mão de obra reais.
+    A base de cada modo vem de ``bases_percentuais`` no composicao.yaml:
+    ``total`` ou uma referência a componente/campo. ``cobertura`` define se os
+    percentuais ficam dentro da base (``incluido``) ou em linhas próprias
+    (``separado``). O total negociado é autoritativo e nunca recebe desconto
+    automático; se não comportar a hora mínima, a operação é recusada com uma
+    mensagem clara.
     """
     config = validar(config or carregar())
     componentes = [c for c in config["componentes"]
@@ -465,7 +480,6 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
     labor = int(mao_obra_centavos or 0)
     if materiais < 0 or labor < 0:
         raise ValueError("Materiais e mão de obra não podem ser negativos.")
-    # Garantia, cortesia e OS 100% materiais continuam sem taxas padrão.
     if labor <= 0:
         return calcular(total_centavos=total_centavos,
                         materiais_centavos=materiais, horas=horas,
@@ -485,55 +499,108 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
     soma_percentual = sum(Decimal(str(c["valor"])) / Decimal(100) for c in percentuais)
     if soma_percentual >= 1:
         raise ValueError("Os componentes percentuais somam 100% ou mais.")
-    desconto_valor = 0
-    if total_centavos is None:
-        total = _round((Decimal(materiais + soma_fixa + labor) /
-                        (Decimal(1) - soma_percentual)))
-        # Total calculado fecha em reais inteiros; a diferença fica na hora.
-        total = ((total + 99) // 100) * 100
-        for _ in range(100):
-            valores_percentuais = {
-                c["id"]: _round(Decimal(total) * Decimal(str(c["valor"])) / Decimal(100))
-                for c in percentuais
-            }
-            nao_hora = materiais + soma_fixa + sum(valores_percentuais.values())
-            hora_valor = total - nao_hora
-            if hora_valor >= minimo:
-                break
-            total += 100
+    bases = config["bases_percentuais"]
+    base_nome = str(base_percentuais or config.get("base_percentuais_padrao") or "total")
+    base_cfg = bases.get(base_nome)
+    if not base_cfg:
+        raise ValueError(f"Base de percentuais desconhecida: {base_nome}")
+    cobertura = str(base_cfg.get("cobertura") or "separado")
+    base_componente = None
+    base_valor = None
+    if base_cfg.get("componente"):
+        base_componente = next(
+            (c for c in componentes if c["id"] == base_cfg["componente"]), None)
+        if base_componente is None:
+            raise ValueError(f"Componente da base não encontrado: {base_cfg['componente']}")
+        modo_base = base_componente["modo"]
+        if modo_base == "materiais":
+            base_valor = materiais
+        elif modo_base == "fixo":
+            base_valor = int(base_componente["valor"])
+        elif modo_base == "hora":
+            base_valor = labor
         else:
-            raise ValueError("Não foi possível fechar a composição em reais inteiros.")
-        aviso = ""
-    else:
-        total = max(0, int(total_centavos))
-        hora_valor = labor
-        disponivel = total - materiais - soma_fixa - hora_valor
-        valores_percentuais = {}
-        if disponivel < 0:
-            # O total negociado é autoritativo; se nem materiais + visita +
-            # hora mínima cabem, a diferença vira desconto e os percentuais
-            # ficam zerados.
-            desconto_valor = disponivel
-            valores_percentuais = {c["id"]: 0 for c in percentuais}
-            aviso = (f"Desconto de R$ {abs(desconto_valor) / 100:,.2f} aplicado "
-                     f"para manter o total negociado de R$ {total / 100:,.2f}.")
-        else:
-            cheios = {
-                c["id"]: _round(Decimal(total) * Decimal(str(c["valor"])) / Decimal(100))
-                for c in percentuais
-            }
-            if sum(cheios.values()) <= disponivel:
-                valores_percentuais = cheios
-                # Sobrou valor: a hora técnica recebe o resto.
-                hora_valor += disponivel - sum(cheios.values())
-                aviso = ""
+            raise ValueError("A base deve ser materiais, um componente fixo ou a hora técnica.")
+    elif base_cfg.get("campo"):
+        nome_campo = base_cfg["campo"]
+        if not isinstance(campos, dict) or nome_campo not in campos:
+            raise ValueError(f"Campo da base não informado: {nome_campo}")
+        try:
+            base_valor = int(Decimal(str(campos[nome_campo])))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise ValueError(f"Valor inválido para a base {base_nome}.") from exc
+        if base_valor < 0:
+            raise ValueError(f"Valor negativo para a base {base_nome}.")
+    if cobertura == "incluido" and base_valor is None:
+        raise ValueError("Cobertura incluída exige um componente ou campo como base.")
+
+    def percentuais_da_base(valor_base):
+        return {c["id"]: _round(Decimal(valor_base) * Decimal(str(c["valor"])) /
+                                Decimal(100)) for c in percentuais}
+
+    hora_valor = labor
+    if base_valor is None:
+        # Base = total: percentuais em linhas próprias.
+        if total_centavos is None:
+            total = _round((Decimal(materiais + soma_fixa + labor) /
+                            (Decimal(1) - soma_percentual)))
+            total = ((total + 99) // 100) * 100
+            for _ in range(100):
+                valores_pct = percentuais_da_base(total)
+                hora_valor = total - materiais - soma_fixa - sum(valores_pct.values())
+                if hora_valor >= minimo:
+                    break
+                total += 100
             else:
-                # Os percentuais integrais não cabem: divide o residual
-                # proporcionalmente entre eles, sem inventar desconto.
-                valores_percentuais = _distribuir_percentuais(disponivel, percentuais)
-                aviso = (f"Percentuais integrais não cabem no total de "
-                         f"R$ {total / 100:,.2f}; residual de "
-                         f"R$ {disponivel / 100:,.2f} dividido entre os custos.")
+                raise ValueError("Não foi possível fechar a composição em reais inteiros.")
+        else:
+            total = max(0, int(total_centavos))
+            valores_pct = percentuais_da_base(total)
+            hora_valor = total - materiais - soma_fixa - sum(valores_pct.values())
+            if hora_valor < minimo:
+                raise ValueError(
+                    "O total não cobre a hora técnica mínima. Aumente o total, "
+                    "reduza materiais/visita ou use a base de visita mínima.")
+        top_percentuais = valores_pct
+        base_extra = 0
+    else:
+        valores_pct = percentuais_da_base(base_valor)
+        soma_pct = sum(valores_pct.values())
+        incluido = cobertura == "incluido"
+        # Base já incluída em soma_fixa quando é um componente fixo; quando é
+        # campo, precisa entrar explicitamente no total.
+        base_extra = (base_valor if incluido and base_componente is None else 0)
+        if incluido:
+            if total_centavos is None:
+                total = materiais + soma_fixa + base_extra + labor
+                total = ((total + 99) // 100) * 100
+                hora_valor = total - materiais - soma_fixa - base_extra
+                if hora_valor < minimo:
+                    raise ValueError("A hora técnica ficou abaixo do mínimo.")
+            else:
+                total = max(0, int(total_centavos))
+                hora_valor = total - materiais - soma_fixa - base_extra
+                if hora_valor < minimo:
+                    raise ValueError(
+                        "O total não cobre a hora técnica mínima com esta base. "
+                        "Aumente o total, reduza materiais/visita ou troque a base.")
+            top_percentuais = {}
+        else:
+            if total_centavos is None:
+                total = materiais + soma_fixa + labor + soma_pct
+                total = ((total + 99) // 100) * 100
+                hora_valor = total - materiais - soma_fixa - soma_pct
+                if hora_valor < minimo:
+                    raise ValueError("A hora técnica ficou abaixo do mínimo.")
+            else:
+                total = max(0, int(total_centavos))
+                hora_valor = total - materiais - soma_fixa - soma_pct
+                if hora_valor < minimo:
+                    raise ValueError(
+                        "O total não cobre a hora técnica mínima com esta base. "
+                        "Aumente o total, reduza materiais/visita ou troque a base.")
+            top_percentuais = valores_pct
+
     valores = {}
     for componente in componentes:
         modo = componente["modo"]
@@ -544,55 +611,81 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
         elif modo == "hora":
             valores[componente["id"]] = hora_valor
         elif modo == "percentual":
-            valores[componente["id"]] = valores_percentuais[componente["id"]]
+            if cobertura == "incluido" and base_componente is not None:
+                continue
+            valores[componente["id"]] = top_percentuais.get(componente["id"], 0)
         else:
             valores[componente["id"]] = 0
-    if not desconto_valor:
-        diferenca = total - sum(valores.values())
-        if diferenca:
-            valores[hora["id"]] = max(0, valores[hora["id"]] + diferenca)
-            hora_valor = valores[hora["id"]]
-    if sum(valores.values()) - abs(desconto_valor) != total:
+    if base_extra:
+        valores["__base__"] = base_extra
+    diferenca = total - sum(valores.values())
+    if diferenca:
+        valores[hora["id"]] = max(0, valores[hora["id"]] + diferenca)
+    if sum(valores.values()) != total:
         raise ValueError("Não foi possível fechar a composição no valor total.")
-    if hora_valor < minimo:
+    if valores[hora["id"]] < minimo:
         raise ValueError("A hora técnica ficou abaixo do mínimo configurado.")
+
     saida = []
     for componente in componentes:
-        valor = valores[componente["id"]]
-        saida.append({
+        if (componente["modo"] == "percentual"
+                and cobertura == "incluido" and base_componente is not None):
+            continue
+        item = {
             "id": componente["id"],
             "nome": componente["nome"],
             "descricao": componente["descricao"],
             "modo": componente["modo"],
-            "valor_centavos": valor,
-            "percentual": round((valor / total * 100), 2) if total else 0.0,
+            "valor_centavos": valores[componente["id"]],
+            "percentual": round((valores[componente["id"]] / total * 100), 2) if total else 0.0,
             "obrigatorio": componente["obrigatorio"],
             "ordem": componente["ordem"],
-        })
-    if desconto_valor:
+        }
+        if (base_componente is not None and componente is base_componente
+                and cobertura == "incluido"):
+            item["filhos"] = [
+                {"id": c["id"], "nome": c["nome"], "descricao": c["descricao"],
+                 "modo": "percentual", "valor_centavos": valores_pct[c["id"]],
+                 "percentual": float(c["valor"]), "obrigatorio": c["obrigatorio"],
+                 "ordem": c["ordem"], "base": base_nome}
+                for c in percentuais
+            ]
+        saida.append(item)
+    if base_extra:
         saida.append({
-            "id": "desconto",
-            "nome": "Desconto",
-            "descricao": "Desconto aplicado para fechar o valor negociado.",
-            "modo": "desconto",
-            "valor_centavos": desconto_valor,
-            "percentual": round((desconto_valor / total * 100), 2) if total else 0.0,
+            "id": base_nome,
+            "nome": base_cfg.get("nome") or base_nome,
+            "descricao": "Base configurável de cálculo dos percentuais.",
+            "modo": "base",
+            "valor_centavos": base_extra,
+            "percentual": round((base_extra / total * 100), 2) if total else 0.0,
             "obrigatorio": False,
             "ordem": max((c["ordem"] for c in componentes), default=0) + 1,
+            "filhos": [
+                {"id": c["id"], "nome": c["nome"], "descricao": c["descricao"],
+                 "modo": "percentual", "valor_centavos": valores_pct[c["id"]],
+                 "percentual": float(c["valor"]), "obrigatorio": c["obrigatorio"],
+                 "ordem": c["ordem"], "base": base_nome}
+                for c in percentuais
+            ],
         })
     if total:
-        soma_percentual_saida = round(sum(x["percentual"] for x in saida), 2)
-        if soma_percentual_saida != 100.0:
-            alvo = next((x for x in saida if x["modo"] == "desconto"), None)
-            if alvo is None:
-                alvo = next((x for x in saida if x["id"] == hora["id"]), None)
-            if alvo is not None:
+        soma_pct_saida = round(sum(x["percentual"] for x in saida), 2)
+        if soma_pct_saida != 100.0:
+            alvo = next((x for x in saida if x["id"] == hora["id"]), None)
+            if alvo:
                 alvo["percentual"] = round(
-                    alvo["percentual"] + (100.0 - soma_percentual_saida), 2)
+                    alvo["percentual"] + (100.0 - soma_pct_saida), 2)
+    if cobertura == "incluido":
+        aviso = (f"Percentuais calculados sobre {base_cfg.get('nome') or base_nome} e "
+                 f"incluídos nela.")
+    else:
+        aviso = f"Percentuais calculados sobre {base_cfg.get('nome') or base_nome}."
     return {
         "versao": 1,
         "total_centavos": total,
         "componentes": saida,
+        "base_percentuais": base_nome,
         "aviso": aviso,
     }
 

@@ -114,28 +114,47 @@ percentuais configurados.
 
 ## Composição específica da OS (`calcular_os`)
 
-A OS usa uma regra própria, porque o valor negociado é autoritativo e os
-componentes precisam caber nele:
+A OS escolhe uma **base de percentuais** configurada em `composicao.yaml`.
+A base é resolvida por componente ou por campo, sem `if` fixo para visita:
 
-1. Materiais entram pelo valor real; componentes fixos (como a visita) entram
-   pelo valor do `composicao.yaml`.
-2. A hora técnica tem mínimo configurável (`minimo_centavos`, padrão
-   R$ 100,00).
-3. Os percentuais são calculados sobre o total negociado. Se os valores
-   integrais não couberem, o residual é dividido proporcionalmente entre os
-   componentes percentuais; nenhum percentual é inventado para fora do total.
-4. Se nem materiais + componentes fixos + hora mínima couberem no total, a
-   diferença vira uma linha **Desconto** (negativa). O total não é elevado
-   silenciosamente.
-5. Quando não há total negociado, o total é calculado pelos componentes e
-   fechado em reais inteiros; a diferença de arredondamento fica na hora
-   técnica.
-6. OS de garantia/cortesia com mão de obra zero mantêm o comportamento
-   anterior: somente materiais e mão de obra reais.
+```yaml
+bases_percentuais:
+  total:
+    nome: Total da OS
+    cobertura: separado
+  visita:
+    nome: Visita mínima
+    componente: visita
+    cobertura: incluido
+  # novo_campo:
+  #   nome: Nova base
+  #   campo: novo_campo
+  #   cobertura: incluido
+base_percentuais_padrao: total
+```
 
-Exemplo da OS-0023 (total R$ 450,00): materiais R$ 65,00, visita R$ 250,00,
-hora técnica R$ 100,00; os 10% integrais (R$ 45,00 cada) não cabem, então o
-residual de R$ 35,00 foi dividido em R$ 11,67, R$ 11,67 e R$ 11,66.
+- `total`: percentuais calculados sobre o total e exibidos em linhas próprias.
+- `componente`: percentuais calculados sobre o valor de um componente existente
+  (por exemplo, a visita).
+- `campo`: percentuais calculados sobre um campo futuro da OS.
+- `cobertura: separado`: os percentuais somam ao total e a hora técnica recebe
+  o restante.
+- `cobertura: incluido`: os percentuais ficam dentro da base (filhos), sem
+  somar novamente. A hora técnica recebe `total − materiais − base`.
+- O total negociado é autoritativo. Se não cobrir a hora mínima, a gravação é
+  recusada com mensagem; não há desconto automático.
+- Sem total negociado, o total é calculado e fechado em reais inteiros.
+- OS de garantia/cortesia com mão de obra zero mantêm o comportamento
+  anterior.
+
+Exemplo da OS-0023 (total R$ 450,00, base `visita`):
+
+- materiais R$ 65,00;
+- visita R$ 250,00;
+- administrativo, operacional e risco: 10% da visita = R$ 25,00 cada,
+  dentro da visita;
+- hora técnica: R$ 135,00;
+- total: R$ 450,00.
 
 ## Persistência
 
@@ -146,6 +165,7 @@ catalogo_servicos.tempo_horas
 catalogo_servicos.composicao_json
 ordens_servico.tempo_horas
 ordens_servico.composicao_json
+ordens_servico.base_percentuais
 ```
 
 O JSON guarda o total, os componentes, os valores em centavos, os percentuais

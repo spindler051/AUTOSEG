@@ -172,6 +172,7 @@ body.ui-unslop .composicao-preview{display:grid;grid-template-columns:repeat(2,m
 body.ui-unslop .composicao-preview span{min-width:0}
 body.ui-unslop .composicao-preview b{color:var(--u-text-2);font-weight:400}
 body.ui-unslop .composicao-preview .aviso{grid-column:1/-1;color:var(--u-warn)}
+body.ui-unslop .composicao-preview .filho{padding-left:16px;color:var(--u-muted)}
 body.ui-unslop .foto-rascunho{display:grid!important;grid-template-columns:120px minmax(0,1fr)!important;gap:16px!important;align-items:start!important;margin:12px 0!important;padding:12px!important;border:1px solid var(--u-line)!important;border-radius:10px!important;background:var(--u-card-2)!important}
 body.ui-unslop .foto-rascunho img{width:120px!important;height:90px!important;object-fit:cover!important;border-radius:8px!important}
 body.ui-unslop .foto-rascunho label{margin-top:10px}
@@ -711,7 +712,7 @@ button.secondary,.btn.secondary{{background:#262626;border-color:#9b9b9b;color:#
 .kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.kpi{{background:#171717;border:1px solid #444;padding:17px;border-radius:10px}}.kpi strong{{display:block;font-size:26px;color:var(--yellow)}}.kpi span{{font-size:13px;color:var(--muted)}}
 form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;overflow-wrap:anywhere}}.nav-more{{max-width:100%}}
 fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row-os{{grid-template-columns:minmax(0,2.4fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.1fr) auto}}.material-row label{{font-size:12px;margin:0}}.material-row input,.material-row select{{width:100%}}
-.composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}
+.composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}.composicao-preview .filho{{padding-left:14px;color:#aaa}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row,.material-row-os{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
 {CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
@@ -1865,6 +1866,20 @@ class PortalPrestador:
                     corpo+='<select id="material-estoque-selecionar">'+''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))+'</select>'
                     corpo+='<button class="secondary" id="adicionar-do-estoque" type="button">+ Adicionar do estoque</button>'
                     corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
+                try:
+                    cfg_comp=composicao.carregar()
+                    bases_comp=cfg_comp.get('bases_percentuais') or {}
+                    base_padrao=cfg_comp.get('base_percentuais_padrao') or 'total'
+                except (ValueError,OSError):
+                    bases_comp={}; base_padrao='total'
+                if not bases_comp:
+                    bases_comp={'total':{'nome':'Total da OS'},
+                                'visita':{'nome':'Visita mínima'}}
+                base_atual=str(d.get('base_percentuais') or base_padrao)
+                opcoes_base=[(chave,(valor or {}).get('nome',chave))
+                             for chave,valor in bases_comp.items()]
+                corpo+=select('Base dos percentuais','base_percentuais',opcoes_base,base_atual)
+                corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
                 corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
                 corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
                 corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p>'
@@ -2392,18 +2407,37 @@ class PortalPrestador:
                             return str(qs.get(k,[padrao])[0])
                         try:
                             total_txt=_valor('total').strip()
+                            campos={}
+                            for chave,valores in qs.items():
+                                if chave in ('total','materiais','mao_obra','horas','base'):
+                                    continue
+                                try:
+                                    campos[chave]=composicao.centavos_de_reais(str(valores[0]))
+                                except (ValueError,TypeError):
+                                    continue
                             comp=composicao.calcular_os(
                                 total_centavos=(composicao.centavos_de_reais(total_txt)
                                                 if total_txt else None),
                                 materiais_centavos=composicao.centavos_de_reais(_valor('materiais','0')),
                                 mao_obra_centavos=composicao.centavos_de_reais(_valor('mao_obra','0')),
-                                horas=_valor('horas','0') or 0)
+                                horas=_valor('horas','0') or 0,
+                                base_percentuais=(_valor('base','total') or 'total'),
+                                campos=campos)
+                            componentes=[]
+                            for x in comp['componentes']:
+                                item={'nome':x['nome'],
+                                      'valor_centavos':x['valor_centavos'],
+                                      'percentual':x['percentual']}
+                                if x.get('filhos'):
+                                    item['filhos']=[{'nome':f['nome'],
+                                                     'valor_centavos':f['valor_centavos'],
+                                                     'percentual':f['percentual']}
+                                                    for f in x['filhos']]
+                                componentes.append(item)
                             dados={'ok':True,'total_centavos':comp['total_centavos'],
+                                   'base_percentuais':comp.get('base_percentuais',''),
                                    'aviso':comp.get('aviso',''),
-                                   'componentes':[{'nome':x['nome'],
-                                                   'valor_centavos':x['valor_centavos'],
-                                                   'percentual':x['percentual']}
-                                                  for x in comp['componentes']]}
+                                   'componentes':componentes}
                             return self.send_bytes(json.dumps(dados,ensure_ascii=False).encode(),
                                                    'application/json; charset=utf-8')
                         except (ValueError,TypeError) as exc:

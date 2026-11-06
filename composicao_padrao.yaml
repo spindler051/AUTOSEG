@@ -16,6 +16,20 @@
 versao: 1
 moeda: BRL
 horas_padrao: 1.0
+bases_percentuais:
+  total:
+    nome: Total da OS
+    cobertura: separado
+  visita:
+    nome: Visita mínima
+    componente: visita
+    cobertura: incluido
+# Para um novo campo futuro, acrescente outra base:
+#  nova_base:
+#    nome: Nova base
+#    campo: novo_campo
+#    cobertura: incluido
+base_percentuais_padrao: total
 componentes:
   - id: materiais
     nome: Materiais

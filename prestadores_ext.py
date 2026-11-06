@@ -124,6 +124,10 @@ def instalar(banco):
             colunas_mat={r[1] for r in c.execute('PRAGMA table_info(materiais_os)').fetchall()}
             if 'unidade' not in colunas_mat:
                 c.execute("ALTER TABLE materiais_os ADD COLUMN unidade TEXT NOT NULL DEFAULT ''")
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ordens_servico'").fetchone():
+            colunas_os={r[1] for r in c.execute('PRAGMA table_info(ordens_servico)').fetchall()}
+            if 'base_percentuais' not in colunas_os:
+                c.execute("ALTER TABLE ordens_servico ADD COLUMN base_percentuais TEXT NOT NULL DEFAULT 'total'")
         # REV05: exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:

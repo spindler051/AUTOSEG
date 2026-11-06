@@ -200,6 +200,21 @@ def os_salvar(banco,d,pid,oid=None):
     except ValueError:
         raise ValueError('Tempo de execução inválido.') from None
     if tempo_horas<0:raise ValueError('Tempo de execução não pode ser negativo.')
+    base_nome=texto(d,'base_percentuais',30) or 'total'
+    try:
+        bases_config=composicao.carregar().get('bases_percentuais',{})
+    except (ValueError,OSError):
+        bases_config={}
+    if bases_config and base_nome not in bases_config:
+        raise ValueError('Base de percentuais inválida.')
+    campos={}
+    for chave,valor in d.items():
+        if isinstance(valor,(list,tuple,dict)) or chave in ('csrf','composicao_yaml'):
+            continue
+        try:
+            campos[chave]=int(round(numero(valor,'Campo')*100))
+        except (ValueError,TypeError):
+            continue
     comp_yaml=d.get('composicao_yaml')
     if comp_yaml:
         import json as _json_comp
@@ -217,7 +232,7 @@ def os_salvar(banco,d,pid,oid=None):
                             else int(round(total_negociado*100))),
             materiais_centavos=int(round(total_mat*100)),
             mao_obra_centavos=int(round(mao_obra*100)),
-            horas=tempo_horas)
+            horas=tempo_horas, base_percentuais=base_nome, campos=campos)
         total=comp['total_centavos']/100
         componente_hora=next((x for x in comp['componentes']
                               if x.get('modo')=='hora'),None)
@@ -243,11 +258,11 @@ def os_salvar(banco,d,pid,oid=None):
             cur=c.execute('''INSERT INTO ordens_servico
                 (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
                  valor_materiais,custo_materiais,valor_total,forma_pagamento,status,observacoes,
-                 tempo_horas,composicao_json,criado_em)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 tempo_horas,composicao_json,base_percentuais,criado_em)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
                 mao_obra,total_mat,custo_mat,total,forma,'Aberta',observacoes,
-                tempo_horas,comp_json,ext.agora()))
+                tempo_horas,comp_json,base_nome,ext.agora()))
             oid=cur.lastrowid
             aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
             ext.evento(c,oid,'OS criada via portal','Cadastro pelo portal web.',pid,'Prestador')
@@ -275,13 +290,14 @@ def os_salvar(banco,d,pid,oid=None):
             updated={'cliente_id':cliente_id,'tecnico':tecnico,'descricao':descricao,
                 'valor_mao_obra':mao_obra,'valor_materiais':total_mat,
                 'custo_materiais':custo_mat,'valor_total':total,
-                'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas}
+                'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas,
+                'base_percentuais':base_nome}
             diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
             c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
                 valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
-                tempo_horas=?,composicao_json=?,atualizado_em=? WHERE id=?''',
+                tempo_horas=?,composicao_json=?,base_percentuais=?,atualizado_em=? WHERE id=?''',
                 (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,observacoes,
-                 tempo_horas,comp_json,ext.agora(),oid))
+                 tempo_horas,comp_json,base_nome,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
         old_mat=[(r['item'], None if r['quantidade'] is None else float(r['quantidade']),

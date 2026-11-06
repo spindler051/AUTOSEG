@@ -223,7 +223,8 @@
       const params = new URLSearchParams({
         materiais: base.material.toFixed(2),
         mao_obra: base.labour.toFixed(2),
-        total: base.negociado || ''
+        total: base.negociado || '',
+        base: form.elements['base_percentuais']?.value || 'total'
       });
       try {
         const resposta = await fetch('/composicao/simular?' + params.toString(), {
@@ -241,6 +242,14 @@
           nome.textContent = item.nome;
           linha.append(nome, ' ' + brl(item.valor_centavos / 100));
           composicaoPreview.appendChild(linha);
+          for (const filho of (item.filhos || [])) {
+            const detalhe = document.createElement('span');
+            detalhe.className = 'filho';
+            const nomeFilho = document.createElement('b');
+            nomeFilho.textContent = filho.nome;
+            detalhe.append('— ', nomeFilho, ' ' + brl(filho.valor_centavos / 100));
+            composicaoPreview.appendChild(detalhe);
+          }
         }
         if (dados.aviso) {
           const aviso = document.createElement('span');
@@ -291,6 +300,7 @@
       });
       form.addEventListener('input', recalc);
       if (aplicarComposicao) aplicarComposicao.addEventListener('change', recalc);
+      form.querySelector('[name="base_percentuais"]')?.addEventListener('change', recalc);
       recalc();
     }
     // Fotos: prévia + legenda individual + chave estável por arquivo.

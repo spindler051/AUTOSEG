@@ -299,7 +299,7 @@ class CorrecoesRev12(unittest.TestCase):
         if fixos:
             self.assertTrue(any(x['valor_centavos'] > 0 for x in fixos))
 
-    def test_composicao_total_450_residual_nos_percentuais(self):
+    def test_composicao_total_450_base_visita(self):
         pid = self._prestador('Técnico Total 450', email='total450@exemplo.com.br')
         cid = self._cliente(pid, 'Condomínio Total 450')
         dados = {
@@ -307,7 +307,8 @@ class CorrecoesRev12(unittest.TestCase):
             'tecnico': 'T', 'forma_pagamento': 'PIX',
             'valor_mao_obra': '100', 'valor_materiais_manual': '65',
             'valor_total_override': '450', 'materiais_presentes': '1',
-            'aplicar_composicao': '1', 'acao_status': 'salvar',
+            'aplicar_composicao': '1', 'base_percentuais': 'visita',
+            'acao_status': 'salvar',
         }
         # A config efetiva do MAIN não tem deslocamento e usa risco de 10%.
         with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
@@ -323,20 +324,25 @@ class CorrecoesRev12(unittest.TestCase):
             composicao.salvar(config)
             oid = neg.os_salvar(self.db, dados, pid)
             with ext.db(self.db) as c:
-                os_ = c.execute('SELECT valor_materiais,valor_mao_obra,valor_total,composicao_json '
+                os_ = c.execute('SELECT valor_materiais,valor_mao_obra,valor_total,base_percentuais,composicao_json '
                                 'FROM ordens_servico WHERE id=?', (oid,)).fetchone()
         self.assertAlmostEqual(float(os_['valor_materiais']), 65.0, places=2)
-        self.assertAlmostEqual(float(os_['valor_mao_obra']), 100.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_mao_obra']), 135.0, places=2)
         self.assertAlmostEqual(float(os_['valor_total']), 450.0, places=2)
+        self.assertEqual(os_['base_percentuais'], 'visita')
         comp = json.loads(os_['composicao_json'])
         valores = {x['nome']: x['valor_centavos'] for x in comp['componentes']}
         self.assertEqual(comp['total_centavos'], 45000)
+        self.assertEqual(comp['base_percentuais'], 'visita')
         self.assertEqual(valores['Materiais'], 6500)
-        self.assertEqual(valores['Mão de obra / hora técnica'], 10000)
+        self.assertEqual(valores['Mão de obra / hora técnica'], 13500)
         self.assertEqual(valores['Taxa mínima de visita'], 25000)
-        self.assertEqual(valores['Custos administrativos'], 1167)
-        self.assertEqual(valores['Custos operacionais e tecnológicos'], 1167)
-        self.assertEqual(valores['Margem de risco e contingência'], 1166)
+        self.assertNotIn('Custos administrativos', valores)
+        visita = next(x for x in comp['componentes'] if x['id'] == 'visita')
+        filhos = {x['nome']: x['valor_centavos'] for x in visita['filhos']}
+        self.assertEqual(filhos['Custos administrativos'], 2500)
+        self.assertEqual(filhos['Custos operacionais e tecnológicos'], 2500)
+        self.assertEqual(filhos['Margem de risco e contingência'], 2500)
         self.assertEqual(sum(valores.values()), 45000)
 
     def test_pdf_nao_abre_pagina_de_erro_em_os_ativa(self):

@@ -17,32 +17,33 @@
 
 ## Composição
 
-A composição da OS usa `composicao.calcular_os`:
+A composição da OS usa `composicao.calcular_os` com uma **base de percentuais**
+configurada no `composicao.yaml`:
 
-- materiais reais;
-- visita e demais componentes fixos do `composicao.yaml`;
-- hora técnica com mínimo de R$ 100,00;
-- percentuais calculados sobre o total negociado;
-- se os percentuais integrais não couberem, o residual é dividido
-  proporcionalmente entre eles;
-- se nem materiais + visita + hora mínima couberem, a diferença vira uma linha
-  de desconto;
-- o total negociado nunca é elevado silenciosamente.
+- `total`: percentuais sobre o total da OS, em linhas próprias;
+- `visita`: percentuais sobre a visita mínima, dentro dela (filhos);
+- uma base futura pode apontar para outro componente (`componente:`) ou para
+  um campo novo (`campo:`), com `cobertura: separado|incluido`.
 
-O formulário tem **Aplicar composição padrão** marcado por padrão e mostra a
-prévia dos componentes antes de salvar. O total negociado continua
-autoritativo.
+O total negociado é autoritativo. Se não cobrir a hora técnica mínima de
+R$ 100,00, a gravação é recusada com mensagem; não há desconto automático.
+
+O formulário tem **Aplicar composição padrão** marcado por padrão, um seletor
+de **Base dos percentuais** e a prévia dos componentes antes de salvar.
 
 ## Caso OS-0023
 
+- Base dos percentuais: **visita mínima**.
 - Caixa de passagem: R$ 49,25.
 - Cabo 20A: 1 m, R$ 10,00.
 - Tubo termo retrátil: 5 cm, R$ 1,00/cm, total R$ 5,00.
 - Materiais: R$ 65,00.
 - Visita mínima: R$ 250,00.
-- Hora técnica: R$ 100,00.
-- Percentuais integrais de 10% (R$ 45,00 cada) não cabem em R$ 450,00; o
-  residual de R$ 35,00 foi dividido em R$ 11,67, R$ 11,67 e R$ 11,66.
+- Administrativo: 10% da visita = R$ 25,00.
+- Operacional: 10% da visita = R$ 25,00.
+- Risco: 10% da visita = R$ 25,00.
+- Hora técnica: R$ 135,00.
 - Total: R$ 450,00.
+- Sem desconto.
 - Feedback: `portal_feedback` id 26.
-- Backup: `backups/dados_antes_correcao_os0023_20261105_221657.db`.
+- Backup: `backups/dados_antes_composicao_visita_os0023_20261105_231929.db`.
