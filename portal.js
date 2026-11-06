@@ -1467,10 +1467,10 @@
 @media(max-width:980px){
   .side-mobile-head>div{display:none!important}
   body.menu-open #side-nav.open{overflow:hidden!important;padding:10px 16px 82px!important;gap:2px!important}
-  body.menu-open #side-nav.open .side-group{gap:0!important}
+  body.menu-open #side-nav.open .side-group{flex:1 1 auto;justify-content:space-evenly;gap:0!important}
   body.menu-open #side-nav.open .side-label{display:none!important}
-  body.menu-open #side-nav.open .side-link{min-height:42px!important;padding:0 10px!important;font-size:15px!important}
-  body.menu-open #side-nav.open .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}
+  body.menu-open #side-nav.open .side-link{flex:1 1 0;min-height:0!important;padding:0 12px!important;font-size:16px!important}
+  body.menu-open #side-nav.open .side-link svg{width:20px!important;height:20px!important;flex-basis:20px!important}
   body.menu-open .side-foot{padding:8px 16px!important}
   body.menu-open .side-foot .side-user{padding:0!important}
   body.menu-open .side-foot .side-tool{min-height:28px!important}
@@ -1499,6 +1499,18 @@
       botao.setAttribute('form', 'form-os');
       acoesTopo.prepend(botao);
     });
+  }
+  if (podeCriarElemento) {
+    const estiloGeral = document.createElement('style');
+    estiloGeral.textContent = `
+body.ui-app .side-brand img{height:36px;max-width:200px}
+body.ui-app form[action="/os"]{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card);padding:12px 16px;margin:0 0 18px}
+body.ui-app form[action="/os"] label[for="c_ordem"]{margin:0;font:600 14px/1.4 var(--u-font);color:var(--u-text)}
+body.ui-app form[action="/os"] select{max-width:380px}
+body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);border:1px solid rgba(124,199,162,.38);border-radius:999px;padding:2px 8px;font-weight:600}
+@media(max-width:520px){body.ui-app form[action="/os"]{align-items:stretch;flex-direction:column;gap:6px}body.ui-app form[action="/os"] select{max-width:none}}
+`;
+    document.head?.append(estiloGeral);
   }
   // Módulo Meu Auto Financeiro é separado do AUTOSEG: remove os atalhos.
   document.querySelectorAll('a[href="/auto-financeiro"]').forEach(link => link.remove());
@@ -1650,6 +1662,63 @@
     placeholder.textContent = 'Selecione um material do estoque';
     estoqueSelect.prepend(placeholder);
     estoqueSelect.value = '-1';
+  }
+
+  // Lista de OS: valor, urgência e ordenação por urgência (carregados ao vivo).
+  if (location.pathname === '/os' && podeCriarElemento && typeof DOMParser !== 'undefined') {
+    const tabela = document.querySelector('.table-scroll table');
+    if (tabela) {
+      const cabecalho = tabela.querySelector('thead tr');
+      if (cabecalho && !cabecalho.querySelector('[data-col="valor"]')) {
+        const thValor = document.createElement('th');
+        thValor.textContent = 'Valor';
+        thValor.dataset.col = 'valor';
+        const thUrgencia = document.createElement('th');
+        thUrgencia.textContent = 'Urgência';
+        thUrgencia.dataset.col = 'urgencia';
+        cabecalho.append(thValor, thUrgencia);
+      }
+      const linhas = Array.from(tabela.querySelectorAll('tbody tr'));
+      (async () => {
+        for (const linha of linhas) {
+          const link = linha.querySelector('a[href^="/os/"]');
+          if (!link) continue;
+          const osId = (link.getAttribute('href') || '').split('/')[1];
+          if (!osId) continue;
+          try {
+            const resposta = await fetch('/os/' + osId, {credentials: 'same-origin'});
+            const html = await resposta.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const valor = doc.querySelector('.os-ticket-stats .money')?.textContent?.trim() || '—';
+            const seletorUrgencia = doc.querySelector('#c_urgencia');
+            const urgencia = seletorUrgencia?.value || 'Normal';
+            linha.dataset.urgencia = urgencia;
+            const tdValor = document.createElement('td');
+            tdValor.dataset.label = 'Valor';
+            tdValor.textContent = valor;
+            const tdUrgencia = document.createElement('td');
+            tdUrgencia.dataset.label = 'Urgência';
+            tdUrgencia.textContent = urgencia;
+            linha.append(tdValor, tdUrgencia);
+          } catch (_erro) {}
+        }
+      })();
+      const seletorOrdem = document.getElementById('c_ordem');
+      if (seletorOrdem && !seletorOrdem.querySelector('option[value="urgencia"]')) {
+        const opcao = document.createElement('option');
+        opcao.value = 'urgencia';
+        opcao.textContent = 'Urgência: Alta primeiro';
+        seletorOrdem.append(opcao);
+      }
+      document.addEventListener('change', evento => {
+        if (evento.target.id !== 'c_ordem' || evento.target.value !== 'urgencia') return;
+        evento.stopImmediatePropagation();
+        const peso = {Alta: 3, Normal: 2, Baixa: 1};
+        linhas.sort((a, b) => (peso[b.dataset.urgencia] || 0) - (peso[a.dataset.urgencia] || 0));
+        const corpo = tabela.querySelector('tbody');
+        if (corpo) linhas.forEach(linha => corpo.append(linha));
+      }, true);
+    }
   }
 
   document.querySelectorAll('button[data-mover]').forEach(botao => {
