@@ -38,7 +38,7 @@ def esc(value):
 
 def centavos(value):
     """Aceita 1234.56 ou 1.234,56; sem ponto flutuante para cálculos."""
-    raw = str(value or '').strip().replace('R$', '').replace(' ', '')
+    raw = str(value if value is not None else '').strip().replace('R$', '').replace(' ', '')
     if ',' in raw:
         raw = raw.replace('.', '').replace(',', '.')
     try:

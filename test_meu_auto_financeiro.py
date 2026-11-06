@@ -69,6 +69,26 @@ class FinanceiroTeste(unittest.TestCase):
             c.execute("INSERT INTO produtividade_rateios(os_id,tecnico_id,valor_centavos,definidor_id,registrado_em) VALUES(1,?,40000,?,'agora')",(self.pid_b,self.pid))
             c.execute("INSERT INTO produtividade_repasses(os_id,tecnico_id,pago_centavos,atualizado_em) VALUES(1,?,0,'agora')",(self.pid_b,))
 
+    def test_conciliacao_com_valor_zero_nao_falha(self):
+        self.assertEqual(maf.centavos(0), 0)
+        self.assertEqual(maf.centavos(0.0), 0)
+        self.os_ficticia()
+        with ext.db(str(self.autoseg)) as c:
+            c.execute("INSERT INTO ordens_servico(numero_os,cliente_id,status) "
+                      "VALUES('OS-ZERO',1,'Concluída')")
+            c.execute("INSERT INTO os_encerramentos(os_id,situacao,ator,prestador_id,"
+                      "encerrado_em) VALUES(2,'Concluída','Técnico',?,'2026-11-04')",
+                      (self.pid,))
+            c.execute("INSERT INTO financeiro(os_id,cliente_id,valor,status) "
+                      "VALUES(2,1,0,'Recebido')")
+        u = self.carregar()
+        self.assertEqual(maf.reconciliar_autoseg(str(self.autoseg), u), 0)
+        with ext.db(str(self.autoseg)) as c:
+            c.execute("UPDATE financeiro SET status='Recebido' WHERE os_id=1")
+        self.assertEqual(maf.reconciliar_autoseg(str(self.autoseg), u), 1)
+        with maf.conn() as c:
+            self.assertEqual(maf.saldo(c, u['id']), 80000)
+
     def test_recebido_autoseg_sem_duplicacao_e_rateio(self):
         self.os_ficticia()
         u=self.carregar();ub=maf.usuario_prestador(self.pid_b,'Técnico B')
