@@ -466,11 +466,12 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .side-mobile-head>div{display:none}
   body.ui-app .side-mobile-head strong{display:block;font:500 16px/1.3 var(--u-font)}
   body.ui-app .side-mobile-head span{display:block;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-  body.ui-app.menu-open .side-nav.open{overflow:hidden;padding:10px 16px 82px;gap:2px}
-  body.ui-app.menu-open .side-nav.open .side-group{gap:0}
+  body.ui-app.menu-open .side-nav.open{height:calc(100dvh - var(--menu-foot-h, 0px));bottom:auto;overflow:hidden;padding:10px 16px 12px;gap:4px}
+  body.ui-app.menu-open .side-nav.open .side-group{display:contents}
   body.ui-app.menu-open .side-nav.open .side-label{display:none}
-  body.ui-app.menu-open .side-nav.open .side-link{min-height:42px;padding:0 10px;font-size:15px}
-  body.ui-app.menu-open .side-nav.open .side-link svg{width:18px;height:18px;flex:0 0 18px}
+  body.ui-app.menu-open .side-nav.open .side-mobile-head{flex:0 0 auto}
+  body.ui-app.menu-open .side-nav.open .side-link{flex:1 1 0;min-height:0;padding:0 12px;font-size:16px}
+  body.ui-app.menu-open .side-nav.open .side-link svg{width:20px;height:20px;flex:0 0 20px}
   body.ui-app.menu-open .side-foot{padding:8px 16px}
   body.ui-app.menu-open .side-foot .side-user{padding:0}
   body.ui-app.menu-open .side-foot .side-tool{min-height:28px}

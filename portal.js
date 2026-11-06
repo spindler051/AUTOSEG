@@ -1496,9 +1496,10 @@
 @media(max-width:980px){
   html.menu-open,body.menu-open{overflow:hidden!important;height:100%!important;overscroll-behavior:none!important;touch-action:none!important}
   .side-mobile-head>div{display:none!important}
-  body.menu-open #side-nav.open{height:calc(100dvh - var(--menu-foot-h, 0px))!important;bottom:auto!important;overflow:hidden!important;padding:10px 16px 12px!important;gap:2px!important}
-  body.menu-open #side-nav.open .side-group{flex:1 1 auto;justify-content:space-evenly;gap:0!important}
+  body.menu-open #side-nav.open{height:calc(100dvh - var(--menu-foot-h, 0px))!important;bottom:auto!important;overflow:hidden!important;padding:10px 16px 12px!important;gap:4px!important}
+  body.menu-open #side-nav.open .side-group{display:contents!important}
   body.menu-open #side-nav.open .side-label{display:none!important}
+  body.menu-open #side-nav.open .side-mobile-head{flex:0 0 auto}
   body.menu-open #side-nav.open .side-link{flex:1 1 0;min-height:0!important;padding:0 12px!important;font-size:16px!important}
   body.menu-open #side-nav.open .side-link svg{width:20px!important;height:20px!important;flex-basis:20px!important}
   body.menu-open .side-foot{padding:8px 16px!important}
