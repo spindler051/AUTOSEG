@@ -18,9 +18,11 @@ Essas suites usam banco, arquivos e portas temporárias; não gravam em
 `dados.db`. Cobrem composição modular, fluxo da OS, unidades de materiais,
 PDF, feedback e API financeira.
 
-O CI da `main` executa exatamente essa lista em passos separados. O CI da
-`develop` executa `test_versionador`, `test_produtividade_rev07`,
-`test_composicao`, `test_autoseg_melhorias` e `test_importacao_yaml.py`.
+Essa é a suíte atual. O workflow da `main` deve ser atualizado para executar
+esses módulos em passos separados; o teste legado v9.4.1 não representa mais o
+portal e não deve ser usado como sinal de regressão. O workflow da `develop`
+executa `test_versionador`, `test_produtividade_rev07`, `test_composicao` e
+`test_autoseg_melhorias`.
 
 ### Testes legados (não executar no CI)
 
