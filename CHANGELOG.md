@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.33 — dados bancários unificados entre site, GTK e e-mail — 2026-11-06 — develop
+
+- **Campo único:** o bloco **Dados bancários e cadastrais para cobrança** do Portal do Prestador agora lê e grava exatamente o mesmo campo do app GTK (`prestadores_config.dados_bancarios_texto`). Alterações feitas no site passam a valer no GTK e nos e-mails de cobrança.
+- **Migração:** textos antigos salvos apenas pelo site (`produtividade_bancos`) são promovidos uma única vez para o campo oficial quando forem mais recentes; o texto do GTK é preservado quando for a edição mais nova.
+- **E-mails:** o rascunho `.eml` também passa a incluir o texto livre de dados bancários, além dos campos estruturados, mantendo o mesmo conteúdo do envio via Gmail.
+- **Testes:** `test_rev12_correcoes.py` (42 OK, 1 skipped), `test_gmail_integracao.py` (7 OK), `test_autoseg_melhorias.py` (9 OK) e `test_produtividade_rev07.py` (9 OK).
+
 ## 9.6.0-dev.32 — feedbacks 54–63, menu hambúrguer e fotos — 2026-11-06 — develop
 
 - **Identificação:** Cancelar OS e Arquivar OS ficaram no fim da aba Identificação; Situação do atendimento e Assumir OS permanecem no topo. Administradores também podem cancelar OS nesse fluxo.

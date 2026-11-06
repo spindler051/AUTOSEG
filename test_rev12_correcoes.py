@@ -1198,6 +1198,63 @@ class CorrecoesRev12(unittest.TestCase):
                                (oid,)).fetchone()['status']
         self.assertEqual(status, 'Cancelada')
 
+    def test_dados_bancarios_site_gtk_e_email_usam_o_mesmo_campo(self):
+        pid = self._prestador('Técnico Banco Único', email='banco.unico@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Banco Único',
+                            email='cliente.banco@exemplo.com.br')
+        oid = self._os_concluida(pid, cid)
+        _, base = self._servidor()
+        cliente = self._login(base, 'banco.unico@exemplo.com.br')
+        _, html = req(cliente, base, '/financeiro')
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        texto = 'PIX: banco-unico@exemplo.com\nAgência 0001\nConta 12345-6'
+        status, _ = req(cliente, base, '/financeiro/banco/salvar',
+                         {'csrf': token, 'dados_bancarios': texto})
+        self.assertEqual(status, 200)
+        config = ext.obter_config_prestador(self.db, pid)
+        self.assertEqual(config['dados_bancarios_texto'], texto)
+        with ext.db(self.db) as c:
+            legado = c.execute('SELECT dados_texto FROM produtividade_bancos WHERE prestador_id=?',
+                               (pid,)).fetchone()
+        self.assertIsNone(legado)
+        corpo_html = gmail_service._dados_pagamento_html(self.db, oid)
+        self.assertIn('banco-unico@exemplo.com', corpo_html)
+        self.assertIn('Conta 12345-6', corpo_html)
+        import email
+        pdf = Path(self.tmp.name) / 'relatorio.pdf'
+        pdf.write_bytes(PDF_MINIMO)
+        arq = Path(ext.criar_email_rascunho(self.db, oid, str(pdf), pid))
+        msg = email.message_from_bytes(arq.read_bytes(), policy=email.policy.default)
+        corpo_eml = msg.get_body(preferencelist=('plain',)).get_content()
+        self.assertIn('banco-unico@exemplo.com', corpo_eml)
+        self.assertIn('Conta 12345-6', corpo_eml)
+
+    def test_migracao_do_texto_bancario_antigo_do_portal(self):
+        pid = self._prestador('Técnico Legado', email='legado.banco@exemplo.com.br')
+        ext.salvar_config_prestador(self.db, pid,
+                                    {'dados_bancarios_texto': 'Conta antiga do GTK'})
+        with ext.db(self.db) as c:
+            c.execute("UPDATE prestadores_config SET atualizado_em=? WHERE prestador_id=?",
+                      ('2026-01-01 10:00:00', pid))
+            c.execute('''INSERT INTO produtividade_bancos(prestador_id,dados_texto,atualizado_em)
+                         VALUES(?,?,?)''',
+                      (pid, 'Conta nova do site', '2026-01-02 10:00:00'))
+        config = ext.obter_config_prestador(self.db, pid)
+        self.assertEqual(config['dados_bancarios_texto'], 'Conta nova do site')
+        with ext.db(self.db) as c:
+            oficial = c.execute('SELECT dados_bancarios_texto FROM prestadores_config '
+                                'WHERE prestador_id=?', (pid,)).fetchone()
+        self.assertEqual(oficial['dados_bancarios_texto'], 'Conta nova do site')
+        with ext.db(self.db) as c:
+            c.execute('''UPDATE prestadores_config SET dados_bancarios_texto=?,
+                         atualizado_em=? WHERE prestador_id=?''',
+                      ('Conta GTK mais nova', '2026-02-01 10:00:00', pid))
+            c.execute("UPDATE produtividade_bancos SET dados_texto=?,atualizado_em=? "
+                      "WHERE prestador_id=?",
+                      ('Conta site antiga', '2026-01-02 10:00:00', pid))
+        self.assertEqual(ext.obter_config_prestador(self.db, pid)['dados_bancarios_texto'],
+                         'Conta GTK mais nova')
+
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""
         pid = self._prestador()

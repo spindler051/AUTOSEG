@@ -661,9 +661,37 @@ CAMPOS_CONFIG = ('provedor_email','email_remetente','credencial_env','banco_nome
 
 
 def obter_config_prestador(banco,pid):
+    """Configuração única do prestador, compartilhada pelo portal, GTK e e-mails.
+
+    O portal antigo gravava os dados bancários em ``produtividade_bancos``.
+    Se esse registro for mais recente que o de ``prestadores_config``, ele é
+    migrado uma única vez para o campo oficial ``dados_bancarios_texto``.
+    """
     with db(banco) as c:
         r=c.execute('SELECT * FROM prestadores_config WHERE prestador_id=?',(pid,)).fetchone()
-        return dict(r) if r else {k:'' for k in CAMPOS_CONFIG}
+        dados=dict(r) if r else {k:'' for k in CAMPOS_CONFIG}
+        legado=None
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='produtividade_bancos'").fetchone():
+            legado=c.execute('SELECT dados_texto,atualizado_em FROM produtividade_bancos WHERE prestador_id=?',
+                             (pid,)).fetchone()
+        if not legado:
+            return dados
+        texto_site=str(legado['dados_texto'] or '').strip()
+        if not texto_site:
+            return dados
+        texto_config=str(dados.get('dados_bancarios_texto') or '').strip()
+        if texto_config and str(legado['atualizado_em'] or '') <= str(dados.get('atualizado_em') or ''):
+            return dados
+        # O portal era a edição mais recente: promove o texto para o campo oficial.
+        momento=agora()
+        c.execute('''INSERT INTO prestadores_config(prestador_id,dados_bancarios_texto,atualizado_em)
+                     VALUES(?,?,?) ON CONFLICT(prestador_id) DO UPDATE SET
+                     dados_bancarios_texto=excluded.dados_bancarios_texto,
+                     atualizado_em=excluded.atualizado_em''',
+                  (pid,texto_site,momento))
+        dados['dados_bancarios_texto']=texto_site
+        dados['atualizado_em']=momento
+        return dados
 
 
 def salvar_config_prestador(banco,pid,dados):
@@ -711,6 +739,9 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     for titulo,chave in (('Titular','banco_titular'),('Banco','banco_nome'),
                          ('Agência','banco_agencia'),('Conta','banco_conta'),('Pix','chave_pix')):
         if config.get(chave):pagamento.append(titulo+': '+config[chave])
+    texto_bancario=str(config.get('dados_bancarios_texto') or '').strip()
+    if texto_bancario:
+        pagamento.append('Dados bancários e cadastrais:\n'+texto_bancario)
     corpo=f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.'
     if pagamento:corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
     corpo+='\n\nAtenciosamente,\n'+(config.get('banco_titular') or 'AUTOSEG')

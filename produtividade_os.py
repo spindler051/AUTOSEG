@@ -434,18 +434,16 @@ def confirmar_recebimento_repasse(banco,os_id,secundario_id,valor=None):
 
 
 def salvar_dados_bancarios(banco,pid,texto):
+    """Grava o mesmo campo usado pelo app GTK e pelos e-mails de cobrança."""
     conteudo=str(texto or '').strip()
-    if len(conteudo)>1500:raise ValueError('Dados bancários longos demais.')
     with ext.db(banco) as c:
         if not c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone():
             raise PermissionError('Prestador inexistente.')
-        c.execute("""INSERT INTO produtividade_bancos(prestador_id,dados_texto,atualizado_em)
-            VALUES(?,?,?) ON CONFLICT(prestador_id) DO UPDATE SET
-            dados_texto=excluded.dados_texto,atualizado_em=excluded.atualizado_em""",
-            (pid,conteudo,ext.agora()))
+    config=ext.obter_config_prestador(banco,pid)
+    config['dados_bancarios_texto']=conteudo
+    ext.salvar_config_prestador(banco,pid,config)
 
 
 def obter_dados_bancarios(banco,pid):
-    with ext.db(banco) as c:
-        r=c.execute('SELECT dados_texto FROM produtividade_bancos WHERE prestador_id=?',(pid,)).fetchone()
-        return r['dados_texto'] if r else ''
+    """Lê o campo oficial compartilhado, migrando o texto antigo do portal."""
+    return str(ext.obter_config_prestador(banco,pid).get('dados_bancarios_texto') or '')

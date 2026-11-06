@@ -2372,11 +2372,12 @@ class PortalPrestador:
                          +_coluna('A receber / Confirmar recebimento',a_receber,'Nenhum lançamento a receber.')
                          +_coluna('Recebidos',recebidos,'Nenhum lançamento recebido.')
                          +'</div>')
-                banco_card=card('Dados bancários para e-mail de cobrança',
+                banco_card=card('Dados bancários e cadastrais para cobrança',
                     f'<form method="post" action="/financeiro/banco/salvar">{token}'
-                    +textarea('Dados bancários / Pix (texto livre)','dados_bancarios',banco_texto,rows=5)
+                    +textarea('Dados bancários e cadastrais (texto livre)','dados_bancarios',banco_texto,rows=5)
                     +'<button type="submit">Salvar meus dados bancários</button></form>'
-                    +'<p class="muted">Primeiro passo do financeiro: mantenha seus dados atualizados para o e-mail de cobrança.</p>')
+                    +'<p class="muted">Este é o mesmo campo do app GTK e o usado no e-mail de cobrança. '
+                    +'O que você salvar aqui vale para os dois.</p>')
                 repasses=[]
                 for item in pessoal['repassar_a_colegas']:
                     confirmado=item['pago_centavos']
