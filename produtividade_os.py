@@ -86,7 +86,12 @@ def _os_ativa_responsavel(c,os_id,pid):
     if 'arquivada' in os_.keys() and os_['arquivada']:
         raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
     if ext.responsavel_atual(c,os_id)!=pid:
-        raise PermissionError('Somente o técnico atribuído pode alterar esta OS.')
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                         (pid,)).fetchone() if tem_admin else None)
+        if not admin:
+            raise PermissionError('Somente o técnico atribuído ou um administrador pode alterar esta OS.')
     return os_
 
 
@@ -329,6 +334,77 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
     return bruto-sum(parcelas.values())
 
 
+def definir_rateio_manual(banco,os_id,ator_id,tecnico_id,valor):
+    """Inclui/edita um rateio depois da conclusão, com auditoria.
+
+    Não altera o valor cobrado do cliente. Bloqueia alteração se o repasse
+    já tiver sido enviado ou confirmado.
+    """
+    cents=_centavos(valor)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT numero_os,status,valor_total FROM ordens_servico WHERE id=?',
+                    (os_id,)).fetchone()
+        if not o:
+            raise ValueError('OS não encontrada.')
+        if o['status']!='Concluída':
+            raise ValueError('O rateio manual está disponível apenas para OS concluída.')
+        if int(tecnico_id)==int(ator_id):
+            raise ValueError('O finalizador não pode receber parcela de si mesmo.')
+        alvo=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',
+                       (int(tecnico_id),)).fetchone()
+        if not alvo:
+            raise ValueError('Técnico secundário não encontrado ou inativo.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
+                        (os_id,)).fetchone()
+        if not final:
+            raise ValueError('OS sem encerramento; não há finalizador definido.')
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (ator_id,)).fetchone()) if tem_admin else False
+        if int(final['prestador_id'])!=int(ator_id) and not admin:
+            raise PermissionError('Somente o finalizador ou um administrador pode ajustar o rateio.')
+        atual=c.execute('SELECT valor_centavos FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                        (os_id,int(tecnico_id))).fetchone()
+        rep=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
+                         WHERE os_id=? AND tecnico_id=?''',(os_id,int(tecnico_id))).fetchone()
+        if rep and (int(rep['pago_centavos'])>0 or int(rep['enviado_centavos'])>0):
+            raise ValueError('Não é possível alterar um repasse já enviado ou confirmado.')
+        outros=c.execute('''SELECT COALESCE(SUM(valor_centavos),0) FROM produtividade_rateios
+                            WHERE os_id=? AND tecnico_id!=?''',(os_id,int(tecnico_id))).fetchone()[0]
+        total=_centavos(o['valor_total'])
+        if int(outros)+cents>total:
+            raise ValueError('O rateio ultrapassa o valor total da OS.')
+        antes=int(atual['valor_centavos']) if atual else 0
+        if cents==0:
+            c.execute('DELETE FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                      (os_id,int(tecnico_id)))
+            c.execute('DELETE FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
+                      (os_id,int(tecnico_id)))
+            acao='Rateio removido manualmente'
+        else:
+            c.execute('''INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo)
+                         VALUES(?,?,?,1) ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1''',
+                      (os_id,int(tecnico_id),ext.agora()))
+            c.execute('''INSERT INTO produtividade_rateios
+                         (os_id,tecnico_id,valor_centavos,definidor_id,registrado_em)
+                         VALUES(?,?,?,?,?) ON CONFLICT(os_id,tecnico_id) DO UPDATE SET
+                         valor_centavos=excluded.valor_centavos,definidor_id=excluded.definidor_id,
+                         registrado_em=excluded.registrado_em''',
+                      (os_id,int(tecnico_id),cents,int(ator_id),ext.agora()))
+            c.execute('''INSERT INTO produtividade_repasses(os_id,tecnico_id,pago_centavos,atualizado_em)
+                         VALUES(?,?,0,?) ON CONFLICT(os_id,tecnico_id) DO UPDATE SET
+                         atualizado_em=excluded.atualizado_em''',
+                      (os_id,int(tecnico_id),ext.agora()))
+            acao='Rateio ajustado manualmente'
+        ext.evento(c,os_id,acao,
+                   f'{o["numero_os"]} · {alvo["nome"]}: {antes} → {cents} centavos. '
+                   f'Total da OS mantido em {total} centavos.',
+                   int(ator_id),f'Prestador {ator_id}')
+        return cents
+
+
 def financeiro_pessoal(banco,pid):
     """Detalha obrigações internas sem somar repasses ao faturamento bruto."""
     with ext.db(banco) as c:
@@ -341,7 +417,8 @@ def financeiro_pessoal(banco,pid):
             JOIN ordens_servico o ON o.id=f.os_id
             JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=f.os_id
-            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY f.id DESC""",(pid,))]
+            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0
+              AND f.status!='Cancelado' ORDER BY f.id DESC""",(pid,))]
         meus=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
             r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,

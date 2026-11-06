@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.38 — feedbacks 71–81, interface padrão e financeiro — 2026-11-06 — develop
+
+- **Interface padrão:** o layout atual passa a ser o único em todas as páginas; a alternância de interface foi removida. O menu mobile abre em tela cheia, bloqueia a rolagem do fundo e mostra conta, ícones e textos maiores.
+- **Rascunho automático:** o botão de salvar rascunho foi retirado. Alterações em campos, seleções, materiais e relatos são salvas automaticamente e restauradas ao reabrir a OS.
+- **Administração:** administradores podem assumir e editar OS de outros prestadores, com auditoria; o botão Assumir OS aparece para eles.
+- **Fechamento:** o bloco de situação do atendimento foi movido para a última aba (Situação e relatório / Fechamento).
+- **Fotos:** o botão “+ Adicionar mais fotos” permanece disponível após o envio; a aba e a rolagem são preservadas.
+- **Rateio pós-conclusão:** OS concluída ganhou a seção Rateio e repasses para incluir, editar ou remover parcelas de técnicos secundários, com validação do total e bloqueio depois de envio/confirmação.
+- **Cancelamento de pagamento:** o financeiro ganhou “Cancelar pagamento”; o lançamento sai das listas e dos totais, preservando o histórico. A OS-0012 do Parque Ganzo foi cancelada manualmente.
+- **Testes:** `test_rev12_correcoes.py` (47 OK, 1 skipped), `test_feedback_portal.py` + `test_api_financeiro.py` + `test_meu_auto_financeiro.py` (40 OK), `test_produtividade_rev07.py` + `test_gmail_integracao.py` (16 OK), `test_autoseg_melhorias.py` + `test_composicao.py` + `test_pdf_relatorio.py` (41 OK).
+
 ## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop
 
 - **Meu Auto Financeiro:** módulo de finanças pessoais/familiares separado do Financeiro da empresa, disponível em `/auto-financeiro` no mesmo Portal do Prestador e no mesmo túnel. Usa a sessão do prestador; familiares entram por convite.

@@ -50,7 +50,7 @@ class Rev03HttpTest(unittest.TestCase):
                 b,_=request(bc,cli,'/nova-organizacao',dados)
                 self.assertIn('Solicitação registrada'.encode(),b)
                 b,_=request(bp,pre,'/login',{'email':'prestador@example.org','senha':'senha-segura-2026'})
-                self.assertIn(b'Painel principal',b)
+                self.assertIn(b'Vis\xc3\xa3o geral',b)
                 b,_=request(bp,pre,'/clientes')
                 self.assertIn('Condomínio Vinte e Um'.encode(),b)
                 b,_=request(bp,pre,'/os')

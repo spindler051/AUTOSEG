@@ -57,7 +57,7 @@ class FeedbackPortalTest(unittest.TestCase):
             'senha': 'senha-bem-segura-2026',
         })
         self.assertEqual(status, 200)
-        self.assertIn(b'Painel principal', html)
+        self.assertIn('Visão geral'.encode(), html)
         self.csrf = csrf(html)
 
     def tearDown(self):
@@ -313,7 +313,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
             'telemetry_session': 'sessao-teste',
         }
         self.meta = {
-            'ui_mode': 'unslop', 'aba': '02Materiais',
+            'ui_mode': 'app', 'aba': '02Materiais',
             'sessao_hash': 'hash-teste', 'navegador': 'Chrome',
             'sistema': 'macOS', 'dispositivo': 'computador',
             'diagnostico': '{"total_previsto":"R$ 450,00"}',
@@ -330,7 +330,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
         item = feedback.obter(self.db, fid)
         self.assertEqual(item['status'], 'Incompleto')
         self.assertEqual(item['status_dev'], 'Incompleto')
-        self.assertEqual(item['ui_mode'], 'unslop')
+        self.assertEqual(item['ui_mode'], 'app')
         self.assertEqual(item['aba'], '02Materiais')
         self.assertIn('R$ 450,00', item['diagnostico_json'])
         self.assertEqual(feedback.ultimo_rascunho(self.db, self.sessao)['id'], fid)
@@ -350,7 +350,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
     def test_telemetria_registra_modo_e_aba(self):
         with patch.dict(os.environ, {'AUTOSEG_TELEMETRY': 'local'}):
             feedback.registrar_ui(
-                self.db, self.sessao, '/os/25', 'unslop', '02Materiais',
+                self.db, self.sessao, '/os/25', 'app', '02Materiais',
                 self.meta)
         with ext.db(self.db) as conexao:
             row = conexao.execute(
@@ -359,7 +359,7 @@ class FeedbackRascunhoTest(unittest.TestCase):
         self.assertIsNotNone(row)
         payload = json.loads(row['payload_json'])
         self.assertEqual(payload['event'], 'page_view')
-        self.assertEqual(payload['attributes']['ui_mode'], 'unslop')
+        self.assertEqual(payload['attributes']['ui_mode'], 'app')
         self.assertEqual(payload['attributes']['tab'], '02Materiais')
 
     def test_cancelar_descarta_rascunho(self):

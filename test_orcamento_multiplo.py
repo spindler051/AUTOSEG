@@ -72,7 +72,7 @@ class OrcamentoMultiplo(unittest.TestCase):
         _, _, html = request(self.browser, self.base + '/login',
                              {'email': 'orcamento@example.org',
                               'senha': 'senha-bem-segura-2026'})
-        self.assertIn('Painel principal', html.decode())
+        self.assertIn('Visão geral', html.decode())
         _, _, formulario = request(self.browser, self.base + '/orcamento')
         self.csrf = re.search(r'name="csrf" value="([^"]+)"',
                               formulario.decode()).group(1)

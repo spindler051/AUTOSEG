@@ -74,7 +74,7 @@ def run():
         try:
             raw,_=requisitar('/');assert b'Entrar' in raw
             raw,_=requisitar('/login',{'email':'joao@example.com','senha':'senha-bem-segura-2026'})
-            html=raw.decode();assert 'Painel principal' in html
+            html=raw.decode();assert 'Visão geral' in html
             csrf=re.search('name="csrf" value="([^"]+)"',html).group(1)
             for path in ['/os','/historico','/clientes','/clientes/1','/clientes/novo','/financeiro','/relatorios','/emails','/notas','/portal-cliente','/os/1','/os/nova']:
                 raw,_=requisitar(path)

@@ -295,7 +295,7 @@ def portal_fluxo(base, db):
     ext.cadastrar(db, 'Prestador Teste', 'prestador@teste.local', 'Senha-Prestador-123')
     p = navegador()
     st, body, _ = req(p, base, '/login', {'email': 'prestador@teste.local', 'senha': 'Senha-Prestador-123'})
-    verificar('15. login do prestador', st == 200 and 'Painel principal' in body)
+    verificar('15. login do prestador', st == 200 and 'Visão geral' in body)
     st, body, _ = req(p, base, '/os')
     verificar('15b. área administrativa lista a OS particular', st == 200 and numero_os in body)
     for caminho in ('/clientes', '/financeiro', '/historico', '/'):

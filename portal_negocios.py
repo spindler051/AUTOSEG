@@ -218,7 +218,8 @@ def os_salvar(banco,d,pid,oid=None):
         comprimir_fotos=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
     campos={}
     for chave,valor in d.items():
-        if isinstance(valor,(list,tuple,dict)) or chave in ('csrf','composicao_yaml'):
+        if isinstance(valor,(list,tuple,dict)) or chave in ('csrf','composicao_yaml',
+                'rateio_manual_tecnico','rateio_manual_valor'):
             continue
         try:
             campos[chave]=int(round(numero(valor,'Campo')*100))
@@ -300,10 +301,10 @@ def os_salvar(banco,d,pid,oid=None):
                     observacoes=old['observacoes'] or original['observacoes_originais']
             atual=ext.responsavel_atual(c,oid)
             admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
-            if atual not in (None,pid) and not (admin and acao=='Cancelada'):
+            if atual not in (None,pid) and not admin:
                 raise PermissionError('Assuma a OS antes de salvar rascunho, fotos ou alterar a situação.')
             if (acao in ('Pendente','Concluída','Cancelada','Não realizada')
-                    and atual not in (None,pid) and not (admin and acao=='Cancelada')):
+                    and atual not in (None,pid) and not admin):
                 raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
             if comprimir_fotos is None:
                 comprimir_fotos=(int(old['comprimir_fotos_pdf'])
@@ -382,6 +383,41 @@ def os_salvar(banco,d,pid,oid=None):
             if f and f['status']=='Aguardando pagamento':
                 c.execute('UPDATE financeiro SET valor=?,forma_pagamento=?,cliente_id=? WHERE id=?',(total,forma,cliente_id,f['id']))
     return oid
+
+
+def financeiro_cancelar(banco,fid,pid,motivo=''):
+    """Cancela o recebimento sem apagar o histórico; não contabiliza mais."""
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        f=c.execute('SELECT os_id,status,valor FROM financeiro WHERE id=?',(fid,)).fetchone()
+        if not f: raise ValueError('Lançamento não encontrado.')
+        if f['status']=='Cancelado': raise ValueError('Este lançamento já está cancelado.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin else False
+        if (not final or int(final['prestador_id'])!=int(pid)) and not admin:
+            raise PermissionError('Somente o finalizador ou administrador pode cancelar o pagamento.')
+        texto=str(motivo or '').strip()[:500]
+        c.execute("""UPDATE financeiro SET status='Cancelado',data_pagamento=NULL,
+                     observacoes=CASE WHEN ?='' THEN observacoes ELSE ? END WHERE id=?""",
+                  (texto,texto,fid))
+        # Parcelas ainda não pagas deixam de existir; pagas ficam no histórico.
+        for r in c.execute('SELECT tecnico_id FROM produtividade_rateios WHERE os_id=?',(f['os_id'],)).fetchall():
+            rep=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
+                             WHERE os_id=? AND tecnico_id=?''',(f['os_id'],r['tecnico_id'])).fetchone()
+            if rep and (int(rep['pago_centavos'])>0 or int(rep['enviado_centavos'])>0):
+                continue
+            c.execute('DELETE FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
+                      (f['os_id'],r['tecnico_id']))
+            c.execute('DELETE FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                      (f['os_id'],r['tecnico_id']))
+        ext.evento(c,f['os_id'],'Pagamento cancelado',
+                   f'Lançamento {fid} cancelado. Valor {dinheiro(f["valor"])}. '+(texto or ''),
+                   pid,'Prestador')
+        audit(c,pid,'Pagamento cancelado',fid,dinheiro(f['valor']))
+        return True
 
 
 def financeiro_receber(banco,fid,pid):

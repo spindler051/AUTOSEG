@@ -57,7 +57,7 @@ class HttpTest(unittest.TestCase):
                 self.assertIn('Sua solicitação foi registrada',html)
                 # Login do prestador; a OS deve estar na fila normal, mesmo sem CNPJ.
                 html=pedido(bp,web_prestador,'/login',{'email':'prestador@example.org','senha':'senha-bem-segura-2026'})
-                self.assertIn('Painel principal',html)
+                self.assertIn('Visão geral',html)
                 html=pedido(bp,web_prestador,'/clientes')
                 self.assertIn('Condomínio HTTP de Testes',html)
                 html=pedido(bp,web_prestador,'/os')

@@ -45,7 +45,7 @@ class Rev04Http(unittest.TestCase):
                 base=f'http://127.0.0.1:{serv.porta}'
                 bc=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
                 txt=fetch(bc,base+'/login',{'email':'prestador@example.invalid','senha':'SenhaSegura123456'})
-                self.assertIn('Painel principal',txt)
+                self.assertIn('Visão geral',txt)
                 form=fetch(bc,base+'/servicos/novo')
                 self.assertIn('id="lista-materiais-servico"',form)
                 self.assertIn('/servicos/yaml',form)

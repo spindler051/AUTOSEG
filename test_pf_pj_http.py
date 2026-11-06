@@ -62,7 +62,7 @@ class PF_PJ_HTTP(unittest.TestCase):
                 self.assertEqual(err.exception.code,403)
                 html=request(bp,base_p,'/login',{'email':'dev-prestador@example.invalid',
                                                  'senha':'senha-forte-ficticia-123'})
-                self.assertIn('Painel principal',html)
+                self.assertIn('Visão geral',html)
                 html=request(bp,base_p,'/organizacoes/responsaveis')
                 self.assertIn('Nomear síndico / gestor',html)
                 self.assertIn('Pessoa Teste',html)

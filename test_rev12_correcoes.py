@@ -212,9 +212,9 @@ class CorrecoesRev12(unittest.TestCase):
             self.assertEqual(c.execute('SELECT urgencia FROM ordens_servico WHERE id=?',
                                        (oid,)).fetchone()['urgencia'], 'Alta')
 
-    def test_toggle_unslop_no_login_e_layout_da_os(self):
-        pid = self._prestador('Técnico Unslop', email='unslop@exemplo.com.br')
-        cid = self._cliente(pid, 'Condomínio Unslop')
+    def test_layout_padrao_autosave_e_sem_toggle(self):
+        pid = self._prestador('Técnico Padrão', email='padrao@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Padrão')
         dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
                  'tecnico': 'T', 'forma_pagamento': 'PIX',
                  'valor_mao_obra': '100', 'valor_materiais_manual': '0',
@@ -222,71 +222,45 @@ class CorrecoesRev12(unittest.TestCase):
         oid = neg.os_salvar(self.db, dados, pid)
         ext.atribuir(self.db, oid, pid)
         _, base = self._servidor()
-
-        def browser_ui(valor):
-            jar = http.cookiejar.CookieJar()
-            jar.set_cookie(http.cookiejar.Cookie(
-                version=0, name='autosseg_ui', value=valor, port=None,
-                port_specified=False, domain='127.0.0.1',
-                domain_specified=True, domain_initial_dot=False,
-                path='/', path_specified=True, secure=False, expires=None,
-                discard=False, comment=None, comment_url=None, rest={},
-                rfc2109=False))
-            return urllib.request.build_opener(
-                urllib.request.HTTPCookieProcessor(jar))
-
-        # O link do login define a preferência e redireciona.
-        sem_redirect = urllib.request.build_opener(_SemRedirecionar)
-        with self.assertRaises(urllib.error.HTTPError) as falha:
-            sem_redirect.open(base + '/ui/unslop', timeout=10)
-        self.assertEqual(falha.exception.code, 303)
-        self.assertIn('autosseg_ui=unslop',
-                      falha.exception.headers.get('Set-Cookie', ''))
-
-        # O destino explícito não depende de Referer (o portal envia no-referrer).
-        with self.assertRaises(urllib.error.HTTPError) as falha:
-            sem_redirect.open(base + '/ui/classic?next=%2Fos%2F1', timeout=10)
-        self.assertEqual(falha.exception.code, 303)
-        self.assertEqual(falha.exception.headers.get('Location'), '/os/1')
-
-        classico = browser_ui('classic')
-        _, login_classico = req(classico, base, '/login')
-        self.assertIn('Ativar unslop', login_classico)
-
-        novo = browser_ui('unslop')
-        _, login_novo = req(novo, base, '/login')
-        self.assertIn('Desativar unslop', login_novo)
-        self.assertIn('Portal do prestador', login_novo)
-        _, html = req(novo, base, '/login', {
-            'email': 'unslop@exemplo.com.br',
-            'senha': 'senha-bem-segura-2026'})
+        _, login = req(browser(), base, '/login')
+        self.assertIn('Portal do prestador', login)
+        self.assertNotIn('Ativar app', login)
+        self.assertNotIn('Desativar app', login)
+        cliente = self._login(base, 'padrao@exemplo.com.br')
+        _, html = req(cliente, base, '/')
         self.assertIn('Visão geral', html)
         self.assertIn('Ordens recentes', html)
         self.assertIn('A receber', html)
         self.assertIn('href="/os/nova"', html)
         self.assertIn('href="/os/rapida"', html)
         self.assertIn('+ Nova OS rápida', html)
-        _, html = req(novo, base, f'/os/{oid}')
+        self.assertIn('class="ui-app', html)
+        self.assertIn('class="app-side"', html)
+        self.assertIn('Meu Auto Financeiro', html)
+        _, html = req(cliente, base, f'/os/{oid}')
         self.assertIn('name="urgencia"', html)
-        self.assertIn('class="ui-unslop', html)
-        self.assertIn('os-form-unslop', html)
-        self.assertIn('novalidate', html)
+        self.assertIn('os-form-app', html)
+        self.assertIn('data-auto-save="1"', html)
+        self.assertIn('rascunho-auto-status', html)
+        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
         self.assertIn('os-summary', html)
         self.assertIn('os-ticket', html)
         self.assertIn('os-workflow', html)
         self.assertIn('os-rail', html)
         self.assertIn('Ficha da OS', html)
         self.assertIn('Situação do atendimento', html)
-        self.assertIn('class="app-side"', html)
         self.assertIn('Baixar preview do PDF', html)
-        self.assertIn('body.ui-unslop .feedback-fab{display:inline-flex}', html)
-
-        _, html = req(classico, base, '/login', {
-            'email': 'unslop@exemplo.com.br',
-            'senha': 'senha-bem-segura-2026'})
-        _, html = req(classico, base, f'/os/{oid}')
-        self.assertNotIn('ui-unslop', html)
-        self.assertNotIn('os-form-unslop', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        status, _ = req(cliente, base, f'/os/{oid}/rascunho/auto',
+                        {'csrf': token, 'v9_diagnostico': 'Rascunho automático'})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            rascunho = ext.obter_rascunho_web(self.db, oid, pid)
+        self.assertEqual(rascunho['v9_diagnostico'], 'Rascunho automático')
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('Rascunho automático', html)
+        self.assertNotIn('Ativar app', html)
+        self.assertNotIn('Desativar app', html)
 
     def test_material_unidade_livre_quantidade_opcional_e_composicao(self):
         pid = self._prestador('Técnico Unidades', email='unidades@exemplo.com.br')
@@ -496,6 +470,7 @@ class CorrecoesRev12(unittest.TestCase):
     def test_admin_adiciona_fotos_em_os_de_outro(self):
         a = self._prestador('Técnico Foto A', email='foto.a@exemplo.com.br')
         b = self._prestador('Técnico Foto B', email='foto.b@exemplo.com.br')
+        c = self._prestador('Técnico Foto C', email='foto.c@exemplo.com.br')
         cad.definir_admin(self.db, b, True)
         cid = self._cliente(a, 'Condomínio Foto')
         dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
@@ -512,7 +487,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertNotIn('Adicionar fotos e legendas sem assumir a OS', html)
         self.assertNotIn('sem assumir', html)
         self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
-        self.assertNotIn('name="modo_envio" value="encerrar"', html)
+        self.assertIn('name="modo_envio" value="encerrar"', html)
+        self.assertIn('Assumir OS', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
         Image.new('RGB', (4, 4), 'red').save(buffer, 'PNG')
@@ -578,8 +554,11 @@ class CorrecoesRev12(unittest.TestCase):
 
         # Tentar concluir sem ser o responsável deve explicar o motivo em JSON,
         # sem navegar para uma página de erro.
+        cliente_c = self._login(base, 'foto.c@exemplo.com.br')
+        _, html_c = req(cliente_c, base, f'/os/{oid}')
+        token_c = re.search(r'name="csrf" value="([^"]+)"', html_c).group(1)
         corpo = urllib.parse.urlencode({
-            'csrf': token, 'modo_envio': 'encerrar', 'acao_status': 'Concluída',
+            'csrf': token_c, 'modo_envio': 'encerrar', 'acao_status': 'Concluída',
             'v9_execucao': 'Serviço executado', 'sem_nota_fiscal': '1',
         }).encode()
         pedido = urllib.request.Request(
@@ -587,10 +566,10 @@ class CorrecoesRev12(unittest.TestCase):
             headers={'X-Requested-With': 'XMLHttpRequest',
                      'Accept': 'application/json'})
         with self.assertRaises(urllib.error.HTTPError) as falha:
-            cliente_b.open(pedido, timeout=30)
+            cliente_c.open(pedido, timeout=30)
         self.assertEqual(falha.exception.code, 403)
         dados = json.loads(falha.exception.read())
-        self.assertIn('Somente o técnico atribuído', dados['error'])
+        self.assertTrue(dados.get('error'))
 
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):
@@ -1050,6 +1029,77 @@ class CorrecoesRev12(unittest.TestCase):
         nota = Path(ext.criar_rascunho_fiscal(self.db, oid))
         self.assertEqual(nota.name, 'nota_fiscal_rascunho_OS-0099.json')
 
+    def test_rateio_manual_apos_conclusao(self):
+        a = self._prestador('Finalizador Manual', email='finalizador.manual@exemplo.com.br')
+        b = self._prestador('Secundário Manual', email='secundario.manual@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Rateio Manual')
+        oid = self._os_concluida(a, cid)
+        with ext.db(self.db) as c:
+            fid = c.execute('SELECT id FROM financeiro WHERE os_id=?', (oid,)).fetchone()['id']
+        self.assertEqual(prod.definir_rateio_manual(self.db, oid, a, b, '300,00'), 30000)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT valor_centavos FROM produtividade_rateios '
+                                       'WHERE os_id=? AND tecnico_id=?', (oid, b)).fetchone()[0], 30000)
+        _, base = self._servidor()
+        cliente = self._login(base, 'finalizador.manual@exemplo.com.br')
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('Rateio e repasses', html)
+        self.assertIn(f'formaction="/os/{oid}/rateio"', html)
+        self.assertIn('R$ 300,00', html)
+        self.assertEqual(prod.definir_rateio_manual(self.db, oid, a, b, '400,00'), 40000)
+        with self.assertRaisesRegex(ValueError, 'ultrapassa'):
+            prod.definir_rateio_manual(self.db, oid, a, b, '700,00')
+        neg.financeiro_receber(self.db, fid, a)
+        prod.confirmar_repasse(self.db, oid, a, b, '400,00')
+        with self.assertRaisesRegex(ValueError, 'já enviado'):
+            prod.definir_rateio_manual(self.db, oid, a, b, '0')
+
+    def test_cancelar_pagamento_remove_do_financeiro(self):
+        a = self._prestador('Finalizador Cancelar', email='finalizador.cancelar@exemplo.com.br')
+        b = self._prestador('Secundário Cancelar', email='secundario.cancelar@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Pagamento Cancelado')
+        oid = self._os_concluida(a, cid)
+        with ext.db(self.db) as c:
+            fid = c.execute('SELECT id FROM financeiro WHERE os_id=?', (oid,)).fetchone()['id']
+        prod.definir_rateio_manual(self.db, oid, a, b, '300,00')
+        neg.financeiro_cancelar(self.db, fid, a, 'Cliente não pagará o serviço.')
+        with ext.db(self.db) as c:
+            status = c.execute('SELECT status FROM financeiro WHERE id=?', (fid,)).fetchone()['status']
+            rateio = c.execute('SELECT COUNT(*) FROM produtividade_rateios WHERE os_id=?',
+                               (oid,)).fetchone()[0]
+            repasse = c.execute('SELECT COUNT(*) FROM produtividade_repasses WHERE os_id=?',
+                                (oid,)).fetchone()[0]
+        self.assertEqual(status, 'Cancelado')
+        self.assertEqual(rateio, 0)
+        self.assertEqual(repasse, 0)
+        pessoal = prod.financeiro_pessoal(self.db, a)
+        self.assertFalse(any(x['os_id'] == oid for x in pessoal['brutos_proprios']))
+        _, base = self._servidor()
+        cliente = self._login(base, 'finalizador.cancelar@exemplo.com.br')
+        _, html = req(cliente, base, '/financeiro')
+        self.assertNotIn(f'href="/os/{oid}"', html)
+
+    def test_admin_assume_os_de_outro(self):
+        a = self._prestador('Responsável Original', email='original.assume@exemplo.com.br')
+        b = self._prestador('Admin Assume', email='admin.assume@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Assumir')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente = self._login(base, 'admin.assume@exemplo.com.br')
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('Assumir OS', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        status, _ = req(cliente, base, f'/os/{oid}/assumir', {'csrf': token})
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            self.assertEqual(ext.responsavel_atual(c, oid), b)
+
     def test_repasse_so_libera_apos_recebimento_do_cliente(self):
         a = self._prestador('Finalizador Repasse', email='finalizador.repasse@exemplo.com.br')
         b = self._prestador('Secundário Repasse', email='secundario.repasse@exemplo.com.br')
@@ -1113,8 +1163,8 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_a = self._login(base, 'tecnico.a@exemplo.com.br')
         status, html = req(cliente_a, base, '/financeiro')
         self.assertEqual(status, 200)
-        self.assertIn('A receber (minha produção)</span><strong>R$ 700,00</strong>', html)
-        self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong>R$ 700,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong>R$ 0,00</strong>', html)
         self.assertIn('Dados bancários', html)
         self.assertIn('Lançamentos das OS em que participo', html)
         self.assertIn('A receber / Confirmar recebimento', html)
@@ -1126,27 +1176,27 @@ class CorrecoesRev12(unittest.TestCase):
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         req(cliente_a, base, f'/financeiro/{fid}/receber', {'csrf': token})
         _, html = req(cliente_a, base, '/financeiro')
-        self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
-        self.assertIn('Recebido (minha produção)</span><strong>R$ 700,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong>R$ 700,00</strong>', html)
         self.assertNotIn(f'action="/financeiro/{fid}/receber"', html)
 
         cliente_b = self._login(base, 'tecnico.b@exemplo.com.br')
         status, html = req(cliente_b, base, '/financeiro')
         self.assertEqual(status, 200)
-        self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong>R$ 300,00</strong>', html)
         self.assertIn('Lançamentos das OS em que participo', html)
         self.assertIn('Aguardando envio', html)
         self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
 
         prod.confirmar_repasse(self.db, oid, a, b, '300,00')
         _, html = req(cliente_b, base, '/financeiro')
-        self.assertIn('A receber (minha produção)</span><strong>R$ 300,00</strong>', html)
-        self.assertIn('Recebido (minha produção)</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong>R$ 0,00</strong>', html)
         self.assertIn('action="/financeiro/repasse/confirmar"', html)
         prod.confirmar_recebimento_repasse(self.db, oid, b)
         _, html = req(cliente_b, base, '/financeiro')
-        self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
-        self.assertIn('Recebido (minha produção)</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong>R$ 300,00</strong>', html)
         self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
 
     def test_nao_admin_nao_edita_fotos_de_outro(self):

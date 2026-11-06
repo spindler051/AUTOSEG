@@ -131,403 +131,398 @@ CSS_FEEDBACK = """
 .os-status-block{margin:0 0 16px;padding:12px;border:1px solid #444;border-radius:8px}
 .feedback-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1300;max-width:min(560px,calc(100vw - 28px));background:#1e1e1e;border:1px solid #ffd400;border-radius:10px;color:#fff;padding:12px 16px;box-shadow:0 10px 30px #000c}
 @media(max-width:620px){.feedback-fab{right:12px;bottom:12px;padding:12px 16px;font-size:14px}.feedback-dialog form{padding:17px}}
-.ui-switch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px;font-size:13px;color:#bbb}
-.ui-switch a{border:1px solid #555;border-radius:8px;padding:8px 12px;text-decoration:none;color:#fff;background:#1b1b1b}
-.ui-switch a.active{background:#ffd400;color:#111;border-color:#ffd400;font-weight:700}
 """
 
 
-UI_COOKIE = 'autosseg_ui'
-CSS_UNSLOP = """
+CSS_APP = """
 :root{--u-bg:#141312;--u-side:#0f0e0d;--u-card:#1a1816;--u-card-2:#201d1a;--u-raised:#27231f;--u-line:rgba(240,235,226,.08);--u-line-2:rgba(240,235,226,.15);--u-text:#f1ece3;--u-text-2:#b5aca1;--u-muted:#8b8175;--u-accent:#d8a24a;--u-accent-soft:rgba(216,162,74,.12);--u-accent-ink:#1a1308;--u-good:#7cc7a2;--u-bad:#df8585;--u-warn:#d8a24a;--u-font:"Avenir Next","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;--u-mono:"SF Mono","IBM Plex Mono","Roboto Mono",ui-monospace,monospace;--u-ease:cubic-bezier(.22,1,.36,1)}
-body.ui-unslop{margin:0;background:var(--u-bg);color:var(--u-text);font:400 14px/1.55 var(--u-font);-webkit-font-smoothing:antialiased}
-body.ui-unslop *{box-sizing:border-box}
-body.ui-unslop header{display:none}
-body.ui-unslop a{color:var(--u-text);text-decoration:none}
-body.ui-unslop a:hover{color:var(--u-accent)}
-body.ui-unslop main{margin:0 0 0 264px;max-width:1600px;min-height:calc(100vh - 64px);padding:40px 40px 96px}
-body.ui-unslop footer{margin-left:264px;border-top:1px solid var(--u-line);color:var(--u-muted);font:400 12px/1.5 var(--u-mono);text-align:left;padding:16px 40px}
-body.ui-unslop h1{font:500 32px/1.08 var(--u-font);letter-spacing:-.02em;margin:0 0 8px;color:var(--u-text)}
-body.ui-unslop h2{font:500 16px/1.3 var(--u-font);letter-spacing:0;margin:0 0 14px;color:var(--u-text)}
-body.ui-unslop h3{font:500 14px/1.35 var(--u-font);margin:18px 0 8px;color:var(--u-text)}
-body.ui-unslop p{margin:0 0 12px}
-body.ui-unslop .muted,body.ui-unslop small{color:var(--u-muted)}
-body.ui-unslop .good{color:var(--u-good)}
-body.ui-unslop .warn{color:var(--u-warn)}
-body.ui-unslop .bad{color:var(--u-bad)}
-body.ui-unslop .mono{font-family:var(--u-mono);font-variant-numeric:tabular-nums}
-body.ui-unslop [hidden]{display:none!important}
-body.ui-unslop .ui-switch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0;font:400 12px/1.5 var(--u-mono);color:var(--u-muted)}
-body.ui-unslop .ui-switch span{color:var(--u-muted)}
-body.ui-unslop .ui-switch a{display:inline-block;padding:0 0 2px;border:0;border-bottom:1px solid transparent;border-radius:0;background:transparent;color:var(--u-text-2);font:inherit;text-decoration:none}
-body.ui-unslop .ui-switch a:hover{color:var(--u-accent);border-bottom-color:var(--u-accent)}
-body.ui-unslop .ui-switch a.active{color:var(--u-text);border-bottom-color:var(--u-line-2);font-weight:400}
+body.ui-app{margin:0;background:var(--u-bg);color:var(--u-text);font:400 14px/1.55 var(--u-font);-webkit-font-smoothing:antialiased}
+body.ui-app *{box-sizing:border-box}
+body.ui-app header{display:none}
+body.ui-app a{color:var(--u-text);text-decoration:none}
+body.ui-app a:hover{color:var(--u-accent)}
+body.ui-app main{margin:0 0 0 264px;max-width:1600px;min-height:calc(100vh - 64px);padding:40px 40px 96px}
+body.ui-app footer{margin-left:264px;border-top:1px solid var(--u-line);color:var(--u-muted);font:400 12px/1.5 var(--u-mono);text-align:left;padding:16px 40px}
+body.ui-app h1{font:500 32px/1.08 var(--u-font);letter-spacing:-.02em;margin:0 0 8px;color:var(--u-text)}
+body.ui-app h2{font:500 16px/1.3 var(--u-font);letter-spacing:0;margin:0 0 14px;color:var(--u-text)}
+body.ui-app h3{font:500 14px/1.35 var(--u-font);margin:18px 0 8px;color:var(--u-text)}
+body.ui-app p{margin:0 0 12px}
+body.ui-app .muted,body.ui-app small{color:var(--u-muted)}
+body.ui-app .good{color:var(--u-good)}
+body.ui-app .warn{color:var(--u-warn)}
+body.ui-app .bad{color:var(--u-bad)}
+body.ui-app .mono{font-family:var(--u-mono);font-variant-numeric:tabular-nums}
+body.ui-app [hidden]{display:none!important}
 
 /* controls */
-body.ui-unslop button,body.ui-unslop .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;margin:0;padding:0 16px;border:1px solid var(--u-text);border-radius:8px;background:var(--u-text);color:#17130d;font:500 14px/1.2 var(--u-font);letter-spacing:0;text-transform:none;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:none;transition:background .15s var(--u-ease),border-color .15s var(--u-ease),color .15s var(--u-ease),transform .12s var(--u-ease)}
-body.ui-unslop button:hover,body.ui-unslop .btn:hover{background:#fff;border-color:#fff;color:#17130d}
-body.ui-unslop button:active,body.ui-unslop .btn:active{transform:scale(.985)}
-body.ui-unslop button:focus-visible,body.ui-unslop .btn:focus-visible,body.ui-unslop a:focus-visible,body.ui-unslop input:focus-visible,body.ui-unslop select:focus-visible,body.ui-unslop textarea:focus-visible{outline:2px solid var(--u-accent);outline-offset:2px}
-body.ui-unslop button.secondary,body.ui-unslop .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop button.secondary:hover,body.ui-unslop .btn.secondary:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop button.danger,body.ui-unslop .btn.danger{background:rgba(223,133,133,.1);border-color:rgba(223,133,133,.3);color:var(--u-bad)}
-body.ui-unslop button.danger:hover,body.ui-unslop .btn.danger:hover{background:rgba(223,133,133,.16);border-color:rgba(223,133,133,.45);color:var(--u-bad)}
-body.ui-unslop button.subtle,body.ui-unslop .btn.subtle{background:transparent;border-color:var(--u-line);color:var(--u-text-2)}
-body.ui-unslop button.subtle:hover,body.ui-unslop .btn.subtle:hover{background:var(--u-raised);color:var(--u-text)}
-body.ui-unslop button:disabled{opacity:.5;cursor:wait}
-body.ui-unslop .btn{display:inline-flex}
-body.ui-unslop table button,body.ui-unslop table .btn{min-height:32px;padding:0 12px;border-color:var(--u-line-2);background:transparent;color:var(--u-text-2);font-size:12px}
-body.ui-unslop table button:hover,body.ui-unslop table .btn:hover{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop form[method="get"] button{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop form[method="get"] button:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop .iniciar-atendimento{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-unslop .iniciar-atendimento:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app button,body.ui-app .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;margin:0;padding:0 16px;border:1px solid var(--u-text);border-radius:8px;background:var(--u-text);color:#17130d;font:500 14px/1.2 var(--u-font);letter-spacing:0;text-transform:none;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:none;transition:background .15s var(--u-ease),border-color .15s var(--u-ease),color .15s var(--u-ease),transform .12s var(--u-ease)}
+body.ui-app button:hover,body.ui-app .btn:hover{background:#fff;border-color:#fff;color:#17130d}
+body.ui-app button:active,body.ui-app .btn:active{transform:scale(.985)}
+body.ui-app button:focus-visible,body.ui-app .btn:focus-visible,body.ui-app a:focus-visible,body.ui-app input:focus-visible,body.ui-app select:focus-visible,body.ui-app textarea:focus-visible{outline:2px solid var(--u-accent);outline-offset:2px}
+body.ui-app button.secondary,body.ui-app .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app button.secondary:hover,body.ui-app .btn.secondary:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app button.danger,body.ui-app .btn.danger{background:rgba(223,133,133,.1);border-color:rgba(223,133,133,.3);color:var(--u-bad)}
+body.ui-app button.danger:hover,body.ui-app .btn.danger:hover{background:rgba(223,133,133,.16);border-color:rgba(223,133,133,.45);color:var(--u-bad)}
+body.ui-app button.subtle,body.ui-app .btn.subtle{background:transparent;border-color:var(--u-line);color:var(--u-text-2)}
+body.ui-app button.subtle:hover,body.ui-app .btn.subtle:hover{background:var(--u-raised);color:var(--u-text)}
+body.ui-app button:disabled{opacity:.5;cursor:wait}
+body.ui-app .btn{display:inline-flex}
+body.ui-app table button,body.ui-app table .btn{min-height:32px;padding:0 12px;border-color:var(--u-line-2);background:transparent;color:var(--u-text-2);font-size:12px}
+body.ui-app table button:hover,body.ui-app table .btn:hover{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app form[method="get"] button{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app form[method="get"] button:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app .iniciar-atendimento{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app .iniciar-atendimento:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
 
 /* forms */
-body.ui-unslop label{display:block;margin:16px 0 8px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
-body.ui-unslop label:first-child{margin-top:0}
-body.ui-unslop input,body.ui-unslop textarea,body.ui-unslop select{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--u-line-2);border-radius:8px;background:#11100f;color:var(--u-text);font:400 14px/1.4 var(--u-font);box-shadow:none}
-body.ui-unslop input::placeholder,body.ui-unslop textarea::placeholder{color:#6f675e}
-body.ui-unslop input:focus,body.ui-unslop textarea:focus,body.ui-unslop select:focus{border-color:var(--u-accent);outline:2px solid var(--u-accent);outline-offset:1px}
-body.ui-unslop textarea{min-height:96px;resize:vertical}
-body.ui-unslop input[type=checkbox],body.ui-unslop input[type=radio]{width:16px;height:16px;min-height:0;accent-color:var(--u-accent);vertical-align:middle}
-body.ui-unslop input[type=file]{padding:8px;font-size:12px;color:var(--u-text-2)}
-body.ui-unslop input[type=file]::file-selector-button{margin-right:8px;padding:4px 8px;border:1px solid var(--u-line-2);border-radius:7px;background:var(--u-raised);color:var(--u-text);font:500 12px/1.2 var(--u-font);cursor:pointer}
-body.ui-unslop input[readonly]{color:var(--u-muted);background:var(--u-card-2)}
-body.ui-unslop fieldset{border:0;padding:0;margin:0;min-width:0}
-body.ui-unslop legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0}
-body.ui-unslop .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-body.ui-unslop .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
-body.ui-unslop .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
-body.ui-unslop .material-row label{margin:0 0 4px}
-body.ui-unslop .material-row input{min-height:36px}
-body.ui-unslop .material-row button{min-height:36px;padding:0 12px}
-body.ui-unslop .material-row select{min-height:36px}
-body.ui-unslop .composicao-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;margin:8px 0 0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .composicao-preview span{min-width:0}
-body.ui-unslop .composicao-preview b{color:var(--u-text-2);font-weight:400}
-body.ui-unslop .composicao-preview .aviso{grid-column:1/-1;color:var(--u-warn)}
-body.ui-unslop .composicao-preview .filho{padding-left:16px;color:var(--u-muted)}
-body.ui-unslop .total-previsto-linha{border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);padding:12px 14px}
-body.ui-unslop .total-previsto-linha>span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .total-previsto-linha strong{color:var(--u-accent);font:500 20px/1.2 var(--u-mono)}
-body.ui-unslop .foto-rascunho{display:grid!important;grid-template-columns:120px minmax(0,1fr)!important;gap:16px!important;align-items:start!important;margin:12px 0!important;padding:12px!important;border:1px solid var(--u-line)!important;border-radius:10px!important;background:var(--u-card-2)!important}
-body.ui-unslop .foto-rascunho img{width:120px!important;height:90px!important;object-fit:cover!important;border-radius:8px!important}
-body.ui-unslop .foto-rascunho label{margin-top:10px}
-body.ui-unslop .foto-incluir{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:500}
-body.ui-unslop .foto-incluir input{width:16px;height:16px;min-height:0}
-body.ui-unslop .foto-comprimir{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-weight:500}
-body.ui-unslop .foto-comprimir input{width:16px;height:16px;min-height:0}
-body.ui-unslop #nota-fiscal-upload>div[style]{border:1px solid var(--u-line)!important;background:var(--u-card-2)!important;border-radius:10px!important}
-body.ui-unslop #nota-fiscal-upload{margin-top:8px!important;border-top:0!important;padding-top:0!important}
-body.ui-unslop #nota-fiscal-upload>label[style]{font-weight:500!important;color:var(--u-text)!important}
+body.ui-app label{display:block;margin:16px 0 8px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
+body.ui-app label:first-child{margin-top:0}
+body.ui-app input,body.ui-app textarea,body.ui-app select{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--u-line-2);border-radius:8px;background:#11100f;color:var(--u-text);font:400 14px/1.4 var(--u-font);box-shadow:none}
+body.ui-app input::placeholder,body.ui-app textarea::placeholder{color:#6f675e}
+body.ui-app input:focus,body.ui-app textarea:focus,body.ui-app select:focus{border-color:var(--u-accent);outline:2px solid var(--u-accent);outline-offset:1px}
+body.ui-app textarea{min-height:96px;resize:vertical}
+body.ui-app input[type=checkbox],body.ui-app input[type=radio]{width:16px;height:16px;min-height:0;accent-color:var(--u-accent);vertical-align:middle}
+body.ui-app input[type=file]{padding:8px;font-size:12px;color:var(--u-text-2)}
+body.ui-app input[type=file]::file-selector-button{margin-right:8px;padding:4px 8px;border:1px solid var(--u-line-2);border-radius:7px;background:var(--u-raised);color:var(--u-text);font:500 12px/1.2 var(--u-font);cursor:pointer}
+body.ui-app input[readonly]{color:var(--u-muted);background:var(--u-card-2)}
+body.ui-app fieldset{border:0;padding:0;margin:0;min-width:0}
+body.ui-app legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0}
+body.ui-app .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+body.ui-app .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
+body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
+body.ui-app .material-row label{margin:0 0 4px}
+body.ui-app .material-row input{min-height:36px}
+body.ui-app .material-row button{min-height:36px;padding:0 12px}
+body.ui-app .material-row select{min-height:36px}
+body.ui-app .composicao-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;margin:8px 0 0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .composicao-preview span{min-width:0}
+body.ui-app .composicao-preview b{color:var(--u-text-2);font-weight:400}
+body.ui-app .composicao-preview .aviso{grid-column:1/-1;color:var(--u-warn)}
+body.ui-app .composicao-preview .filho{padding-left:16px;color:var(--u-muted)}
+body.ui-app .total-previsto-linha{border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);padding:12px 14px}
+body.ui-app .total-previsto-linha>span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .total-previsto-linha strong{color:var(--u-accent);font:500 20px/1.2 var(--u-mono)}
+body.ui-app .foto-rascunho{display:grid!important;grid-template-columns:120px minmax(0,1fr)!important;gap:16px!important;align-items:start!important;margin:12px 0!important;padding:12px!important;border:1px solid var(--u-line)!important;border-radius:10px!important;background:var(--u-card-2)!important}
+body.ui-app .foto-rascunho img{width:120px!important;height:90px!important;object-fit:cover!important;border-radius:8px!important}
+body.ui-app .foto-rascunho label{margin-top:10px}
+body.ui-app .foto-incluir{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:500}
+body.ui-app .foto-incluir input{width:16px;height:16px;min-height:0}
+body.ui-app .foto-comprimir{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-weight:500}
+body.ui-app .foto-comprimir input{width:16px;height:16px;min-height:0}
+body.ui-app #nota-fiscal-upload>div[style]{border:1px solid var(--u-line)!important;background:var(--u-card-2)!important;border-radius:10px!important}
+body.ui-app #nota-fiscal-upload{margin-top:8px!important;border-top:0!important;padding-top:0!important}
+body.ui-app #nota-fiscal-upload>label[style]{font-weight:500!important;color:var(--u-text)!important}
 
 /* surfaces */
-body.ui-unslop .card{background:var(--u-card);border:1px solid var(--u-line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:none}
-body.ui-unslop .card>h2:first-child,body.ui-unslop .card>h3:first-child{margin-top:0}
-body.ui-unslop .notice{background:var(--u-card-2);border:1px solid var(--u-line);border-left:2px solid var(--u-accent);border-radius:10px;color:var(--u-text-2);padding:12px 16px;font-size:12px;line-height:1.55}
-body.ui-unslop .notice strong{color:var(--u-text)}
-body.ui-unslop .flash{background:rgba(124,199,162,.08);border:1px solid rgba(124,199,162,.25);color:var(--u-text);border-radius:10px;padding:12px 14px}
-body.ui-unslop .tag{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;border-radius:0;background:transparent;color:var(--u-text-2);font:400 12px/1.2 var(--u-mono)}
-body.ui-unslop .tag::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--u-muted);flex:0 0 5px}
-body.ui-unslop .tag:has(+ .good),body.ui-unslop .tag.good::before{background:var(--u-good)}
-body.ui-unslop .table-scroll{border:1px solid var(--u-line);border-radius:12px;overflow:auto;background:var(--u-card)}
-body.ui-unslop .table-filter-label{display:none}
-body.ui-unslop .table-filter-input{max-width:320px;min-height:36px;margin:0 0 8px}
-body.ui-unslop .table-filter-count{display:block;margin:0 0 8px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .home-grid .table-filter-label,body.ui-unslop .home-grid .table-filter-input,body.ui-unslop .home-grid .table-filter-count,body.ui-unslop .finance-grid .table-filter-label,body.ui-unslop .finance-grid .table-filter-input,body.ui-unslop .finance-grid .table-filter-count{display:none}
-body.ui-unslop table{width:100%;min-width:640px;border-collapse:collapse}
-body.ui-unslop th{padding:12px;border-bottom:1px solid var(--u-line);background:transparent;color:var(--u-muted);font:400 12px/1.5 var(--u-mono);text-align:left;text-transform:none;letter-spacing:0;white-space:nowrap}
-body.ui-unslop td{padding:12px;border-bottom:1px solid var(--u-line);color:var(--u-text-2);font-size:13px;vertical-align:middle}
-body.ui-unslop td:first-child{color:var(--u-text)}
-body.ui-unslop tbody tr:last-child td{border-bottom:0}
-body.ui-unslop tbody tr:hover{background:rgba(255,255,255,.02)}
-body.ui-unslop .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:0 0 20px}
-body.ui-unslop .kpi{display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-height:112px;margin:0;padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card);box-shadow:none}
-body.ui-unslop .kpi span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .kpi strong{color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-body.ui-unslop .kpi:first-child strong{color:var(--u-accent)}
-body.ui-unslop .cartao{background:var(--u-card);border:1px solid var(--u-line);border-radius:14px;box-shadow:none}
-body.ui-unslop .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-body.ui-unslop .stack{display:flex;gap:8px;flex-wrap:wrap}
+body.ui-app .card{background:var(--u-card);border:1px solid var(--u-line);border-radius:16px;padding:24px;margin:16px 0;box-shadow:none}
+body.ui-app .card>h2:first-child,body.ui-app .card>h3:first-child{margin-top:0}
+body.ui-app .notice{background:var(--u-card-2);border:1px solid var(--u-line);border-left:2px solid var(--u-accent);border-radius:10px;color:var(--u-text-2);padding:12px 16px;font-size:12px;line-height:1.55}
+body.ui-app .notice strong{color:var(--u-text)}
+body.ui-app .flash{background:rgba(124,199,162,.08);border:1px solid rgba(124,199,162,.25);color:var(--u-text);border-radius:10px;padding:12px 14px}
+body.ui-app .tag{display:inline-flex;align-items:center;gap:8px;padding:0;border:0;border-radius:0;background:transparent;color:var(--u-text-2);font:400 12px/1.2 var(--u-mono)}
+body.ui-app .tag::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--u-muted);flex:0 0 5px}
+body.ui-app .tag:has(+ .good),body.ui-app .tag.good::before{background:var(--u-good)}
+body.ui-app .table-scroll{border:1px solid var(--u-line);border-radius:12px;overflow:auto;background:var(--u-card)}
+body.ui-app .table-filter-label{display:none}
+body.ui-app .table-filter-input{max-width:320px;min-height:36px;margin:0 0 8px}
+body.ui-app .table-filter-count{display:block;margin:0 0 8px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .home-grid .table-filter-label,body.ui-app .home-grid .table-filter-input,body.ui-app .home-grid .table-filter-count,body.ui-app .finance-grid .table-filter-label,body.ui-app .finance-grid .table-filter-input,body.ui-app .finance-grid .table-filter-count{display:none}
+body.ui-app table{width:100%;min-width:640px;border-collapse:collapse}
+body.ui-app th{padding:12px;border-bottom:1px solid var(--u-line);background:transparent;color:var(--u-muted);font:400 12px/1.5 var(--u-mono);text-align:left;text-transform:none;letter-spacing:0;white-space:nowrap}
+body.ui-app td{padding:12px;border-bottom:1px solid var(--u-line);color:var(--u-text-2);font-size:13px;vertical-align:middle}
+body.ui-app td:first-child{color:var(--u-text)}
+body.ui-app tbody tr:last-child td{border-bottom:0}
+body.ui-app tbody tr:hover{background:rgba(255,255,255,.02)}
+body.ui-app .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:0 0 20px}
+body.ui-app .kpi{display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-height:112px;margin:0;padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card);box-shadow:none}
+body.ui-app .kpi span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .kpi strong{color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+body.ui-app .kpi:first-child strong{color:var(--u-accent)}
+body.ui-app .cartao{background:var(--u-card);border:1px solid var(--u-line);border-radius:14px;box-shadow:none}
+body.ui-app .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+body.ui-app .stack{display:flex;gap:8px;flex-wrap:wrap}
 
 /* app shell */
-body.ui-unslop .app-side{position:fixed;inset:0 auto 0 0;z-index:100;display:flex;flex-direction:column;gap:24px;width:264px;padding:24px 16px 20px;border-right:1px solid var(--u-line);background:var(--u-side)}
-body.ui-unslop .side-brand{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:0 12px;text-decoration:none}
-body.ui-unslop .side-brand img{display:block;width:auto;height:32px;max-width:176px;object-fit:contain}
-body.ui-unslop .side-brand span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .side-menu-toggle{display:none;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid var(--u-line-2);border-radius:8px;background:var(--u-raised);color:var(--u-text);font:500 12px/1.2 var(--u-font);cursor:pointer}
-body.ui-unslop .side-nav{display:flex;flex-direction:column;gap:20px;overflow-y:auto;padding-right:2px}
-body.ui-unslop .side-group{display:flex;flex-direction:column;gap:2px}
-body.ui-unslop .side-label{margin:0 12px 8px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .side-link{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 12px;border-radius:8px;color:var(--u-text-2);font:400 14px/1.2 var(--u-font);text-decoration:none;transition:background .15s var(--u-ease),color .15s var(--u-ease)}
-body.ui-unslop .side-link svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-body.ui-unslop .side-link:hover{background:var(--u-raised);color:var(--u-text)}
-body.ui-unslop .side-link:hover svg{color:var(--u-text-2)}
-body.ui-unslop .side-link.active{background:var(--u-raised);color:var(--u-text);box-shadow:inset 2px 0 0 var(--u-accent)}
-body.ui-unslop .side-link.active svg{color:var(--u-accent)}
-body.ui-unslop .side-foot{display:flex;flex-direction:column;gap:16px;margin-top:auto;padding-top:16px;border-top:1px solid var(--u-line)}
-body.ui-unslop .side-user{display:flex;flex-direction:column;gap:4px;padding:0 12px}
-body.ui-unslop .side-user strong{color:var(--u-text);font:500 14px/1.3 var(--u-font)}
-body.ui-unslop .side-user span{color:var(--u-muted);font:400 12px/1.3 var(--u-mono)}
-body.ui-unslop .side-tools{display:flex;flex-direction:column;gap:2px}
-body.ui-unslop .side-tool{display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:32px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--u-muted);font:400 12px/1.2 var(--u-font);text-align:left;text-decoration:none;cursor:pointer}
-body.ui-unslop .side-tool svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-body.ui-unslop .side-tool:hover{background:var(--u-raised);color:var(--u-text)}
-body.ui-unslop .side-tool:hover svg{color:var(--u-text-2)}
-body.ui-unslop .side-tool-form{display:block;margin:0}
-body.ui-unslop .side-version{padding:0 12px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .unslop-credit{padding:0 40px 24px 304px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono);text-align:left}
-body.ui-unslop .unslop-credit a{color:var(--u-text-2);border-bottom:1px solid var(--u-line-2)}
-body.ui-unslop .unslop-credit a:hover{color:var(--u-accent);border-bottom-color:var(--u-accent)}
+body.ui-app .app-side{position:fixed;inset:0 auto 0 0;z-index:100;display:flex;flex-direction:column;gap:24px;width:264px;padding:24px 16px 20px;border-right:1px solid var(--u-line);background:var(--u-side)}
+body.ui-app .side-brand{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:0 12px;text-decoration:none}
+body.ui-app .side-brand img{display:block;width:auto;height:32px;max-width:176px;object-fit:contain}
+body.ui-app .side-brand span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .side-menu-toggle{display:none;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid var(--u-line-2);border-radius:8px;background:var(--u-raised);color:var(--u-text);font:500 12px/1.2 var(--u-font);cursor:pointer}
+body.ui-app .side-mobile-head{display:none}
+body.ui-app .side-nav{display:flex;flex-direction:column;gap:20px;overflow-y:auto;padding-right:2px}
+body.ui-app .side-group{display:flex;flex-direction:column;gap:2px}
+body.ui-app .side-label{margin:0 12px 8px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .side-link{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 12px;border-radius:8px;color:var(--u-text-2);font:400 14px/1.2 var(--u-font);text-decoration:none;transition:background .15s var(--u-ease),color .15s var(--u-ease)}
+body.ui-app .side-link svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+body.ui-app .side-link:hover{background:var(--u-raised);color:var(--u-text)}
+body.ui-app .side-link:hover svg{color:var(--u-text-2)}
+body.ui-app .side-link.active{background:var(--u-raised);color:var(--u-text);box-shadow:inset 2px 0 0 var(--u-accent)}
+body.ui-app .side-link.active svg{color:var(--u-accent)}
+body.ui-app .side-foot{display:flex;flex-direction:column;gap:16px;margin-top:auto;padding-top:16px;border-top:1px solid var(--u-line)}
+body.ui-app .side-user{display:flex;flex-direction:column;gap:4px;padding:0 12px}
+body.ui-app .side-user strong{color:var(--u-text);font:500 14px/1.3 var(--u-font)}
+body.ui-app .side-user span{color:var(--u-muted);font:400 12px/1.3 var(--u-mono)}
+body.ui-app .side-tools{display:flex;flex-direction:column;gap:2px}
+body.ui-app .side-tool{display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:32px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--u-muted);font:400 12px/1.2 var(--u-font);text-align:left;text-decoration:none;cursor:pointer}
+body.ui-app .side-tool svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+body.ui-app .side-tool:hover{background:var(--u-raised);color:var(--u-text)}
+body.ui-app .side-tool:hover svg{color:var(--u-text-2)}
+body.ui-app .side-tool-form{display:block;margin:0}
+body.ui-app .side-version{padding:0 12px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 
 /* home */
-body.ui-unslop .home-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 24px}
-body.ui-unslop .home-toolbar .btn{flex:0 0 auto;white-space:nowrap}
-body.ui-unslop .page-meta{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);margin:0}
-body.ui-unslop .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 24px}
-body.ui-unslop .stat{display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-height:100px;padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
-body.ui-unslop .stat span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .stat strong{color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-body.ui-unslop .stat:hover{border-color:var(--u-line-2);background:var(--u-card-2)}
-body.ui-unslop .finance-figures{text-decoration:none}
-body.ui-unslop .finance-figures:hover strong{color:var(--u-accent)}
-body.ui-unslop a.home-note:hover{color:var(--u-accent)}
-body.ui-unslop .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
-body.ui-unslop .home-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
-body.ui-unslop .panel{padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
-body.ui-unslop .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
-body.ui-unslop .panel-head h2{margin:0;font-size:16px}
-body.ui-unslop .panel-head a{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .panel-head a:hover{color:var(--u-accent)}
-body.ui-unslop .finance-figures{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-body.ui-unslop .finance-figures span{display:block;margin:0 0 4px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .finance-figures strong{display:block;color:var(--u-text);font:500 20px/1.1 var(--u-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-body.ui-unslop .finance-figures .accent{color:var(--u-accent)}
-body.ui-unslop .shortcut{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--u-line);color:var(--u-text-2);font-size:14px}
-body.ui-unslop .shortcut:last-child{border-bottom:0;padding-bottom:0}
-body.ui-unslop .shortcut:hover{color:var(--u-text)}
-body.ui-unslop .shortcut svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-body.ui-unslop .home-note{margin:16px 0 0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .home-links{margin-top:20px}
-body.ui-unslop .home-links details.card{margin:0;padding:14px 18px;border-radius:12px;background:var(--u-card)}
-body.ui-unslop .home-links summary{color:var(--u-text-2);font:400 12px/1.5 var(--u-mono);cursor:pointer}
-body.ui-unslop .home-links details.card p{margin:12px 0 4px;font-size:12px;overflow-wrap:anywhere}
-body.ui-unslop .home-links details.card small{font-size:12px}
+body.ui-app .home-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 24px}
+body.ui-app .home-toolbar .btn{flex:0 0 auto;white-space:nowrap}
+body.ui-app .page-meta{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);margin:0}
+body.ui-app .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 24px}
+body.ui-app .stat{display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-height:100px;padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
+body.ui-app .stat span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .stat strong{color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+body.ui-app .stat:hover{border-color:var(--u-line-2);background:var(--u-card-2)}
+body.ui-app .finance-figures{text-decoration:none}
+body.ui-app .finance-figures:hover strong{color:var(--u-accent)}
+body.ui-app a.home-note:hover{color:var(--u-accent)}
+body.ui-app .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+body.ui-app .home-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+body.ui-app .panel{padding:20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
+body.ui-app .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+body.ui-app .panel-head h2{margin:0;font-size:16px}
+body.ui-app .panel-head a{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .panel-head a:hover{color:var(--u-accent)}
+body.ui-app .finance-figures{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+body.ui-app .finance-figures span{display:block;margin:0 0 4px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .finance-figures strong{display:block;color:var(--u-text);font:500 20px/1.1 var(--u-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+body.ui-app .finance-figures .accent{color:var(--u-accent)}
+body.ui-app .shortcut{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--u-line);color:var(--u-text-2);font-size:14px}
+body.ui-app .shortcut:last-child{border-bottom:0;padding-bottom:0}
+body.ui-app .shortcut:hover{color:var(--u-text)}
+body.ui-app .shortcut svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+body.ui-app .home-note{margin:16px 0 0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .home-links{margin-top:20px}
+body.ui-app .home-links details.card{margin:0;padding:14px 18px;border-radius:12px;background:var(--u-card)}
+body.ui-app .home-links summary{color:var(--u-text-2);font:400 12px/1.5 var(--u-mono);cursor:pointer}
+body.ui-app .home-links details.card p{margin:12px 0 4px;font-size:12px;overflow-wrap:anywhere}
+body.ui-app .home-links details.card small{font-size:12px}
 
 /* OS detail */
-body.ui-unslop .os-ticket{display:grid;grid-template-columns:200px minmax(0,1fr) auto;margin:0 0 20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card);overflow:hidden}
-body.ui-unslop .os-ticket-stub{display:flex;flex-direction:column;justify-content:space-between;gap:20px;padding:24px;border-right:1px dashed var(--u-line-2)}
-body.ui-unslop .os-kicker{margin:0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-ticket-stub h2{margin:0;color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.03em}
-body.ui-unslop .os-status{display:inline-flex;align-items:center;gap:8px;margin:0;color:var(--u-text-2);font:400 12px/1.2 var(--u-mono)}
-body.ui-unslop .os-status .dot{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--u-muted)}
-body.ui-unslop .os-status.status--iniciada .dot,body.ui-unslop .os-status.status--em-rota .dot{background:var(--u-accent)}
-body.ui-unslop .os-status.status--pendente .dot{background:var(--u-warn)}
-body.ui-unslop .os-status.status--concluida .dot{background:var(--u-good)}
-body.ui-unslop .os-status.status--cancelada .dot{background:var(--u-bad)}
-body.ui-unslop .os-ticket-body{display:flex;flex-direction:column;gap:16px;padding:24px;min-width:0}
-body.ui-unslop .os-ticket-client{margin:0;color:var(--u-text);font:500 20px/1.3 var(--u-font)}
-body.ui-unslop .os-ticket-meta{margin:0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-ticket-stats{display:grid;grid-template-columns:repeat(3,minmax(80px,1fr));gap:16px}
-body.ui-unslop .os-ticket-stats span{display:block;margin:0 0 4px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-ticket-stats strong{display:block;color:var(--u-text);font:500 14px/1.35 var(--u-font)}
-body.ui-unslop .os-ticket-stats .money{color:var(--u-accent);font-family:var(--u-mono);font-variant-numeric:tabular-nums}
-body.ui-unslop .os-ticket-actions{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:8px;padding:24px;border-left:1px solid var(--u-line)}
-body.ui-unslop .os-ticket-actions .btn{min-height:36px;font-size:12px;white-space:nowrap}
-body.ui-unslop .os-workflow{display:grid;grid-template-columns:1fr .8fr;gap:16px;margin:0 0 20px}
-body.ui-unslop .os-work-status{order:-2}
-body.ui-unslop .os-work-draft{order:-1}
-body.ui-unslop .os-workflow .card{margin:0;padding:20px;border-radius:16px}
-body.ui-unslop .os-workflow .card h2{margin:0 0 12px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
-body.ui-unslop .os-workflow .card p{margin:0 0 8px;font-size:12px;line-height:1.5}
-body.ui-unslop .os-workflow .card .muted{font-size:12px}
-body.ui-unslop .os-workflow .card form{margin:0}
-body.ui-unslop .os-workflow .card button{margin-top:8px;min-height:36px;font-size:12px}
-body.ui-unslop .os-workflow .card input[type=file]{padding:8px;font-size:12px}
-body.ui-unslop .os-workflow .card .tag{margin-right:6px}
-body.ui-unslop .os-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
-body.ui-unslop .os-main{min-width:0;padding:24px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
-body.ui-unslop .os-form-unslop{display:block;margin:0}
-body.ui-unslop .os-form-unslop>fieldset{border:0;padding:0;margin:0}
-body.ui-unslop .os-form-unslop>fieldset>legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-body.ui-unslop .os-service-model{margin:0 0 20px;padding:16px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
-body.ui-unslop .os-service-model .card{margin:0;padding:0;border:0;background:transparent}
-body.ui-unslop .os-service-model .card h2{margin:0 0 8px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
-body.ui-unslop .os-service-model .card p{margin:0 0 8px;font-size:12px}
-body.ui-unslop .os-service-model .card label{margin-top:8px}
-body.ui-unslop .os-tabs{display:flex;gap:24px;margin:0 0 24px;padding:0;border-bottom:1px solid var(--u-line);border-radius:0;background:transparent;overflow-x:auto}
-body.ui-unslop .os-tab{position:relative;flex:0 0 auto;display:inline-flex;align-items:baseline;gap:8px;min-height:0;padding:0 0 12px;border:0;border-radius:0;background:transparent;color:var(--u-muted);font:500 14px/1.2 var(--u-font);white-space:nowrap}
-body.ui-unslop .os-tab:hover{background:transparent;border-color:transparent;color:var(--u-text-2)}
-body.ui-unslop .os-tab.active{background:transparent;border-color:transparent;color:var(--u-text)}
-body.ui-unslop .os-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--u-accent)}
-body.ui-unslop .os-tab .tab-index{color:var(--u-muted);font:400 12px/1 var(--u-mono)}
-body.ui-unslop .os-tab.active .tab-index{color:var(--u-accent)}
-body.ui-unslop .os-panel[hidden]{display:none}
-body.ui-unslop .os-panel>p:first-of-type{margin-top:0}
-body.ui-unslop .os-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
-body.ui-unslop .os-rail .card{margin:0;padding:20px;border-radius:16px}
-body.ui-unslop .os-rail .card h2{margin:0 0 12px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
-body.ui-unslop .os-rail .card p{font-size:12px;line-height:1.55}
-body.ui-unslop .os-rail .card .card{margin:8px 0;padding:12px 0;border:0;border-bottom:1px solid var(--u-line);border-radius:0;background:transparent}
-body.ui-unslop .os-rail .card .card:last-child{border-bottom:0;padding-bottom:0}
-body.ui-unslop .os-rail .card .card small{display:block;margin-bottom:4px;font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-rail .card .card p{margin:0}
-body.ui-unslop .os-rail .card form{margin:8px 0 0}
-body.ui-unslop .os-rail .card button{min-height:36px;font-size:12px}
-body.ui-unslop .os-rail .card input[type=file]{font-size:12px;padding:8px}
-body.ui-unslop .os-rail .card details{margin-top:12px}
-body.ui-unslop .os-rail .card summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-close-head{margin:24px 0 0;padding-top:20px;border-top:1px solid var(--u-line)}
-body.ui-unslop .os-close-head h3{margin:0 0 4px;font-size:16px}
-body.ui-unslop .os-close-head p{margin:0 0 8px;color:var(--u-muted);font-size:12px}
-body.ui-unslop .os-form-unslop .actions{position:sticky;bottom:8px;z-index:20;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:12px;margin:24px 0 0;padding:8px 12px;border:1px solid var(--u-line);border-radius:12px;background:rgba(20,19,18,.96);box-shadow:0 12px 32px rgba(0,0,0,.25)}
-body.ui-unslop .os-form-unslop .actions .actions-buttons button,body.ui-unslop .os-form-unslop .actions .actions-buttons .btn{min-height:36px}
-body.ui-unslop .actions-note{flex:1 1 auto;min-width:0;overflow:hidden;color:var(--u-muted);font:400 12px/1.5 var(--u-mono);white-space:nowrap;text-overflow:ellipsis}
-body.ui-unslop .actions-buttons{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-body.ui-unslop .actions-buttons button,body.ui-unslop .actions-buttons .btn{width:auto!important;margin:0!important}
-body.ui-unslop .os-form-unslop .actions .notice{margin:0;font-size:12px}
-body.ui-unslop .os-status-block{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;align-items:end;margin:0 0 18px;padding:14px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
-body.ui-unslop .os-status-block label{grid-column:1/-1;margin:0}
-body.ui-unslop .os-status-block p{grid-column:1/-1;margin:0;color:var(--u-muted);font-size:12px;line-height:1.5}
-body.ui-unslop .os-status-block button{min-height:40px}
-body.ui-unslop .os-status-current{color:var(--u-text-2)}
-body.ui-unslop .os-status-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-body.ui-unslop .os-status-actions p{flex:1 1 100%;margin:0;font-size:12px}
-body.ui-unslop .os-status-actions button{min-height:36px}
-body.ui-unslop .os-danger-actions{border-top:1px solid var(--u-line)}
-body.ui-unslop .cancel-dialog .cancel-step{padding:24px}
-body.ui-unslop .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
-body.ui-unslop .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
-body.ui-unslop .cancel-dialog .cancel-step textarea{min-height:110px}
-body.ui-unslop .os-tools{margin-top:20px;border-top:1px solid var(--u-line);padding-top:16px}
-body.ui-unslop .os-tools summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .os-tools summary:hover{color:var(--u-text-2)}
+body.ui-app .os-ticket{display:grid;grid-template-columns:200px minmax(0,1fr) auto;margin:0 0 20px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card);overflow:hidden}
+body.ui-app .os-ticket-stub{display:flex;flex-direction:column;justify-content:space-between;gap:20px;padding:24px;border-right:1px dashed var(--u-line-2)}
+body.ui-app .os-kicker{margin:0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-ticket-stub h2{margin:0;color:var(--u-text);font:500 28px/1 var(--u-mono);letter-spacing:-.03em}
+body.ui-app .os-status{display:inline-flex;align-items:center;gap:8px;margin:0;color:var(--u-text-2);font:400 12px/1.2 var(--u-mono)}
+body.ui-app .os-status .dot{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--u-muted)}
+body.ui-app .os-status.status--iniciada .dot,body.ui-app .os-status.status--em-rota .dot{background:var(--u-accent)}
+body.ui-app .os-status.status--pendente .dot{background:var(--u-warn)}
+body.ui-app .os-status.status--concluida .dot{background:var(--u-good)}
+body.ui-app .os-status.status--cancelada .dot{background:var(--u-bad)}
+body.ui-app .os-ticket-body{display:flex;flex-direction:column;gap:16px;padding:24px;min-width:0}
+body.ui-app .os-ticket-client{margin:0;color:var(--u-text);font:500 20px/1.3 var(--u-font)}
+body.ui-app .os-ticket-meta{margin:0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-ticket-stats{display:grid;grid-template-columns:repeat(3,minmax(80px,1fr));gap:16px}
+body.ui-app .os-ticket-stats span{display:block;margin:0 0 4px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-ticket-stats strong{display:block;color:var(--u-text);font:500 14px/1.35 var(--u-font)}
+body.ui-app .os-ticket-stats .money{color:var(--u-accent);font-family:var(--u-mono);font-variant-numeric:tabular-nums}
+body.ui-app .os-ticket-actions{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:8px;padding:24px;border-left:1px solid var(--u-line)}
+body.ui-app .os-ticket-actions .btn{min-height:36px;font-size:12px;white-space:nowrap}
+body.ui-app .os-workflow{display:grid;grid-template-columns:1fr .8fr;gap:16px;margin:0 0 20px}
+body.ui-app .os-work-status{order:-2}
+body.ui-app .os-work-draft{order:-1}
+body.ui-app .os-workflow .card{margin:0;padding:20px;border-radius:16px}
+body.ui-app .os-workflow .card h2{margin:0 0 12px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
+body.ui-app .os-workflow .card p{margin:0 0 8px;font-size:12px;line-height:1.5}
+body.ui-app .os-workflow .card .muted{font-size:12px}
+body.ui-app .os-workflow .card form{margin:0}
+body.ui-app .os-workflow .card button{margin-top:8px;min-height:36px;font-size:12px}
+body.ui-app .os-workflow .card input[type=file]{padding:8px;font-size:12px}
+body.ui-app .os-workflow .card .tag{margin-right:6px}
+body.ui-app .os-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+body.ui-app .os-main{min-width:0;padding:24px;border:1px solid var(--u-line);border-radius:16px;background:var(--u-card)}
+body.ui-app .os-form-app{display:block;margin:0}
+body.ui-app .os-form-app>fieldset{border:0;padding:0;margin:0}
+body.ui-app .os-form-app>fieldset>legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.ui-app .os-service-model{margin:0 0 20px;padding:16px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
+body.ui-app .os-service-model .card{margin:0;padding:0;border:0;background:transparent}
+body.ui-app .os-service-model .card h2{margin:0 0 8px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
+body.ui-app .os-service-model .card p{margin:0 0 8px;font-size:12px}
+body.ui-app .os-service-model .card label{margin-top:8px}
+body.ui-app .os-tabs{display:flex;gap:24px;margin:0 0 24px;padding:0;border-bottom:1px solid var(--u-line);border-radius:0;background:transparent;overflow-x:auto}
+body.ui-app .os-tab{position:relative;flex:0 0 auto;display:inline-flex;align-items:baseline;gap:8px;min-height:0;padding:0 0 12px;border:0;border-radius:0;background:transparent;color:var(--u-muted);font:500 14px/1.2 var(--u-font);white-space:nowrap}
+body.ui-app .os-tab:hover{background:transparent;border-color:transparent;color:var(--u-text-2)}
+body.ui-app .os-tab.active{background:transparent;border-color:transparent;color:var(--u-text)}
+body.ui-app .os-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--u-accent)}
+body.ui-app .os-tab .tab-index{color:var(--u-muted);font:400 12px/1 var(--u-mono)}
+body.ui-app .os-tab.active .tab-index{color:var(--u-accent)}
+body.ui-app .os-panel[hidden]{display:none}
+body.ui-app .os-panel>p:first-of-type{margin-top:0}
+body.ui-app .os-rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+body.ui-app .os-rail .card{margin:0;padding:20px;border-radius:16px}
+body.ui-app .os-rail .card h2{margin:0 0 12px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
+body.ui-app .os-rail .card p{font-size:12px;line-height:1.55}
+body.ui-app .os-rail .card .card{margin:8px 0;padding:12px 0;border:0;border-bottom:1px solid var(--u-line);border-radius:0;background:transparent}
+body.ui-app .os-rail .card .card:last-child{border-bottom:0;padding-bottom:0}
+body.ui-app .os-rail .card .card small{display:block;margin-bottom:4px;font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-rail .card .card p{margin:0}
+body.ui-app .os-rail .card form{margin:8px 0 0}
+body.ui-app .os-rail .card button{min-height:36px;font-size:12px}
+body.ui-app .os-rail .card input[type=file]{font-size:12px;padding:8px}
+body.ui-app .os-rail .card details{margin-top:12px}
+body.ui-app .os-rail .card summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-close-head{margin:24px 0 0;padding-top:20px;border-top:1px solid var(--u-line)}
+body.ui-app .os-close-head h3{margin:0 0 4px;font-size:16px}
+body.ui-app .os-close-head p{margin:0 0 8px;color:var(--u-muted);font-size:12px}
+body.ui-app .os-form-app .actions{position:sticky;bottom:8px;z-index:20;display:flex;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:12px;margin:24px 0 0;padding:8px 12px;border:1px solid var(--u-line);border-radius:12px;background:rgba(20,19,18,.96);box-shadow:0 12px 32px rgba(0,0,0,.25)}
+body.ui-app .os-form-app .actions .actions-buttons button,body.ui-app .os-form-app .actions .actions-buttons .btn{min-height:36px}
+body.ui-app .actions-note{flex:1 1 auto;min-width:0;overflow:hidden;color:var(--u-muted);font:400 12px/1.5 var(--u-mono);white-space:nowrap;text-overflow:ellipsis}
+body.ui-app .actions-buttons{display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+body.ui-app .actions-buttons button,body.ui-app .actions-buttons .btn{width:auto!important;margin:0!important}
+body.ui-app .os-form-app .actions .notice{margin:0;font-size:12px}
+body.ui-app .os-status-block{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;align-items:end;margin:0 0 18px;padding:14px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
+body.ui-app .os-status-block label{grid-column:1/-1;margin:0}
+body.ui-app .os-status-block p{grid-column:1/-1;margin:0;color:var(--u-muted);font-size:12px;line-height:1.5}
+body.ui-app .os-status-block button{min-height:40px}
+body.ui-app .os-status-current{color:var(--u-text-2)}
+body.ui-app .os-status-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+body.ui-app .os-status-actions p{flex:1 1 100%;margin:0;font-size:12px}
+body.ui-app .os-status-actions button{min-height:36px}
+body.ui-app .os-danger-actions{border-top:1px solid var(--u-line)}
+body.ui-app .cancel-dialog .cancel-step{padding:24px}
+body.ui-app .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
+body.ui-app .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
+body.ui-app .cancel-dialog .cancel-step textarea{min-height:110px}
+body.ui-app .os-tools{margin-top:20px;border-top:1px solid var(--u-line);padding-top:16px}
+body.ui-app .os-tools summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .os-tools summary:hover{color:var(--u-text-2)}
 
 /* finance */
-body.ui-unslop .finance-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 20px}
-body.ui-unslop .finance-head .page-meta{margin:0}
-body.ui-unslop .finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-flow:dense;gap:16px;margin-top:16px}
-body.ui-unslop .finance-grid .card:nth-child(2),body.ui-unslop .finance-grid .card:nth-child(4){grid-column:1/-1}
-body.ui-unslop .finance-grid .card{margin:0}
-body.ui-unslop .finance-grid .card h2{font-size:15px}
-body.ui-unslop .finance-note{margin:0 0 20px;color:var(--u-text-2);font-size:12px;line-height:1.6}
-body.ui-unslop .finance-note strong{color:var(--u-text)}
-body.ui-unslop .finance-columns .card{margin:0;padding:20px;border-radius:16px}
-body.ui-unslop .finance-item{padding:16px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
-body.ui-unslop .finance-item-os{color:var(--u-text);font:500 15px/1.3 var(--u-font)}
-body.ui-unslop .finance-item-type{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
-body.ui-unslop .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13px;overflow-wrap:anywhere}
-body.ui-unslop .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
-body.ui-unslop .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
-body.ui-unslop .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
-body.ui-unslop .finance-item-foot .tag{margin:0}
+body.ui-app .finance-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 20px}
+body.ui-app .finance-head .page-meta{margin:0}
+body.ui-app .finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-flow:dense;gap:16px;margin-top:16px}
+body.ui-app .finance-grid .card:nth-child(2),body.ui-app .finance-grid .card:nth-child(4){grid-column:1/-1}
+body.ui-app .finance-grid .card{margin:0}
+body.ui-app .finance-grid .card h2{font-size:15px}
+body.ui-app .finance-note{margin:0 0 20px;color:var(--u-text-2);font-size:12px;line-height:1.6}
+body.ui-app .finance-note strong{color:var(--u-text)}
+body.ui-app .finance-columns .card{margin:0;padding:20px;border-radius:16px}
+body.ui-app .finance-item{padding:16px;border:1px solid var(--u-line);border-radius:12px;background:var(--u-card-2)}
+body.ui-app .finance-item-os{color:var(--u-text);font:500 15px/1.3 var(--u-font)}
+body.ui-app .finance-item-type{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
+body.ui-app .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13px;overflow-wrap:anywhere}
+body.ui-app .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
+body.ui-app .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
+body.ui-app .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
+body.ui-app .finance-item-foot .tag{margin:0}
 
 /* login */
-body.ui-unslop.ui-login main{min-height:100vh;max-width:none;margin:0;padding:0}
-body.ui-unslop.ui-login main>h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-body.ui-unslop.ui-login footer{margin-left:0;padding:14px 32px;text-align:center}
-body.ui-unslop.ui-login .unslop-credit{padding:0 32px 18px;text-align:center}
-body.ui-unslop .login-shell{display:grid;grid-template-columns:minmax(0,1fr) 460px;min-height:100vh}
-body.ui-unslop .login-brand{display:flex;flex-direction:column;justify-content:space-between;gap:48px;padding:56px;border-right:1px solid var(--u-line);background:var(--u-side)}
-body.ui-unslop .login-brand img{display:block;width:auto;height:40px;max-width:240px;object-fit:contain}
-body.ui-unslop .login-brand-copy{max-width:560px}
-body.ui-unslop .login-brand h1,body.ui-unslop .login-brand .login-headline{max-width:13ch;margin:0 0 16px;color:var(--u-text);font:500 40px/1.06 var(--u-font);letter-spacing:-.03em}
-body.ui-unslop .login-brand p{max-width:50ch;margin:0;color:var(--u-text-2);font-size:14px;line-height:1.65}
-body.ui-unslop .login-facts{display:flex;flex-direction:column;gap:12px;margin-top:32px}
-body.ui-unslop .login-fact{display:flex;align-items:center;gap:8px;color:var(--u-text-2);font-size:14px}
-body.ui-unslop .login-fact svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-accent);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
-body.ui-unslop .login-brand-foot{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .login-panel{display:flex;flex-direction:column;justify-content:center;padding:56px 48px;background:var(--u-bg)}
-body.ui-unslop .login-panel .ui-switch{margin:0 0 32px}
-body.ui-unslop .login-panel h2{margin:0 0 8px;font:500 28px/1.2 var(--u-font);letter-spacing:-.02em}
-body.ui-unslop .login-lede{margin:0 0 24px;color:var(--u-muted);font-size:12px}
-body.ui-unslop .login-form button{width:100%;margin-top:20px}
-body.ui-unslop .login-note{margin:20px 0 0;color:var(--u-muted);font-size:12px;line-height:1.6}
-body.ui-unslop .login-links{margin-top:28px}
-body.ui-unslop .login-links details.card{margin:0;padding:16px;border-radius:12px;background:var(--u-card)}
-body.ui-unslop .login-links summary{cursor:pointer;color:var(--u-text-2);font:400 12px/1.5 var(--u-mono)}
-body.ui-unslop .login-links p{margin:12px 0 4px;font-size:12px;overflow-wrap:anywhere}
-body.ui-unslop .login-links small{font-size:12px}
+body.ui-app.ui-login main{min-height:100vh;max-width:none;margin:0;padding:0}
+body.ui-app.ui-login main>h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.ui-app.ui-login footer{margin-left:0;padding:14px 32px;text-align:center}
+body.ui-app .login-shell{display:grid;grid-template-columns:minmax(0,1fr) 460px;min-height:100vh}
+body.ui-app .login-brand{display:flex;flex-direction:column;justify-content:space-between;gap:48px;padding:56px;border-right:1px solid var(--u-line);background:var(--u-side)}
+body.ui-app .login-brand img{display:block;width:auto;height:40px;max-width:240px;object-fit:contain}
+body.ui-app .login-brand-copy{max-width:560px}
+body.ui-app .login-brand h1,body.ui-app .login-brand .login-headline{max-width:13ch;margin:0 0 16px;color:var(--u-text);font:500 40px/1.06 var(--u-font);letter-spacing:-.03em}
+body.ui-app .login-brand p{max-width:50ch;margin:0;color:var(--u-text-2);font-size:14px;line-height:1.65}
+body.ui-app .login-facts{display:flex;flex-direction:column;gap:12px;margin-top:32px}
+body.ui-app .login-fact{display:flex;align-items:center;gap:8px;color:var(--u-text-2);font-size:14px}
+body.ui-app .login-fact svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-accent);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+body.ui-app .login-brand-foot{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .login-panel{display:flex;flex-direction:column;justify-content:center;padding:56px 48px;background:var(--u-bg)}
+body.ui-app .login-panel h2{margin:0 0 8px;font:500 28px/1.2 var(--u-font);letter-spacing:-.02em}
+body.ui-app .login-lede{margin:0 0 24px;color:var(--u-muted);font-size:12px}
+body.ui-app .login-form button{width:100%;margin-top:20px}
+body.ui-app .login-note{margin:20px 0 0;color:var(--u-muted);font-size:12px;line-height:1.6}
+body.ui-app .login-links{margin-top:28px}
+body.ui-app .login-links details.card{margin:0;padding:16px;border-radius:12px;background:var(--u-card)}
+body.ui-app .login-links summary{cursor:pointer;color:var(--u-text-2);font:400 12px/1.5 var(--u-mono)}
+body.ui-app .login-links p{margin:12px 0 4px;font-size:12px;overflow-wrap:anywhere}
+body.ui-app .login-links small{font-size:12px}
 
 /* feedback */
-body.ui-unslop .feedback-fab{display:none}
-body.ui-unslop .feedback-dialog{width:min(640px,calc(100vw - 28px));max-height:calc(100vh - 48px);padding:0;border:1px solid var(--u-line-2);border-radius:16px;background:var(--u-card);color:var(--u-text);box-shadow:0 24px 80px rgba(0,0,0,.55)}
-body.ui-unslop .feedback-dialog::backdrop{background:rgba(0,0,0,.7)}
-body.ui-unslop .feedback-dialog form{padding:24px}
-body.ui-unslop .feedback-dialog h2{margin:0 0 6px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
-body.ui-unslop .feedback-dialog .feedback-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-body.ui-unslop .feedback-dialog .feedback-privacidade{color:var(--u-muted);font-size:12px;line-height:1.6}
-body.ui-unslop .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw - 28px));padding:12px 16px;border:1px solid var(--u-line-2);border-left:2px solid var(--u-accent);border-radius:10px;background:var(--u-card);color:var(--u-text);box-shadow:0 16px 48px rgba(0,0,0,.45);font-size:12px;line-height:1.5;transform:translateX(-50%)}
+body.ui-app .feedback-fab{display:none}
+body.ui-app .feedback-dialog{width:min(640px,calc(100vw - 28px));max-height:calc(100vh - 48px);padding:0;border:1px solid var(--u-line-2);border-radius:16px;background:var(--u-card);color:var(--u-text);box-shadow:0 24px 80px rgba(0,0,0,.55)}
+body.ui-app .feedback-dialog::backdrop{background:rgba(0,0,0,.7)}
+body.ui-app .feedback-dialog form{padding:24px}
+body.ui-app .feedback-dialog h2{margin:0 0 6px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
+body.ui-app .feedback-dialog .feedback-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+body.ui-app .feedback-dialog .feedback-privacidade{color:var(--u-muted);font-size:12px;line-height:1.6}
+body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw - 28px));padding:12px 16px;border:1px solid var(--u-line-2);border-left:2px solid var(--u-accent);border-radius:10px;background:var(--u-card);color:var(--u-text);box-shadow:0 16px 48px rgba(0,0,0,.45);font-size:12px;line-height:1.5;transform:translateX(-50%)}
 
 /* responsive */
 @media(max-width:1200px){
-  body.ui-unslop main{padding:32px 28px 88px}
-  body.ui-unslop .os-layout,body.ui-unslop .home-grid{grid-template-columns:minmax(0,1fr) 300px}
-  body.ui-unslop .os-ticket{grid-template-columns:172px minmax(0,1fr)}
-  body.ui-unslop .os-ticket-actions{grid-column:1/-1;flex-direction:row;justify-content:flex-end;border-left:0;border-top:1px solid var(--u-line)}
+  body.ui-app main{padding:32px 28px 88px}
+  body.ui-app .os-layout,body.ui-app .home-grid{grid-template-columns:minmax(0,1fr) 300px}
+  body.ui-app .os-ticket{grid-template-columns:172px minmax(0,1fr)}
+  body.ui-app .os-ticket-actions{grid-column:1/-1;flex-direction:row;justify-content:flex-end;border-left:0;border-top:1px solid var(--u-line)}
 }
 @media(max-width:980px){
-  body.ui-unslop .app-side{position:relative;width:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--u-line);gap:12px;flex-direction:row;align-items:center;justify-content:space-between}
-  body.ui-unslop .side-brand{flex-direction:row;align-items:center;gap:10px}
-  body.ui-unslop .side-brand img{height:28px}
-  body.ui-unslop .side-brand span{display:none}
-  body.ui-unslop .side-menu-toggle{display:inline-flex}
-  body.ui-unslop .side-nav{display:none;position:absolute;top:100%;left:0;right:0;z-index:250;flex-direction:column;gap:4px;max-height:calc(100vh - 80px);overflow-y:auto;padding:12px 16px 18px;border-bottom:1px solid var(--u-line);background:var(--u-side);box-shadow:0 18px 40px rgba(0,0,0,.45)}
-  body.ui-unslop .side-nav.open{display:flex}
-  body.ui-unslop .side-group{flex-direction:column;gap:2px}
-  body.ui-unslop .side-label{display:block;margin:8px 12px 4px;color:var(--u-muted)}
-  body.ui-unslop .side-link{white-space:normal;min-height:36px;padding:0 12px}
-  body.ui-unslop .side-link svg{display:none}
-  body.ui-unslop .side-foot{display:none}
-  body.ui-unslop .feedback-fab{display:inline-flex}
-  body.ui-unslop main{margin:0;padding:28px 20px 80px}
-  body.ui-unslop footer{margin-left:0;padding:14px 20px}
-  body.ui-unslop .unslop-credit{padding:0 20px 18px}
-  body.ui-unslop .os-layout,body.ui-unslop .home-grid{grid-template-columns:1fr}
-  body.ui-unslop .os-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-  body.ui-unslop .os-workflow{grid-template-columns:1fr 1fr}
-  body.ui-unslop .os-workflow .card:first-child{grid-column:1/-1}
-  body.ui-unslop .login-shell{grid-template-columns:1fr}
-  body.ui-unslop .login-brand{border-right:0;border-bottom:1px solid var(--u-line);padding:36px 28px;gap:28px}
-  body.ui-unslop .login-brand h1,body.ui-unslop .login-brand .login-headline{font-size:32px;max-width:18ch}
-  body.ui-unslop .login-facts{display:none}
-  body.ui-unslop .login-panel{padding:36px 28px}
+  body.ui-app .app-side{position:relative;width:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--u-line);gap:12px;flex-direction:row;align-items:center;justify-content:space-between}
+  body.ui-app .side-brand{flex-direction:row;align-items:center;gap:10px}
+  body.ui-app .side-brand img{height:28px}
+  body.ui-app .side-brand span{display:none}
+  body.ui-app.menu-open{overflow:hidden}
+  body.ui-app .side-menu-toggle{display:inline-flex}
+  body.ui-app .side-nav{display:none;position:fixed;inset:0;z-index:1000;flex-direction:column;gap:6px;height:100dvh;max-height:none;overflow-y:auto;padding:18px 20px 104px;background:var(--u-side)}
+  body.ui-app .side-nav.open{display:flex}
+  body.ui-app .side-mobile-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 4px 18px;margin-bottom:8px;border-bottom:1px solid var(--u-line)}
+  body.ui-app .side-mobile-head strong{display:block;font:500 16px/1.3 var(--u-font)}
+  body.ui-app .side-mobile-head span{display:block;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+  body.ui-app #fechar-side-nav{width:40px;height:40px;min-height:40px;padding:0;border:1px solid var(--u-line-2);border-radius:10px;background:var(--u-raised);color:var(--u-text);font-size:22px;line-height:1}
+  body.ui-app .side-group{flex-direction:column;gap:2px}
+  body.ui-app .side-label{display:block;margin:14px 12px 6px;color:var(--u-muted);font-size:12px}
+  body.ui-app .side-link{white-space:normal;min-height:46px;padding:0 14px;font-size:15px}
+  body.ui-app .side-link svg{display:block;flex:0 0 20px;width:20px;height:20px}
+  body.ui-app .side-foot{display:none}
+  body.ui-app.menu-open .side-foot{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1001;padding:14px 20px;background:var(--u-side);border-top:1px solid var(--u-line)}
+  body.ui-app.menu-open .side-foot .side-user{display:flex;flex-direction:column;gap:4px}
+  body.ui-app .feedback-fab{display:inline-flex}
+  body.ui-app main{margin:0;padding:28px 20px 80px}
+  body.ui-app footer{margin-left:0;padding:14px 20px}
+  body.ui-app .os-layout,body.ui-app .home-grid{grid-template-columns:1fr}
+  body.ui-app .os-rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  body.ui-app .os-workflow{grid-template-columns:1fr 1fr}
+  body.ui-app .os-workflow .card:first-child{grid-column:1/-1}
+  body.ui-app .login-shell{grid-template-columns:1fr}
+  body.ui-app .login-brand{border-right:0;border-bottom:1px solid var(--u-line);padding:36px 28px;gap:28px}
+  body.ui-app .login-brand h1,body.ui-app .login-brand .login-headline{font-size:32px;max-width:18ch}
+  body.ui-app .login-facts{display:none}
+  body.ui-app .login-panel{padding:36px 28px}
 }
 @media(max-width:720px){
-  body.ui-unslop h1{font-size:28px}
-  body.ui-unslop .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  body.ui-unslop .os-ticket{grid-template-columns:1fr}
-  body.ui-unslop .os-ticket-stub{border-right:0;border-bottom:1px dashed var(--u-line-2)}
-  body.ui-unslop .os-ticket-actions{border-top:1px solid var(--u-line)}
-  body.ui-unslop .os-workflow{grid-template-columns:1fr}
-  body.ui-unslop .os-workflow .card:first-child{grid-column:auto}
-  body.ui-unslop .os-main{padding:20px}
-  body.ui-unslop .col2{grid-template-columns:1fr}
-  body.ui-unslop .os-status-block{grid-template-columns:1fr}
-  body.ui-unslop .os-status-block button{width:100%}
-  body.ui-unslop .material-row{grid-template-columns:1fr 1fr}
-  body.ui-unslop .material-row>div:first-child{grid-column:1/-1}
-  body.ui-unslop .material-row button{grid-column:1/-1;width:100%}
-  body.ui-unslop .foto-rascunho{grid-template-columns:1fr!important}
-  body.ui-unslop .foto-rascunho img{width:100%!important;height:auto!important}
-  body.ui-unslop .os-form-unslop .actions{flex-direction:column;align-items:stretch;bottom:8px}
-  body.ui-unslop .actions-buttons{flex-direction:column;align-items:stretch}
-  body.ui-unslop .actions-buttons button,body.ui-unslop .actions-buttons .btn{width:100%!important}
-  body.ui-unslop .finance-figures{grid-template-columns:1fr 1fr}
-  body.ui-unslop .finance-grid{grid-template-columns:1fr}
-  body.ui-unslop .finance-grid .card:nth-child(2),body.ui-unslop .finance-grid .card:nth-child(4){grid-column:auto}
-  body.ui-unslop .home-toolbar{align-items:flex-start;flex-direction:column}
+  body.ui-app h1{font-size:28px}
+  body.ui-app .os-tabs{flex-wrap:wrap;overflow-x:visible;gap:12px 18px}
+  body.ui-app .os-tab{white-space:normal}
+  body.ui-app .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.ui-app .os-ticket{grid-template-columns:1fr}
+  body.ui-app .os-ticket-stub{border-right:0;border-bottom:1px dashed var(--u-line-2)}
+  body.ui-app .os-ticket-actions{border-top:1px solid var(--u-line)}
+  body.ui-app .os-workflow{grid-template-columns:1fr}
+  body.ui-app .os-workflow .card:first-child{grid-column:auto}
+  body.ui-app .os-main{padding:20px}
+  body.ui-app .col2{grid-template-columns:1fr}
+  body.ui-app .os-status-block{grid-template-columns:1fr}
+  body.ui-app .os-status-block button{width:100%}
+  body.ui-app .material-row{grid-template-columns:1fr 1fr}
+  body.ui-app .material-row>div:first-child{grid-column:1/-1}
+  body.ui-app .material-row button{grid-column:1/-1;width:100%}
+  body.ui-app .foto-rascunho{grid-template-columns:1fr!important}
+  body.ui-app .foto-rascunho img{width:100%!important;height:auto!important}
+  body.ui-app .os-form-app .actions{flex-direction:column;align-items:stretch;bottom:8px}
+  body.ui-app .actions-buttons{flex-direction:column;align-items:stretch}
+  body.ui-app .actions-buttons button,body.ui-app .actions-buttons .btn{width:100%!important}
+  body.ui-app .finance-figures{grid-template-columns:1fr 1fr}
+  body.ui-app .finance-grid{grid-template-columns:1fr}
+  body.ui-app .finance-grid .card:nth-child(2),body.ui-app .finance-grid .card:nth-child(4){grid-column:auto}
+  body.ui-app .home-toolbar{align-items:flex-start;flex-direction:column}
 }
 @media(max-width:520px){
-  body.ui-unslop main{padding:24px 14px 72px}
-  body.ui-unslop .stat-grid{grid-template-columns:1fr 1fr}
-  body.ui-unslop .finance-figures{grid-template-columns:1fr}
-  body.ui-unslop .login-panel{padding:28px 20px}
-  body.ui-unslop .login-brand{padding:28px 20px}
-  body.ui-unslop .os-ticket-stub,body.ui-unslop .os-ticket-body,body.ui-unslop .os-ticket-actions{padding:20px}
-  body.ui-unslop .os-ticket-stats{grid-template-columns:1fr 1fr}
-  body.ui-unslop .panel{padding:16px}
+  body.ui-app main{padding:24px 14px 72px}
+  body.ui-app .stat-grid{grid-template-columns:1fr 1fr}
+  body.ui-app .finance-figures{grid-template-columns:1fr}
+  body.ui-app .login-panel{padding:28px 20px}
+  body.ui-app .login-brand{padding:28px 20px}
+  body.ui-app .os-ticket-stub,body.ui-app .os-ticket-body,body.ui-app .os-ticket-actions{padding:20px}
+  body.ui-app .os-ticket-stats{grid-template-columns:1fr 1fr}
+  body.ui-app .panel{padding:16px}
 }
 """
 
@@ -701,13 +696,13 @@ def chip_status(status):
             f'{esc(status)}</span>')
 
 
-def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
+def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
     """Experimental interface: a quiet work-order shell around the same flow."""
     base=layout(titulo,corpo,usuario,nonce,cliente,banco)
     login=not usuario or cliente
-    body_class='ui-unslop'+(' ui-login' if login else '')
+    body_class='ui-app'+(' ui-login' if login else '')
     base=base.replace('<body>',f'<body class="{body_class}">',1)
-    base=base.replace('</style>',CSS_UNSLOP+'</style>',1)
+    base=base.replace('</style>',CSS_APP+'</style>',1)
     sidebar=''
     if usuario and not cliente:
         grupos=[
@@ -738,26 +733,25 @@ def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,ba
                  '<span>Portal do prestador</span></a>'
                  '<button type="button" class="side-menu-toggle" id="toggle-side-nav" '
                  'aria-expanded="false" aria-controls="side-nav">☰ Menu</button>'
-                 f'<nav class="side-nav" id="side-nav" aria-label="Navegação principal">{blocos}</nav>'
+                 f'<nav class="side-nav" id="side-nav" aria-label="Navegação principal">'
+                 f'<div class="side-mobile-head"><div><strong>{esc(usuario.get("nome",""))}</strong>'
+                 '<span>Prestador</span></div>'
+                 '<button type="button" id="fechar-side-nav" aria-label="Fechar menu">×</button></div>'
+                 f'{blocos}</nav>'
                  '<div class="side-foot">'
                  f'<div class="side-user"><strong>{esc(usuario.get("nome",""))}</strong>'
-                 '<span>Prestador · DEV</span></div>'
+                 '<span>Prestador</span></div>'
                  '<div class="side-tools">'
                  '<button type="button" class="side-tool" id="abrir-feedback-side">'
                  f'{icone("message")}<span>Enviar feedback</span></button>'
                  f'<form method="post" action="/sair" class="side-tool-form">'
                  f'<input type="hidden" name="csrf" value="{csrf}">'
                  f'<button class="side-tool" type="submit">{icone("logout")}<span>Sair</span></button></form>'
-                 f'<a class="side-tool" href="/ui/classic?next={quote(path,safe="/")}">{icone("layout")}<span>Desativar unslop</span></a>'
                  '</div>'
-                 f'<div class="side-version">AUTOSEG {VERSAO_PORTAL} · DEV</div>'
+                 f'<div class="side-version">AUTOSEG {VERSAO_PORTAL}</div>'
                  '</div></aside>')
         base=base.replace(f'<body class="{body_class}">',
                           f'<body class="{body_class}">{sidebar}',1)
-    credit=('<div class="unslop-credit">Interface experimental inspirada em '
-            '<a href="https://github.com/heydamir/unslop" target="_blank" '
-            'rel="noopener noreferrer">unslop</a>, de Damir Sokolovsky (CC BY 4.0).</div>')
-    base=base.replace('</body>',credit+'</body>',1)
     return base
 
 
@@ -885,21 +879,13 @@ class PortalPrestador:
             def responder(self,html_text,status=200,cookie=None):
                 return self.send_bytes(html_text.encode('utf-8'),status=status,cookie=cookie)
 
-            def ui_unslop(self):
-                try:
-                    ck=SimpleCookie();ck.load(self.headers.get('Cookie',''))
-                    item=ck.get(UI_COOKIE)
-                    return bool(item and item.value=='unslop')
-                except (KeyError,ValueError):
-                    return False
+            def ui_app(self):
+                return True
 
             def pagina(self,titulo,conteudo,s=None,status=200):
-                if self.ui_unslop():
-                    pagina=layout_unslop(titulo,conteudo,s,
-                                         path=urlparse(self.path).path,
-                                         banco=banco)
-                else:
-                    pagina=layout(titulo,conteudo,s,banco=banco)
+                pagina=layout_app(titulo,conteudo,s,
+                                     path=urlparse(self.path).path,
+                                     banco=banco)
                 if titulo=='Ordens de serviço ativas':
                     # Inert marker: portal.js owns the timer and pauses it while
                     # the feedback dialog is open or a form control is in use.
@@ -987,10 +973,9 @@ class PortalPrestador:
                          f'<p><a href="{destino}">Voltar à página anterior</a></p>'),s,status)
 
             def login(self):
-                ativo=self.ui_unslop()
+                ativo=self.ui_app()
                 if ativo:
-                    troca=('<div class="ui-switch"><span>Interface unslop ativa</span>'
-                           '<a href="/ui/classic?next=/login">Desativar unslop</a></div>')
+                    troca=''
                     fatos=(''.join(f'<div class="login-fact">{icone(nome)}<span>{esc(texto)}</span></div>'
                                    for nome,texto in (('clipboard','Ordens e relatórios'),
                                                       ('wallet','Financeiro e repasses'),
@@ -1003,7 +988,7 @@ class PortalPrestador:
                            f'<p class="login-headline">A OS, o relatório e o recebimento do prestador no mesmo lugar</p>'
                            f'<p>Acompanhe as ordens atribuídas, registre o serviço e consulte o que já foi recebido.</p>'
                            f'<div class="login-facts">{fatos}</div></div></div>'
-                           f'<p class="login-brand-foot">AUTOSEG {VERSAO_PORTAL} · DEV (testes)</p>'
+                           f'<p class="login-brand-foot">AUTOSEG {VERSAO_PORTAL}</p>'
                            f'</section>'
                            f'<section class="login-panel">{troca}'
                            f'<h2>Entrar</h2>'
@@ -1016,10 +1001,6 @@ class PortalPrestador:
                            f'<div class="login-links">{v9.barra_links("prestador")}</div>'
                            f'</section></div>')
                     return self.pagina('Acesso do prestador',corpo)
-                else:
-                    troca=('<div class="ui-switch"><span>Interface:</span>'
-                           '<a class="active" href="/ui/classic?next=/login">Atual</a>'
-                           '<a href="/ui/unslop?next=/login">Ativar unslop</a></div>')
                 return self.pagina('Acesso do prestador',troca+card('Entrar',
                     '<form method="post" action="/login">'
                     +campos_escuros('E-mail','email',kind='email',required=True)
@@ -1132,7 +1113,7 @@ class PortalPrestador:
                         FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
                         WHERE COALESCE(o.arquivada,0)=0
                         ORDER BY o.id DESC LIMIT 6''').fetchall()
-                if self.ui_unslop():
+                if self.ui_app():
                     def stat(rotulo,valor,href):
                         return (f'<a class="stat" href="{href}"><span>{esc(rotulo)}</span>'
                                 f'<strong>{esc(valor)}</strong></a>')
@@ -1813,16 +1794,16 @@ class PortalPrestador:
                     except Exception:
                         em_rota=False
                 token=self.hidden(s)
-                unslop=self.ui_unslop()
-                rotulo_salvar='Salvar rascunho' if unslop else 'SALVAR RASCUNHO'
-                classe_form=' class="os-form-unslop" novalidate' if unslop else ''
-                titulo=(('Ordem de serviço' if unslop else f'OS {d["numero_os"]}') if oid else 'Nova ordem de serviço')
+                app=self.ui_app()
+                rotulo_salvar='Salvar rascunho' if app else 'SALVAR RASCUNHO'
+                classe_form=' class="os-form-app" novalidate' if app else ''
+                titulo=(('Ordem de serviço' if app else f'OS {d["numero_os"]}') if oid else 'Nova ordem de serviço')
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
-                corpo='' if unslop else botao('← Ordens de serviço','/os','secondary')
-                if oid and not unslop:
+                corpo='' if app else botao('← Ordens de serviço','/os','secondary')
+                if oid and not app:
                     corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b> · '
                     f'identificador interno do link: <code>/os/{oid}</code></p>'
-                if oid and unslop:
+                if oid and app:
                     cliente_info=next((x for x in cl if x['id']==d.get('cliente_id')),None)
                     cliente_nome=cliente_info['nome'] if cliente_info else ''
                     local=' · '.join(str(cliente_info[k] or '') for k in ('bairro','cidade') if cliente_info and cliente_info[k])
@@ -1853,23 +1834,18 @@ class PortalPrestador:
                         'revise as informações antes de confirmar a OS.</p>'
                         '<button class="secondary" type="button" id="desfazer-yaml-rev08">'
                         'Desfazer importação YAML</button>')
-                rotulo_assumir='Assumir OS' if unslop else 'ASSUMIR OS'
-                rotulo_em_rota='Em rota' if unslop else 'EM ROTA'
-                rotulo_cancelar_rota='Cancelar em rota' if unslop else 'CANCELAR EM ROTA'
-                rotulo_iniciar='Iniciar OS' if unslop else 'INICIAR OS'
-                aviso_rota='Em rota — deslocamento iniciado.' if unslop else '🚗 EM ROTA — deslocamento iniciado.'
+                rotulo_assumir='Assumir OS' if app else 'ASSUMIR OS'
+                rotulo_em_rota='Em rota' if app else 'EM ROTA'
+                rotulo_cancelar_rota='Cancelar em rota' if app else 'CANCELAR EM ROTA'
+                rotulo_iniciar='Iniciar OS' if app else 'INICIAR OS'
+                aviso_rota='Em rota — deslocamento iniciado.' if app else '🚗 EM ROTA — deslocamento iniciado.'
                 texto_iniciar=('Iniciar OS registra o início efetivo e encerra o deslocamento. '
                                'Se a OS não tiver responsável, ela será atribuída a você.'
-                               if unslop else
+                               if app else
                                'INICIAR OS registra o início efetivo do atendimento e encerra o deslocamento. '
                                'Ao iniciar uma OS sem responsável, ela será atribuída a você com registro explícito.')
-                if oid and unslop:
+                if oid and app:
                     corpo+='<div class="os-workflow">'
-                if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    if responsavel==s['pid']:
-                        corpo+=('<section class="card os-work-draft"><h2>Rascunho</h2>'
-                            +botao('Recuperar rascunho',f'/os/{oid}/rascunho','secondary')
-                            +'<p class="muted">Os dados salvos no servidor são recarregados ao abrir a OS.</p></section>')
                 if oid:
                     nome_resp=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     if arquivada:
@@ -1883,7 +1859,7 @@ class PortalPrestador:
                         corpo+=(f'<form method="post" action="/os/{oid}/arquivar" '
                                 f'data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">'
                                 f'{token}<button type="submit" class="danger">Arquivar OS</button></form>')
-                if oid and unslop:
+                if oid and app:
                     corpo+='</div>'
                 if not cl:
                     corpo+='<p class="notice">Cadastre primeiro um cliente.</p>'
@@ -1894,13 +1870,13 @@ class PortalPrestador:
                     rasc_salvo = ext.obter_rascunho_web(banco, oid, s['pid']) if oid else None
                     if rasc_salvo:
                         for k,v in rasc_salvo.items():
-                            if k.startswith('_'):
+                            if k.startswith('_') or k in ('csrf','modo_envio','nota_fiscal'):
                                 continue
-                            if k not in d and isinstance(v,(str,list)):
+                            if isinstance(v,(str,list)):
                                 d[k]=v
                 except Exception:
                     rasc_salvo = None
-                if unslop:
+                if app:
                     corpo+='<div class="os-layout"><div class="os-main">'
                 if not oid:
                     corpo+=card('Importar OS em YAML',
@@ -1910,7 +1886,10 @@ class PortalPrestador:
                         '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
                         '<p class="muted">A importação apenas preenche o formulário para revisão; '
                         'nada é salvo antes de confirmar a criação da OS.</p>')
-                corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" enctype="multipart/form-data">{token}'
+                auto_save='1' if oid and d['status'] in ext.ATIVAS and not arquivada else '0'
+                corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" data-os-id="{oid or ""}" data-auto-save="{auto_save}" enctype="multipart/form-data">{token}'
+                if auto_save=='1':
+                    corpo+='<p class="muted auto-save-status" id="rascunho-auto-status" aria-live="polite">Salvamento automático ativo.</p>'
                 if d.get('composicao_yaml'):
                     import json as _json_comp
                     corpo+=('<input type="hidden" name="composicao_yaml" value="'
@@ -1929,7 +1908,7 @@ class PortalPrestador:
                        +'<button id="aplicar-modelo-servico" type="button" class="secondary">Preencher dados a partir do modelo</button>'
                        +'<p class="muted">Só é aplicado quando você clicar. Verifique e ajuste os valores e o relatório.</p>')
                        +f'<script type="application/json" id="catalogo-os-json">{js_json}</script>')
-                    if unslop:
+                    if app:
                         bloco_modelo='<div class="os-service-model">'+bloco_modelo+'</div>'
                 corpo+='<input type="hidden" name="materiais_presentes" value="1">'
                 if oid:
@@ -1951,7 +1930,7 @@ class PortalPrestador:
                     bloco.append('<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
                                  'As ações de cancelar e arquivar ficam no fim desta aba.</p>')
                     bloco.append('<div class="os-status-actions">')
-                    if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente'):
+                    if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente' or s.get('admin')):
                         bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/assumir" formnovalidate>{rotulo_assumir}</button>')
                         bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
                     if responsavel in (None, s['pid']) and not iniciado:
@@ -1964,7 +1943,7 @@ class PortalPrestador:
                         bloco.append(f'<p class="muted">{texto_iniciar}</p>')
                     elif iniciado:
                         bloco.append(f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}.</p>')
-                    elif responsavel is not None and responsavel != s['pid']:
+                    elif responsavel is not None and responsavel != s['pid'] and not s.get('admin'):
                         bloco.append('<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>')
                     bloco.append('</div></div>')
                     status_bloco=''.join(bloco)
@@ -1997,7 +1976,6 @@ class PortalPrestador:
                         'Cancelar OS definitivamente</button>'
                         '</div></div></dialog>')
                 corpo+='<fieldset><legend>Identificação e serviço</legend>'
-                corpo+=status_bloco
                 corpo+=cancelar_dialogo
                 if bloco_modelo:
                     corpo+=bloco_modelo
@@ -2121,7 +2099,7 @@ class PortalPrestador:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
                     else:
                         corpo+='<p class="warn">OS ainda não iniciada. Assumir uma OS não inicia o atendimento automaticamente.</p>'
-                if oid and d['status'] in ext.ATIVAS and responsavel==s['pid']:
+                if oid and d['status'] in ext.ATIVAS and (responsavel==s['pid'] or s.get('admin')):
                     corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
                     corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
                     opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
@@ -2129,6 +2107,33 @@ class PortalPrestador:
                         corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
                         corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
                     corpo+='</div>'
+                if oid and d['status']=='Concluída':
+                    with ext.db(banco) as c:
+                        fin=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
+                                      (oid,)).fetchone()
+                        rateios_manuais=c.execute('''SELECT r.tecnico_id,p.nome,r.valor_centavos
+                            FROM produtividade_rateios r JOIN prestadores p ON p.id=r.tecnico_id
+                            WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()
+                    finalizador_id=fin['prestador_id'] if fin else None
+                    if finalizador_id==s['pid'] or s.get('admin'):
+                        corpo+='<div id="rateio-manual"><h3>Rateio e repasses</h3>'
+                        if rateios_manuais:
+                            corpo+='<ul>'+''.join(
+                                f'<li>{esc(x["nome"])} — {dinheiro(float(x["valor_centavos"] or 0)/100)}</li>'
+                                for x in rateios_manuais)+'</ul>'
+                        else:
+                            corpo+='<p class="muted">Nenhum técnico secundário com parcela nesta OS.</p>'
+                        opcoes_manual=[('', 'Selecione o técnico')]+[
+                            (p['id'], p['nome']) for p in prestadores
+                            if p['id']!=finalizador_id]
+                        corpo+='<div class="col2"><div>'+select('Técnico secundário',
+                            'rateio_manual_tecnico',opcoes_manual,'')+'</div>'
+                        corpo+='<div>'+campos_escuros('Valor do rateio (R$)',
+                            'rateio_manual_valor','',placeholder='0,00')+'</div></div>'
+                        corpo+=f'<button type="submit" class="secondary" formaction="/os/{oid}/rateio" formnovalidate>Salvar rateio</button>'
+                        corpo+='<p class="muted">Use 0,00 para remover a parcela. O total cobrado do cliente não muda; '
+                        corpo+='o restante fica com o finalizador. Depois de enviado/confirmado, o repasse não pode ser alterado.</p></div>'
+                corpo+=status_bloco
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     pode_editar_fotos = (responsavel == s['pid']) or bool(s.get('admin'))
@@ -2167,6 +2172,7 @@ class PortalPrestador:
                     if pode_editar_fotos:
                         corpo+='<div id="anexo-encerramento"><label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
                         corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
+                        corpo+='<button class="secondary" id="adicionar-mais-fotos" type="button">+ Adicionar mais fotos</button>'
                         corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>Salvar fotos e legendas</b> para guardar as fotos e legendas sem finalizar.</p></div>'
@@ -2208,7 +2214,7 @@ class PortalPrestador:
                     corpo+='</fieldset>'
                 nota_acoes=('Preencha os dados para criar a OS.' if not oid else
                             f'{d["status"]} · {d["numero_os"]}')
-                if unslop:
+                if app:
                     corpo+=('<div class="actions"><div class="actions-note">'+esc(nota_acoes)
                             +'</div><div class="actions-buttons">')
                 else:
@@ -2219,24 +2225,23 @@ class PortalPrestador:
                     if arquivada:
                         corpo+='<span class="notice">OS arquivada: edição bloqueada. O histórico permanece preservado.</span>'
                     elif d['status'] in ext.ATIVAS:
-                        if responsavel==s['pid']:
-                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar" formnovalidate>{rotulo_salvar}</button>'
+                        if responsavel==s['pid'] or s.get('admin'):
                             corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                     else:
                         corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
-                if unslop:
+                if app:
                     corpo+='</div></div></form>'
                 else:
                     corpo+='</div></form>'
-                if unslop and oid:
+                if app and oid:
                     corpo+='</div><aside class="os-rail">'
                 if not oid:
                     corpo+='<p class="muted">Depois de salvar a OS, você poderá atribuir um prestador e, no encerramento, anexar imagens e publicar PDF.</p>'
-                    if unslop:
+                    if app:
                         return self.pagina(titulo,corpo+'</div></div>',s)
                     return self.pagina(titulo,card('Dados da OS',corpo),s)
                 # Atribuição e desatribuição administrativas são exclusivas do desktop.
-                if d['status'] in ext.ATIVAS and not unslop and not arquivada:
+                if d['status'] in ext.ATIVAS and not app and not arquivada:
                     corpo+=card('Atribuição',f'<p>Responsável atual: <b>{esc(next((p["nome"] for p in prestadores if p["id"]==responsavel),"Não atribuído"))}</b></p>'
                         '<p class="muted">Prestadores podem assumir apenas OS não atribuídas. Transferências são feitas no desktop.</p>')
                 if anexos and d['status'] not in ext.ATIVAS:
@@ -2270,7 +2275,7 @@ class PortalPrestador:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="/os/{oid}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
                 if d['status'] in ext.ATIVAS:
-                    if unslop:
+                    if app:
                         docs=('<p class="muted">Use o botão <b>Baixar preview do PDF</b> na ficha '
                               'da OS. A prévia não publica, não envia e-mail e não altera o status.</p>')
                     else:
@@ -2305,7 +2310,7 @@ class PortalPrestador:
                                else f'{len(notas_fiscais)} PDFs anexados')
                     itens_notas=f'<p class="good">{rotulo_nf}</p>'+itens_notas
                 upload_nf=''
-                if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not unslop or d['status'] not in ext.ATIVAS) and not arquivada:
+                if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not app or d['status'] not in ext.ATIVAS) and not arquivada:
                     upload_nf=(f'<form id="form-nota-fiscal-upload" method="post" action="/os/{oid}/nota-fiscal" '
                                'enctype="multipart/form-data" style="margin-top:10px">'
                                f'{token}'
@@ -2323,10 +2328,10 @@ class PortalPrestador:
                             +upload_nf)
                 corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
                 def _evento_html(e):
-                    quando=data_hora_br(e['criado_em']) if unslop else e['criado_em']
+                    quando=data_hora_br(e['criado_em']) if app else e['criado_em']
                     return ('<div class="card"><small>'+esc(quando)+' · '+esc(e['ator'])+'</small>'
                             +'<p><b>'+esc(e['acao'])+'</b> — '+esc(e['descricao'])+'</p></div>')
-                if unslop:
+                if app:
                     recentes_ev=eventos[:6]
                     restantes=eventos[6:]
                     historico=''.join(_evento_html(e) for e in recentes_ev) or '<p>Nenhum evento.</p>'
@@ -2355,7 +2360,10 @@ class PortalPrestador:
                     else:
                         acao=(f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/receber" '
                               'data-confirm="Confirma que o valor foi realmente recebido?">'
-                              f'{token}<button type="submit">Confirmar recebimento</button></form>')
+                              f'{token}<button type="submit">Confirmar recebimento</button></form>'
+                              f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/cancelar" '
+                              'data-confirm="Cancelar este pagamento? Ele deixará de ser contabilizado.">'
+                              f'{token}<button type="submit" class="danger">Cancelar pagamento</button></form>')
                     return {'tipo':'Finalizei','os_id':x['os_id'],'numero_os':x['numero_os'],
                             'cliente':x.get('cliente') or '','meu':meu,
                             'status':'Recebido' if recebido else 'A receber',
@@ -2466,7 +2474,7 @@ class PortalPrestador:
                     a_receber_total+=(item['valor_centavos']-item['pago_centavos'])/100
                 a_receber_total=round(a_receber_total,2)
                 recebido_total=round(recebido_total,2)
-                if self.ui_unslop():
+                if self.ui_app():
                     rotulo_a='A receber';rotulo_r='Recebido'
                     cabecalho=f'<div class="finance-head"><p class="page-meta">{esc(s["nome"])} · produção própria</p></div>'
                 else:
@@ -2599,19 +2607,6 @@ class PortalPrestador:
                                           'login_prestador':'e-mail e senha',
                                           'cadastro_prestadores':'bloqueado no portal web'}).encode('utf-8')
                         return self.send_bytes(dados,'application/json; charset=utf-8')
-                    if path in ('/ui/unslop','/ui/classic'):
-                        valor='unslop' if path.endswith('unslop') else 'classic'
-                        qs=parse_qs(urlparse(self.path).query)
-                        destino=qs.get('next',[''])[0]
-                        if not (destino.startswith('/') and not destino.startswith('//')
-                                and '\r' not in destino and '\n' not in destino):
-                            ref=urlparse(self.headers.get('Referer',''))
-                            destino=ref.path if ref.path.startswith('/') and not ref.path.startswith('//') else '/login'
-                        seguro=('Secure; ' if (usar_https or self.headers.get('CF-Ray')
-                                or self.headers.get('X-Forwarded-Proto','').lower()=='https') else '')
-                        cookie=(f'{UI_COOKIE}={valor}; Path=/; SameSite=Lax; '
-                                f'Max-Age=31536000; {seguro}')
-                        return self.redir(destino,cookie)
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'GET')
                     if path=='/static/portal.js':
@@ -2847,7 +2842,7 @@ class PortalPrestador:
                             banco,s,
                             feedback.ip_requisicao(self.client_address[0],self.headers),
                             self.headers.get('User-Agent',''))
-                        meta['ui_mode']=str(d.get('ui_mode') or ('unslop' if self.ui_unslop() else 'classic'))[:20]
+                        meta['ui_mode']=str(d.get('ui_mode') or ('app' if self.ui_app() else 'classic'))[:20]
                         meta['aba']=str(d.get('aba') or '')[:80]
                         meta['diagnostico']=str(d.get('diagnostico') or '')[:8000]
                         return meta
@@ -3193,6 +3188,23 @@ class PortalPrestador:
                                     anexo_legendas[i] if i<len(anexo_legendas) else '',
                                     visivel)
                         return self.redir(f'/os/{oid}')
+                    if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','auto']:
+                        oid=int(partes[1])
+                        prod.salvar_rascunho(banco,oid,pid,d)
+                        dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+                        ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                        try:
+                            cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+                                                 str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+                        except Exception:
+                            pass
+                        if str(d.get('relatorio_tecnico','')).strip():
+                            with ext.db(banco) as c:
+                                aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+                        if quer_json:
+                            return self.send_bytes(json.dumps({'ok':True}).encode(),
+                                                   'application/json; charset=utf-8')
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])
                         prod.salvar_rascunho(banco,oid,pid,d)
@@ -3225,6 +3237,15 @@ class PortalPrestador:
                             return self.redir(f'/os/{resultado["os_id"]}')
                         pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'])
                         return self.redir('/pj-publicas')
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='rateio':
+                        oid=int(partes[1])
+                        try:
+                            tecnico=int(str(d.get('rateio_manual_tecnico','')).strip())
+                        except (TypeError,ValueError):
+                            raise ValueError('Selecione o técnico secundário.')
+                        prod.definir_rateio_manual(banco,oid,pid,tecnico,
+                                                   str(d.get('rateio_manual_valor','0')))
+                        return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='remover':
                         oid=int(partes[1]);nid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3404,14 +3425,19 @@ class PortalPrestador:
                         try:maf.sincronizar_prestador(banco,pid)
                         except Exception:LOG.exception('Repasse recebido, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
-                    if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2]=='receber':
+                    if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2] in ('receber','cancelar'):
+                        fid=int(partes[1])
                         with ext.db(banco) as c:
                             autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id
-                                WHERE f.id=? AND con.prestador_id=?''',(int(partes[1]),pid)).fetchone()
-                        if not autorizado:raise PermissionError('Financeiro restrito ao técnico finalizador.')
-                        neg.financeiro_receber(banco,int(partes[1]),pid)
-                        try:maf.sincronizar_prestador(banco,pid)
-                        except Exception:LOG.exception('Recebimento confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
+                                WHERE f.id=? AND con.prestador_id=?''',(fid,pid)).fetchone()
+                        if not autorizado and not s.get('admin'):
+                            raise PermissionError('Financeiro restrito ao técnico finalizador ou administrador.')
+                        if partes[2]=='cancelar':
+                            neg.financeiro_cancelar(banco,fid,pid,str(d.get('motivo_cancelamento','')))
+                        else:
+                            neg.financeiro_receber(banco,fid,pid)
+                            try:maf.sincronizar_prestador(banco,pid)
+                            except Exception:LOG.exception('Recebimento confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
                 except PermissionError as e:

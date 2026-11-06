@@ -19,7 +19,7 @@
   };
 
   const csrfGlobal = document.querySelector('input[name="csrf"]')?.value || '';
-  const modoUi = () => (document.body?.classList?.contains('ui-unslop') ? 'unslop' : 'classic');
+  const modoUi = () => (document.body?.classList?.contains('ui-app') ? 'app' : 'classic');
   const abaAtiva = () => (document.querySelector('.os-tab.active')?.textContent || '')
     .replace(/\s+/g, ' ').trim().replace(/^\d+\s*/, '');
   const registrarUi = (aba = abaAtiva()) => {
@@ -52,7 +52,7 @@
       const textoOriginal = submitter?.textContent;
       if (submitter) {
         submitter.disabled = true;
-        submitter.textContent = document.body.classList.contains('ui-unslop') ? 'Salvando…' : 'SALVANDO...';
+        submitter.textContent = document.body.classList.contains('ui-app') ? 'Salvando…' : 'SALVANDO...';
       }
       try {
         const resposta = await fetch(action, {
@@ -413,6 +413,7 @@
         if (limparFotos) limparFotos.hidden = !fotos.length;
       };
       campoFotos.addEventListener('change', mostrarFotos);
+      document.getElementById('adicionar-mais-fotos')?.addEventListener('click', () => campoFotos.click());
       if (limparFotos) limparFotos.addEventListener('click', () => {
         campoFotos.value = ''; chavesFotos.clear(); legendasFotos.clear(); mostrarFotos();
       });
@@ -546,7 +547,7 @@
     if (!tabela) return;
     const linhas = Array.from(tabela.querySelectorAll('tbody tr'));
     if (!linhas.length) return;
-    const modoUnslop = document.body.classList.contains('ui-unslop');
+    const modoApp = document.body.classList.contains('ui-app');
     const titulo = document.createElement('label');
     titulo.className = 'table-filter-label';
     titulo.textContent = 'Filtrar registros exibidos';
@@ -555,7 +556,7 @@
     busca.type = 'search';
     busca.className = 'table-filter-input';
     busca.id = `busca-tabela-${indice}`;
-    busca.placeholder = modoUnslop
+    busca.placeholder = modoApp
       ? 'Buscar na tabela'
       : 'Digite nome, OS, situação ou outro dado da tabela';
     const aviso = document.createElement('small');
@@ -569,7 +570,7 @@
         linha.hidden = !texto.includes(termo);
         if (!linha.hidden) exibidas += 1;
       }
-      aviso.textContent = modoUnslop
+      aviso.textContent = modoApp
         ? `${exibidas} de ${linhas.length} registros`
         : `${exibidas} de ${linhas.length} registro(s) carregados nesta página`;
     };
@@ -1161,10 +1162,68 @@
     }, true);
   }
 
-  // Interface unslop: transforma os fieldsets da OS em seções navegáveis.
-  const formUnslop = document.getElementById('form-os');
-  if (formUnslop && document.body.classList.contains('ui-unslop')) {
-    const paineis = Array.from(formUnslop.children)
+  // Rascunho automático: cada alteração é preservada sem botão de salvar.
+  const formAuto = document.getElementById('form-os');
+  const statusAuto = document.getElementById('rascunho-auto-status');
+  if (formAuto && formAuto.dataset.osId && formAuto.dataset.autoSave === '1') {
+    const urlAuto = '/os/' + formAuto.dataset.osId + '/rascunho/auto';
+    let timerAuto = null;
+    let salvandoAuto = false;
+    const agendarAuto = () => {
+      window.clearTimeout(timerAuto);
+      timerAuto = window.setTimeout(salvarAuto, 900);
+    };
+    const salvarAuto = async () => {
+      if (salvandoAuto) { agendarAuto(); return; }
+      salvandoAuto = true;
+      const dados = new FormData(formAuto);
+      ['nota_fiscal', 'imagens_encerramento[]', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
+      if (statusAuto) statusAuto.textContent = 'Salvando rascunho…';
+      try {
+        const resposta = await fetch(urlAuto, {
+          method: 'POST', body: dados, credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        });
+        let corpo = {};
+        try { corpo = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !corpo.ok) {
+          throw new Error(corpo.error || 'Não foi possível salvar o rascunho.');
+        }
+        const hora = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+        if (statusAuto) statusAuto.textContent = `Rascunho salvo automaticamente às ${hora}.`;
+      } catch (erro) {
+        if (statusAuto) statusAuto.textContent = erro.message || 'Não foi possível salvar o rascunho.';
+      } finally {
+        salvandoAuto = false;
+      }
+    };
+    formAuto.addEventListener('input', evento => {
+      const alvo = evento.target;
+      if (alvo && ['file', 'submit', 'button'].includes(alvo.type)) return;
+      agendarAuto();
+    });
+    formAuto.addEventListener('change', evento => {
+      const alvo = evento.target;
+      if (alvo && ['file', 'submit', 'button'].includes(alvo.type)) return;
+      agendarAuto();
+    });
+    window.addEventListener('pagehide', () => {
+      if (!timerAuto) return;
+      window.clearTimeout(timerAuto);
+      try {
+        const dados = new FormData(formAuto);
+        ['nota_fiscal', 'imagens_encerramento[]', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
+        if (navigator.sendBeacon) navigator.sendBeacon(urlAuto, dados);
+      } catch (_erro) {}
+    });
+  }
+  // Interface app: transforma os fieldsets da OS em seções navegáveis.
+  const formApp = document.getElementById('form-os');
+  if (formApp && document.body.classList.contains('ui-app')) {
+    const paineis = Array.from(formApp.children)
       .filter(elemento => elemento.tagName === 'FIELDSET');
     if (paineis.length > 1) {
       if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -1242,7 +1301,7 @@
         registrarUi();
         abas.children[destino].focus();
       });
-      formUnslop.insertBefore(abas, paineis[0]);
+      formApp.insertBefore(abas, paineis[0]);
       const indiceInicial = Number.isInteger(estadoOS.aba)
         && estadoOS.aba >= 0 && estadoOS.aba < paineis.length ? estadoOS.aba : 0;
       ativar(indiceInicial);
@@ -1260,7 +1319,7 @@
       window.addEventListener('pagehide', salvarEstadoOS);
       window.addEventListener('beforeunload', salvarEstadoOS);
 
-      const modelo = formUnslop.querySelector('.os-service-model');
+      const modelo = formApp.querySelector('.os-service-model');
       if (modelo && paineis[0]) {
         const statusBloco = paineis[0].querySelector('.os-status-block');
         if (statusBloco) statusBloco.after(modelo);
@@ -1282,10 +1341,10 @@
         painelSituacao.append(titulo, notaFiscal);
       }
 
-      formUnslop.addEventListener('submit', evento => {
+      formApp.addEventListener('submit', evento => {
         const botao = evento.submitter;
         if (botao && botao.hasAttribute('formnovalidate')) return;
-        for (const campo of formUnslop.elements) {
+        for (const campo of formApp.elements) {
           if (!campo.willValidate || campo.disabled || campo.type === 'hidden') continue;
           if (!campo.checkValidity()) {
             evento.preventDefault();
@@ -1354,16 +1413,23 @@
   if (menuToggle && menuLateral) {
     const fecharMenu = () => {
       menuLateral.classList.remove('open');
+      document.body.classList.remove('menu-open');
       menuToggle.setAttribute('aria-expanded', 'false');
+    };
+    const abrirMenu = () => {
+      menuLateral.classList.add('open');
+      document.body.classList.add('menu-open');
+      menuToggle.setAttribute('aria-expanded', 'true');
     };
     menuToggle.addEventListener('click', evento => {
       evento.stopPropagation();
-      const aberto = menuLateral.classList.toggle('open');
-      menuToggle.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+      if (menuLateral.classList.contains('open')) fecharMenu();
+      else abrirMenu();
     });
+    document.getElementById('fechar-side-nav')?.addEventListener('click', fecharMenu);
     document.addEventListener('click', evento => {
       if (!menuLateral.classList.contains('open')) return;
-      if (evento.target.closest('#side-nav,#toggle-side-nav')) return;
+      if (evento.target.closest('#side-nav,#toggle-side-nav,#fechar-side-nav')) return;
       fecharMenu();
     });
     menuLateral.querySelectorAll('a').forEach(link => {

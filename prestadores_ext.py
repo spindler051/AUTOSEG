@@ -317,7 +317,11 @@ def assumir(banco,os_id,pid):
         anterior=responsavel_atual(c,os_id)
         if anterior==pid:
             return False
-        if not pode_assumir(c,os_id,pid):
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin else False
+        if not admin and not pode_assumir(c,os_id,pid):
             raise PermissionError('OS em atendimento por outro prestador. Aguarde ficar pendente ou solicite transferência.')
         c.execute('INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo) VALUES(?,?,?,1) '
                   'ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1', (os_id,pid,agora()))
