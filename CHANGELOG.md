@@ -11,7 +11,7 @@
 - **Cancelamento de pagamento:** o financeiro ganhou “Cancelar pagamento”; o lançamento sai das listas e dos totais, preservando o histórico. A OS-0012 do Parque Ganzo foi cancelada manualmente.
 - **Correções ao vivo:** horas e valores com vírgula são normalizados antes do cálculo; rascunhos antigos com vírgula foram convertidos; o menu mobile ficou compacto, sem nome duplicado e sem rolagem; a barra de ações não cobre mais o conteúdo; Em rota e Iniciar OS aparecem também no topo da OS.
 - **Feedbacks 87–100:** menu mobile maior e sem rolagem; cancelamento de pagamento com confirmação e motivo; Meu Auto Financeiro removido do AUTOSEG; fluxo único de Nova OS com modal de sucesso; ações da OS alinhadas no mobile; abas com ícones em vez de números; histórico retrátil; textos redundantes de documentos/nota fiscal removidos; modelo de serviço apenas na criação; seletor de estoque com placeholder.
-- **PDF de OS pendente:** o anexo do próximo e-mail passa a usar o relatório técnico completo salvo no atendimento, em vez de apenas o resumo em três campos. OS concluídas, finalizadas e canceladas não foram alteradas.
+- **PDF de OS pendente:** o anexo do próximo e-mail passa a incluir o relatório técnico completo salvo no atendimento, além do resumo em três campos. OS concluídas, finalizadas e canceladas não foram alteradas.
 - **Testes:** `test_rev12_correcoes.py` (47 OK, 1 skipped), `test_feedback_portal.py` + `test_api_financeiro.py` + `test_meu_auto_financeiro.py` (40 OK), `test_produtividade_rev07.py` + `test_gmail_integracao.py` (16 OK), `test_autoseg_melhorias.py` + `test_composicao.py` + `test_pdf_relatorio.py` (41 OK).
 
 ## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop

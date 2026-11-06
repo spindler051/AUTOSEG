@@ -102,20 +102,23 @@ def gerar(banco,os_id):
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
     linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
     linhas.append(S('02  ATENDIMENTO REALIZADO'))
-    # OS pendente: o e-mail/PDF deve levar o relatório técnico completo que o
-    # prestador escreveu, não apenas o resumo em três campos. OS já encerradas
-    # continuam com o comportamento anterior.
+    # OS pendente: além do resumo em três campos, o e-mail/PDF leva o relatório
+    # técnico completo que o prestador escreveu. OS já encerradas continuam com
+    # o comportamento anterior.
     relato_pendente=''
     if os_['status']=='Pendente':
         relato_pendente=((atendimento['rascunho'] if atendimento else '') or
                          (enc['relatorio'] if enc else '')).strip()
-    if relato_pendente:
-        linhas.append(P(relato_pendente))
-    elif detalhes and any(detalhes[x] for x in ('diagnostico','execucao','resultado')):
+    tem_resumo=bool(detalhes and any(detalhes[x] for x in ('diagnostico','execucao','resultado')))
+    if tem_resumo:
         for label,field in [('Diagnóstico','diagnostico'),('Serviço executado','execucao'),('Resultado e testes','resultado')]:
             if detalhes[field]:linhas.append(P(label+': '+detalhes[field]))
-    elif enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
-    else:linhas.append(P('Relato técnico não informado.'))
+    if relato_pendente:
+        if tem_resumo:linhas.append(PB('Relatório técnico'))
+        linhas.append(P(relato_pendente))
+    elif not tem_resumo:
+        if enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
+        else:linhas.append(P('Relato técnico não informado.'))
     if enc and enc['motivo']:linhas.append(P('Motivo: '+enc['motivo']))
     linhas.append(S('03  MATERIAIS UTILIZADOS'))
     cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]

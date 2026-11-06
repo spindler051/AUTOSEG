@@ -119,9 +119,9 @@ class PdfRelatorioTest(unittest.TestCase):
         self._criar_os_com_relato(20, "OS-0020", "Pendente",
                                   "Resumo do diagnóstico", relato)
         texto = self._texto_pdf(ext.gerar_pdf(self.db, 20))
+        self.assertIn("Resumo do diagnóstico", texto)
         self.assertIn("Relatório completo do atendimento pendente", texto)
         self.assertIn("Diagnóstico detalhado com todo o histórico do local", texto)
-        self.assertNotIn("Resumo do diagnóstico", texto)
 
     def test_pdf_os_concluida_mantem_resumo(self):
         relato = "Relatório completo que não deve substituir o resumo da OS concluída."
