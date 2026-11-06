@@ -173,21 +173,44 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('name="cliente_id"', html)
         self.assertIn('name="descricao"', html)
+        self.assertIn('name="urgencia"', html)
+        self.assertIn('<option value="Alta"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         status, html = req(cliente, base, '/os/rapida/salvar',
                            {'csrf': token, 'cliente_id': str(alfa),
                             'descricao': 'Portão da garagem não abre.',
-                            'forma_pagamento': 'PIX'})
+                            'forma_pagamento': 'PIX', 'urgencia': 'Alta'})
         self.assertEqual(status, 200)
         self.assertIn('OS aberta com sucesso', html)
         self.assertIn('Abrir OS', html)
         self.assertNotIn('SALVAR RASCUNHO', html)
         with ext.db(self.db) as c:
-            ordem = c.execute('SELECT cliente_id,status,descricao FROM ordens_servico '
+            ordem = c.execute('SELECT cliente_id,status,descricao,urgencia FROM ordens_servico '
                               'ORDER BY id DESC LIMIT 1').fetchone()
         self.assertEqual(ordem['cliente_id'], alfa)
         self.assertEqual(ordem['status'], 'Aberta')
+        self.assertEqual(ordem['urgencia'], 'Alta')
         self.assertIn('Portão da garagem', ordem['descricao'])
+
+    def test_urgencia_da_os_completa_e_preservada_na_edicao(self):
+        pid = self._prestador('Técnico Urgência', email='urgencia.os@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Urgência')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX', 'urgencia': 'Alta',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT urgencia FROM ordens_servico WHERE id=?',
+                                       (oid,)).fetchone()['urgencia'], 'Alta')
+        # Edição sem o campo (integrações antigas) não pode rebaixar para Normal.
+        edicao = dict(dados)
+        edicao.pop('urgencia')
+        edicao['descricao'] = 'Ajustar portão e fechadura'
+        neg.os_salvar(self.db, edicao, pid, oid)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT urgencia FROM ordens_servico WHERE id=?',
+                                       (oid,)).fetchone()['urgencia'], 'Alta')
 
     def test_toggle_unslop_no_login_e_layout_da_os(self):
         pid = self._prestador('Técnico Unslop', email='unslop@exemplo.com.br')
@@ -240,7 +263,11 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Visão geral', html)
         self.assertIn('Ordens recentes', html)
         self.assertIn('A receber', html)
+        self.assertIn('href="/os/nova"', html)
+        self.assertIn('href="/os/rapida"', html)
+        self.assertIn('+ Nova OS rápida', html)
         _, html = req(novo, base, f'/os/{oid}')
+        self.assertIn('name="urgencia"', html)
         self.assertIn('class="ui-unslop', html)
         self.assertIn('os-form-unslop', html)
         self.assertIn('novalidate', html)

@@ -1152,7 +1152,8 @@ class PortalPrestador:
                         for texto,url,nome in atalhos)
                     corpo=(f'<div class="home-toolbar"><p class="page-meta">'
                            f'{esc(s["nome"])} · {time.strftime("%d/%m/%Y")}</p>'
-                           f'<a class="btn" href="/os/nova">{icone("plus")}Nova OS</a></div>'
+                           f'<div class="page-actions">{botao("+ Nova OS rápida","/os/rapida")}'
+                           f'{botao("+ Nova OS","/os/nova","secondary")}</div></div>'
                            f'<div class="stat-grid">{stats}</div>'
                            f'<div class="home-grid">'
                            f'<section class="panel"><div class="panel-head"><h2>Ordens recentes</h2>'
@@ -1654,7 +1655,10 @@ class PortalPrestador:
                                            required=True)
                                 + select('Forma de pagamento', 'forma_pagamento',
                                          [('', 'Selecione a forma de pagamento')]
-                                         + [(z, z) for z in neg.OS_FORMAS], '', required=True))
+                                         + [(z, z) for z in neg.OS_FORMAS], '', required=True)
+                                + select('Urgência', 'urgencia',
+                                         [('Baixa', 'Baixa'), ('Normal', 'Normal'),
+                                          ('Alta', 'Alta')], 'Normal'))
                         if prestadores:
                             form += select('Atribuir prestador (opcional)', 'prestador_id',
                                            [('', 'Não atribuir agora')]
@@ -1776,7 +1780,7 @@ class PortalPrestador:
                         if k.startswith('v9_') or k=='relatorio_tecnico':
                             if substituir or not str(d.get(k,'')).strip():d[k]=v
                     # Rascunho completo do servidor (produtividade_os) também chega aqui.
-                    for k in ('cliente_id','tecnico','valor_mao_obra','valor_materiais_manual','custo_materiais','valor_total_override','forma_pagamento'):
+                    for k in ('cliente_id','tecnico','valor_mao_obra','valor_materiais_manual','custo_materiais','valor_total_override','forma_pagamento','urgencia'):
                         if k in preenchimento and (substituir or not str(d.get(k,'')).strip()):
                             d[k]=preenchimento[k]
                     if 'material_yaml' in preenchimento and (substituir or not mat):
@@ -2006,6 +2010,9 @@ class PortalPrestador:
                 corpo+='</div><div>'+select('Forma de pagamento','forma_pagamento',
                     [('', 'Selecione a forma de pagamento')]+[(z,z) for z in neg.OS_FORMAS],
                     d.get('forma_pagamento') or '')
+                corpo+=select('Urgência','urgencia',
+                    [('Baixa','Baixa'),('Normal','Normal'),('Alta','Alta')],
+                    d.get('urgencia') or 'Normal')
                 corpo+=campos_escuros('Valor de mão de obra (R$)','valor_mao_obra',d.get('valor_mao_obra') or '0',required=True)+'</div></div>'
                 corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra e <b>0,00</b> no valor cobrado dos materiais. ' \
                        'O custo real dos materiais é interno e não entra no total cobrado.</p>'
@@ -2987,8 +2994,13 @@ class PortalPrestador:
                             return self.os_rapida_form(
                                 s, erro='Escolha a forma de pagamento.',
                                 cliente_id=cliente_id)
+                        urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
+                        if urgencia not in ('Baixa','Normal','Alta'):
+                            return self.os_rapida_form(
+                                s, erro='Escolha a urgência.', cliente_id=cliente_id)
                         dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
-                               'forma_pagamento':forma,'valor_mao_obra':'0','valor_materiais_manual':'0',
+                               'forma_pagamento':forma,'urgencia':urgencia,
+                               'valor_mao_obra':'0','valor_materiais_manual':'0',
                                'materiais_presentes':'1','acao_status':'salvar'}
                         oid=neg.os_salvar(banco,dados,pid)
                         prestador_id=str(d.get('prestador_id','')).strip()

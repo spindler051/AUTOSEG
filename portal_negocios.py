@@ -157,6 +157,9 @@ def os_salvar(banco,d,pid,oid=None):
     forma=texto(d,'forma_pagamento',60)
     if not forma: raise ValueError('Selecione a forma de pagamento.')
     if forma not in OS_FORMAS: raise ValueError('Forma de pagamento inválida.')
+    urgencia=texto(d,'urgencia',20)
+    if urgencia and urgencia not in ('Baixa','Normal','Alta'):
+        raise ValueError('Urgência inválida.')
     observacoes=texto(d,'observacoes')
     relato=texto(d,'relatorio_tecnico',5000)
     cancelar=str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
@@ -264,11 +267,11 @@ def os_salvar(banco,d,pid,oid=None):
             if comprimir_fotos is None:comprimir_fotos=1
             cur=c.execute('''INSERT INTO ordens_servico
                 (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                 valor_materiais,custo_materiais,valor_total,forma_pagamento,status,observacoes,
+                 valor_materiais,custo_materiais,valor_total,forma_pagamento,urgencia,status,observacoes,
                  tempo_horas,composicao_json,base_percentuais,comprimir_fotos_pdf,criado_em)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
-                mao_obra,total_mat,custo_mat,total,forma,'Aberta',observacoes,
+                mao_obra,total_mat,custo_mat,total,forma,urgencia or 'Normal','Aberta',observacoes,
                 tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora()))
             oid=cur.lastrowid
             aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
@@ -311,11 +314,15 @@ def os_salvar(banco,d,pid,oid=None):
                 'custo_materiais':custo_mat,'valor_total':total,
                 'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas,
                 'base_percentuais':base_nome,'comprimir_fotos_pdf':comprimir_fotos}
+            if urgencia:
+                updated['urgencia']=urgencia
             diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
             c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
-                valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
+                valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,
+                urgencia=COALESCE(?,urgencia),observacoes=?,
                 tempo_horas=?,composicao_json=?,base_percentuais=?,comprimir_fotos_pdf=?,atualizado_em=? WHERE id=?''',
-                (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,observacoes,
+                (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,
+                 urgencia or None,observacoes,
                  tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))

@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.34 — urgência na OS rápida e atalhos na home — 2026-11-06 — develop
+
+- **OS rápida:** após escolher o cliente, a criação agora permite selecionar a **Urgência** (Baixa, Normal ou Alta). O valor é gravado na OS e aparece no formulário completo.
+- **OS completa:** o seletor de urgência também fica na aba Identificação; edições feitas por integrações antigas, sem o campo, preservam a urgência já salva em vez de rebaixar para Normal.
+- **Home:** a Visão geral ganhou os dois atalhos com sinal de “+”: **+ Nova OS rápida** e **+ Nova OS**, no mesmo padrão da lista de ordens de serviço.
+- **Testes:** `test_rev12_correcoes.py` (43 OK, 1 skipped), `test_importacao_yaml.py` + `test_produtividade_rev07.py` (9 OK), `test_gmail_integracao.py` + `test_fluxo_v6.py` + `test_composicao.py` (35 OK).
+
 ## 9.6.0-dev.33 — dados bancários unificados entre site, GTK e e-mail — 2026-11-06 — develop
 
 - **Campo único:** o bloco **Dados bancários e cadastrais para cobrança** do Portal do Prestador agora lê e grava exatamente o mesmo campo do app GTK (`prestadores_config.dados_bancarios_texto`). Alterações feitas no site passam a valer no GTK e nos e-mails de cobrança.
