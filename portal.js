@@ -1503,8 +1503,13 @@
   body.menu-open #side-nav.open .side-link{flex:1 1 0;min-height:0!important;padding:0 12px!important;font-size:16px!important}
   body.menu-open #side-nav.open .side-link svg{width:20px!important;height:20px!important;flex-basis:20px!important}
   body.menu-open .side-foot{padding:8px 16px!important}
-  body.menu-open .side-foot .side-user{padding:0!important}
-  body.menu-open .side-foot .side-tool{min-height:28px!important}
+  body.menu-open .side-foot .side-user{flex-direction:row;align-items:center;gap:8px;padding:0!important}
+  body.menu-open .side-foot .side-user strong{font-size:14px}
+  body.menu-open .side-foot .side-user span{font-size:11px}
+  body.menu-open .side-foot .side-tools{flex-direction:row;gap:6px}
+  body.menu-open .side-foot .side-tool-form{flex:1}
+  body.menu-open .side-foot .side-tool{flex:1;justify-content:center;min-height:32px;padding:0 8px;border:1px solid var(--u-line);background:var(--u-raised)}
+  body.menu-open .side-foot .side-version{display:none}
   body.menu-open .feedback-fab{display:none!important}
   body.ui-app .os-form-app .actions{position:static!important;margin-bottom:28px!important}
   body.ui-app .os-form-app{padding-bottom:80px!important}

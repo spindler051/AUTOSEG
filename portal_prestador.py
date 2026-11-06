@@ -483,7 +483,14 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .side-link{white-space:normal;min-height:46px;padding:0 14px;font-size:15px}
   body.ui-app .side-link svg{display:block;flex:0 0 20px;width:20px;height:20px}
   body.ui-app .side-foot{display:none}
-  body.ui-app.menu-open .side-foot{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1001;padding:14px 20px;background:var(--u-side);border-top:1px solid var(--u-line)}
+  body.ui-app.menu-open .side-foot{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1001;padding:8px 16px;background:var(--u-side);border-top:1px solid var(--u-line)}
+  body.ui-app.menu-open .side-foot .side-user{flex-direction:row;align-items:center;gap:8px;padding:0}
+  body.ui-app.menu-open .side-foot .side-user strong{font-size:14px}
+  body.ui-app.menu-open .side-foot .side-user span{font-size:11px}
+  body.ui-app.menu-open .side-foot .side-tools{flex-direction:row;gap:6px}
+  body.ui-app.menu-open .side-foot .side-tool-form{flex:1}
+  body.ui-app.menu-open .side-foot .side-tool{flex:1;justify-content:center;min-height:32px;padding:0 8px;border:1px solid var(--u-line);background:var(--u-raised)}
+  body.ui-app.menu-open .side-foot .side-version{display:none}
   body.ui-app.menu-open .side-foot .side-user{display:flex;flex-direction:column;gap:4px}
   body.ui-app .feedback-fab{display:inline-flex}
   body.ui-app main{margin:0;padding:28px 20px 80px}
