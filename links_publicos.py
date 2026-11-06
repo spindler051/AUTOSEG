@@ -25,10 +25,23 @@ def estado():
     for porta in PORTAS:
         item=d.get(porta) or {};pid=item.get('pid')
         if not vivo(pid):continue
-        try: texto=(TUNEIS/f'{porta}.log').read_text(encoding='utf8')[-20000:]
-        except OSError: texto=''
+        # A URL e o registro da conexão aparecem no início do log; depois o
+        # arquivo cresce com erros de requisição. Lê as duas pontas para não
+        # perder o link quando o log fica grande.
+        partes=[]
+        try:
+            with (TUNEIS/f'{porta}.log').open(encoding='utf8',errors='replace') as arquivo:
+                partes.append(arquivo.read(30000))
+                try:
+                    arquivo.seek(-30000,2);partes.append(arquivo.read())
+                except OSError:
+                    pass
+        except OSError:
+            pass
+        texto='\n'.join(partes)
         urls=URL_RE.findall(texto)
-        if urls and 'Registered tunnel connection' in texto:saida[porta]={'url':urls[-1],'pid':pid,'origem':'gerenciado'}
+        if urls and 'Registered tunnel connection' in texto:
+            saida[porta]={'url':urls[-1],'pid':pid,'origem':'gerenciado'}
     return saida
 
 def quadro_html():
