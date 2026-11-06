@@ -1430,19 +1430,36 @@
   const menuToggle = document.getElementById('toggle-side-nav');
   const menuLateral = document.getElementById('side-nav');
   if (menuToggle && menuLateral) {
+    let scrollMenu = 0;
     const fecharMenu = () => {
       menuLateral.classList.remove('open');
       document.body.classList.remove('menu-open');
+      document.documentElement?.classList.remove('menu-open');
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      const voltar = scrollMenu;
+      scrollMenu = 0;
+      if (typeof window.scrollTo === 'function') window.scrollTo(0, voltar);
       menuToggle.setAttribute('aria-expanded', 'false');
     };
     const medirRodape = () => {
       const rodape = document.querySelector('.side-foot');
       const altura = rodape ? Math.ceil(rodape.getBoundingClientRect().height) : 0;
-      document.documentElement.style.setProperty('--menu-foot-h', `${altura}px`);
+      document.documentElement?.style.setProperty('--menu-foot-h', `${altura}px`);
     };
     const abrirMenu = () => {
+      scrollMenu = window.scrollY || document.documentElement?.scrollTop || 0;
       menuLateral.classList.add('open');
       document.body.classList.add('menu-open');
+      document.documentElement?.classList.add('menu-open');
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollMenu}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      document.body.style.width = '100%';
       menuToggle.setAttribute('aria-expanded', 'true');
       window.requestAnimationFrame(medirRodape);
     };
@@ -1466,6 +1483,9 @@
     window.addEventListener('resize', () => {
       if (menuLateral.classList.contains('open')) medirRodape();
     });
+    document.addEventListener('touchmove', evento => {
+      if (document.body.classList.contains('menu-open')) evento.preventDefault();
+    }, {passive: false});
   }
   // Ajustes mobile: menu compacto sem rolagem e barra de ações sem cobrir conteúdo.
   const podeCriarElemento = typeof document.createElement === 'function';
@@ -1474,6 +1494,7 @@
     ajustes.id = 'ajustes-mobile-app';
     ajustes.textContent = `
 @media(max-width:980px){
+  html.menu-open,body.menu-open{overflow:hidden!important;height:100%!important;overscroll-behavior:none!important;touch-action:none!important}
   .side-mobile-head>div{display:none!important}
   body.menu-open #side-nav.open{height:calc(100dvh - var(--menu-foot-h, 0px))!important;bottom:auto!important;overflow:hidden!important;padding:10px 16px 12px!important;gap:2px!important}
   body.menu-open #side-nav.open .side-group{flex:1 1 auto;justify-content:space-evenly;gap:0!important}
