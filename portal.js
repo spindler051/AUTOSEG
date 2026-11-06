@@ -32,7 +32,7 @@
       const textoOriginal = submitter?.textContent;
       if (submitter) {
         submitter.disabled = true;
-        submitter.textContent = 'SALVANDO...';
+        submitter.textContent = document.body.classList.contains('ui-unslop') ? 'Salvando…' : 'SALVANDO...';
       }
       try {
         const resposta = await fetch(action, {
@@ -335,24 +335,72 @@
       if (rateioBox) rateioBox.hidden = status.value !== 'Concluída';
     }
     if (status) {status.addEventListener('change', atualizarEncerramento); atualizarEncerramento();}
+    const irParaCampo = campo => {
+      if (!campo) return;
+      const painel = campo.closest('fieldset.os-panel');
+      if (painel) {
+        const indice = Array.from(form.querySelectorAll('#form-os > fieldset')).indexOf(painel);
+        const abas = document.querySelectorAll('.os-tabs .os-tab');
+        if (indice >= 0 && abas[indice]) abas[indice].click();
+      }
+      window.setTimeout(() => {
+        try { campo.focus({preventScroll:false}); } catch (_erro) {}
+      }, 0);
+    };
+
+    const primeiroInvalido = () => {
+      for (const campo of form.elements) {
+        if (!campo.willValidate || campo.disabled || campo.type === 'hidden') continue;
+        if (!campo.checkValidity()) return campo;
+      }
+      return null;
+    };
+
+    const nomeDoCampo = campo => {
+      const rotulo = campo.labels && campo.labels[0];
+      return (rotulo?.textContent || campo.name || 'campo obrigatório').replace(/\s+/g,' ').trim();
+    };
+
+    // Captura antes do envio AJAX: revela a aba do campo inválido e evita
+    // que o navegador bloqueie o envio com um campo escondido.
     form.addEventListener('submit', e => {
       const botao = e.submitter;
+      if (botao && botao.hasAttribute('formnovalidate')) return;
+      const invalido = primeiroInvalido();
+      if (invalido) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        irParaCampo(invalido);
+        mostrarAvisoGlobal('Preencha: ' + nomeDoCampo(invalido));
+        return;
+      }
       if (!botao || botao.value !== 'encerrar') return;
-      if (!status || !status.value) {e.preventDefault();window.alert('Selecione uma situação.');return;}
+      if (!status || !status.value) {
+        e.preventDefault();e.stopImmediatePropagation();
+        irParaCampo(status);
+        mostrarAvisoGlobal('Selecione a situação do atendimento.');
+        return;
+      }
       const executado = form.querySelector('[name="v9_execucao"]');
       if (relato && !relato.value.trim() && !(executado && executado.value.trim())) {
-        e.preventDefault();window.alert('Preencha o relatório técnico antes de confirmar.');relato.focus();return;
+        e.preventDefault();e.stopImmediatePropagation();
+        irParaCampo(relato);
+        mostrarAvisoGlobal('Preencha o relatório técnico antes de confirmar.');
+        return;
       }
       if (status.value === 'Cancelada' && motivo && !motivo.value.trim()) {
-        e.preventDefault();window.alert('Informe o motivo do cancelamento.');motivo.focus();return;
+        e.preventDefault();e.stopImmediatePropagation();
+        irParaCampo(motivo);
+        mostrarAvisoGlobal('Informe o motivo do cancelamento.');
+        return;
       }
       const encerrada = status.value !== 'Pendente';
       if (!window.confirm(encerrada
         ? 'Confirmar OS como '+status.value+'? O relatório PDF será publicado e ficará disponível ao cliente.'
         : 'Confirmar OS pendente? Ela continuará visível aos prestadores e ainda não terá PDF final.')) {
-        e.preventDefault();
+        e.preventDefault();e.stopImmediatePropagation();
       }
-    });
+    }, true);
   }
   // Catálogo: linhas visuais em lugar do campo "Nome | Qtd | Valor".
   const formServ = document.getElementById('form-servico');
@@ -401,14 +449,20 @@
     if (!tabela) return;
     const linhas = Array.from(tabela.querySelectorAll('tbody tr'));
     if (!linhas.length) return;
+    const modoUnslop = document.body.classList.contains('ui-unslop');
     const titulo = document.createElement('label');
+    titulo.className = 'table-filter-label';
     titulo.textContent = 'Filtrar registros exibidos';
     titulo.setAttribute('for',`busca-tabela-${indice}`);
     const busca = document.createElement('input');
     busca.type = 'search';
+    busca.className = 'table-filter-input';
     busca.id = `busca-tabela-${indice}`;
-    busca.placeholder = 'Digite nome, OS, situação ou outro dado da tabela';
+    busca.placeholder = modoUnslop
+      ? 'Buscar na tabela'
+      : 'Digite nome, OS, situação ou outro dado da tabela';
     const aviso = document.createElement('small');
+    aviso.className = 'table-filter-count';
     aviso.setAttribute('aria-live','polite');
     const filtrar = () => {
       const termo = busca.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -418,7 +472,9 @@
         linha.hidden = !texto.includes(termo);
         if (!linha.hidden) exibidas += 1;
       }
-      aviso.textContent = `${exibidas} de ${linhas.length} registro(s) carregados nesta página`;
+      aviso.textContent = modoUnslop
+        ? `${exibidas} de ${linhas.length} registros`
+        : `${exibidas} de ${linhas.length} registro(s) carregados nesta página`;
     };
     busca.addEventListener('input',filtrar);
     area.before(titulo,busca,aviso);
@@ -815,31 +871,112 @@
       const abas = document.createElement('div');
       abas.className = 'os-tabs';
       abas.setAttribute('role', 'tablist');
+      abas.setAttribute('aria-label', 'Seções da ordem de serviço');
       const ativar = indice => {
         paineis.forEach((painel, i) => {
           painel.hidden = i !== indice;
+          painel.setAttribute('aria-hidden', i === indice ? 'false' : 'true');
         });
         Array.from(abas.children).forEach((botao, i) => {
-          botao.classList.toggle('active', i === indice);
-          botao.setAttribute('aria-selected', i === indice ? 'true' : 'false');
+          const ativo = i === indice;
+          botao.classList.toggle('active', ativo);
+          botao.setAttribute('aria-selected', ativo ? 'true' : 'false');
+          botao.tabIndex = ativo ? 0 : -1;
         });
       };
       paineis.forEach((painel, indice) => {
         const legenda = painel.querySelector('legend');
-        const nome = (legenda?.textContent || `Seção ${indice + 1}`).trim();
+        const nomeCompleto = (legenda?.textContent || `Seção ${indice + 1}`).trim();
+        const nomesCurtos = [
+          ['identificação', 'Identificação'],
+          ['materiais', 'Materiais'],
+          ['situação', 'Situação e relatório'],
+          ['fotos', 'Fotos e legendas'],
+        ];
+        const nome = (nomesCurtos.find(([chave]) =>
+          nomeCompleto.toLowerCase().includes(chave)) || [null, nomeCompleto])[1];
+        const painelId = 'os-panel-' + (indice + 1);
+        const abaId = 'os-tab-' + (indice + 1);
+        painel.id = painelId;
+        painel.classList.add('os-panel');
+        painel.setAttribute('role', 'tabpanel');
+        painel.setAttribute('aria-labelledby', abaId);
         const botao = document.createElement('button');
         botao.type = 'button';
         botao.className = 'os-tab';
-        botao.textContent = nome;
+        botao.id = abaId;
         botao.setAttribute('role', 'tab');
+        botao.setAttribute('aria-controls', painelId);
+        const numero = document.createElement('span');
+        numero.className = 'tab-index';
+        numero.textContent = String(indice + 1).padStart(2, '0');
+        const rotulo = document.createElement('span');
+        rotulo.textContent = nome;
+        botao.append(numero, rotulo);
         botao.addEventListener('click', () => ativar(indice));
         abas.appendChild(botao);
-        painel.classList.add('os-panel');
-        painel.setAttribute('role', 'tabpanel');
+      });
+      abas.addEventListener('keydown', evento => {
+        const atual = Array.from(abas.children).indexOf(document.activeElement);
+        if (atual < 0) return;
+        let destino = null;
+        if (evento.key === 'ArrowRight') destino = (atual + 1) % paineis.length;
+        else if (evento.key === 'ArrowLeft') destino = (atual - 1 + paineis.length) % paineis.length;
+        else if (evento.key === 'Home') destino = 0;
+        else if (evento.key === 'End') destino = paineis.length - 1;
+        if (destino === null) return;
+        evento.preventDefault();
+        ativar(destino);
+        abas.children[destino].focus();
       });
       formUnslop.insertBefore(abas, paineis[0]);
       ativar(0);
+
+      const modelo = formUnslop.querySelector('.os-service-model');
+      if (modelo && paineis[0]) paineis[0].prepend(modelo);
+
+      // O fechamento pertence à aba de situação, não à de fotos.
+      const painelSituacao = paineis.find(painel =>
+        (painel.querySelector('legend')?.textContent || '').toLowerCase().includes('situação'));
+      const notaFiscal = document.getElementById('nota-fiscal-upload');
+      if (painelSituacao && notaFiscal) {
+        const titulo = document.createElement('div');
+        titulo.className = 'os-close-head';
+        const h3 = document.createElement('h3');
+        h3.textContent = 'Fechamento';
+        const texto = document.createElement('p');
+        texto.textContent = 'Nota fiscal e confirmação da OS.';
+        titulo.append(h3, texto);
+        painelSituacao.append(titulo, notaFiscal);
+      }
+
+      formUnslop.addEventListener('submit', evento => {
+        const botao = evento.submitter;
+        if (botao && botao.hasAttribute('formnovalidate')) return;
+        for (const campo of formUnslop.elements) {
+          if (!campo.willValidate || campo.disabled || campo.type === 'hidden') continue;
+          if (!campo.checkValidity()) {
+            evento.preventDefault();
+            evento.stopImmediatePropagation();
+            const indice = paineis.indexOf(campo.closest('fieldset.os-panel'));
+            if (indice >= 0) {
+              ativar(indice);
+              abas.children[indice].focus();
+            }
+            const rotulo = campo.labels && campo.labels[0];
+            mostrarAvisoGlobal('Preencha: ' + ((rotulo?.textContent || campo.name || 'campo obrigatório').replace(/\s+/g,' ').trim()));
+            window.setTimeout(() => {
+              try { campo.focus({preventScroll:false}); } catch (_erro) {}
+            }, 0);
+            return;
+          }
+        }
+      }, true);
     }
   }
+
+  document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
+    document.getElementById('abrir-feedback')?.click();
+  });
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

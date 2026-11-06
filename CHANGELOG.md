@@ -2,12 +2,14 @@
 
 ## 9.6.0-dev.27 — interface experimental unslop — 2026-11-05 — develop
 
-- **Toggle no login:** a página de acesso do prestador ganhou **Ativar unslop**; com o modo ativo, mostra **Desativar unslop**. A preferência fica no cookie `autosseg_ui` e a interface atual continua sendo o padrão.
-- **Nova casca:** sidebar fixa, superfícies grafite, acento âmbar e tipografia sem caixa alta/brilhos/gradientes. O portal do cliente e o aplicativo desktop não mudam.
-- **OS mais clara:** a tela da OS ganha um cartão de resumo (número, cliente, status, responsável, total e fotos), atalho para o preview do PDF e abas para identificação, materiais, situação/relatório, fotos e entrega.
-- **Sem mudança de fluxo:** formulário, CSRF, permissões, banco, PDF e e-mail são os mesmos; as abas apenas mostram/ocultam fieldsets e todos os campos continuam sendo enviados.
-- **Rollback imediato:** `/ui/classic` restaura a interface atual; a documentação está em `docs/features/UNSLOP_UI.md`.
-- **Testes:** `test_rev12_correcoes.py` cobre o cookie, o login, a casca unslop, o resumo/abas da OS e o retorno à interface clássica.
+- **Toggle no login:** a página de acesso do prestador ganhou **Ativar unslop**; com o modo ativo, mostra **Desativar unslop**. A preferência fica no cookie `autosseg_ui` e a interface atual continua sendo o padrão. O link aceita `next` e volta à mesma página mesmo com `Referrer-Policy: no-referrer`.
+- **Nova casca:** sidebar fixa de 264 px, grupos de navegação, ícones de linha, superfícies grafite, acento âmbar e tipografia Avenir Next/SF Mono. Sem gradientes, brilhos, sombras coloridas, emoji ou caixa alta.
+- **Visão geral redesenhada:** quatro indicadores operacionais, ordens recentes com status e datas consistentes, financeiro com um único número em âmbar e atalhos discretos. A ação primária é off-white; o âmbar fica para seleção e o número principal.
+- **OS mais clara:** ficha da OS com número, status, cliente, responsável, total e fotos; três cartões de fluxo (Andamento, Rascunho, Importação); editor em abas com rail de documentos e histórico. O bloco **Fechamento** com nota fiscal e “Não precisa de nota fiscal” foi movido para a aba Situação.
+- **Validação sem campo escondido:** em unslop o formulário usa `novalidate`; um handler de captura revela a aba do primeiro campo inválido, foca o campo e mostra um toast. Salvar rascunho usa `formnovalidate`. O fluxo AJAX e os erros em toast continuam.
+- **Financeiro e listas:** tabelas com ações discretas, filtros secundários, grade de cartões e cabeçalhos de tabela em 12 px. O visual clássico e o portal do cliente não mudam.
+- **Rollback imediato:** `/ui/classic` restaura a interface atual e volta à mesma página; a documentação está em `docs/features/UNSLOP_UI.md`.
+- **Testes:** `test_rev12_correcoes.py` cobre cookie, `next`, login, casca, ficha/fluxo/rail da OS, `novalidate` e retorno clássico. `test_feedback_portal.py` e `test_api_financeiro.py` seguem verdes.
 - **Fora do MAIN:** experimental apenas em `develop`; o MAIN continua na interface atual.
 
 ## 9.6.0-dev.26 — mensagem real dos erros e permissão da OS — 2026-11-05 — develop

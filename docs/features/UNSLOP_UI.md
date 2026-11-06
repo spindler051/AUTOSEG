@@ -8,82 +8,155 @@ browser.
 
 ## 1. Toggle
 
-The login page has a small interface switch:
-
-- **Atual** — keeps the existing layout and CSS.
-- **Ativar unslop** — sets `autosseg_ui=unslop` and reloads the current page.
-
-When the experimental interface is active, the login page and the authenticated
-portal show **Desativar unslop**. The preference is a `SameSite=Lax` cookie,
-valid for one year; it contains only `classic` or `unslop`, never identity or
-business data. Logout does not erase the preference.
+The login page offers **Ativar unslop**. When the experimental interface is
+active, the login page and the authenticated sidebar show **Desativar unslop**.
+The preference is a `SameSite=Lax` cookie named `autosseg_ui`, valid for one
+year. It contains only `classic` or `unslop`, never identity or business data.
 
 Routes:
 
 | Route | Effect |
 |---|---|
-| `GET /ui/unslop` | Sets the experimental preference and redirects back. |
-| `GET /ui/classic` | Restores the classic preference and redirects back. |
+| `GET /ui/unslop?next=/page` | Sets the experimental preference and returns to `/page`. |
+| `GET /ui/classic?next=/page` | Restores the classic preference and returns to `/page`. |
+
+The `next` parameter is optional and must be a local path. When it is absent,
+the route falls back to the `Referer` header. The sidebar link always includes
+`next`, so **Desativar unslop** returns to the same OS or page even though the
+portal sends `Referrer-Policy: no-referrer`.
 
 ## 2. Direction
 
-Derived from the product, not from a template:
+- **Product.** Work and service orders for security and automation providers,
+  from the client request to the technical report and the technician's payment.
+- **Character.** Exact, calm, field-ready. A job sheet, not a marketing page.
+- **World.** Graphite tools, warm paper notes and a service ticket on a bench.
+- **Moments.** The perforated **Ficha da OS** ticket and the section-index tabs
+  on the OS editor.
+- **Signature.** The quiet OS ticket (number, status, client, responsible,
+  total and photos) followed by three workflow cards: Andamento, Rascunho and
+  Importação.
 
-- **Product:** work and service orders for security/automation providers.
-- **Character:** field-ready, exact, calm.
-- **World:** graphite tools, job sheets and technical reports, with a warm
-  amber accent retained from the AUTOSEG identity.
-- **Moments:** the OS summary ticket and the tabbed job sheet.
-- **Signature:** the quiet “OS” summary with status, responsible, total and
-  photo count before the editable sections.
+## 3. Shell
 
-The experimental shell uses a fixed sidebar (navigation rows, user, logout),
-graphite surfaces, amber only for primary actions/selection, no glows, no
-gradient text and no emoji decoration. Body copy is sentence case and figures
-use tabular numerals.
+- Fixed sidebar, 264 px, warm graphite surfaces and a hairline border.
+- Navigation grouped into Operação, Gestão and Registros, with one line icon
+  set at 18 px and a single amber selection marker.
+- User, feedback, logout and interface switch in the sidebar footer.
+- Quiet chrome: primary actions use an off-white surface with dark text; amber
+  is reserved for the active item, the selected tab, one key figure and status
+  dots.
+- No gradients, glows, colored shadows, emoji or uppercase tracked labels.
+- Type: Avenir Next for the interface and SF Mono for dates, IDs, meta and
+  figures; fallbacks keep the same hierarchy. Spacing follows the 4 px scale.
+- Responsive: the sidebar becomes a horizontal navigation bar; the OS ticket,
+  workflow and editor stack; tables keep their own horizontal scroll. There is
+  no page-level horizontal overflow.
 
-## 3. OS page
+## 4. Pages
 
-In unslop mode the OS page adds:
+### 4.1 Login
 
-- a summary card with OS number, client, status, responsible, total and photo
-  count;
-- **Preview do PDF** and **Editar OS** actions;
-- the existing fieldsets rendered as tabs: identification, materials,
-  attendance/report, photos and delivery details;
-- a sticky action bar for **Salvar rascunho** and **Confirmar situação**.
+A two-column split: product statement and a short list of what the portal does
+on the left; the login form on the right. The interface switch is a quiet text
+row above the form. The primary **Entrar** button is off-white, not amber.
 
-The form, routes, CSRF, permissions, storage and PDF generation are the same as
-the classic interface. The tabs only hide/show existing fieldsets; all fields
-still submit. For a provider who is not the responsible technician, save and
-conclude actions remain hidden; photo/legend collaboration remains available.
+### 4.2 Visão geral
 
-## 4. What does not change
+- Factual meta line with the provider and date, no greeting headline.
+- Four compact operational figures: OS abertas, iniciadas, pendentes and
+  concluídas.
+- **Ordens recentes** table with status dots, consistent dates and a direct
+  link to each OS.
+- Finance panel with **A receber** (the one amber figure) and **Recebido**.
+- Quiet shortcut rows and the public-link disclosure.
+
+### 4.3 Ordem de serviço
+
+The page is composed in three layers:
+
+1. **Ficha da OS** — a ticket with the OS number, status, client, opening date,
+   responsible, total and photo count, plus **Preview do PDF**.
+2. **Workflow** — Andamento (status, responsible, participants, assumir, em rota
+   and iniciar), Rascunho and Importação de relatório.
+3. **Editor and rail** — the form on the left and context on the right.
+
+The editor uses four tabs generated from the existing fieldsets:
+
+| Tab | Content |
+|---|---|
+| Identificação | Service model, client, payment, values, description and notes |
+| Materiais | Material lines, stock picker and the expected total |
+| Situação e relatório | Diagnosis, executed service, tests, internal report, status, recipients, rateio and **Fechamento** |
+| Fotos e legendas | Existing photos, new photos and individual captions |
+
+**Fechamento** contains the NF upload and the **Não precisa de nota fiscal**
+checkbox. It lives in the Situação tab, not in Fotos, so the conclusion steps
+are together. For a non-responsible provider, save/conclude actions stay
+hidden and the photo/legend collaboration form remains available in the rail.
+
+The action bar is sticky at the bottom of the editor: **Salvar rascunho** as a
+secondary action and **Confirmar situação da OS** as the single primary action.
+The draft button uses `formnovalidate`; the form uses `novalidate` in unslop
+mode, and a capture-phase submit handler:
+
+- switches to the tab of the first invalid field;
+- focuses the field and shows a toast with its label;
+- checks status, technical report and cancellation reason before confirming;
+- keeps the AJAX error handling and never navigates to a full error page.
+
+The classic form keeps native browser validation.
+
+### 4.4 Financeiro
+
+Two compact figures, a quiet PIX warning, the main receivables table and a
+two-column secondary grid. Table actions are outlined and small; amber is not
+repeated on every row. The bank data, transfers and technician-share cards use
+the same surface and type hierarchy.
+
+### 4.5 Lists and documents
+
+OS, clients, services, invoices, e-mails and history reuse the shell and the
+shared table/card styles. Search and filter buttons are secondary; only the
+page's real creation action is primary. Tables use quiet headers, hairline row
+separators and tabular figures.
+
+## 5. What does not change
 
 - No database schema or data migration.
 - No change to OS, finance, stock, feedback or API behavior.
 - No change to the Client Portal.
-- No change to the classic interface. `/ui/classic` restores it immediately.
+- No change to the classic interface. `/ui/classic` restores it immediately
+  and returns to the same page through `next`.
 
-## 5. Tests and manual check
+## 6. Tests and manual checks
 
-`test_rev12_correcoes.py` covers the cookie toggle, the unslop shell on the OS
-page, the summary, and the classic fallback.
+`test_rev12_correcoes.py` covers the cookie toggle, the `next` redirect, the
+unslop login, the shell, the OS ticket/workflow/rail, the server-rendered
+summary and the classic fallback. Current result: **30 tests, OK, 1 skipped**.
+`test_feedback_portal.py`: **22 OK**. `test_api_financeiro.py`: **8 OK**.
 
-Manual check in DEV:
+Manual checks in DEV (Playwright, 1440×1000 and 390×844):
 
-1. Open `/login` and click **Ativar unslop**.
-2. Log in and open an OS: verify the summary and tabs.
-3. Click **Desativar unslop**: the classic layout must return.
-4. Open the Client Portal: it must remain unchanged.
+1. Enable unslop on the login and open an OS.
+2. Confirm the ticket, workflow, tabs and rail are visible.
+3. Click **Confirmar situação** without a status: the Situação tab opens, the
+   field is focused and the toast says `Preencha: Situação do atendimento`.
+4. Open the Situação tab and confirm **Fechamento** contains the NF upload and
+   the **Não precisa de nota fiscal** checkbox.
+5. Open the sidebar feedback button: the existing dialog opens.
+6. Click **Desativar unslop**: the classic OS page loads on the same URL.
+7. Check the dashboard, finance, OS, lists and login at 390 px wide with no
+   page-level horizontal overflow.
 
-## 6. Rollback
+## 7. Rollback
 
 Remove the `/ui/unslop` and `/ui/classic` routes, the `layout_unslop` branch in
-`pagina()`, `CSS_UNSLOP`, and the tab block in `portal.js`. Existing cookies
-become inert; no data needs cleanup.
+`pagina()`, `CSS_UNSLOP`, `ICONES`/`icone`, the unslop branches in `inicio`,
+`os_form`, `financeiro` and `login`, the `next` handling and the unslop block
+in `portal.js`. Existing cookies become inert; no data needs cleanup.
 
-## 7. Credit
+## 8. Credit
 
 The experimental interface was designed with guidance from
 [unslop](https://github.com/heydamir/unslop), created by Damir Sokolovsky and

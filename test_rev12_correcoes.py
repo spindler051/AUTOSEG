@@ -218,19 +218,36 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('autosseg_ui=unslop',
                       falha.exception.headers.get('Set-Cookie', ''))
 
+        # O destino explícito não depende de Referer (o portal envia no-referrer).
+        with self.assertRaises(urllib.error.HTTPError) as falha:
+            sem_redirect.open(base + '/ui/classic?next=%2Fos%2F1', timeout=10)
+        self.assertEqual(falha.exception.code, 303)
+        self.assertEqual(falha.exception.headers.get('Location'), '/os/1')
+
         classico = browser_ui('classic')
         _, login_classico = req(classico, base, '/login')
         self.assertIn('Ativar unslop', login_classico)
 
         novo = browser_ui('unslop')
+        _, login_novo = req(novo, base, '/login')
+        self.assertIn('Desativar unslop', login_novo)
+        self.assertIn('Portal do prestador', login_novo)
         _, html = req(novo, base, '/login', {
             'email': 'unslop@exemplo.com.br',
             'senha': 'senha-bem-segura-2026'})
-        self.assertIn('Painel principal', html)
+        self.assertIn('Visão geral', html)
+        self.assertIn('Ordens recentes', html)
+        self.assertIn('A receber', html)
         _, html = req(novo, base, f'/os/{oid}')
         self.assertIn('class="ui-unslop', html)
         self.assertIn('os-form-unslop', html)
+        self.assertIn('novalidate', html)
         self.assertIn('os-summary', html)
+        self.assertIn('os-ticket', html)
+        self.assertIn('os-workflow', html)
+        self.assertIn('os-rail', html)
+        self.assertIn('Ficha da OS', html)
+        self.assertIn('Situação do atendimento', html)
         self.assertIn('class="app-side"', html)
         self.assertIn('Preview do PDF', html)
 
