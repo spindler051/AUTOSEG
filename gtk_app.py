@@ -35,6 +35,7 @@ import importacao_yaml
 import completude
 import composicao
 from integracao import clientes as clientes_core
+import runtime_config
 
 if os.environ.get("AUTOSEG_DEV") == "1":
     import tuneis_dev as tuneis
@@ -103,20 +104,18 @@ class Janela(Adw.ApplicationWindow):
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
                 print("Aviso: recuperação de PDFs anteriores:", erro)
+            prestador_cfg = runtime_config.provider_server()
             self.portal_prestador = PortalPrestador(
-                BANCO, host=os.environ.get("PRESTADOR_BIND", "127.0.0.1"),
-                porta=int(os.environ.get(
-                    "PRESTADOR_PORT", "8866" if os.environ.get("AUTOSEG_DEV") == "1" else "8766")))
+                BANCO, host=prestador_cfg.host, porta=prestador_cfg.port)
             try:
                 self.url_prestador = self.portal_prestador.iniciar()
             except Exception as erro:
                 self.aviso_prestador = str(erro)
                 print("Portal do prestador indisponível:", erro)
+            cliente_cfg = runtime_config.client_server()
             self.servidor_portal = ServidorPortal(
                 BANCO, ui.PASTA_APP,
-                porta=int(os.environ.get(
-                    "CLIENTE_PORT", "8865" if os.environ.get("AUTOSEG_DEV") == "1" else "8765")),
-                host=os.environ.get("CLIENTE_BIND", "127.0.0.1"))
+                porta=cliente_cfg.port, host=cliente_cfg.host)
             try:
                 self.servidor_portal.iniciar()
             except Exception as erro:

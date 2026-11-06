@@ -38,6 +38,7 @@ import produtividade_os as prod
 import solicitacoes_pj as pj_publico
 import socket
 from versao_app import versao_local
+import runtime_config
 
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
@@ -829,8 +830,9 @@ fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}l
 class PortalPrestador:
     def __init__(self,banco,host=None,porta=8766):
         self.banco=banco
-        self.host=host or os.environ.get('PRESTADOR_BIND','127.0.0.1')
-        self.porta=int(os.environ.get('PRESTADOR_PORT',porta))
+        cfg=runtime_config.provider_server(port=porta,host=host)
+        self.host=cfg.host
+        self.porta=cfg.port
         self.servidor=None
         self.thread=None
 
@@ -851,7 +853,7 @@ class PortalPrestador:
                 if os.name=='posix':os.chmod(arquivo,0o600)
             except OSError as exc:
                 LOG.warning('Não foi possível iniciar log de arquivo: %s',exc)
-        usar_https=os.environ.get('PRESTADOR_HTTPS')=='1' 
+        usar_https=runtime_config.provider_https()
         ext.instalar(banco)
         prod.instalar(banco)
         pj_publico.instalar(banco)
@@ -2539,8 +2541,9 @@ class PortalPrestador:
                 return self.pagina(title,f'<p class="muted">{esc(explanation)}</p>{resumo}'+card('Ordens disponíveis',tabela(['OS','Cliente','Status','Valor','Ação'],rows)),s)
 
             def portal_cliente(self,s):
-                url_cliente='http://127.0.0.1:'+os.environ.get('CLIENTE_PORT','8765')+'/'
-                info=botao('Abrir Portal do Cliente (8765)',url_cliente)
+                porta_cliente=runtime_config.client_port(8765)
+                url_cliente=f'http://127.0.0.1:{porta_cliente}/'
+                info=botao(f'Abrir Portal do Cliente ({porta_cliente})',url_cliente)
                 info+=('<p class="muted">O Portal do Cliente é um site separado, na porta 8765. '
                        'O login dele é por CPF e senha e não se mistura com o login do prestador. '
                        'As solicitações registradas lá aparecem nesta lista e no desktop.</p>')

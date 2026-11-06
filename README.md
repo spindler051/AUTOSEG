@@ -85,6 +85,7 @@ Development database and ports:
 - [Workaholic integration](docs/WORKAHOLIC_INTEGRACAO.md)
 - [Modular migration ledger](docs/MIGRACAO_MODULAR.md)
 - [Architecture evolution plan](docs/PLANO_EVOLUCAO_ARQUITETURA.md)
+- [Fundamental structural problems](docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md)
 
 ## Repository layout
 
@@ -92,6 +93,7 @@ Development database and ports:
 gtk_app.py, gtk_dialogos.py, gtk_comum.py   GTK desktop frontend
 portal_prestador.py, servidor_web.py        provider and client portals
 portal_negocios.py, fluxo_os.py, ...        business rules
+runtime_config.py                           runtime paths, bind and ports
 workaholic/                                 generic engine prototype
 integracao/                                 AUTOSEG adapters to Workaholic
 docs/                                       product, architecture and operations

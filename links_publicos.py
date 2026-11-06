@@ -3,7 +3,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 import json,os,re,subprocess
 
-BASE=Path(os.environ.get('AUTOSEG_BASE') or Path(__file__).resolve().parent)
+import runtime_config
+
+BASE=runtime_config.base_dir()
 DEV=os.environ.get('AUTOSEG_DEV')=='1'
 PORTAS=('8865','8866') if DEV else ('8765','8766')
 TUNEIS=BASE/('tuneis_dev' if DEV else 'tuneis')

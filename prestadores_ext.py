@@ -8,7 +8,9 @@ from email.message import EmailMessage
 from email.policy import SMTP
 from contextlib import contextmanager
 
-BASE = Path(os.environ.get('AUTOSEG_BASE') or Path(__file__).resolve().parent)
+import runtime_config
+
+BASE = runtime_config.base_dir()
 ANEXOS = BASE / 'anexos_os'
 RELATORIOS = BASE / 'relatorios_pdf'
 RASCUNHOS = BASE / 'rascunhos'

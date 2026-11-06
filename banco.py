@@ -5,14 +5,14 @@ Centraliza a conexão, a criação/migração das tabelas e funções utilitári
 usadas tanto pelo aplicativo desktop quanto pelo portal web.
 """
 
-import os
 import re
 import sqlite3
 from datetime import datetime
 
+import runtime_config
 
-PASTA_APP = os.path.abspath(os.environ.get("AUTOSEG_BASE") or os.path.dirname(os.path.abspath(__file__)))
-BANCO = os.environ.get("GESTAO_BANCO", os.path.join(PASTA_APP, "dados.db"))
+PASTA_APP = str(runtime_config.base_dir())
+BANCO = str(runtime_config.database_path())
 
 
 # ============================================================

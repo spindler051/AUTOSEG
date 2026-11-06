@@ -10,13 +10,13 @@ Variáveis:
   PRESTADOR_PORT / PRESTADOR_BIND
   AUTOSEG_DEV=1                 portas 8865/8866 por padrão
 """
-import os
 import signal
 import time
 from pathlib import Path
 
 from banco import BANCO, criar_banco
 from servidor_web import ServidorPortal
+import runtime_config
 from portal_prestador import PortalPrestador
 import prestadores_ext as ext
 import fluxo_os as fluxo
@@ -26,7 +26,6 @@ import estoque_materiais as estoque
 import catalogo_servicos as catalogo
 
 PASTA_APP = Path(__file__).resolve().parent
-DEV = os.environ.get("AUTOSEG_DEV") == "1"
 
 
 def main():
@@ -38,16 +37,16 @@ def main():
     estoque.instalar(BANCO)
     catalogo.instalar(BANCO)
 
-    porta_cliente = int(os.environ.get("CLIENTE_PORT", "8865" if DEV else "8765"))
-    porta_prestador = int(os.environ.get("PRESTADOR_PORT", "8866" if DEV else "8766"))
+    cliente_cfg = runtime_config.client_server()
+    prestador_cfg = runtime_config.provider_server()
     cliente = ServidorPortal(
         BANCO, PASTA_APP,
-        porta=porta_cliente,
-        host=os.environ.get("CLIENTE_BIND", "127.0.0.1"))
+        porta=cliente_cfg.port,
+        host=cliente_cfg.host)
     prestador = PortalPrestador(
         BANCO,
-        host=os.environ.get("PRESTADOR_BIND", "127.0.0.1"),
-        porta=porta_prestador)
+        host=prestador_cfg.host,
+        porta=prestador_cfg.port)
 
     parar = False
 
