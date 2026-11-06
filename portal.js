@@ -805,5 +805,41 @@
       }
     });
   }
+
+  // Interface unslop: transforma os fieldsets da OS em seções navegáveis.
+  const formUnslop = document.getElementById('form-os');
+  if (formUnslop && document.body.classList.contains('ui-unslop')) {
+    const paineis = Array.from(formUnslop.children)
+      .filter(elemento => elemento.tagName === 'FIELDSET');
+    if (paineis.length > 1) {
+      const abas = document.createElement('div');
+      abas.className = 'os-tabs';
+      abas.setAttribute('role', 'tablist');
+      const ativar = indice => {
+        paineis.forEach((painel, i) => {
+          painel.hidden = i !== indice;
+        });
+        Array.from(abas.children).forEach((botao, i) => {
+          botao.classList.toggle('active', i === indice);
+          botao.setAttribute('aria-selected', i === indice ? 'true' : 'false');
+        });
+      };
+      paineis.forEach((painel, indice) => {
+        const legenda = painel.querySelector('legend');
+        const nome = (legenda?.textContent || `Seção ${indice + 1}`).trim();
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'os-tab';
+        botao.textContent = nome;
+        botao.setAttribute('role', 'tab');
+        botao.addEventListener('click', () => ativar(indice));
+        abas.appendChild(botao);
+        painel.classList.add('os-panel');
+        painel.setAttribute('role', 'tabpanel');
+      });
+      formUnslop.insertBefore(abas, paineis[0]);
+      ativar(0);
+    }
+  }
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.27 — interface experimental unslop — 2026-11-05 — develop
+
+- **Toggle no login:** a página de acesso do prestador ganhou **Ativar unslop**; com o modo ativo, mostra **Desativar unslop**. A preferência fica no cookie `autosseg_ui` e a interface atual continua sendo o padrão.
+- **Nova casca:** sidebar fixa, superfícies grafite, acento âmbar e tipografia sem caixa alta/brilhos/gradientes. O portal do cliente e o aplicativo desktop não mudam.
+- **OS mais clara:** a tela da OS ganha um cartão de resumo (número, cliente, status, responsável, total e fotos), atalho para o preview do PDF e abas para identificação, materiais, situação/relatório, fotos e entrega.
+- **Sem mudança de fluxo:** formulário, CSRF, permissões, banco, PDF e e-mail são os mesmos; as abas apenas mostram/ocultam fieldsets e todos os campos continuam sendo enviados.
+- **Rollback imediato:** `/ui/classic` restaura a interface atual; a documentação está em `docs/features/UNSLOP_UI.md`.
+- **Testes:** `test_rev12_correcoes.py` cobre o cookie, o login, a casca unslop, o resumo/abas da OS e o retorno à interface clássica.
+- **Fora do MAIN:** experimental apenas em `develop`; o MAIN continua na interface atual.
+
 ## 9.6.0-dev.26 — mensagem real dos erros e permissão da OS — 2026-11-05 — develop
 
 - **Erro real no toast:** `self.erro` agora devolve JSON para requisições AJAX, então o toast mostra a mensagem exata do servidor em vez de “Não foi possível salvar”.

@@ -95,6 +95,87 @@ CSS_FEEDBACK = """
 .feedback-dialog .feedback-privacidade{font-size:13px;line-height:1.5;color:#c9c9c9}
 .feedback-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:1300;max-width:min(560px,calc(100vw - 28px));background:#1e1e1e;border:1px solid #ffd400;border-radius:10px;color:#fff;padding:12px 16px;box-shadow:0 10px 30px #000c}
 @media(max-width:620px){.feedback-fab{right:12px;bottom:12px;padding:12px 16px;font-size:14px}.feedback-dialog form{padding:17px}}
+.ui-switch{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px;font-size:13px;color:#bbb}
+.ui-switch a{border:1px solid #555;border-radius:8px;padding:8px 12px;text-decoration:none;color:#fff;background:#1b1b1b}
+.ui-switch a.active{background:#ffd400;color:#111;border-color:#ffd400;font-weight:700}
+"""
+
+
+UI_COOKIE = 'autosseg_ui'
+CSS_UNSLOP = """
+:root{--u-bg:#141413;--u-side:#0f0f0e;--u-card:#1b1a18;--u-raised:#232220;--u-line:rgba(255,255,255,.09);--u-text:#efece6;--u-text2:#b0aba2;--u-muted:#807a70;--u-accent:#e6bd57;--u-accent-ink:#17140b;--u-good:#61c99a;--u-warn:#e6bd57;--u-bad:#e06c6c}
+body.ui-unslop{background:var(--u-bg);color:var(--u-text);font:14px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body.ui-unslop header{display:none}
+body.ui-unslop a{color:var(--u-accent)}
+body.ui-unslop main{margin-left:264px;max-width:none;padding:32px 32px 72px}
+body.ui-unslop footer{margin-left:264px;border-top:1px solid var(--u-line);color:var(--u-muted);font-size:12px;text-align:left;padding:16px 32px}
+body.ui-unslop h1{font-size:32px;font-weight:500;letter-spacing:-.02em;margin:0 0 8px}
+body.ui-unslop h2{font-size:18px;font-weight:500;letter-spacing:0;margin:0 0 12px}
+body.ui-unslop h3{font-size:15px;font-weight:500;margin:14px 0 8px}
+body.ui-unslop .card{background:var(--u-card);border:1px solid var(--u-line);border-radius:14px;padding:24px;margin:16px 0;box-shadow:none}
+body.ui-unslop .grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+body.ui-unslop label{font-weight:500;color:var(--u-text2);margin:12px 0 6px}
+body.ui-unslop input,body.ui-unslop textarea,body.ui-unslop select{background:#111110;color:var(--u-text);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:10px 12px}
+body.ui-unslop input:focus,body.ui-unslop textarea:focus,body.ui-unslop select:focus{outline:2px solid var(--u-accent);outline-offset:1px}
+body.ui-unslop button,body.ui-unslop .btn{background:var(--u-accent);color:var(--u-accent-ink);border:1px solid var(--u-accent);border-radius:8px;font:500 14px/1.2 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-transform:none;letter-spacing:0;padding:10px 14px;min-height:40px;box-shadow:none}
+body.ui-unslop button.secondary,body.ui-unslop .btn.secondary{background:var(--u-raised);color:var(--u-text);border-color:var(--u-line)}
+body.ui-unslop button.danger,body.ui-unslop .btn.danger{background:rgba(224,108,108,.12);color:var(--u-bad);border-color:rgba(224,108,108,.35)}
+body.ui-unslop button.subtle{background:transparent;color:var(--u-text2);border-color:var(--u-line)}
+body.ui-unslop .tag{background:var(--u-raised);color:var(--u-text2);border:1px solid var(--u-line);border-radius:6px}
+body.ui-unslop .muted,body.ui-unslop small{color:var(--u-muted)}
+body.ui-unslop .good{color:var(--u-good)}body.ui-unslop .warn{color:var(--u-warn)}body.ui-unslop .bad{color:var(--u-bad)}
+body.ui-unslop .notice{background:rgba(230,189,87,.08);border:1px solid rgba(230,189,87,.3);color:var(--u-text2);border-radius:10px;padding:14px 16px}
+body.ui-unslop .flash{background:rgba(97,201,154,.1);border:1px solid rgba(97,201,154,.3);color:var(--u-text)}
+body.ui-unslop .table-scroll{border:1px solid var(--u-line);border-radius:12px;overflow:auto}
+body.ui-unslop table{min-width:0}
+body.ui-unslop th,body.ui-unslop td{border-bottom:1px solid var(--u-line);padding:12px 14px;font-size:13px}
+body.ui-unslop th{background:transparent;color:var(--u-text2);font-weight:500;text-transform:none;letter-spacing:0}
+body.ui-unslop tr:last-child td{border-bottom:0}
+body.ui-unslop fieldset{border:1px solid var(--u-line);border-radius:12px;padding:20px;margin:16px 0}
+body.ui-unslop legend{color:var(--u-text);font-weight:500;padding:0 8px}
+body.ui-unslop .kpi,body.ui-unslop .cartao{background:var(--u-card);border:1px solid var(--u-line);border-radius:12px;box-shadow:none}
+body.ui-unslop .kpi strong{color:var(--u-text);font-weight:500;font-variant-numeric:tabular-nums}
+body.ui-unslop .material-row{gap:10px;margin:10px 0}
+body.ui-unslop .actions{position:sticky;bottom:0;background:var(--u-bg);border-top:1px solid var(--u-line);padding:12px 0;margin-top:20px;z-index:20}
+.app-side{position:fixed;inset:0 auto 0 0;width:248px;background:var(--u-side);border-right:1px solid var(--u-line);padding:20px 14px;display:flex;flex-direction:column;gap:20px;z-index:100}
+.side-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--u-text);font-weight:500;font-size:16px;padding:0 10px}
+.side-brand img{height:28px;max-width:84px;object-fit:contain}
+.side-nav{display:flex;flex-direction:column;gap:2px}
+.side-link{display:flex;align-items:center;min-height:36px;padding:0 10px;border-radius:8px;color:var(--u-text2);text-decoration:none;font-weight:400}
+.side-link:hover{background:var(--u-raised);color:var(--u-text)}
+.side-link.active{background:var(--u-raised);color:var(--u-text);box-shadow:inset 2px 0 0 var(--u-accent)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--u-muted)}
+.side-user{display:flex;flex-direction:column;gap:2px;padding:0 10px;color:var(--u-text)}
+.side-user small{color:var(--u-muted)}
+.side-switch{background:transparent!important;color:var(--u-text2)!important;border:1px solid var(--u-line)!important;border-radius:8px;padding:8px 10px;text-align:left;font-weight:400!important;min-height:34px!important;text-decoration:none;font-size:12px}
+.side-switch:hover{background:var(--u-raised)!important;color:var(--u-text)!important}
+.unslop-credit{text-align:center;color:var(--u-muted);font-size:11px;padding:12px}
+.unslop-credit a{color:var(--u-text2)}
+.ui-switch{margin:0 0 20px;color:var(--u-text2)}
+body.ui-unslop .ui-switch a{background:var(--u-raised);border-color:var(--u-line);color:var(--u-text2);font-weight:400}
+body.ui-unslop .ui-switch a.active{background:var(--u-accent);border-color:var(--u-accent);color:var(--u-accent-ink);font-weight:500}
+body.ui-unslop.ui-login main{margin:9vh auto;max-width:440px;padding:0 20px}
+body.ui-unslop.ui-login footer{margin-left:0;text-align:center}
+body.ui-unslop.ui-login h1{font-size:28px}
+body.ui-unslop .os-summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:start;background:var(--u-card);border:1px solid var(--u-line);border-radius:16px;padding:24px;margin:0 0 20px}
+body.ui-unslop .os-kicker{font-size:12px;color:var(--u-muted);margin:0 0 4px}
+body.ui-unslop .os-summary h2{font-size:26px;margin:0 0 2px}
+body.ui-unslop .os-summary-client{color:var(--u-text2);margin:0}
+body.ui-unslop .os-summary-stats{display:grid;grid-template-columns:repeat(4,minmax(80px,1fr));gap:16px;min-width:360px}
+body.ui-unslop .os-summary-stats span{display:block;color:var(--u-muted);font-size:12px;margin-bottom:2px}
+body.ui-unslop .os-summary-stats strong{font-weight:500;font-variant-numeric:tabular-nums;color:var(--u-text)}
+body.ui-unslop .os-summary-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding-top:4px}
+body.ui-unslop .os-tabs{display:flex;gap:4px;overflow-x:auto;padding:4px;margin:0 0 16px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-side)}
+body.ui-unslop .os-tab{flex:0 0 auto;background:transparent;border:1px solid transparent;color:var(--u-text2);border-radius:7px;padding:8px 12px;min-height:34px;font-weight:400}
+body.ui-unslop .os-tab:hover{background:var(--u-raised);color:var(--u-text)}
+body.ui-unslop .os-tab.active{background:var(--u-raised);border-color:var(--u-line);color:var(--u-text)}
+body.ui-unslop .os-form-unslop>fieldset{border:0;padding:0;margin:0}
+body.ui-unslop .os-panel[hidden]{display:none}
+body.ui-unslop .feedback-fab{background:var(--u-accent);color:var(--u-accent-ink);border-color:var(--u-accent);font-weight:500;box-shadow:0 8px 24px #0008}
+body.ui-unslop .feedback-dialog{border:1px solid var(--u-line);background:var(--u-card);color:var(--u-text);box-shadow:0 18px 60px #000c}
+body.ui-unslop .feedback-dialog h2{color:var(--u-text)}
+body.ui-unslop .feedback-toast{background:var(--u-card);border-color:var(--u-line);color:var(--u-text)}
+@media(max-width:900px){.app-side{position:static;width:auto;border-right:0;border-bottom:1px solid var(--u-line);padding:14px}.side-nav{flex-direction:row;overflow-x:auto;gap:4px}.side-link{white-space:nowrap}.side-foot{display:none}body.ui-unslop main{margin-left:0;padding:20px 16px 56px}body.ui-unslop footer{margin-left:0}body.ui-unslop .os-summary{grid-template-columns:1fr;gap:16px}body.ui-unslop .os-summary-stats{min-width:0;grid-template-columns:repeat(2,1fr)}}
 """
 
 
@@ -176,6 +257,48 @@ def _dialogo_feedback(usuario):
   </form>
 </dialog>
 <div class="feedback-toast" id="feedback-toast" role="status" aria-live="polite" hidden></div>'''
+
+
+def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False):
+    """Experimental interface: app shell + OS tabs, without changing the flow."""
+    base=layout(titulo,corpo,usuario,nonce,cliente)
+    login=not usuario or cliente
+    body_class='ui-unslop'+(' ui-login' if login else '')
+    base=base.replace('<body>',f'<body class="{body_class}">',1)
+    base=base.replace('</style>',CSS_UNSLOP+'</style>',1)
+    sidebar=''
+    if usuario and not cliente:
+        menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),
+               ('/servicos','Serviços e valores'),('/financeiro','Financeiro'),
+               ('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),
+               ('/emails','E-mails'),('/historico','Histórico e relatórios')]
+        if usuario.get('admin'):
+            menus.append(('/feedback/recebidos','Feedbacks'))
+        def ativo(url):
+            return path==url or (url!='/' and path.startswith(url+'/'))
+        links=''.join(
+            f'<a class="side-link{" active" if ativo(url) else ""}" href="{url}">{esc(nome)}</a>'
+            for url,nome in menus)
+        csrf=esc(usuario.get('csrf',''))
+        sidebar=(f'<aside class="app-side">'
+                 '<a class="side-brand" href="/"><img src="/logo.png" alt="">'
+                 '<span>AUTOSEG</span></a>'
+                 f'<nav class="side-nav" aria-label="Navegação principal">{links}</nav>'
+                 '<div class="side-foot">'
+                 f'<div class="side-user"><span>{esc(usuario.get("nome",""))}</span>'
+                 '<small>Prestador</small></div>'
+                 f'<form method="post" action="/sair"><input type="hidden" name="csrf" value="{csrf}">'
+                 '<button class="side-switch" type="submit">Sair</button></form>'
+                 '<a class="side-switch" href="/ui/classic">Desativar unslop</a>'
+                 f'<span>AUTOSEG {VERSAO_PORTAL}</span>'
+                 '</div></aside>')
+        base=base.replace(f'<body class="{body_class}">',
+                          f'<body class="{body_class}">{sidebar}',1)
+    credit=('<div class="unslop-credit">Interface experimental inspirada em '
+            '<a href="https://github.com/heydamir/unslop" target="_blank" '
+            'rel="noopener noreferrer">unslop</a>, de Damir Sokolovsky (CC BY 4.0).</div>')
+    base=base.replace('</body>',credit+'</body>',1)
+    return base
 
 
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False):
@@ -297,8 +420,20 @@ class PortalPrestador:
             def responder(self,html_text,status=200,cookie=None):
                 return self.send_bytes(html_text.encode('utf-8'),status=status,cookie=cookie)
 
+            def ui_unslop(self):
+                try:
+                    ck=SimpleCookie();ck.load(self.headers.get('Cookie',''))
+                    item=ck.get(UI_COOKIE)
+                    return bool(item and item.value=='unslop')
+                except (KeyError,ValueError):
+                    return False
+
             def pagina(self,titulo,conteudo,s=None,status=200):
-                pagina=layout(titulo,conteudo,s)
+                if self.ui_unslop():
+                    pagina=layout_unslop(titulo,conteudo,s,
+                                         path=urlparse(self.path).path)
+                else:
+                    pagina=layout(titulo,conteudo,s)
                 if titulo=='Ordens de serviço ativas':
                     # Inert marker: portal.js owns the timer and pauses it while
                     # the feedback dialog is open or a form control is in use.
@@ -386,7 +521,16 @@ class PortalPrestador:
                          f'<p><a href="{destino}">Voltar à página anterior</a></p>'),s,status)
 
             def login(self):
-                return self.pagina('Acesso do prestador',card('Entrar',
+                ativo=self.ui_unslop()
+                if ativo:
+                    troca=('<div class="ui-switch"><span>Interface nova ativa</span>'
+                           '<a class="active" href="/ui/unslop">Interface unslop</a>'
+                           '<a href="/ui/classic">Desativar unslop</a></div>')
+                else:
+                    troca=('<div class="ui-switch"><span>Interface:</span>'
+                           '<a class="active" href="/ui/classic">Atual</a>'
+                           '<a href="/ui/unslop">Ativar unslop</a></div>')
+                return self.pagina('Acesso do prestador',troca+card('Entrar',
                     '<form method="post" action="/login">'
                     +campos_escuros('E-mail','email',kind='email',required=True)
                     +campos_escuros('Senha','senha',kind='password',required=True)
@@ -1074,12 +1218,30 @@ class PortalPrestador:
                         mat=[dict(item=item,quantidade=quantidades[i] if i<len(quantidades) else '',valor_unitario=unitarios[i] if i<len(unitarios) else '')
                              for i,item in enumerate(itens) if item]
                 token=self.hidden(s)
+                rotulo_salvar='Salvar rascunho' if self.ui_unslop() else 'SALVAR RASCUNHO'
+                classe_form=' class="os-form-unslop"' if self.ui_unslop() else ''
                 titulo=f'OS {d["numero_os"]}' if oid else 'Nova ordem de serviço'
                 action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
                 corpo=botao('← Ordens de serviço','/os','secondary')
                 if oid:
                     corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b> · '
                     f'identificador interno do link: <code>/os/{oid}</code></p>'
+                if oid and self.ui_unslop():
+                    cliente_nome=next((x['nome'] for x in cl if x['id']==d.get('cliente_id')),'')
+                    resp_nome=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
+                    corpo+=('<section class="os-summary">'
+                        '<div><p class="os-kicker">Ordem de serviço</p>'
+                        f'<h2>{esc(d["numero_os"])}</h2>'
+                        f'<p class="os-summary-client">{esc(cliente_nome)}</p></div>'
+                        '<div class="os-summary-stats">'
+                        f'<div><span>Status</span><strong>{esc(d["status"])}</strong></div>'
+                        f'<div><span>Responsável</span><strong>{esc(resp_nome)}</strong></div>'
+                        f'<div><span>Total</span><strong>{dinheiro(d.get("valor_total") or 0)}</strong></div>'
+                        f'<div><span>Fotos</span><strong>{len(anexos)}</strong></div>'
+                        '</div>'
+                        f'<div class="os-summary-actions"><a class="btn secondary" href="/os/{oid}/pdf-preview">Preview do PDF</a>'
+                        f'<a class="btn secondary" href="#form-os">Editar OS</a></div>'
+                        '</section>')
                 if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
                 if preenchimento:
                     corpo+=('<p class="notice" id="yaml-importado-rev08" data-yaml-importado="1">'
@@ -1141,7 +1303,7 @@ class PortalPrestador:
                                 d[k]=v
                 except Exception:
                     rasc_salvo = None
-                corpo+=f'<form method="post" action="{action}" id="form-os" data-ajax-preserve="1" enctype="multipart/form-data">{token}'
+                corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" enctype="multipart/form-data">{token}'
                 if d.get('composicao_yaml'):
                     import json as _json_comp
                     corpo+=('<input type="hidden" name="composicao_yaml" value="'
@@ -1318,7 +1480,7 @@ class PortalPrestador:
                 else:
                     if d['status'] in ext.ATIVAS:
                         if responsavel==s['pid']:
-                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO</button>'
+                            corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar">{rotulo_salvar}</button>'
                             corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
                         else:
                             corpo+=('<span class="notice">Esta OS está com outro responsável. '
@@ -1629,6 +1791,15 @@ class PortalPrestador:
                                           'login_prestador':'e-mail e senha',
                                           'cadastro_prestadores':'bloqueado no portal web'}).encode('utf-8')
                         return self.send_bytes(dados,'application/json; charset=utf-8')
+                    if path in ('/ui/unslop','/ui/classic'):
+                        valor='unslop' if path.endswith('unslop') else 'classic'
+                        ref=urlparse(self.headers.get('Referer',''))
+                        destino=ref.path if ref.path.startswith('/') and not ref.path.startswith('//') else '/login'
+                        seguro=('Secure; ' if (usar_https or self.headers.get('CF-Ray')
+                                or self.headers.get('X-Forwarded-Proto','').lower()=='https') else '')
+                        cookie=(f'{UI_COOKIE}={valor}; Path=/; SameSite=Lax; '
+                                f'Max-Age=31536000; {seguro}')
+                        return self.redir(destino,cookie)
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'GET')
                     if path=='/static/portal.js':

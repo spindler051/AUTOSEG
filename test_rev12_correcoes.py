@@ -78,6 +78,11 @@ def texto_pdf(arquivo):
     return '\n'.join(pagina.extract_text() or '' for pagina in PdfReader(arquivo).pages)
 
 
+class _SemRedirecionar(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class CorrecoesRev12(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_correcoes_')
@@ -181,6 +186,60 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(ordem['cliente_id'], alfa)
         self.assertEqual(ordem['status'], 'Aberta')
         self.assertIn('Portão da garagem', ordem['descricao'])
+
+    def test_toggle_unslop_no_login_e_layout_da_os(self):
+        pid = self._prestador('Técnico Unslop', email='unslop@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Unslop')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        _, base = self._servidor()
+
+        def browser_ui(valor):
+            jar = http.cookiejar.CookieJar()
+            jar.set_cookie(http.cookiejar.Cookie(
+                version=0, name='autosseg_ui', value=valor, port=None,
+                port_specified=False, domain='127.0.0.1',
+                domain_specified=True, domain_initial_dot=False,
+                path='/', path_specified=True, secure=False, expires=None,
+                discard=False, comment=None, comment_url=None, rest={},
+                rfc2109=False))
+            return urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(jar))
+
+        # O link do login define a preferência e redireciona.
+        sem_redirect = urllib.request.build_opener(_SemRedirecionar)
+        with self.assertRaises(urllib.error.HTTPError) as falha:
+            sem_redirect.open(base + '/ui/unslop', timeout=10)
+        self.assertEqual(falha.exception.code, 303)
+        self.assertIn('autosseg_ui=unslop',
+                      falha.exception.headers.get('Set-Cookie', ''))
+
+        classico = browser_ui('classic')
+        _, login_classico = req(classico, base, '/login')
+        self.assertIn('Ativar unslop', login_classico)
+
+        novo = browser_ui('unslop')
+        _, html = req(novo, base, '/login', {
+            'email': 'unslop@exemplo.com.br',
+            'senha': 'senha-bem-segura-2026'})
+        self.assertIn('Painel principal', html)
+        _, html = req(novo, base, f'/os/{oid}')
+        self.assertIn('class="ui-unslop', html)
+        self.assertIn('os-form-unslop', html)
+        self.assertIn('os-summary', html)
+        self.assertIn('class="app-side"', html)
+        self.assertIn('Preview do PDF', html)
+
+        _, html = req(classico, base, '/login', {
+            'email': 'unslop@exemplo.com.br',
+            'senha': 'senha-bem-segura-2026'})
+        _, html = req(classico, base, f'/os/{oid}')
+        self.assertNotIn('ui-unslop', html)
+        self.assertNotIn('os-form-unslop', html)
 
     def test_pdf_nao_abre_pagina_de_erro_em_os_ativa(self):
         pid = self._prestador()
