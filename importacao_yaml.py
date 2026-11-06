@@ -265,6 +265,50 @@ def relatorio(nome, conteudo, numero_os=None):
     return resultado
 
 
+def relatorio_os_yaml(banco, os_id):
+    """Exporta o relatório de uma OS no formato aceito por ``relatorio``."""
+    import yaml
+    with ext.db(banco) as c:
+        o=c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:
+            raise ValueError('OS não encontrada.')
+        detalhes=None
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_detalhes_os'").fetchone():
+            detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',
+                               (os_id,)).fetchone()
+        andamento=None
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='os_atendimentos'").fetchone():
+            andamento=c.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=?',
+                                (os_id,)).fetchone()
+        encerramento=None
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='os_encerramentos'").fetchone():
+            encerramento=c.execute('SELECT relatorio FROM os_encerramentos WHERE os_id=?',
+                                   (os_id,)).fetchone()
+        materiais=c.execute('SELECT item,quantidade,unidade,valor_unitario FROM materiais_os '
+                            'WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+    dados={'versao':1,'os':{}}
+    for chave,coluna in (('diagnostico','diagnostico'),('execucao','execucao'),('resultado','resultado')):
+        valor=(detalhes[coluna] if detalhes else '') or ''
+        if str(valor).strip():
+            dados['os'][chave]=str(valor).strip()
+    relato=((encerramento['relatorio'] if encerramento else '') or
+            (andamento['rascunho'] if andamento else '') or '')
+    if str(relato).strip():
+        dados['os']['relatorio_tecnico']=str(relato).strip()
+    itens=[]
+    for m in materiais:
+        if m['quantidade'] is None:
+            continue
+        item={'item':m['item'],'quantidade':float(m['quantidade']),
+              'valor_unitario':float(m['valor_unitario'] or 0)}
+        if str(m['unidade'] or '').strip():
+            item['unidade']=str(m['unidade']).strip()
+        itens.append(item)
+    if itens:
+        dados['os']['materiais']=itens
+    return yaml.safe_dump(dados,allow_unicode=True,sort_keys=False)
+
+
 def _texto_orcamento(entrada, chave, limite):
     valor = entrada.get(chave, '')
     if valor is None:

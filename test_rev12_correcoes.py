@@ -509,7 +509,12 @@ class CorrecoesRev12(unittest.TestCase):
 
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn('name="anexo_incluir[]"', html)
-        self.assertIn(f'formaction="/os/{oid}/anexo/{foto["id"]}/mover"', html)
+        self.assertIn(f'data-mover="/os/{oid}/anexo/{foto["id"]}/mover"', html)
+        with cliente_b.open(urllib.request.Request(
+                base + f'/arquivos/anexo/{foto["id"]}/thumb'), timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'image/jpeg')
+            self.assertGreater(len(resposta.read()), 0)
 
         # O mesmo técnico não responsável pode alterar a legenda depois.
         status, _ = req(cliente_b, base, f'/os/{oid}/fotos', {
@@ -517,14 +522,19 @@ class CorrecoesRev12(unittest.TestCase):
             'anexo_id[]': [str(foto['id'])],
             'anexo_legenda[]': ['Legenda alterada pelo colaborador'],
             'anexo_incluir_modo': '1',
+            'comprimir_fotos_pdf_presente': '1',
         })
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             alterada = c.execute(
                 'SELECT legenda,visivel FROM v9_anexos_visiveis WHERE anexo_id=?',
                 (foto['id'],)).fetchone()
+            compressao = c.execute(
+                'SELECT comprimir_fotos_pdf FROM ordens_servico WHERE id=?',
+                (oid,)).fetchone()
         self.assertEqual(alterada['legenda'], 'Legenda alterada pelo colaborador')
         self.assertEqual(alterada['visivel'], 0)
+        self.assertEqual(compressao['comprimir_fotos_pdf'], 0)
 
         # Erro de validação nesse formulário deve voltar como JSON/toast, sem
         # navegar para uma página de erro.
@@ -1131,6 +1141,37 @@ class CorrecoesRev12(unittest.TestCase):
                             (oid,)).fetchone()
         self.assertEqual(row['status'], 'Concluída')
         self.assertEqual(row['arquivada'], 1)
+
+    def test_importar_yaml_na_criacao_e_exportar_relatorio(self):
+        pid = self._prestador('Técnico YAML OS', email='yaml.os@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio YAML OS')
+        dados = {'cliente_id': str(cid), 'descricao': 'OS para exportar',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        cad.salvar_detalhes(self.db, oid, 'Diagnóstico exportado',
+                            'Execução exportada', 'Resultado exportado')
+        _, base = self._servidor()
+        cliente = self._login(base, 'yaml.os@exemplo.com.br')
+        _, html = req(cliente, base, '/os/nova')
+        self.assertIn('Importar OS em YAML', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        yaml_os = (b'versao: 1\nos:\n  diagnostico: Diagnostico importado\n'
+                   b'  execucao: Execucao importada\n  relatorio_tecnico: Relato importado\n')
+        status, body = multipart(
+            cliente, base, '/os/yaml',
+            [('csrf', token)],
+            [('yaml', 'relatorio.yaml', yaml_os, 'application/x-yaml')])
+        self.assertEqual(status, 200)
+        self.assertIn('Diagnostico importado', body)
+        self.assertIn('Execucao importada', body)
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertNotIn('Importar OS em YAML', html)
+        status, texto = req(cliente, base, f'/os/{oid}/relatorio.yaml')
+        self.assertEqual(status, 200)
+        self.assertIn('versao: 1', texto)
+        self.assertIn('Diagnóstico exportado', texto)
 
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""

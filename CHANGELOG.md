@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.32 — feedbacks 54–63, menu hambúrguer e fotos — 2026-11-06 — develop
+
+- **Identificação:** Cancelar OS e Arquivar OS ficaram no fim da aba Identificação; Situação do atendimento e Assumir OS permanecem no topo. Administradores também podem cancelar OS nesse fluxo.
+- **YAML da OS:** importação de relatório aparece somente na criação (OS rápida ou completa), não na edição; o formulário de criação é preenchido para revisão. OS existentes ganharam **Exportar relatório em YAML** acima das ações de cancelar/arquivar, com diagnóstico, execução, resultado, relato e materiais.
+- **Fotos:** subir/descer é aplicado ao vivo (sem recarregar e sem voltar para a aba 01); “Incluir no PDF” é checkbox; a ordem é usada no PDF.
+- **Desempenho de fotos:** o site passa a usar miniaturas JPEG em cache; o original permanece no banco. O PDF ganhou a opção **Comprimir fotos no PDF** (marcada por padrão); desmarcada, usa alta qualidade, sempre sem alterar o original.
+- **Menu mobile:** no unslop, a navegação mobile fica dentro de um botão **☰ Menu** com lista vertical no estilo de configurações do Android, em vez de uma lista aberta no topo.
+- **Lista de OS:** o filtro de ordenação aplica automaticamente, sem botão Aplicar; novas opções **Última alteração** e **Última abertura (lida por mim)**. Abrir uma OS registra a leitura por prestador.
+- **YAML na criação:** as telas de OS rápida (após escolher o cliente) e OS completa oferecem importação antes de criar, sem salvar automaticamente.
+- **Testes:** `test_rev12_correcoes.py` (39 OK, 1 skipped), `test_composicao.py` (28 OK), `test_feedback_portal.py` (25 OK), `test_api_financeiro.py` (8 OK), `test_autoseg_melhorias.py` (9 OK), `test_pdf_relatorio.py` (4 OK), `test_produtividade_rev07.py` (9 OK) e `test_importacao_yaml.py` (OK).
+
 ## 9.6.0-dev.31 — financeiro por OS em que participo e feedbacks recentes — 2026-11-06 — develop
 
 - **Financeiro:** dados bancários passam a ser o primeiro bloco; “Lançamentos das OS em que participo” une OSs finalizadas e OSs em que o prestador é técnico secundário; duas colunas visíveis (A receber / Confirmar recebimento e Recebidos) com migração automática ao confirmar. O card separado de produção secundária foi absorvido.

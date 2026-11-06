@@ -1282,6 +1282,62 @@
     }
   }
 
+  const menuToggle = document.getElementById('toggle-side-nav');
+  const menuLateral = document.getElementById('side-nav');
+  if (menuToggle && menuLateral) {
+    const fecharMenu = () => {
+      menuLateral.classList.remove('open');
+      menuToggle.setAttribute('aria-expanded', 'false');
+    };
+    menuToggle.addEventListener('click', evento => {
+      evento.stopPropagation();
+      const aberto = menuLateral.classList.toggle('open');
+      menuToggle.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    });
+    document.addEventListener('click', evento => {
+      if (!menuLateral.classList.contains('open')) return;
+      if (evento.target.closest('#side-nav,#toggle-side-nav')) return;
+      fecharMenu();
+    });
+    menuLateral.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', fecharMenu);
+    });
+    document.addEventListener('keydown', evento => {
+      if (evento.key === 'Escape') fecharMenu();
+    });
+  }
+  document.querySelectorAll('button[data-mover]').forEach(botao => {
+    botao.addEventListener('click', async () => {
+      const card = botao.closest('.foto-rascunho');
+      const form = botao.closest('form');
+      if (!card || !form) return;
+      const corpo = new FormData();
+      const csrf = form.querySelector('input[name="csrf"]')?.value || '';
+      if (csrf) corpo.append('csrf', csrf);
+      corpo.append('direcao', botao.dataset.direcao || '');
+      botao.disabled = true;
+      try {
+        const resposta = await fetch(botao.dataset.mover, {
+          method: 'POST', body: corpo, credentials: 'same-origin',
+          headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}
+        });
+        let dados = {};
+        try { dados = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !dados.ok) {
+          throw new Error(dados.error || 'Não foi possível mover a foto.');
+        }
+        if (botao.dataset.direcao === 'up' && card.previousElementSibling) {
+          card.parentElement.insertBefore(card, card.previousElementSibling);
+        } else if (botao.dataset.direcao === 'down' && card.nextElementSibling) {
+          card.parentElement.insertBefore(card.nextElementSibling, card);
+        }
+      } catch (erro) {
+        mostrarAvisoGlobal(erro.message || 'Não foi possível mover a foto.');
+      } finally {
+        botao.disabled = false;
+      }
+    });
+  });
   document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
     document.getElementById('abrir-feedback')?.click();
   });

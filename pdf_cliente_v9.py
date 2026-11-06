@@ -129,6 +129,9 @@ def gerar(banco,os_id):
             ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
     tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
     if anexos:
+        comprimir=True
+        if 'comprimir_fotos_pdf' in os_.keys():
+            comprimir=bool(os_['comprimir_fotos_pdf'])
         primeira_foto=True
         for a in anexos:
             p=Path(a['caminho'])
@@ -138,9 +141,14 @@ def gerar(banco,os_id):
                     # Aplica a orientação EXIF: o navegador já gira a prévia,
                     # mas o PDF precisa do mesmo resultado.
                     im=ImageOps.exif_transpose(im)
-                    # Resolução preservada para tela e impressão; reduz apenas
-                    # imagens maiores que o limite, mantendo a proporção.
-                    im.thumbnail((1400, 1400));buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=85);buf.seek(0)
+                    if comprimir:
+                        # Resolução preservada para tela e impressão; reduz
+                        # apenas imagens maiores que o limite.
+                        im.thumbnail((1400, 1400))
+                        qualidade=85
+                    else:
+                        qualidade=95
+                    buf=io.BytesIO();im.convert('RGB').save(buf,format='JPEG',quality=qualidade);buf.seek(0)
                     w,h=im.size
                 # Usa a largura útil da página (A4 com margens de 42pt) sem
                 # distorcer: a escala preserva a proporção original.

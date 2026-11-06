@@ -94,6 +94,12 @@ def instalar(banco):
             atualizado_em TEXT NOT NULL,
             UNIQUE(os_id, prestador_id)
         );
+        CREATE TABLE IF NOT EXISTS os_leituras (
+            os_id INTEGER NOT NULL,
+            prestador_id INTEGER NOT NULL,
+            lido_em TEXT NOT NULL,
+            PRIMARY KEY(os_id, prestador_id)
+        );
         CREATE INDEX IF NOT EXISTS idx_os_prestadores_prestador ON os_prestadores(prestador_id,os_id);
         CREATE INDEX IF NOT EXISTS idx_os_responsaveis_prestador ON os_responsaveis(prestador_id);
         CREATE INDEX IF NOT EXISTS idx_eventos_os ON os_eventos(os_id,id);
@@ -131,6 +137,8 @@ def instalar(banco):
                 c.execute("ALTER TABLE ordens_servico ADD COLUMN base_percentuais TEXT NOT NULL DEFAULT 'total'")
             if 'arquivada' not in colunas_os:
                 c.execute("ALTER TABLE ordens_servico ADD COLUMN arquivada INTEGER NOT NULL DEFAULT 0")
+            if 'comprimir_fotos_pdf' not in colunas_os:
+                c.execute("ALTER TABLE ordens_servico ADD COLUMN comprimir_fotos_pdf INTEGER NOT NULL DEFAULT 1")
         # REV05: exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
@@ -229,7 +237,7 @@ def evento(c,os_id,acao,descricao,prestador_id=None,ator='Administrador'):
 
 ATIVAS = ('Aberta', 'Iniciada', 'Pendente')
 
-def listar_os_compartilhadas(banco, ordem='status'):
+def listar_os_compartilhadas(banco, ordem='status', pid=None):
     """Todas as OS ativas para todo prestador autenticado, atribuídas ou não.
 
     ``ordem`` is a whitelist key, never SQL from the caller. The default puts
@@ -242,6 +250,8 @@ def listar_os_compartilhadas(banco, ordem='status'):
         'data': 'o.data_abertura DESC, o.id DESC',
         'cliente': 'cl.nome COLLATE NOCASE ASC, o.id DESC',
         'os': 'o.numero_os COLLATE NOCASE ASC, o.id DESC',
+        'alteracao': 'COALESCE(o.atualizado_em, o.data_abertura) DESC, o.id DESC',
+        'abertura': 'l.lido_em DESC, o.id DESC',
     }
     clausula = ordens.get(str(ordem or ''), ordens['status'])
     with db(banco) as c:
@@ -259,10 +269,11 @@ def listar_os_compartilhadas(banco, ordem='status'):
             JOIN clientes cl ON cl.id=o.cliente_id
             LEFT JOIN os_responsaveis r ON r.os_id=o.id
             LEFT JOIN prestadores p ON p.id=r.prestador_id
+            LEFT JOIN os_leituras l ON l.os_id=o.id AND l.prestador_id=?
             WHERE o.status IN ('Aberta','Iniciada','Pendente')
               AND COALESCE(o.arquivada,0)=0
             ORDER BY {clausula}
-        """).fetchall()]
+        """, (int(pid or 0),)).fetchall()]
 
 def responsavel_atual(c, os_id):
     x = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (os_id,)).fetchone()
@@ -457,6 +468,24 @@ def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
                f'{Path(atual["nome_original"]).name[:150]} movida para {"cima" if direcao=="up" else "baixo"}.',
                pid,nome_ator)
         return True
+
+
+def thumb_imagem(caminho):
+    """Gera/retorna um JPEG pequeno para a listagem do portal."""
+    from PIL import Image, ImageOps
+    p=Path(caminho)
+    if not p.is_file():
+        raise ValueError('Arquivo da foto não encontrado.')
+    chave=hashlib.sha256(f'{p.resolve()}:{p.stat().st_mtime_ns}:{p.stat().st_size}'.encode()).hexdigest()[:24]
+    pasta=ANEXOS/'.thumbs'
+    pasta.mkdir(parents=True,exist_ok=True)
+    destino=pasta/f'{chave}.jpg'
+    if not destino.is_file():
+        with Image.open(p) as original:
+            imagem=ImageOps.exif_transpose(original)
+            imagem.thumbnail((560,560))
+            imagem.convert('RGB').save(destino,'JPEG',quality=78,optimize=True)
+    return destino.read_bytes()
 
 
 def _legenda_normalizada(texto):

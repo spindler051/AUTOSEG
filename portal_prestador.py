@@ -63,10 +63,13 @@ CSS_MOBILE = """
 .finance-item-foot button{min-height:36px;padding:8px 12px;font-size:13px}
 .foto-incluir{display:flex!important;align-items:center;gap:8px;margin:8px 0;font-weight:600}
 .foto-incluir input{width:18px;height:18px;min-height:0}
+.foto-comprimir{display:flex!important;align-items:center;gap:8px;margin:12px 0 4px;font-weight:600}
+.foto-comprimir input{width:18px;height:18px;min-height:0}
 .row-link{cursor:pointer}
 .total-previsto-linha{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0 8px;padding:12px 14px;border:1px solid #444;border-radius:8px;background:#1b1b1b}
 .total-previsto-linha>span{color:#bbb;font-size:13px}
 .total-previsto-linha strong{font-size:20px;color:#ffd400;white-space:nowrap}
+.os-danger-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin:18px 0 0;padding-top:14px;border-top:1px solid #444}
 @media(max-width:980px){.finance-columns{grid-template-columns:1fr}}
 .lista-organizacoes-pj{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .lista-organizacoes-pj .resultado-organizacao{margin:0}
@@ -212,6 +215,8 @@ body.ui-unslop .foto-rascunho img{width:120px!important;height:90px!important;ob
 body.ui-unslop .foto-rascunho label{margin-top:10px}
 body.ui-unslop .foto-incluir{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:500}
 body.ui-unslop .foto-incluir input{width:16px;height:16px;min-height:0}
+body.ui-unslop .foto-comprimir{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-weight:500}
+body.ui-unslop .foto-comprimir input{width:16px;height:16px;min-height:0}
 body.ui-unslop #nota-fiscal-upload>div[style]{border:1px solid var(--u-line)!important;background:var(--u-card-2)!important;border-radius:10px!important}
 body.ui-unslop #nota-fiscal-upload{margin-top:8px!important;border-top:0!important;padding-top:0!important}
 body.ui-unslop #nota-fiscal-upload>label[style]{font-weight:500!important;color:var(--u-text)!important}
@@ -250,6 +255,7 @@ body.ui-unslop .app-side{position:fixed;inset:0 auto 0 0;z-index:100;display:fle
 body.ui-unslop .side-brand{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:0 12px;text-decoration:none}
 body.ui-unslop .side-brand img{display:block;width:auto;height:32px;max-width:176px;object-fit:contain}
 body.ui-unslop .side-brand span{color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-unslop .side-menu-toggle{display:none;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid var(--u-line-2);border-radius:8px;background:var(--u-raised);color:var(--u-text);font:500 12px/1.2 var(--u-font);cursor:pointer}
 body.ui-unslop .side-nav{display:flex;flex-direction:column;gap:20px;overflow-y:auto;padding-right:2px}
 body.ui-unslop .side-group{display:flex;flex-direction:column;gap:2px}
 body.ui-unslop .side-label{margin:0 12px 8px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
@@ -388,6 +394,7 @@ body.ui-unslop .os-status-current{color:var(--u-text-2)}
 body.ui-unslop .os-status-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 body.ui-unslop .os-status-actions p{flex:1 1 100%;margin:0;font-size:12px}
 body.ui-unslop .os-status-actions button{min-height:36px}
+body.ui-unslop .os-danger-actions{border-top:1px solid var(--u-line)}
 body.ui-unslop .cancel-dialog .cancel-step{padding:24px}
 body.ui-unslop .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
 body.ui-unslop .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
@@ -460,14 +467,16 @@ body.ui-unslop .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100
   body.ui-unslop .os-ticket-actions{grid-column:1/-1;flex-direction:row;justify-content:flex-end;border-left:0;border-top:1px solid var(--u-line)}
 }
 @media(max-width:980px){
-  body.ui-unslop .app-side{position:static;width:auto;padding:16px 16px 10px;border-right:0;border-bottom:1px solid var(--u-line);gap:14px}
+  body.ui-unslop .app-side{position:relative;width:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--u-line);gap:12px;flex-direction:row;align-items:center;justify-content:space-between}
   body.ui-unslop .side-brand{flex-direction:row;align-items:center;gap:10px}
   body.ui-unslop .side-brand img{height:28px}
   body.ui-unslop .side-brand span{display:none}
-  body.ui-unslop .side-nav{flex-direction:column;gap:2px;max-height:42vh;overflow-y:auto;overflow-x:visible;padding:0}
+  body.ui-unslop .side-menu-toggle{display:inline-flex}
+  body.ui-unslop .side-nav{display:none;position:absolute;top:100%;left:0;right:0;z-index:250;flex-direction:column;gap:4px;max-height:calc(100vh - 80px);overflow-y:auto;padding:12px 16px 18px;border-bottom:1px solid var(--u-line);background:var(--u-side);box-shadow:0 18px 40px rgba(0,0,0,.45)}
+  body.ui-unslop .side-nav.open{display:flex}
   body.ui-unslop .side-group{flex-direction:column;gap:2px}
   body.ui-unslop .side-label{display:block;margin:8px 12px 4px;color:var(--u-muted)}
-  body.ui-unslop .side-link{white-space:normal;min-height:32px;padding:0 12px}
+  body.ui-unslop .side-link{white-space:normal;min-height:36px;padding:0 12px}
   body.ui-unslop .side-link svg{display:none}
   body.ui-unslop .side-foot{display:none}
   body.ui-unslop .feedback-fab{display:inline-flex}
@@ -725,7 +734,9 @@ def layout_unslop(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,ba
         sidebar=(f'<aside class="app-side">'
                  '<a class="side-brand" href="/"><img src="/logo.png" alt="AUTOSEG">'
                  '<span>Portal do prestador</span></a>'
-                 f'<nav class="side-nav" aria-label="Navegação principal">{blocos}</nav>'
+                 '<button type="button" class="side-menu-toggle" id="toggle-side-nav" '
+                 'aria-expanded="false" aria-controls="side-nav">☰ Menu</button>'
+                 f'<nav class="side-nav" id="side-nav" aria-label="Navegação principal">{blocos}</nav>'
                  '<div class="side-foot">'
                  f'<div class="side-user"><strong>{esc(usuario.get("nome",""))}</strong>'
                  '<span>Prestador · DEV</span></div>'
@@ -1065,8 +1076,8 @@ class PortalPrestador:
                     return self.pagina('Histórico e relatórios',resumo+card('Histórico e documentos',
                         tabela(['OS','Cliente','Situação','Valor','Versão PDF','Documento'],rows)),s)
                 ordem=parse_qs(urlparse(self.path).query).get('ordem',['status'])[0]
-                if ordem not in ('status','data','cliente','os'):ordem='status'
-                lista=ext.listar_os_compartilhadas(banco,ordem)
+                if ordem not in ('status','data','cliente','os','alteracao','abertura'):ordem='status'
+                lista=ext.listar_os_compartilhadas(banco,ordem,s['pid'])
                 rows=[]
                 for x in lista:
                     estado=x['status']
@@ -1081,13 +1092,18 @@ class PortalPrestador:
                         esc(x.get('participantes') or 'Nenhum')))
                 opcoes_ordem=[
                     ('status','Situação: iniciadas e pendentes primeiro'),
+                    ('alteracao','Última alteração'),
+                    ('abertura','Última abertura (lida por mim)'),
                     ('data','Data de criação: mais recentes'),
                     ('cliente','Cliente: A-Z'),
                     ('os','Número da OS'),
                 ]
-                filtro_ordem=(f'<form method="get" action="/os" class="actions">'
-                    +select('Ordenar por','ordem',opcoes_ordem,ordem)
-                    +'<button type="submit">Aplicar</button></form>')
+                filtro_ordem=('<form method="get" action="/os" class="actions">'
+                    '<label for="c_ordem">Ordenar por</label>'
+                    '<select id="c_ordem" name="ordem" onchange="this.form.submit()">'
+                    +''.join(f'<option value="{esc(k)}" {"selected" if ordem==k else ""}>{esc(v)}</option>'
+                             for k,v in opcoes_ordem)
+                    +'</select></form>')
                 return self.pagina('Ordens de serviço ativas',
                     '<p class="muted">Todos os prestadores veem as OS abertas, iniciadas e pendentes, mesmo quando atribuídas a outros.</p>'
                     +f'<div class="page-actions">{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</div>'
@@ -1651,9 +1667,18 @@ class PortalPrestador:
                                  'encerrado com essa situação.</p>'
                                  '<button type="submit" style="width:100%">Criar OS aberta</button></form>')
                         aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                        importar_rapida=card('Importar OS em YAML',
+                            f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{self.hidden(s)}'
+                            f'<input type="hidden" name="cliente_id" value="{int(cliente["id"])}">'
+                            '<label for="importar-os-rapida-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
+                            '<input id="importar-os-rapida-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
+                            '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
+                            '<p class="muted">Abre o formulário completo já preenchido para revisão; '
+                            'nada é salvo antes de confirmar.</p>')
                         return self.pagina(
                             'Nova OS rápida — ' + cliente['nome'],
                             card('Solicitação para ' + cliente['nome'], aviso + form)
+                            + importar_rapida
                             + botao('← Voltar e escolher outro cliente', '/os/rapida', 'secondary'), s)
 
                     termo = str(q or '').strip()[:120]
@@ -1730,6 +1755,15 @@ class PortalPrestador:
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
                 arquivada=bool(d.get('arquivada'))
+                if oid:
+                    try:
+                        with ext.db(banco) as c:
+                            c.execute('''INSERT INTO os_leituras(os_id,prestador_id,lido_em)
+                                VALUES(?,?,?) ON CONFLICT(os_id,prestador_id)
+                                DO UPDATE SET lido_em=excluded.lido_em''',
+                                (oid,s['pid'],ext.agora()))
+                    except Exception:
+                        pass
                 if preenchimento:
                     # YAML é um modelo: preenche apenas campos vazios por padrão.
                     # A escolha explícita "substituir" é necessária para sobrescrever.
@@ -1742,7 +1776,7 @@ class PortalPrestador:
                         if k.startswith('v9_') or k=='relatorio_tecnico':
                             if substituir or not str(d.get(k,'')).strip():d[k]=v
                     # Rascunho completo do servidor (produtividade_os) também chega aqui.
-                    for k in ('tecnico','valor_mao_obra','valor_materiais_manual','custo_materiais','valor_total_override','forma_pagamento'):
+                    for k in ('cliente_id','tecnico','valor_mao_obra','valor_materiais_manual','custo_materiais','valor_total_override','forma_pagamento'):
                         if k in preenchimento and (substituir or not str(d.get(k,'')).strip()):
                             d[k]=preenchimento[k]
                     if 'material_yaml' in preenchimento and (substituir or not mat):
@@ -1821,13 +1855,6 @@ class PortalPrestador:
                 if oid and unslop:
                     corpo+='<div class="os-workflow">'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    importar=(f'<form method="post" action="/os/{oid}/yaml" enctype="multipart/form-data">{token}'
-                      '<label for="importar-relatorio-yaml">Preencher relatório com arquivo YAML (até 64 KB)</label>'
-                      '<input type="file" id="importar-relatorio-yaml" name="yaml" accept=".yaml,.yml" required>'
-                      '<label><input type="checkbox" name="substituir" value="1"> Substituir campos e materiais já preenchidos</label>'
-                      '<button type="submit" class="secondary">Pré-visualizar relatório YAML</button></form>'
-                      '<p class="muted">Modelo pronto: <a href="/modelos/relatorio.yaml">Baixar YAML de relatório</a>. Nada será salvo sem confirmação.</p>')
-                    corpo+='<section class="card os-work-import"><h2>Importação de relatório</h2>'+importar+'</section>'
                     if responsavel==s['pid']:
                         corpo+=('<section class="card os-work-draft"><h2>Rascunho</h2>'
                             +botao('Recuperar rascunho',f'/os/{oid}/rascunho','secondary')
@@ -1864,6 +1891,14 @@ class PortalPrestador:
                     rasc_salvo = None
                 if unslop:
                     corpo+='<div class="os-layout"><div class="os-main">'
+                if not oid:
+                    corpo+=card('Importar OS em YAML',
+                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{token}'
+                        '<label for="importar-os-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
+                        '<input id="importar-os-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
+                        '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
+                        '<p class="muted">A importação apenas preenche o formulário para revisão; '
+                        'nada é salvo antes de confirmar a criação da OS.</p>')
                 corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" enctype="multipart/form-data">{token}'
                 if d.get('composicao_yaml'):
                     import json as _json_comp
@@ -1902,12 +1937,9 @@ class PortalPrestador:
                     bloco.append(select('Situação do atendimento','acao_status',
                         [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído')],
                         status_atual,required=True))
-                    bloco.append('<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>')
                     bloco.append('<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
-                                 'Para cancelar, use o botão vermelho e confirme o número da OS.</p>')
+                                 'As ações de cancelar e arquivar ficam no fim desta aba.</p>')
                     bloco.append('<div class="os-status-actions">')
-                    if s.get('admin'):
-                        bloco.append(f'<button type="submit" class="danger" formaction="/os/{oid}/arquivar" formnovalidate data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">Arquivar OS</button>')
                     if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente'):
                         bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/assumir" formnovalidate>{rotulo_assumir}</button>')
                         bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
@@ -1993,6 +2025,16 @@ class PortalPrestador:
                     corpo+=f'<input type="hidden" name="observacoes" value="{esc(d.get("observacoes") or "") }">'
                 else:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
+                    corpo+='<div class="os-danger-actions">'
+                    corpo+=botao('Exportar relatório em YAML', f'/os/{oid}/relatorio.yaml','secondary')
+                    if s.get('admin'):
+                        corpo+=(f'<button type="submit" class="secondary" formaction="/os/{oid}/arquivar" formnovalidate '
+                                f'data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">'
+                                'Arquivar OS</button>')
+                    if responsavel==s['pid'] or s.get('admin'):
+                        corpo+='<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>'
+                    corpo+='</div>'
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total é calculado por mão de obra + materiais; o total negociado, quando informado, prevalece. Materiais detalhados prevalecem sobre o campo de materiais sem itens.</p>'
                 corpo+=datalist_unidades_material()
@@ -2094,15 +2136,15 @@ class PortalPrestador:
                             legenda=esc(a['legenda'] or '')
                             vis=esc(str(a['visivel'] if a['visivel'] is not None else 1))
                             corpo+=('<div class="foto-rascunho" data-anexo-id="'+str(a['id'])+'" style="display:grid;grid-template-columns:150px 1fr;gap:12px;border:1px solid #3b3b3b;padding:10px;margin:10px 0;border-radius:8px">'
-                                +'<img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto da OS" loading="lazy" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
+                                +'<img src="/arquivos/anexo/'+str(a['id'])+'/thumb" alt="Foto da OS" loading="lazy" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
                                 +'<div>')
                             if pode_editar_fotos:
                                 marcado=' checked' if vis=='1' else ''
                                 corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
                                     +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
                                     +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
-                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/mover" name="direcao" value="up" formnovalidate title="Mover para cima">↑</button>'
-                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/mover" name="direcao" value="down" formnovalidate title="Mover para baixo">↓</button>'
+                                    +f'<button class="secondary" type="button" data-mover="/os/{oid}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
+                                    +f'<button class="secondary" type="button" data-mover="/os/{oid}/anexo/{a["id"]}/mover" data-direcao="down" title="Mover para baixo">↓</button>'
                                     +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
@@ -2114,6 +2156,12 @@ class PortalPrestador:
                         corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>Salvar fotos e legendas</b> para guardar as fotos e legendas sem finalizar.</p></div>'
+                        comprimir_pdf=bool(d.get('comprimir_fotos_pdf',1))
+                        corpo+='<input type="hidden" name="comprimir_fotos_pdf_presente" value="1">'
+                        corpo+=(f'<label class="foto-comprimir"><input type="checkbox" name="comprimir_fotos_pdf" value="1"'
+                                f'{" checked" if comprimir_pdf else ""}> Comprimir fotos no PDF</label>')
+                        corpo+='<p class="muted">As imagens do site são sempre otimizadas; o original permanece no banco. '
+                        corpo+='Desmarque para usar alta qualidade no PDF.</p>'
                         corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/fotos" formnovalidate>Salvar fotos e legendas</button>'
                     if pode_nota:
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
@@ -2166,7 +2214,7 @@ class PortalPrestador:
                               +campos_escuros('Legenda para o PDF','legenda',vis.get('legenda',''))
                               +select('Incluir no PDF','visivel',[('1','Sim — incluir foto (padrão)'),('0','Não — ocultar por privacidade')],str(vis.get('visivel',1)))
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
-                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
+                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'/thumb" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
                     corpo+=card('Fotos da OS','<p>As fotos anexadas entram automaticamente no PDF. Se houver informação particular, selecione Ocultar por privacidade. Após alterar uma OS encerrada, publique outra versão do relatório.</p>'+''.join(itens))
                 if oid:
                     with ext.db(banco) as c:
@@ -2469,6 +2517,17 @@ class PortalPrestador:
                 mime=mimetypes.guess_type(arq.name)[0] or 'application/octet-stream'
                 return self.send_bytes(arq.read_bytes(),mime,filename=x['nome_original'])
 
+            def anexo_thumb(self,s,aid):
+                with ext.db(banco) as c:
+                    x=c.execute('SELECT os_id,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+                    if x and not prod.participou(c,x['os_id'],s['pid']):
+                        raise PermissionError('Anexo restrito aos técnicos participantes.')
+                if not x:return self.erro('Anexo não encontrado.',404,s)
+                arq=Path(x['caminho']).resolve()
+                if not arq.is_relative_to(ext.ANEXOS.resolve()):
+                    return self.erro('Anexo fora do diretório autorizado.',403,s)
+                return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg')
+
             def do_OPTIONS(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
@@ -2631,6 +2690,15 @@ class PortalPrestador:
                         return self.cliente_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='os' and partes[1].isdigit():
                         return self.os_form(s,int(partes[1]))
+                    if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='relatorio.yaml':
+                        oid=int(partes[1])
+                        try:
+                            texto=yaml_import.relatorio_os_yaml(banco,oid)
+                        except ValueError as exc:
+                            return self.erro(str(exc),404,s)
+                        return self.send_bytes(texto.encode('utf-8'),
+                                               'application/x-yaml; charset=utf-8',
+                                               filename=f'relatorio_os_{oid}.yaml')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='rascunho':
                         oid=int(partes[1])
                         rascunho=prod.recuperar_rascunho(banco,oid,s['pid'])
@@ -2646,6 +2714,8 @@ class PortalPrestador:
                         registro,caminho=ext.obter_nota_fiscal(banco,oid,nid)
                         return self.send_bytes(Path(caminho).read_bytes(),'application/pdf',
                                                filename=registro['nome_original'])
+                    if len(partes)==4 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit() and partes[3]=='thumb':
+                        return self.anexo_thumb(s,int(partes[2]))
                     if len(partes)==3 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit():
                         return self.anexo(s,int(partes[2]))
                     return self.erro('Página não encontrada.',404,s)
@@ -2934,12 +3004,32 @@ class PortalPrestador:
                                 +botao('Abrir OS',f'/os/{oid}')
                                 +botao('Abrir outra OS rápida','/os/rapida','secondary')
                                 +botao('Voltar às OS','/os','secondary')),s)
+                    if path=='/os/yaml':
+                        arquivo=d.get('yaml')
+                        if not isinstance(arquivo,tuple) or not arquivo[0]:
+                            raise ValueError('Selecione um arquivo YAML.')
+                        try:
+                            preenchimento=yaml_import.relatorio(arquivo[0],arquivo[1])
+                        except ValueError as erro:
+                            return self.os_form(s,None,erro=str(erro))
+                        if not preenchimento:
+                            return self.os_form(s,None,erro='O YAML está em branco. Preencha a seção "os" antes de importar.')
+                        cliente_id=str(d.get('cliente_id','')).strip()
+                        if cliente_id:
+                            try:
+                                preenchimento['cliente_id']=int(cliente_id)
+                            except ValueError:
+                                pass
+                        return self.os_form(s,None,preenchimento=preenchimento)
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
                         return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='mover':
                         oid=int(partes[1]);aid=int(partes[3])
-                        ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
+                        movido=ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
+                        if quer_json:
+                            return self.send_bytes(json.dumps({'ok':True,'movido':bool(movido)}).encode(),
+                                                   'application/json; charset=utf-8')
                         return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
                         oid=int(partes[1]);aid=int(partes[3])
@@ -2990,6 +3080,10 @@ class PortalPrestador:
                             raise ValueError('Envie no máximo 10 fotos por vez.')
                         with ext.db(banco) as c:
                             c.execute('BEGIN IMMEDIATE')
+                            if str(d.get('comprimir_fotos_pdf_presente',''))=='1':
+                                comprimir_pdf=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
+                                c.execute('UPDATE ordens_servico SET comprimir_fotos_pdf=? WHERE id=?',
+                                          (comprimir_pdf,oid))
                             for i,(nome,conteudo) in enumerate(imagens):
                                 ext.registrar_imagem_transacao(
                                     c,oid,pid,nome,conteudo,
@@ -3129,7 +3223,9 @@ class PortalPrestador:
                             if not str(d.get('relatorio_tecnico','')).strip():
                                 d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
                             with ext.db(banco) as c:
-                                prod._os_ativa_responsavel(c,oid,pid)
+                                if not (str(d.get('acao_status',''))=='Cancelada'
+                                        and cad9.prestador_admin(banco,pid)):
+                                    prod._os_ativa_responsavel(c,oid,pid)
                             if str(d.get('acao_status','')) in ('Concluída','Pendente'):
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),

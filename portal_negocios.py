@@ -210,6 +210,9 @@ def os_salvar(banco,d,pid,oid=None):
         bases_config={}
     if bases_config and base_nome not in bases_config:
         raise ValueError('Base de percentuais inválida.')
+    comprimir_fotos=None
+    if str(d.get('comprimir_fotos_pdf_presente',''))=='1':
+        comprimir_fotos=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
     campos={}
     for chave,valor in d.items():
         if isinstance(valor,(list,tuple,dict)) or chave in ('csrf','composicao_yaml'):
@@ -258,14 +261,15 @@ def os_salvar(banco,d,pid,oid=None):
             # A função central do banco original é a mesma utilizada no aplicativo desktop.
             from banco import proximo_numero_os
             n=proximo_numero_os(c.cursor())
+            if comprimir_fotos is None:comprimir_fotos=1
             cur=c.execute('''INSERT INTO ordens_servico
                 (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
                  valor_materiais,custo_materiais,valor_total,forma_pagamento,status,observacoes,
-                 tempo_horas,composicao_json,base_percentuais,criado_em)
-                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 tempo_horas,composicao_json,base_percentuais,comprimir_fotos_pdf,criado_em)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
                 mao_obra,total_mat,custo_mat,total,forma,'Aberta',observacoes,
-                tempo_horas,comp_json,base_nome,ext.agora()))
+                tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora()))
             oid=cur.lastrowid
             aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
             ext.evento(c,oid,'OS criada via portal','Cadastro pelo portal web.',pid,'Prestador')
@@ -292,22 +296,27 @@ def os_salvar(banco,d,pid,oid=None):
                 if old['origem']=='Portal':
                     observacoes=old['observacoes'] or original['observacoes_originais']
             atual=ext.responsavel_atual(c,oid)
-            if atual not in (None,pid):
+            admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+            if atual not in (None,pid) and not (admin and acao=='Cancelada'):
                 raise PermissionError('Assuma a OS antes de salvar rascunho, fotos ou alterar a situação.')
-            if acao in ('Pendente','Concluída','Cancelada','Não realizada') and atual not in (None,pid):
+            if (acao in ('Pendente','Concluída','Cancelada','Não realizada')
+                    and atual not in (None,pid) and not (admin and acao=='Cancelada')):
                 raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
+            if comprimir_fotos is None:
+                comprimir_fotos=(int(old['comprimir_fotos_pdf'])
+                                 if 'comprimir_fotos_pdf' in old.keys() else 1)
             old_dict=dict(old)
             updated={'cliente_id':cliente_id,'tecnico':tecnico,'descricao':descricao,
                 'valor_mao_obra':mao_obra,'valor_materiais':total_mat,
                 'custo_materiais':custo_mat,'valor_total':total,
                 'forma_pagamento':forma,'observacoes':observacoes,'tempo_horas':tempo_horas,
-                'base_percentuais':base_nome}
+                'base_percentuais':base_nome,'comprimir_fotos_pdf':comprimir_fotos}
             diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
             c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
                 valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,observacoes=?,
-                tempo_horas=?,composicao_json=?,base_percentuais=?,atualizado_em=? WHERE id=?''',
+                tempo_horas=?,composicao_json=?,base_percentuais=?,comprimir_fotos_pdf=?,atualizado_em=? WHERE id=?''',
                 (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,observacoes,
-                 tempo_horas,comp_json,base_nome,ext.agora(),oid))
+                 tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
         old_mat=[(r['item'], None if r['quantidade'] is None else float(r['quantidade']),
