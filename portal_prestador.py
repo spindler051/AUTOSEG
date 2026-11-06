@@ -28,7 +28,6 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import feedback_portal as feedback
 import api_financeiro as api_fin
-import meu_auto_financeiro as maf
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
 import composicao
@@ -728,7 +727,6 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
                           ('/clientes', 'Clientes', 'users')]),
             ('Gestão', [('/servicos', 'Serviços e valores', 'wrench'),
                         ('/financeiro', 'Financeiro', 'wallet'),
-                        ('/auto-financeiro', 'Meu Auto Financeiro', 'wallet'),
                         ('/notas', 'Notas fiscais', 'receipt'),
                         ('/emails', 'E-mails', 'mail')]),
             ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
@@ -774,7 +772,7 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
 
 
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
-    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/auto-financeiro','Meu Auto Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
+    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     if usuario and usuario.get('admin') and not cliente:
         menus.append(('/feedback/recebidos','Feedbacks'))
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
@@ -827,7 +825,6 @@ class PortalPrestador:
         self.porta=int(os.environ.get('PRESTADOR_PORT',porta))
         self.servidor=None
         self.thread=None
-        self._maf_stop=threading.Event()
 
     def iniciar(self):
         banco=self.banco
@@ -857,7 +854,6 @@ class PortalPrestador:
         estoque.instalar(banco)
         feedback.instalar(banco)
         api_fin.instalar(banco)
-        maf.instalar()
         # Repara chamados antigos que não receberam OS após falha/interrupção,
         # inclusive quando apenas o Portal do Prestador é iniciado.
         recuperadas=cad9.sincronizar_solicitacoes_pendentes(banco)
@@ -1111,7 +1107,7 @@ class PortalPrestador:
                     +'</select></form>')
                 return self.pagina('Ordens de serviço ativas',
                     '<p class="muted">Todos os prestadores veem as OS abertas, iniciadas e pendentes, mesmo quando atribuídas a outros.</p>'
-                    +f'<div class="page-actions">{botao("+ Nova OS rápida","/os/rapida")} {botao("Nova OS completa","/os/nova","secondary")}</div>'
+                    +f'<div class="page-actions">{botao("+ Nova OS","/os/rapida")}</div>'
                     +filtro_ordem
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
@@ -1149,7 +1145,6 @@ class PortalPrestador:
                     recentes_html=tabela(['OS','Cliente','Status','Valor','Abertura'],linhas)
                     atalhos=[('Clientes','/clientes','users'),
                              ('Serviços e valores','/servicos','wrench'),
-                             ('Meu Auto Financeiro','/auto-financeiro','wallet'),
                              ('Notas fiscais','/notas','receipt'),
                              ('Histórico e relatórios','/historico','history')]
                     atalhos_html=''.join(
@@ -1158,8 +1153,7 @@ class PortalPrestador:
                         for texto,url,nome in atalhos)
                     corpo=(f'<div class="home-toolbar"><p class="page-meta">'
                            f'{esc(s["nome"])} · {time.strftime("%d/%m/%Y")}</p>'
-                           f'<div class="page-actions">{botao("+ Nova OS rápida","/os/rapida")}'
-                           f'{botao("+ Nova OS","/os/nova","secondary")}</div></div>'
+                           f'<div class="page-actions">{botao("+ Nova OS","/os/rapida")}</div></div>'
                            f'<div class="stat-grid">{stats}</div>'
                            f'<div class="home-grid">'
                            f'<section class="panel"><div class="panel-head"><h2>Ordens recentes</h2>'
@@ -1184,7 +1178,7 @@ class PortalPrestador:
                        ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',cl['total'])]
                 k='<div class="kpis">'+''.join(f'<div class="kpi"><span>{esc(n)}</span><strong>{esc(v)}</strong></div>' for n,v in indic)+'</div>'
                 corpo=f'<p>Olá, <b>{esc(s["nome"])}</b>. Acesso completo às funcionalidades operacionais, com auditoria.</p>{k}'
-                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Meu Auto Financeiro','/auto-financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
+                atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
                 corpo+=card('Acesso rápido',''.join(botao(t,url) for t,url in atalhos))
                 corpo+=v9.barra_links('prestador')
                 corpo+='<div class="notice">As alterações são registradas com o prestador autenticado. E-mails e notas fiscais ainda dependem das APIs externas.</div>'
@@ -1675,7 +1669,7 @@ class PortalPrestador:
                         form += ('<p class="notice">A OS será criada como <b>Aberta</b>. '
                                  'Ela só fica <b>Pendente</b> se o atendimento for iniciado e '
                                  'encerrado com essa situação.</p>'
-                                 '<button type="submit" style="width:100%">Criar OS aberta</button></form>')
+                                 '<button type="submit" style="width:100%">Criar OS</button></form>')
                         aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
                         importar_rapida=card('Importar OS em YAML',
                             f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{self.hidden(s)}'
@@ -1686,7 +1680,7 @@ class PortalPrestador:
                             '<p class="muted">Abre o formulário completo já preenchido para revisão; '
                             'nada é salvo antes de confirmar.</p>')
                         return self.pagina(
-                            'Nova OS rápida — ' + cliente['nome'],
+                            'Nova ordem de serviço — ' + cliente['nome'],
                             card('Solicitação para ' + cliente['nome'], aviso + form)
                             + importar_rapida
                             + botao('← Voltar e escolher outro cliente', '/os/rapida', 'secondary'), s)
@@ -1732,13 +1726,12 @@ class PortalPrestador:
                     'Tente outro nome ou <a href="/clientes/novo">cadastre o cliente</a>.</p>')
                 aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
                 return self.pagina(
-                    'Nova OS rápida',
+                    'Nova ordem de serviço',
                     card('1. Encontre o cliente',
                          '<p>Busque pelo nome, CNPJ/CPF, cidade ou e-mail. '
                          'Ao escolher, você informa a solicitação e cria a OS.</p>' + aviso + busca)
                     + card('2. Escolha o cliente', '<div class="lista-organizacoes-pj">'
                            + lista + '</div>')
-                    + botao('Nova OS completa', '/os/nova', 'secondary')
                     + botao('Voltar às OS', '/os', 'secondary'), s)
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
@@ -1995,7 +1988,7 @@ class PortalPrestador:
                         '</div></div></dialog>')
                 corpo+='<fieldset><legend>Identificação e serviço</legend>'
                 corpo+=cancelar_dialogo
-                if bloco_modelo:
+                if bloco_modelo and not oid:
                     corpo+=bloco_modelo
                 corpo+='<div class="col2"><div>'
                 if solicitacao:
@@ -2646,8 +2639,6 @@ class PortalPrestador:
                         return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
                     s=self.sessao()
-                    if path=='/auto-financeiro' or path.startswith('/auto-financeiro/'):
-                        return maf.GET(self,path,s,banco)
                     if not s:return self.login()
                     if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml','/modelos/orcamento.yaml'):
                         nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml','/modelos/orcamento.yaml':'modelo_orcamento.yaml'}[path]
@@ -2808,25 +2799,6 @@ class PortalPrestador:
                 try:
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
-                    if path=='/auto-financeiro' or path.startswith('/auto-financeiro/'):
-                        try: tamanho=int(self.headers.get('Content-Length','0'))
-                        except ValueError: tamanho=0
-                        if tamanho>5*1024*1024:
-                            return self.erro('Formulário financeiro ultrapassa 5 MB.',413)
-                        d=self.form()
-                        origem=self.headers.get('Origin','')
-                        if origem:
-                            parsed=urlparse(origem)
-                            if (parsed.hostname is None
-                                    or parsed.netloc.lower()!=self.headers.get('Host','').lower()
-                                    or parsed.scheme not in ('http','https')):
-                                return self.erro('Origem do formulário não autorizada.',403)
-                        try:
-                            return maf.POST(self,path,self.sessao(),banco,d)
-                        except PermissionError as erro:
-                            return maf._fail(self,str(erro),status=403)
-                        except (ValueError,TypeError,KeyError,OverflowError) as erro:
-                            return maf._fail(self,str(erro),status=400)
                     d=self.form()
                     if path=='/prestadores' or path.startswith('/prestadores/'):
                         return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop. '
@@ -3102,7 +3074,7 @@ class PortalPrestador:
                                 '<p class="muted">Você não precisa preencher o atendimento agora. '
                                 'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
                                 +botao('Abrir OS',f'/os/{oid}')
-                                +botao('Abrir outra OS rápida','/os/rapida','secondary')
+                                +botao('Abrir outra OS','/os/rapida','secondary')
                                 +botao('Voltar às OS','/os','secondary')),s)
                     if path=='/os/yaml':
                         arquivo=d.get('yaml')
@@ -3434,14 +3406,10 @@ class PortalPrestador:
                         secundario=int(d['secundario_id'])
                         prod.confirmar_repasse(
                             banco,int(d['os_id']),pid,secundario,None)
-                        try:maf.sincronizar_prestador(banco,secundario)
-                        except Exception:LOG.exception('Repasse confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     if path=='/financeiro/repasse/confirmar':
                         prod.confirmar_recebimento_repasse(
                             banco,int(d['os_id']),pid,None)
-                        try:maf.sincronizar_prestador(banco,pid)
-                        except Exception:LOG.exception('Repasse recebido, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2] in ('receber','cancelar'):
                         fid=int(partes[1])
@@ -3454,8 +3422,6 @@ class PortalPrestador:
                             neg.financeiro_cancelar(banco,fid,pid,str(d.get('motivo_cancelamento','')))
                         else:
                             neg.financeiro_receber(banco,fid,pid)
-                            try:maf.sincronizar_prestador(banco,pid)
-                            except Exception:LOG.exception('Recebimento confirmado, mas a conciliação do Meu Auto Financeiro ficou pendente.')
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
                 except PermissionError as e:
@@ -3491,17 +3457,6 @@ class PortalPrestador:
         self.porta=self.servidor.server_port
         self.thread=threading.Thread(target=self.servidor.serve_forever,daemon=True)
         self.thread.start()
-        self._maf_stop.clear()
-        def conciliar_periodicamente():
-            while not self._maf_stop.wait(15):
-                try:
-                    if maf.sincronizar_todos(banco):
-                        LOG.warning('Meu Auto Financeiro: algumas contas não conciliaram; nova tentativa em 15s.')
-                except Exception:
-                    LOG.exception('Erro de conciliação automática do Meu Auto Financeiro.')
-        self._maf_thread=threading.Thread(target=conciliar_periodicamente,
-            daemon=True,name='AUTOSEG-MeuAutoFinanceiro-Sync')
-        self._maf_thread.start()
         host_exibido='127.0.0.1' if self.host in ('0.0.0.0','::') else self.host
         return f'http://{host_exibido}:{self.porta}'
 
@@ -3515,6 +3470,5 @@ class PortalPrestador:
             return f'http://127.0.0.1:{self.porta}'
 
     def parar(self):
-        self._maf_stop.set()
         if self.servidor:
             self.servidor.shutdown();self.servidor.server_close();self.servidor=None

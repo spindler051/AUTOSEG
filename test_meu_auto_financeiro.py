@@ -252,26 +252,6 @@ class FinanceiroTeste(unittest.TestCase):
             self.assertEqual(maf.saldo(c,u['id'])+maf.saldo(c,m),0)
         with self.assertRaises(ValueError):self.acao(f'emprestimo/{lid}/confirmar',devolucao=str(did))
 
-    def test_portal_http_rota_integrada(self):
-        # Exercita o roteamento real do servidor existente sem abrir túnel.
-        portal=PortalPrestador(str(self.autoseg),host='127.0.0.1',porta=0)
-        portal.iniciar()
-        self.addCleanup(portal.parar)
-        url=f'http://127.0.0.1:{portal.porta}'
-        cl=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-        with cl.open(url+'/auto-financeiro',timeout=10) as r:
-            html=r.read().decode()
-            self.assertIn('Acesso da família',html)
-        params=urllib.parse.urlencode({'email':'a@example.org','senha':'senha-segura-integra-1'}).encode()
-        with cl.open(urllib.request.Request(url+'/login',data=params),timeout=10) as r:
-            html=r.read().decode()
-            self.assertIn('Meu Auto Financeiro',html)
-        with cl.open(url+'/auto-financeiro',timeout=10) as r:
-            html=r.read().decode()
-            self.assertIn('Recebido AUTOSEG',html)
-            self.assertIn('Saldo pessoal disponível',html)
-        with cl.open(url+'/financeiro',timeout=10) as r:
-            self.assertIn('Financeiro',r.read().decode())
 
 
 if __name__=='__main__':

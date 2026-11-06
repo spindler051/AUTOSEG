@@ -293,7 +293,7 @@ class MelhoriasRev12(unittest.TestCase):
         token = csrf(html)
         status, html = req(prestador, base, '/os/rapida')
         self.assertEqual(status, 200)
-        self.assertIn('Nova OS rápida', html)
+        self.assertIn('Nova ordem de serviço', html)
         status, html = req(prestador, base, '/os/rapida/salvar', {
             'csrf': token, 'cliente_texto': f'{cid} — Condomínio Rápido',
             'descricao': 'Solicitação criada pelo fluxo rápido', 'prestador_id': str(pid),
@@ -422,7 +422,9 @@ class MelhoriasRev12(unittest.TestCase):
         token = csrf(html)
         status, html = req(prestador, base, f'/os/{oid}')
         self.assertEqual(status, 200)
-        self.assertEqual(html.count(f'formaction="/os/{oid}/rascunho/salvar">SALVAR RASCUNHO'), 1)
+        self.assertIn('data-auto-save="1"', html)
+        self.assertIn('rascunho-auto-status', html)
+        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
         pos_fotos = html.find('name="imagens_encerramento[]"')
         pos_nota = html.find('name="nota_fiscal"')
         pos_confirmar = html.find('id="confirmar-situacao"')

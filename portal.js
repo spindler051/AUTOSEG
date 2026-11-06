@@ -1459,7 +1459,8 @@
     });
   }
   // Ajustes mobile: menu compacto sem rolagem e barra de ações sem cobrir conteúdo.
-  if (window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
+  const podeCriarElemento = typeof document.createElement === 'function';
+  if (podeCriarElemento && window.matchMedia && window.matchMedia('(max-width: 980px)').matches) {
     const ajustes = document.createElement('style');
     ajustes.id = 'ajustes-mobile-app';
     ajustes.textContent = `
@@ -1468,13 +1469,23 @@
   body.menu-open #side-nav.open{overflow:hidden!important;padding:10px 16px 82px!important;gap:2px!important}
   body.menu-open #side-nav.open .side-group{gap:0!important}
   body.menu-open #side-nav.open .side-label{display:none!important}
-  body.menu-open #side-nav.open .side-link{min-height:38px!important;padding:0 10px!important;font-size:14px!important}
+  body.menu-open #side-nav.open .side-link{min-height:42px!important;padding:0 10px!important;font-size:15px!important}
   body.menu-open #side-nav.open .side-link svg{width:18px!important;height:18px!important;flex-basis:18px!important}
   body.menu-open .side-foot{padding:8px 16px!important}
   body.menu-open .side-foot .side-user{padding:0!important}
   body.menu-open .side-foot .side-tool{min-height:28px!important}
   body.ui-app .os-form-app .actions{position:static!important;margin-bottom:28px!important}
   body.ui-app .os-form-app{padding-bottom:80px!important}
+}
+@media(max-width:520px){
+  .finance-item-foot{flex-direction:column!important;align-items:stretch!important;gap:8px!important}
+  .finance-item-foot form{width:100%!important;margin:0!important}
+  .finance-item-foot button{width:100%!important}
+  .os-danger-actions{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:8px!important;margin-top:16px!important}
+  .os-danger-actions .btn,.os-danger-actions button{width:100%!important;margin:0!important}
+  body.ui-app .os-form-app .actions{position:static!important;margin-bottom:0!important;padding:8px 12px!important}
+  body.ui-app .os-form-app{padding-bottom:calc(16px + env(safe-area-inset-bottom))!important}
+  .actions-note{display:none!important}
 }`;
     document.head.appendChild(ajustes);
   }
@@ -1489,6 +1500,158 @@
       acoesTopo.prepend(botao);
     });
   }
+  // Módulo Meu Auto Financeiro é separado do AUTOSEG: remove os atalhos.
+  document.querySelectorAll('a[href="/auto-financeiro"]').forEach(link => link.remove());
+
+  // Fluxo único de Nova OS: usa a tela rápida e remove o conceito de completa.
+  document.querySelectorAll('.page-actions').forEach(area => {
+    const rapida = area.querySelector('a[href="/os/rapida"]');
+    const completa = area.querySelector('a[href="/os/nova"]');
+    if (!rapida) return;
+    rapida.textContent = '+ Nova OS';
+    if (completa) completa.remove();
+  });
+  if (location.pathname === '/os/rapida') {
+    document.querySelectorAll('a[href="/os/nova"]').forEach(link => link.remove());
+    document.title = document.title.replace('Nova OS rápida', 'Nova ordem de serviço');
+    const h1 = document.querySelector('main h1');
+    if (h1 && h1.textContent.includes('Nova OS rápida')) {
+      h1.textContent = h1.textContent.replace('Nova OS rápida', 'Nova ordem de serviço');
+    }
+    document.querySelectorAll('form[action="/os/rapida/salvar"] button[type="submit"]')
+      .forEach(botao => {
+        if (botao.textContent.trim() === 'Criar OS aberta') botao.textContent = 'Criar OS';
+      });
+  }
+  const formRapida = document.querySelector('form[action="/os/rapida/salvar"]');
+  if (formRapida) {
+    formRapida.addEventListener('submit', async evento => {
+      evento.preventDefault();
+      const botao = formRapida.querySelector('button[type="submit"]');
+      if (botao) { botao.disabled = true; botao.textContent = 'Criando…'; }
+      try {
+        const resposta = await fetch('/os/rapida/salvar', {
+          method: 'POST', body: new FormData(formRapida), credentials: 'same-origin'
+        });
+        const html = await resposta.text();
+        if (!resposta.ok || !html.includes('OS aberta com sucesso')) {
+          throw new Error('Não foi possível criar a OS.');
+        }
+        const numero = (html.match(/OS-\d{3,}/) || [''])[0];
+        const cliente = (document.querySelector('.passo')?.textContent || '').split('·')[0].trim();
+        sessionStorage.setItem('autoseg:os-criada', JSON.stringify({numero, cliente}));
+        window.location.href = '/';
+      } catch (erro) {
+        if (botao) { botao.disabled = false; botao.textContent = 'Criar OS'; }
+        mostrarAvisoGlobal(erro.message || 'Não foi possível criar a OS.');
+      }
+    });
+  }
+  const osCriada = (() => {
+    try { return JSON.parse(sessionStorage.getItem('autoseg:os-criada')); }
+    catch (_erro) { return null; }
+  })();
+  if (osCriada && podeCriarElemento) {
+    sessionStorage.removeItem('autoseg:os-criada');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    const caixa = document.createElement('div');
+    caixa.style.cssText = 'background:#1a1816;color:#f1ece3;border:1px solid #3a342e;border-radius:16px;padding:24px;max-width:420px;width:100%;font:400 14px/1.5 -apple-system,BlinkMacSystemFont,sans-serif';
+    const titulo = document.createElement('h2');
+    titulo.textContent = 'OS aberta com sucesso';
+    titulo.style.cssText = 'margin:0 0 8px;font-size:20px';
+    const texto = document.createElement('p');
+    texto.textContent = `${osCriada.numero || 'OS'}${osCriada.cliente ? ' · ' + osCriada.cliente : ''}`;
+    texto.style.cssText = 'margin:0 0 16px;color:#b5aca1';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.textContent = 'OK';
+    ok.style.cssText = 'width:100%;background:#f1ece3;color:#17130d;border:0;border-radius:8px;min-height:40px;font-weight:600;cursor:pointer';
+    ok.addEventListener('click', () => overlay.remove());
+    caixa.append(titulo, texto, ok);
+    overlay.append(caixa);
+    document.body?.append(overlay);
+    ok.focus();
+  }
+
+  // Cancelamento de pagamento: confirmação + motivo, botão apenas "Cancelar".
+  document.querySelectorAll('form[action*="/financeiro/"][action$="/cancelar"]').forEach(form => {
+    form.removeAttribute('data-confirm');
+    const botao = form.querySelector('button[type="submit"]');
+    if (botao && botao.textContent.trim() === 'Cancelar pagamento') botao.textContent = 'Cancelar';
+    form.addEventListener('submit', evento => {
+      evento.preventDefault();
+      evento.stopImmediatePropagation();
+      if (!window.confirm('Cancelar este pagamento? Ele deixará de ser contabilizado.')) return;
+      const motivo = window.prompt('Motivo do cancelamento (opcional):', '');
+      if (motivo === null) return;
+      let campo = form.querySelector('input[name="motivo_cancelamento"]');
+      if (!campo) {
+        campo = document.createElement('input');
+        campo.type = 'hidden';
+        campo.name = 'motivo_cancelamento';
+        form.append(campo);
+      }
+      campo.value = motivo;
+      form.submit();
+    }, true);
+  });
+
+  // Histórico retrátil; textos redundantes de documentos e nota fiscal.
+  document.querySelectorAll('.os-rail .card').forEach(card => {
+    const h2 = card.querySelector('h2');
+    if (!h2) return;
+    const titulo = h2.textContent.trim();
+    if (titulo === 'Histórico' && podeCriarElemento) {
+      const detalhes = document.createElement('details');
+      const resumo = document.createElement('summary');
+      resumo.textContent = 'Mostrar histórico';
+      const conteudo = document.createElement('div');
+      Array.from(card.children).slice(1).forEach(el => conteudo.appendChild(el));
+      detalhes.append(resumo, conteudo);
+      card.append(detalhes);
+    }
+    if (titulo === 'Documentos e relatórios') {
+      card.querySelectorAll('p.muted').forEach(p => p.remove());
+      if (!card.querySelector('a,button,form')) card.remove();
+    }
+    if (titulo === 'Notas fiscais da OS') {
+      card.querySelectorAll('p.muted').forEach(p => {
+        if (p.textContent.includes('A nota fiscal anexada é enviada')) p.remove();
+      });
+    }
+  });
+
+  // Abas da OS: somente nome + ícone simbólico.
+  const svgsAbas = [
+    '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M4 7 12 3l8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12a9 9 0 1 1-6-8.5"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>'
+  ];
+  document.querySelectorAll('.os-tabs .os-tab .tab-index').forEach((span, indice) => {
+    span.innerHTML = svgsAbas[indice] || '';
+    span.classList.add('tab-icon');
+  });
+  if (podeCriarElemento) {
+    const estiloAbas = document.createElement('style');
+    estiloAbas.textContent = '.os-tab .tab-icon svg{width:16px;height:16px;display:block;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}';
+    document.head?.append(estiloAbas);
+  }
+
+  // Modelo de serviço só na criação; no estoque, placeholder explícito.
+  if (/^\/os\/\d+/.test(location.pathname)) {
+    document.querySelectorAll('.os-service-model').forEach(el => el.remove());
+  }
+  const estoqueSelect = document.getElementById('material-estoque-selecionar');
+  if (estoqueSelect && podeCriarElemento) {
+    const placeholder = document.createElement('option');
+    placeholder.value = '-1';
+    placeholder.textContent = 'Selecione um material do estoque';
+    estoqueSelect.prepend(placeholder);
+    estoqueSelect.value = '-1';
+  }
+
   document.querySelectorAll('button[data-mover]').forEach(botao => {
     botao.addEventListener('click', async () => {
       const card = botao.closest('.foto-rascunho');

@@ -1719,12 +1719,12 @@ class DialogoOSRapida(Adw.Dialog):
                 "SELECT id,nome FROM prestadores WHERE ativo=1 ORDER BY nome")]
         if not self.clientes:
             raise ValueError("Cadastre um condomínio ou cliente antes de abrir a OS.")
-        self.set_title("Nova OS rápida")
+        self.set_title("Nova ordem de serviço")
         self.set_content_width(680)
         self.set_content_height(520)
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        header.set_title_widget(Adw.WindowTitle(title="Nova OS rápida"))
+        header.set_title_widget(Adw.WindowTitle(title="Nova ordem de serviço"))
         toolbar.add_top_bar(header)
         pagina = Adw.PreferencesPage()
         grupo = Adw.PreferencesGroup(
