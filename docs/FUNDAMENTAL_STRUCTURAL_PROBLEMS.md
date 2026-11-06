@@ -86,7 +86,12 @@ configuração; nenhuma delas foi alterada agora.
   `PRESTADOR_BIND`, como antes;
 - `PRESTADOR_PORT` continua tendo precedência sobre a porta passada ao
   construtor, como antes;
-- nenhuma tela, texto, rota, HTML, CSS, banco ou regra foi alterado.
+- nenhuma tela, rota, HTML, CSS, banco ou regra foi alterado.
+
+**Exceção intencional e limitada ao DEV:** o link “Abrir Portal do Cliente” no
+portal do prestador passa a usar `CLIENTE_PORT` (8865 no DEV). Antes ele
+apontava fixamente para 8765 mesmo no DEV. No MAIN, sem `CLIENTE_PORT`, o link
+continua 8765 e o texto permanece o mesmo.
 
 ### Testes
 
