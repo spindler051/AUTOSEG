@@ -6,6 +6,7 @@ import re
 import prestadores_ext as ext
 import pdf_identidade as identidade
 import composicao
+import cadastros_v9 as cad
 
 def data_br(valor):
     s=str(valor or '').strip()
@@ -23,7 +24,7 @@ def _cnpj_no_texto(texto):
                    r'\b(\d{14})\b'):
         for achado in re.finditer(padrao,texto,re.IGNORECASE):
             cnpj=identidade.formatar_cnpj(achado.group(1))
-            if cnpj:
+            if cnpj and cad.cnpj_valido(cnpj):
                 return cnpj
     return ''
 
