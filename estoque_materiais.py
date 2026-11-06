@@ -64,6 +64,8 @@ def instalar(banco):
             for m in linhas:
                 nome=str(m['item'] or '').strip()
                 if not nome:continue
+                if m['quantidade'] is None or str(m['quantidade']).strip()=='':
+                    continue
                 key=(int(m['os_id']),_chave(nome))
                 if key not in agrupado:agrupado[key]=[nome,Decimal(0),m['valor_unitario']]
                 agrupado[key][1]+=_q(m['quantidade'])
@@ -173,6 +175,8 @@ def reconciliar_os_conexao(c,os_id,ator='OS'):
     for item in c.execute('SELECT item,quantidade,valor_unitario FROM materiais_os WHERE os_id=?',(os_id,)).fetchall():
         nome=str(item['item'] or '').strip()
         if not nome:continue
+        if item['quantidade'] is None or str(item['quantidade']).strip()=='':
+            continue
         qtd=_q(item['quantidade'])
         chave=_chave(nome)
         if chave not in desejado:desejado[chave]=[nome,Decimal('0'),item['valor_unitario']]

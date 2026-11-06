@@ -287,5 +287,101 @@ class ComposicaoBancoTest(unittest.TestCase):
         self.assertEqual(sum(item["valor_centavos"] for item in comp["componentes"]), 20000)
 
 
+class ComposicaoOSTest(unittest.TestCase):
+    def _config_os(self):
+        return {"versao": 1, "componentes": [
+            {"id": "materiais", "nome": "Materiais", "modo": "materiais",
+             "valor": 0, "ordem": 1, "ativo": True},
+            {"id": "hora_tecnica", "nome": "Mão de obra / hora técnica",
+             "modo": "hora", "valor": 10000, "minimo_centavos": 10000,
+             "ordem": 2, "ativo": True},
+            {"id": "visita", "nome": "Taxa mínima de visita", "modo": "fixo",
+             "valor": 25000, "ordem": 3, "ativo": True},
+            {"id": "administrativo", "nome": "Custos administrativos",
+             "modo": "percentual", "valor": 10, "ordem": 4, "ativo": True},
+            {"id": "operacional", "nome": "Custos operacionais e tecnológicos",
+             "modo": "percentual", "valor": 10, "ordem": 5, "ativo": True},
+            {"id": "risco", "nome": "Margem de risco e contingência",
+             "modo": "percentual", "valor": 10, "ordem": 6, "ativo": True},
+        ]}
+
+    def test_calcular_os_usa_padrao_e_hora_residual(self):
+        comp = composicao.calcular_os(
+            total_centavos=100000, materiais_centavos=11075,
+            mao_obra_centavos=10000, config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 100000)
+        self.assertEqual(valores["Materiais"], 11075)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 33925)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertEqual(valores["Custos administrativos"], 10000)
+        self.assertEqual(valores["Custos operacionais e tecnológicos"], 10000)
+        self.assertEqual(valores["Margem de risco e contingência"], 10000)
+        self.assertEqual(sum(valores.values()), 100000)
+
+    def test_calcular_os_respeita_hora_minima_de_100(self):
+        comp = composicao.calcular_os(
+            total_centavos=45000, materiais_centavos=11075,
+            mao_obra_centavos=10000, config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 45000)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 10000)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertEqual(valores["Custos administrativos"], 0)
+        desconto = next(x for x in comp["componentes"] if x["modo"] == "desconto")
+        self.assertEqual(desconto["valor_centavos"], -1075)
+        self.assertTrue(comp["aviso"])
+        self.assertEqual(sum(valores.values()), 45000)
+
+    def test_calcular_os_residual_dividido_entre_percentuais(self):
+        comp = composicao.calcular_os(
+            total_centavos=45000, materiais_centavos=6500,
+            mao_obra_centavos=10000, config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 45000)
+        self.assertEqual(valores["Materiais"], 6500)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 10000)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertEqual(valores["Custos administrativos"], 1167)
+        self.assertEqual(valores["Custos operacionais e tecnológicos"], 1167)
+        self.assertEqual(valores["Margem de risco e contingência"], 1166)
+        self.assertFalse(any(x["modo"] == "desconto" for x in comp["componentes"]))
+        self.assertIn("residual", comp["aviso"].lower())
+        self.assertEqual(sum(valores.values()), 45000)
+        self.assertAlmostEqual(sum(x["percentual"] for x in comp["componentes"]), 100.0, places=2)
+
+    def test_calcular_os_sem_mao_de_obra_mantem_garantia(self):
+        comp = composicao.calcular_os(
+            total_centavos=7550, materiais_centavos=7550,
+            mao_obra_centavos=0, config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 7550)
+        self.assertEqual(valores["Materiais"], 7550)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 0)
+        self.assertEqual(valores["Taxa mínima de visita"], 0)
+        self.assertEqual(sum(valores.values()), 7550)
+
+    def test_calcular_os_sem_total_calcula_padrao(self):
+        comp = composicao.calcular_os(
+            materiais_centavos=11075, mao_obra_centavos=10000,
+            config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertGreater(comp["total_centavos"], 0)
+        self.assertEqual(comp["total_centavos"] % 100, 0)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertGreaterEqual(valores["Mão de obra / hora técnica"], 10000)
+        self.assertEqual(sum(valores.values()), comp["total_centavos"])
+
+    def test_calcular_os_arredonda_total_e_sobra_na_hora(self):
+        comp = composicao.calcular_os(
+            materiais_centavos=2500, mao_obra_centavos=10000,
+            config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 53600)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 10020)
+        self.assertEqual(valores["Taxa mínima de visita"], 25000)
+        self.assertEqual(sum(valores.values()), 53600)
+
+
 if __name__ == "__main__":
     unittest.main()

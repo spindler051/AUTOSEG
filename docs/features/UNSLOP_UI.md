@@ -133,7 +133,7 @@ separators and tabular figures.
 
 `test_rev12_correcoes.py` covers the cookie toggle, the `next` redirect, the
 unslop login, the shell, the OS ticket/workflow/rail, the server-rendered
-summary and the classic fallback. Current result: **30 tests, OK, 1 skipped**.
+summary and the classic fallback. Current result: **32 tests, OK, 1 skipped**.
 `test_feedback_portal.py`: **22 OK**. `test_api_financeiro.py`: **8 OK**.
 
 Manual checks in DEV (Playwright, 1440×1000 and 390×844):

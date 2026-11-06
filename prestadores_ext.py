@@ -120,6 +120,10 @@ def instalar(banco):
             colunas_os={r[1] for r in c.execute('PRAGMA table_info(ordens_servico)').fetchall()}
             if 'custo_materiais' not in colunas_os:
                 c.execute('ALTER TABLE ordens_servico ADD COLUMN custo_materiais REAL DEFAULT 0')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='materiais_os'").fetchone():
+            colunas_mat={r[1] for r in c.execute('PRAGMA table_info(materiais_os)').fetchall()}
+            if 'unidade' not in colunas_mat:
+                c.execute("ALTER TABLE materiais_os ADD COLUMN unidade TEXT NOT NULL DEFAULT ''")
         # REV05: exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
@@ -442,7 +446,7 @@ def gerar_pdf(banco,os_id):
         participantes=c.execute('SELECT p.nome FROM os_prestadores op JOIN prestadores p ON p.id=op.prestador_id WHERE op.os_id=? ORDER BY p.nome',(os_id,)).fetchall()
         eventos=c.execute('SELECT criado_em,ator,acao,descricao FROM os_eventos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         anexos=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
-        materiais=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        materiais=c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status,valor FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         tem_encerramento=c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_encerramentos'").fetchone()
         enc=c.execute('SELECT situacao,motivo,relatorio,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if tem_encerramento else None
@@ -474,7 +478,11 @@ def gerar_pdf(banco,os_id):
             P('Relatório técnico: '+str(enc['relatorio']))])
         if enc['motivo']: partes.append(P('Motivo do encerramento: '+enc['motivo']))
     partes.append(H('MATERIAIS UTILIZADOS'))
-    for m in materiais: partes.append(P(f'{m["item"]}: {m["quantidade"]} un. | {brl(m["valor_total"])}'))
+    for m in materiais:
+        qtd=m['quantidade']; unidade=str(m['unidade'] or '').strip()
+        quantidade=('—' + (' '+unidade if unidade else '')) if qtd is None else (
+            f'{float(qtd):g}' + (' '+unidade if unidade else ' un.'))
+        partes.append(P(f'{m["item"]}: {quantidade} | {brl(m["valor_total"])}'))
     partes.extend([Spacer(1,10),H('HISTÓRICO DE ATIVIDADES')])
     for ev in eventos: partes.append(P(f'{ev["criado_em"]} | {ev["ator"]} | {ev["acao"]}: {ev["descricao"]}'))
     partes.extend([Spacer(1,10),H('IMAGENS ANEXADAS')])

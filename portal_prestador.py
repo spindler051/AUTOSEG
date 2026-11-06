@@ -30,6 +30,7 @@ import feedback_portal as feedback
 import api_financeiro as api_fin
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
+import composicao
 import estoque_materiais as estoque
 import portal_v9 as v9
 import links_publicos as links9
@@ -162,9 +163,15 @@ body.ui-unslop fieldset{border:0;padding:0;margin:0;min-width:0}
 body.ui-unslop legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0}
 body.ui-unslop .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 body.ui-unslop .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
+body.ui-unslop .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
 body.ui-unslop .material-row label{margin:0 0 4px}
 body.ui-unslop .material-row input{min-height:36px}
 body.ui-unslop .material-row button{min-height:36px;padding:0 12px}
+body.ui-unslop .material-row select{min-height:36px}
+body.ui-unslop .composicao-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;margin:8px 0 0;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
+body.ui-unslop .composicao-preview span{min-width:0}
+body.ui-unslop .composicao-preview b{color:var(--u-text-2);font-weight:400}
+body.ui-unslop .composicao-preview .aviso{grid-column:1/-1;color:var(--u-warn)}
 body.ui-unslop .foto-rascunho{display:grid!important;grid-template-columns:120px minmax(0,1fr)!important;gap:16px!important;align-items:start!important;margin:12px 0!important;padding:12px!important;border:1px solid var(--u-line)!important;border-radius:10px!important;background:var(--u-card-2)!important}
 body.ui-unslop .foto-rascunho img{width:120px!important;height:90px!important;object-fit:cover!important;border-radius:8px!important}
 body.ui-unslop .foto-rascunho label{margin-top:10px}
@@ -485,6 +492,27 @@ def campos_escuros(caption, name, value='', required=False, kind='text', placeho
             f'placeholder="{esc(placeholder)}" {"required" if required else ""} {"readonly" if readonly else ""}>')
 
 
+UNIDADES_MATERIAL = (
+    ('un', 'Unidade'), ('m', 'Metro'), ('cm', 'Centímetro'), ('mm', 'Milímetro'),
+    ('g', 'Grama'), ('kg', 'Quilograma'), ('L', 'Litro'), ('ml', 'Mililitro'),
+    ('h', 'Hora'), ('par', 'Par'), ('rolo', 'Rolo'), ('caixa', 'Caixa'),
+    ('pacote', 'Pacote'),
+)
+
+
+def datalist_unidades_material():
+    return ('<datalist id="unidades-material">'
+            + ''.join(f'<option value="{esc(chave)}">{esc(rotulo)}</option>'
+                      for chave,rotulo in UNIDADES_MATERIAL)
+            + '</datalist>')
+
+
+def input_unidade_material(valor=''):
+    return (f'<input name="material_unidade[]" list="unidades-material" '
+            f'maxlength="40" value="{esc(valor or "")}" placeholder="un, m, cm, g..." '
+            f'autocomplete="off" aria-label="Unidade do material">')
+
+
 def textarea(caption,name,value='',rows=4,required=False):
     return f'<label for="c_{esc(name)}">{esc(caption)}</label><textarea id="c_{esc(name)}" name="{esc(name)}" rows="{int(rows)}" {"required" if required else ""}>{esc(value)}</textarea>'
 
@@ -682,9 +710,10 @@ button.secondary,.btn.secondary{{background:#262626;border-color:#9b9b9b;color:#
 .table-scroll{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;min-width:640px}}th,td{{border-bottom:1px solid #414141;padding:12px 10px;text-align:left;vertical-align:top;overflow-wrap:normal;word-break:normal}}th{{color:var(--yellow);background:#222}}td:nth-child(3){{min-width:125px}}td:nth-child(3),td:nth-child(4),td:nth-child(5){{overflow-wrap:normal;word-break:normal}} .material-row button{{min-width:90px}}.col2{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px}}.actions{{display:flex;gap:8px;flex-wrap:wrap;align-items:center}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.kpi{{background:#171717;border:1px solid #444;padding:17px;border-radius:10px}}.kpi strong{{display:block;font-size:26px;color:var(--yellow)}}.kpi span{{font-size:13px;color:var(--muted)}}
 form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;overflow-wrap:anywhere}}.nav-more{{max-width:100%}}
-fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row label{{font-size:12px;margin:0}}.material-row input{{width:100%}}
+fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row-os{{grid-template-columns:minmax(0,2.4fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.1fr) auto}}.material-row label{{font-size:12px;margin:0}}.material-row input,.material-row select{{width:100%}}
+.composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
-@media(max-width:620px){{.material-row{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
+@media(max-width:620px){{.material-row,.material-row-os{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
 {CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
 
 
@@ -1626,9 +1655,13 @@ class PortalPrestador:
                         d['composicao_yaml'] = preenchimento['composicao_yaml']
                     itens=preenchimento.get('material_item[]',[])
                     quantidades=preenchimento.get('material_qtd[]',[])
+                    unidades=preenchimento.get('material_unidade[]',[])
                     unitarios=preenchimento.get('material_unit[]',[])
                     if itens and (substituir or not mat):
-                        mat=[dict(item=item,quantidade=quantidades[i] if i<len(quantidades) else '',valor_unitario=unitarios[i] if i<len(unitarios) else '')
+                        mat=[dict(item=item,
+                                  quantidade=quantidades[i] if i<len(quantidades) else '',
+                                  unidade=unidades[i] if i<len(unidades) else '',
+                                  valor_unitario=unitarios[i] if i<len(unitarios) else '')
                              for i,item in enumerate(itens) if item]
                 em_rota=False
                 if oid and d.get('status') in ext.ATIVAS:
@@ -1806,19 +1839,23 @@ class PortalPrestador:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total é calculado por mão de obra + materiais; o total negociado, quando informado, prevalece. Materiais detalhados prevalecem sobre o campo de materiais sem itens.</p>'
+                corpo+=datalist_unidades_material()
+                corpo+='<p class="muted">Deixe a quantidade vazia para itens sem quantidade fixa; nesse caso, o valor informado é o total do item. A unidade é livre: use uma sugestão ou digite a sua.</p>'
                 linhas=list(mat)
                 corpo+='<div id="lista-materiais">'
                 for i,m in enumerate(linhas):
                     item=m['item'] if 'item' in m.keys() else ''
                     qtd=m['quantidade'] if 'quantidade' in m.keys() else ''
+                    unidade=(m['unidade'] if 'unidade' in m.keys() else '') or ''
                     unit=m['valor_unitario'] if 'valor_unitario' in m.keys() else ''
-                    corpo+='<div class="material-row">'
+                    corpo+='<div class="material-row material-row-os">'
                     corpo+=f'<div><label>Material<input name="material_item[]" value="{esc(item)}" placeholder="Cabo, câmera, fonte..."></label></div>'
-                    corpo+=f'<div><label>Quantidade<input name="material_qtd[]" value="{esc(qtd)}" placeholder="1"></label></div>'
-                    corpo+=f'<div><label>Valor unitário (R$)<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
+                    corpo+=f'<div><label>Quantidade<input name="material_qtd[]" value="{esc(qtd)}" placeholder="—" inputmode="decimal"></label></div>'
+                    corpo+=f'<div><label>Unidade{input_unidade_material(unidade)}</label></div>'
+                    corpo+=f'<div><label>Valor unitário / total (R$)<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
                     corpo+='<button type="button" class="secondary remover-material" title="Remover material">Remover</button></div>'
                 corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
-                corpo+='''<template id="modelo-material"><div class="material-row"><div><label>Material<input name="material_item[]" placeholder="Cabo, câmera, fonte..."></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="1"></label></div><div><label>Valor unitário (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
+                corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Cabo, câmera, fonte..."></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
                 corpo+='<button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
                 produtos=estoque.listar(banco,ativos=True)
                 if produtos:
@@ -1828,7 +1865,10 @@ class PortalPrestador:
                     corpo+='<select id="material-estoque-selecionar">'+''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))+'</select>'
                     corpo+='<button class="secondary" id="adicionar-do-estoque" type="button">+ Adicionar do estoque</button>'
                     corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
-                corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p></fieldset>'
+                corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
+                corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
+                corpo+='<p><strong>Total previsto: <span id="total-previsto">—</span></strong></p>'
+                corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
                 corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
@@ -2346,6 +2386,28 @@ class PortalPrestador:
                         return self.redir('/os' if path=='/chamados' else '/clientes')
                     if path in ('/clientes/responsaveis','/organizacoes/responsaveis'):
                         return v9.get(self,'/organizacoes/responsaveis',banco,s)
+                    if path=='/composicao/simular':
+                        qs=parse_qs(urlparse(self.path).query)
+                        def _valor(k,padrao=''):
+                            return str(qs.get(k,[padrao])[0])
+                        try:
+                            total_txt=_valor('total').strip()
+                            comp=composicao.calcular_os(
+                                total_centavos=(composicao.centavos_de_reais(total_txt)
+                                                if total_txt else None),
+                                materiais_centavos=composicao.centavos_de_reais(_valor('materiais','0')),
+                                mao_obra_centavos=composicao.centavos_de_reais(_valor('mao_obra','0')),
+                                horas=_valor('horas','0') or 0)
+                            dados={'ok':True,'total_centavos':comp['total_centavos'],
+                                   'aviso':comp.get('aviso',''),
+                                   'componentes':[{'nome':x['nome'],
+                                                   'valor_centavos':x['valor_centavos'],
+                                                   'percentual':x['percentual']}
+                                                  for x in comp['componentes']]}
+                            return self.send_bytes(json.dumps(dados,ensure_ascii=False).encode(),
+                                                   'application/json; charset=utf-8')
+                        except (ValueError,TypeError) as exc:
+                            return self.erro(str(exc),400,self.sessao())
                     if path=='/':return self.inicio(s)
                     if path=='/os':return self.os_lista(s)
                     if path=='/pj-publicas':return self.pj_publicas(s)

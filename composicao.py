@@ -189,6 +189,8 @@ def _normalizar_componente(bruto, indice, ids):
         "valor": valor,
         "formula": formula,
         "horas_padrao": float(_numero(bruto.get("horas_padrao", 0), "Horas padrão")),
+        "minimo_centavos": (int(_round(_numero(bruto.get("minimo_centavos", 0), "Mínimo")))
+                            if modo == "hora" else 0),
         "aplicavel_a": [str(x).strip() for x in aplicavel if str(x).strip()],
         "ativo": bool(bruto.get("ativo", True)),
         "obrigatorio": bool(bruto.get("obrigatorio", False)),
@@ -415,6 +417,178 @@ def calcular(total_centavos=None, materiais_centavos=0, horas=None,
             "obrigatorio": componente["obrigatorio"],
             "ordem": componente["ordem"],
         })
+    return {
+        "versao": 1,
+        "total_centavos": total,
+        "componentes": saida,
+        "aviso": aviso,
+    }
+
+
+def _distribuir_percentuais(total_centavos, componentes):
+    """Divide o residual entre os percentuais, proporcional às taxas."""
+    if not componentes:
+        return {}
+    pesos = [Decimal(str(c.get("valor", 0))) for c in componentes]
+    soma = sum(pesos)
+    if soma <= 0:
+        pesos = [Decimal(1) for _ in componentes]
+        soma = Decimal(len(componentes))
+    valores = [int(Decimal(total_centavos) * p / soma) for p in pesos]
+    resto = int(total_centavos) - sum(valores)
+    for i in range(max(0, resto)):
+        valores[i % len(valores)] += 1
+    return {c["id"]: v for c, v in zip(componentes, valores)}
+
+
+def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
+                horas=None, tipo_servico="", config=None,
+                hora_minima_centavos=10000):
+    """Composição de uma OS com os componentes padrão e hora técnica residual.
+
+    Materiais, componentes fixos e percentuais seguem ``composicao.yaml``. A
+    hora técnica recebe o que sobrar do total depois dos demais componentes e
+    nunca fica abaixo do mínimo configurado (R$ 100,00 por padrão). Se o total
+    informado não comportar esse mínimo, ele é elevado ao menor valor válido e
+    a composição traz um aviso.
+
+    Quando não há mão de obra (OS de garantia/cortesia), mantém o
+    comportamento explícito anterior: somente materiais e mão de obra reais.
+    """
+    config = validar(config or carregar())
+    componentes = [c for c in config["componentes"]
+                   if c["ativo"] and c["modo"] != "residual"
+                   and _aplicavel(c, tipo_servico)]
+    if not componentes:
+        raise ValueError("Nenhum componente ativo para este tipo de serviço.")
+    materiais = int(materiais_centavos or 0)
+    labor = int(mao_obra_centavos or 0)
+    if materiais < 0 or labor < 0:
+        raise ValueError("Materiais e mão de obra não podem ser negativos.")
+    # Garantia, cortesia e OS 100% materiais continuam sem taxas padrão.
+    if labor <= 0:
+        return calcular(total_centavos=total_centavos,
+                        materiais_centavos=materiais, horas=horas,
+                        tipo_servico=tipo_servico, config=config,
+                        mao_obra_centavos=labor)
+    hora = next((c for c in componentes if c["modo"] == "hora"), None)
+    if hora is None or any(c["modo"] == "formula" for c in componentes):
+        return calcular(total_centavos=total_centavos,
+                        materiais_centavos=materiais, horas=horas,
+                        tipo_servico=tipo_servico, config=config,
+                        mao_obra_centavos=labor)
+    minimo = int(hora.get("minimo_centavos") or hora_minima_centavos or 0)
+    labor = max(labor, minimo)
+    fixos = [c for c in componentes if c["modo"] == "fixo"]
+    percentuais = [c for c in componentes if c["modo"] == "percentual"]
+    soma_fixa = sum(int(c["valor"]) for c in fixos)
+    soma_percentual = sum(Decimal(str(c["valor"])) / Decimal(100) for c in percentuais)
+    if soma_percentual >= 1:
+        raise ValueError("Os componentes percentuais somam 100% ou mais.")
+    desconto_valor = 0
+    if total_centavos is None:
+        total = _round((Decimal(materiais + soma_fixa + labor) /
+                        (Decimal(1) - soma_percentual)))
+        # Total calculado fecha em reais inteiros; a diferença fica na hora.
+        total = ((total + 99) // 100) * 100
+        for _ in range(100):
+            valores_percentuais = {
+                c["id"]: _round(Decimal(total) * Decimal(str(c["valor"])) / Decimal(100))
+                for c in percentuais
+            }
+            nao_hora = materiais + soma_fixa + sum(valores_percentuais.values())
+            hora_valor = total - nao_hora
+            if hora_valor >= minimo:
+                break
+            total += 100
+        else:
+            raise ValueError("Não foi possível fechar a composição em reais inteiros.")
+        aviso = ""
+    else:
+        total = max(0, int(total_centavos))
+        hora_valor = labor
+        disponivel = total - materiais - soma_fixa - hora_valor
+        valores_percentuais = {}
+        if disponivel < 0:
+            # O total negociado é autoritativo; se nem materiais + visita +
+            # hora mínima cabem, a diferença vira desconto e os percentuais
+            # ficam zerados.
+            desconto_valor = disponivel
+            valores_percentuais = {c["id"]: 0 for c in percentuais}
+            aviso = (f"Desconto de R$ {abs(desconto_valor) / 100:,.2f} aplicado "
+                     f"para manter o total negociado de R$ {total / 100:,.2f}.")
+        else:
+            cheios = {
+                c["id"]: _round(Decimal(total) * Decimal(str(c["valor"])) / Decimal(100))
+                for c in percentuais
+            }
+            if sum(cheios.values()) <= disponivel:
+                valores_percentuais = cheios
+                # Sobrou valor: a hora técnica recebe o resto.
+                hora_valor += disponivel - sum(cheios.values())
+                aviso = ""
+            else:
+                # Os percentuais integrais não cabem: divide o residual
+                # proporcionalmente entre eles, sem inventar desconto.
+                valores_percentuais = _distribuir_percentuais(disponivel, percentuais)
+                aviso = (f"Percentuais integrais não cabem no total de "
+                         f"R$ {total / 100:,.2f}; residual de "
+                         f"R$ {disponivel / 100:,.2f} dividido entre os custos.")
+    valores = {}
+    for componente in componentes:
+        modo = componente["modo"]
+        if modo == "materiais":
+            valores[componente["id"]] = materiais
+        elif modo == "fixo":
+            valores[componente["id"]] = int(componente["valor"])
+        elif modo == "hora":
+            valores[componente["id"]] = hora_valor
+        elif modo == "percentual":
+            valores[componente["id"]] = valores_percentuais[componente["id"]]
+        else:
+            valores[componente["id"]] = 0
+    if not desconto_valor:
+        diferenca = total - sum(valores.values())
+        if diferenca:
+            valores[hora["id"]] = max(0, valores[hora["id"]] + diferenca)
+            hora_valor = valores[hora["id"]]
+    if sum(valores.values()) - abs(desconto_valor) != total:
+        raise ValueError("Não foi possível fechar a composição no valor total.")
+    if hora_valor < minimo:
+        raise ValueError("A hora técnica ficou abaixo do mínimo configurado.")
+    saida = []
+    for componente in componentes:
+        valor = valores[componente["id"]]
+        saida.append({
+            "id": componente["id"],
+            "nome": componente["nome"],
+            "descricao": componente["descricao"],
+            "modo": componente["modo"],
+            "valor_centavos": valor,
+            "percentual": round((valor / total * 100), 2) if total else 0.0,
+            "obrigatorio": componente["obrigatorio"],
+            "ordem": componente["ordem"],
+        })
+    if desconto_valor:
+        saida.append({
+            "id": "desconto",
+            "nome": "Desconto",
+            "descricao": "Desconto aplicado para fechar o valor negociado.",
+            "modo": "desconto",
+            "valor_centavos": desconto_valor,
+            "percentual": round((desconto_valor / total * 100), 2) if total else 0.0,
+            "obrigatorio": False,
+            "ordem": max((c["ordem"] for c in componentes), default=0) + 1,
+        })
+    if total:
+        soma_percentual_saida = round(sum(x["percentual"] for x in saida), 2)
+        if soma_percentual_saida != 100.0:
+            alvo = next((x for x in saida if x["modo"] == "desconto"), None)
+            if alvo is None:
+                alvo = next((x for x in saida if x["id"] == hora["id"]), None)
+            if alvo is not None:
+                alvo["percentual"] = round(
+                    alvo["percentual"] + (100.0 - soma_percentual_saida), 2)
     return {
         "versao": 1,
         "total_centavos": total,

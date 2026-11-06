@@ -33,6 +33,7 @@ componentes:
     modo: hora
     valor: 10000
     horas_padrao: 1.0
+    minimo_centavos: 10000
     ativo: true
     obrigatorio: true
     ordem: 2

@@ -96,7 +96,8 @@
           const materiais = [];
           linhas?.querySelectorAll('.material-row').forEach(row => {
             const ler = nome => row.querySelector('[name="'+nome+'"]')?.value || '';
-            materiais.push({item:ler('material_item[]'),qtd:ler('material_qtd[]'),unit:ler('material_unit[]')});
+            materiais.push({item:ler('material_item[]'),qtd:ler('material_qtd[]'),
+                            unidade:ler('material_unidade[]'),unit:ler('material_unit[]')});
           });
           return {valores,materiais};
         };
@@ -113,6 +114,8 @@
               if (!row) continue;
               row.querySelector('[name="material_item[]"]').value = m.item;
               row.querySelector('[name="material_qtd[]"]').value = m.qtd;
+              const unidade = row.querySelector('[name="material_unidade[]"]');
+              if (unidade) unidade.value = m.unidade || '';
               row.querySelector('[name="material_unit[]"]').value = m.unit;
               linhas.appendChild(row);
             }
@@ -180,13 +183,18 @@
     const add = document.getElementById('adicionar-material');
     const modeloMaterial = document.getElementById('modelo-material');
     const total = document.getElementById('total-previsto');
+    const composicaoPreview = document.getElementById('composicao-prevista');
+    const aplicarComposicao = form.querySelector('[name="aplicar_composicao"]');
+    let timerComposicao = null;
     function number(v) {
       let x = String(v || '').trim().replace(/R\$/g, '').replace(/\s/g, '');
       if (x.includes(',')) x = x.replace(/\./g, '').replace(',', '.');
       return Number(x) || 0;
     }
-    function recalc() {
-      if (!total) return;
+    function brl(v) {
+      return Number(v || 0).toLocaleString('pt-BR', {style:'currency',currency:'BRL'});
+    }
+    function valoresBase() {
       const labour = number(form.elements['valor_mao_obra'].value);
       let material = 0, hasMaterial = false;
       container.querySelectorAll('.material-row').forEach(row => {
@@ -195,13 +203,69 @@
         const unit = row.querySelector('[name="material_unit[]"]');
         if (item && item.value.trim()) {
           hasMaterial = true;
-          material += number(qtd.value) * number(unit.value);
+          const quantidade = String(qtd?.value || '').trim();
+          material += (quantidade === '' ? 1 : number(quantidade)) * number(unit?.value);
         }
       });
       if (!hasMaterial) material = number(form.elements['valor_materiais_manual'].value);
       const negociado = String(form.elements['valor_total_override'].value).trim();
-      const cost = negociado ? number(negociado) : labour + material;
-      total.textContent = cost.toLocaleString('pt-BR', {style:'currency',currency:'BRL'});
+      return {labour, material, negociado, cost: negociado ? number(negociado) : labour + material};
+    }
+    function limparComposicao() {
+      if (composicaoPreview) composicaoPreview.replaceChildren();
+    }
+    async function atualizarComposicao() {
+      if (!total || !composicaoPreview || !aplicarComposicao || !aplicarComposicao.checked) {
+        limparComposicao();
+        return;
+      }
+      const base = valoresBase();
+      const params = new URLSearchParams({
+        materiais: base.material.toFixed(2),
+        mao_obra: base.labour.toFixed(2),
+        total: base.negociado || ''
+      });
+      try {
+        const resposta = await fetch('/composicao/simular?' + params.toString(), {
+          headers: {'Accept':'application/json'},
+          credentials: 'same-origin'
+        });
+        let dados = {};
+        try { dados = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !dados.ok) throw new Error(dados.error || 'Composição indisponível.');
+        total.textContent = brl(dados.total_centavos / 100);
+        composicaoPreview.replaceChildren();
+        for (const item of (dados.componentes || [])) {
+          const linha = document.createElement('span');
+          const nome = document.createElement('b');
+          nome.textContent = item.nome;
+          linha.append(nome, ' ' + brl(item.valor_centavos / 100));
+          composicaoPreview.appendChild(linha);
+        }
+        if (dados.aviso) {
+          const aviso = document.createElement('span');
+          aviso.className = 'aviso';
+          aviso.textContent = dados.aviso;
+          composicaoPreview.appendChild(aviso);
+        }
+      } catch (erro) {
+        limparComposicao();
+        const aviso = document.createElement('span');
+        aviso.className = 'aviso';
+        aviso.textContent = erro.message || 'Não foi possível calcular a composição agora.';
+        composicaoPreview.appendChild(aviso);
+      }
+    }
+    function recalc() {
+      if (!total) return;
+      const base = valoresBase();
+      total.textContent = brl(base.cost);
+      if (timerComposicao) window.clearTimeout(timerComposicao);
+      if (aplicarComposicao && aplicarComposicao.checked) {
+        timerComposicao = window.setTimeout(atualizarComposicao, 250);
+      } else {
+        limparComposicao();
+      }
     }
     if (add && container) {
       add.addEventListener('click', () => {
@@ -226,6 +290,7 @@
         }
       });
       form.addEventListener('input', recalc);
+      if (aplicarComposicao) aplicarComposicao.addEventListener('change', recalc);
       recalc();
     }
     // Fotos: prévia + legenda individual + chave estável por arquivo.
@@ -436,6 +501,8 @@
         const linha=modelo.content.firstElementChild.cloneNode(true);
         linha.querySelector('[name="material_item[]"]').value=produto.nome;
         linha.querySelector('[name="material_qtd[]"]').value='1';
+        const unidade = linha.querySelector('[name="material_unidade[]"]');
+        if (unidade) unidade.value='un';
         linha.querySelector('[name="material_unit[]"]').value=Number(produto.valor).toFixed(2).replace('.',',');
         lista.appendChild(linha);
         form.querySelector('[name="valor_mao_obra"]').dispatchEvent(new Event('input',{bubbles:true}));

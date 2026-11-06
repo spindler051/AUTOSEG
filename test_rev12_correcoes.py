@@ -8,6 +8,7 @@ import json
 import re
 import tempfile
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -20,6 +21,7 @@ import atendimento_os as aten
 import cadastros_v9 as cad
 import catalogo_servicos as cat
 import completude
+import composicao
 import estoque_materiais as estoque
 import fluxo_os as fluxo
 import gmail_service
@@ -257,6 +259,85 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(classico, base, f'/os/{oid}')
         self.assertNotIn('ui-unslop', html)
         self.assertNotIn('os-form-unslop', html)
+
+    def test_material_unidade_livre_quantidade_opcional_e_composicao(self):
+        pid = self._prestador('Técnico Unidades', email='unidades@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Unidades')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Ajuste com materiais',
+            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+            'materiais_presentes': '1', 'acao_status': 'salvar',
+            'aplicar_composicao': '1',
+            'material_item[]': ['Cola silicone', 'Cabo 20A'],
+            'material_qtd[]': ['', '20'],
+            'material_unidade[]': ['googleplexes', 'm'],
+            'material_unit[]': ['25,00', '1,25'],
+        }
+        oid = neg.os_salvar(self.db, dados, pid)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT valor_mao_obra,valor_total,composicao_json '
+                            'FROM ordens_servico WHERE id=?', (oid,)).fetchone()
+            mats = c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os '
+                             'WHERE os_id=? ORDER BY id', (oid,)).fetchall()
+        self.assertIsNone(mats[0]['quantidade'])
+        self.assertEqual(mats[0]['unidade'], 'googleplexes')
+        self.assertAlmostEqual(float(mats[0]['valor_total']), 25.0, places=2)
+        self.assertAlmostEqual(float(mats[1]['quantidade']), 20.0)
+        self.assertEqual(mats[1]['unidade'], 'm')
+        self.assertAlmostEqual(float(mats[1]['valor_total']), 25.0, places=2)
+        comp = json.loads(os_['composicao_json'])
+        esperado = composicao.calcular_os(
+            materiais_centavos=5000, mao_obra_centavos=10000)
+        self.assertAlmostEqual(float(os_['valor_total']),
+                               esperado['total_centavos'] / 100, places=2)
+        hora = next(x for x in comp['componentes'] if x['modo'] == 'hora')
+        self.assertAlmostEqual(float(os_['valor_mao_obra']),
+                               hora['valor_centavos'] / 100, places=2)
+        self.assertEqual(sum(x['valor_centavos'] for x in comp['componentes']),
+                         comp['total_centavos'])
+        fixos = [x for x in comp['componentes'] if x['modo'] == 'fixo']
+        if fixos:
+            self.assertTrue(any(x['valor_centavos'] > 0 for x in fixos))
+
+    def test_composicao_total_450_residual_nos_percentuais(self):
+        pid = self._prestador('Técnico Total 450', email='total450@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Total 450')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço fechado em 450',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '100', 'valor_materiais_manual': '65',
+            'valor_total_override': '450', 'materiais_presentes': '1',
+            'aplicar_composicao': '1', 'acao_status': 'salvar',
+        }
+        # A config efetiva do MAIN não tem deslocamento e usa risco de 10%.
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            config = composicao.carregar()
+            config['componentes'] = [
+                c for c in config['componentes'] if c['id'] != 'deslocamento']
+            for componente in config['componentes']:
+                if componente['id'] == 'risco':
+                    componente['valor'] = 10
+                if componente['id'] == 'hora_tecnica':
+                    componente['minimo_centavos'] = 10000
+            composicao.salvar(config)
+            oid = neg.os_salvar(self.db, dados, pid)
+            with ext.db(self.db) as c:
+                os_ = c.execute('SELECT valor_materiais,valor_mao_obra,valor_total,composicao_json '
+                                'FROM ordens_servico WHERE id=?', (oid,)).fetchone()
+        self.assertAlmostEqual(float(os_['valor_materiais']), 65.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_mao_obra']), 100.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_total']), 450.0, places=2)
+        comp = json.loads(os_['composicao_json'])
+        valores = {x['nome']: x['valor_centavos'] for x in comp['componentes']}
+        self.assertEqual(comp['total_centavos'], 45000)
+        self.assertEqual(valores['Materiais'], 6500)
+        self.assertEqual(valores['Mão de obra / hora técnica'], 10000)
+        self.assertEqual(valores['Taxa mínima de visita'], 25000)
+        self.assertEqual(valores['Custos administrativos'], 1167)
+        self.assertEqual(valores['Custos operacionais e tecnológicos'], 1167)
+        self.assertEqual(valores['Margem de risco e contingência'], 1166)
+        self.assertEqual(sum(valores.values()), 45000)
 
     def test_pdf_nao_abre_pagina_de_erro_em_os_ativa(self):
         pid = self._prestador()

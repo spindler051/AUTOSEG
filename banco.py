@@ -102,6 +102,7 @@ def criar_banco(caminho=None):
             os_id INTEGER NOT NULL,
             item TEXT NOT NULL,
             quantidade REAL DEFAULT 1,
+            unidade TEXT NOT NULL DEFAULT '',
             valor_unitario REAL DEFAULT 0,
             valor_total REAL DEFAULT 0,
             FOREIGN KEY (os_id) REFERENCES ordens_servico(id)
@@ -144,6 +145,7 @@ def criar_banco(caminho=None):
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "atualizado_em", "TEXT")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "dados_incompletos", "INTEGER NOT NULL DEFAULT 0")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "custo_materiais", "REAL DEFAULT 0")
+    adicionar_coluna_se_nao_existir(cursor, "materiais_os", "unidade", "TEXT NOT NULL DEFAULT ''")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_cliente ON ordens_servico(cliente_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status)")

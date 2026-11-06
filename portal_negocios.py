@@ -44,9 +44,11 @@ def texto(d,chave,maximo=5000):
 def lista_materiais(d):
     itens=d.get('material_item[]',[])
     quantidades=d.get('material_qtd[]',[])
+    unidades=d.get('material_unidade[]',[])
     unitarios=d.get('material_unit[]',[])
     if isinstance(itens,str): itens=[itens]
     if isinstance(quantidades,str): quantidades=[quantidades]
+    if isinstance(unidades,str): unidades=[unidades]
     if isinstance(unitarios,str): unitarios=[unitarios]
     if len(itens)>100: raise ValueError('Limite de 100 materiais por OS.')
     result=[]
@@ -54,10 +56,18 @@ def lista_materiais(d):
         nome=str(raw).strip()
         if not nome: continue
         if len(nome)>180: raise ValueError('Nome do material muito longo.')
-        qtd=numero(quantidades[i] if i<len(quantidades) else '0','Quantidade')
+        qtd_bruta=str(quantidades[i] if i<len(quantidades) else '').strip()
+        unidade=str(unidades[i] if i<len(unidades) else '').strip()[:40]
         unit=numero(unitarios[i] if i<len(unitarios) else '0','Valor unitário')
-        if qtd<=0: raise ValueError(f'Quantidade do material {nome} precisa ser positiva.')
-        result.append({'item':nome,'quantidade':qtd,'valor_unitario':unit,'valor_total':round(qtd*unit,2)})
+        if qtd_bruta=='':
+            # Item sem quantidade fixa: o valor informado é o total do item.
+            result.append({'item':nome,'quantidade':None,'unidade':unidade,
+                           'valor_unitario':unit,'valor_total':round(unit,2)})
+            continue
+        qtd=numero(qtd_bruta,'Quantidade')
+        if qtd<=0: raise ValueError(f'Quantidade do material {nome} precisa ser positiva ou ficar vazia.')
+        result.append({'item':nome,'quantidade':qtd,'unidade':unidade,
+                       'valor_unitario':unit,'valor_total':round(qtd*unit,2)})
     return result
 
 
@@ -183,7 +193,8 @@ def os_salvar(banco,d,pid,oid=None):
     custo_mat=numero(d.get('custo_materiais','0'),'Custo dos materiais')
     soma=round(mao_obra+total_mat,2)
     override=texto(d,'valor_total_override',30)
-    total=numero(override,'Total negociado') if override else soma
+    total_negociado=numero(override,'Total negociado') if override else None
+    aplicar_comp=str(d.get('aplicar_composicao','0')).lower() in ('1','on','true','sim')
     try:
         tempo_horas=float(str(d.get('tempo_horas','0') or '0').replace(',','.'))
     except ValueError:
@@ -197,9 +208,23 @@ def os_salvar(banco,d,pid,oid=None):
                 comp_yaml=_json_comp.loads(comp_yaml)
             except ValueError as exc:
                 raise ValueError('Composição declarativa inválida no YAML.') from exc
+        total=total_negociado if total_negociado is not None else soma
         comp=composicao.declarativa(
             total_centavos=int(round(total*100)),blocos=comp_yaml)
+    elif aplicar_comp:
+        comp=composicao.calcular_os(
+            total_centavos=(None if total_negociado is None
+                            else int(round(total_negociado*100))),
+            materiais_centavos=int(round(total_mat*100)),
+            mao_obra_centavos=int(round(mao_obra*100)),
+            horas=tempo_horas)
+        total=comp['total_centavos']/100
+        componente_hora=next((x for x in comp['componentes']
+                              if x.get('modo')=='hora'),None)
+        if componente_hora is not None:
+            mao_obra=componente_hora['valor_centavos']/100
     else:
+        total=total_negociado if total_negociado is not None else soma
         comp=composicao.calcular(
             total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
             horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
@@ -259,18 +284,22 @@ def os_salvar(banco,d,pid,oid=None):
                  tempo_horas,comp_json,ext.agora(),oid))
             if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
             if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
-        old_mat=[(r['item'],float(r['quantidade']),float(r['valor_unitario'])) for r in
-                 c.execute('SELECT item,quantidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id',(oid,))]
+        old_mat=[(r['item'], None if r['quantidade'] is None else float(r['quantidade']),
+                  r['unidade'] or '', float(r['valor_unitario'])) for r in
+                 c.execute('SELECT item,quantidade,unidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id',(oid,))]
         if oid is not None and 'material_item[]' not in d and old_mat and not d.get('materiais_presentes'):
-            materiais=[dict(item=r[0],quantidade=r[1],valor_unitario=r[2],valor_total=round(r[1]*r[2],2)) for r in old_mat]
+            materiais=[dict(item=r[0], quantidade=r[1], unidade=r[2],
+                            valor_unitario=r[3],
+                            valor_total=round(r[3],2) if r[1] is None else round(r[1]*r[3],2))
+                       for r in old_mat]
             new_mat=list(old_mat)
         else:
-            new_mat=[(m['item'],m['quantidade'],m['valor_unitario']) for m in materiais]
+            new_mat=[(m['item'],m['quantidade'],m.get('unidade',''),m['valor_unitario']) for m in materiais]
         if old_mat!=new_mat:
             c.execute('DELETE FROM materiais_os WHERE os_id=?',(oid,))
             for m in materiais:
-                c.execute('INSERT INTO materiais_os(os_id,item,quantidade,valor_unitario,valor_total) VALUES(?,?,?,?,?)',
-                    (oid,m['item'],m['quantidade'],m['valor_unitario'],m['valor_total']))
+                c.execute('INSERT INTO materiais_os(os_id,item,quantidade,unidade,valor_unitario,valor_total) VALUES(?,?,?,?,?,?)',
+                    (oid,m['item'],m['quantidade'],m.get('unidade',''),m['valor_unitario'],m['valor_total']))
             ext.evento(c,oid,'Materiais alterados','Antes: '+repr(old_mat)[:1200]+'; depois: '+repr(new_mat)[:1200],pid,'Prestador')
         if acao=='salvar':
             aten.salvar_rascunho(c,oid,relato,f'Prestador ID {pid}')

@@ -112,6 +112,31 @@ Quando o usuário informa apenas o valor final, o total não muda. Quando não
 informa o total, o motor calcula o total a partir dos componentes e dos
 percentuais configurados.
 
+## Composição específica da OS (`calcular_os`)
+
+A OS usa uma regra própria, porque o valor negociado é autoritativo e os
+componentes precisam caber nele:
+
+1. Materiais entram pelo valor real; componentes fixos (como a visita) entram
+   pelo valor do `composicao.yaml`.
+2. A hora técnica tem mínimo configurável (`minimo_centavos`, padrão
+   R$ 100,00).
+3. Os percentuais são calculados sobre o total negociado. Se os valores
+   integrais não couberem, o residual é dividido proporcionalmente entre os
+   componentes percentuais; nenhum percentual é inventado para fora do total.
+4. Se nem materiais + componentes fixos + hora mínima couberem no total, a
+   diferença vira uma linha **Desconto** (negativa). O total não é elevado
+   silenciosamente.
+5. Quando não há total negociado, o total é calculado pelos componentes e
+   fechado em reais inteiros; a diferença de arredondamento fica na hora
+   técnica.
+6. OS de garantia/cortesia com mão de obra zero mantêm o comportamento
+   anterior: somente materiais e mão de obra reais.
+
+Exemplo da OS-0023 (total R$ 450,00): materiais R$ 65,00, visita R$ 250,00,
+hora técnica R$ 100,00; os 10% integrais (R$ 45,00 cada) não cabem, então o
+residual de R$ 35,00 foi dividido em R$ 11,67, R$ 11,67 e R$ 11,66.
+
 ## Persistência
 
 Colunas aditivas:

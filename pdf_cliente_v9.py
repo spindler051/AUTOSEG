@@ -29,13 +29,13 @@ def gerar(banco,os_id):
         sol=c.execute('SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_solicitacoes'").fetchone() else None
         enc=c.execute('SELECT relatorio,motivo,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_encerramentos'").fetchone() else None
         resp=c.execute('SELECT p.nome,p.documento FROM os_responsaveis r JOIN prestadores p ON p.id=r.prestador_id WHERE r.os_id=?',(os_id,)).fetchone()
-        mats=c.execute('SELECT item,quantidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
+        mats=c.execute('SELECT item,quantidade,unidade,valor_total FROM materiais_os WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
         comp=composicao.de_json(os_['composicao_json']) if 'composicao_json' in os_.keys() else None
         if not comp or int(comp.get('total_centavos',0))!=composicao.centavos_de_reais(os_['valor_total']):
             try:
-                comp=composicao.calcular(
+                comp=composicao.calcular_os(
                     total_centavos=composicao.centavos_de_reais(os_['valor_total']),
                     materiais_centavos=composicao.centavos_de_reais(os_['valor_materiais']),
                     horas=os_['tempo_horas'] if 'tempo_horas' in os_.keys() else 0,
@@ -91,7 +91,12 @@ def gerar(banco,os_id):
     cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]
     registros=[cab]
     for m in mats:
-        registros.append([P(m['item']),P(f'{float(m["quantidade"]):g} un.'),P(brl(m['valor_total']))])
+        qtd=m['quantidade']; unidade=str(m['unidade'] or '').strip()
+        if qtd is None:
+            quantidade='—' + (' '+unidade if unidade else '')
+        else:
+            quantidade=f'{float(qtd):g}' + (' '+unidade if unidade else ' un.')
+        registros.append([P(m['item']),P(quantidade),P(brl(m['valor_total']))])
     if len(registros)==1:registros.append([P('Nenhum material detalhado'),P('—'),P('—')])
     tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
     tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))

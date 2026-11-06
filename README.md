@@ -76,6 +76,7 @@ Development database and ports:
 - [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)
 - [Provider finance API v1](docs/features/API_FINANCEIRO.md)
 - [Experimental unslop interface](docs/features/UNSLOP_UI.md)
+- [Materiais e composição da OS](docs/features/MATERIAIS_COMPOSICAO_OS.md)
 - [Company cash ledger](docs/features/CAIXA_EMPRESA.md)
 - [OS financial correction UI plan](docs/features/OS_FINANCIAL_CORRECTION_UI.md)
 - [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
