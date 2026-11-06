@@ -2005,18 +2005,18 @@ class PortalPrestador:
                     corpo+='</div>'
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS:
-                    pode_editar_fotos = (responsavel == s['pid'])
+                    pode_editar_fotos = (responsavel == s['pid']) or bool(s.get('admin'))
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
                     if pode_editar_fotos:
-                        corpo+=('<p class="muted">Para adicionar fotos: selecione os arquivos, '
-                                'escreva a legenda de cada um e clique em SALVAR RASCUNHO. '
-                                'A conclusão gera o PDF com as fotos e legendas. '
-                                'Cada foto recebe uma legenda individual e a legenda é salva no SQLite.</p>')
+                        corpo+=('<p class="muted">Você pode adicionar fotos e alterar legendas. '
+                                'Selecione os arquivos, escreva a legenda e clique em '
+                                '<b>Salvar fotos e legendas</b>. A conclusão gera o PDF com '
+                                'as fotos e legendas.</p>')
                     else:
-                        corpo+=('<p class="muted">Use a seção abaixo para adicionar fotos '
-                                'e legendas sem assumir a OS.</p>')
-                    if anexos and pode_editar_fotos:
+                        corpo+=('<p class="muted">Somente o responsável ou administrador pode '
+                                'adicionar fotos e alterar legendas.</p>')
+                    if anexos:
                         corpo+='<div class="fotos-rascunho">'
                         for a in anexos:
                             legenda=esc(a['legenda'] or '')
@@ -2038,10 +2038,8 @@ class PortalPrestador:
                         corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
                         corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
-                        corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>SALVAR RASCUNHO</b> para guardar fotos e legendas sem finalizar.</p></div>'
-                    else:
-                        corpo+=('<p class="notice">Você pode adicionar fotos e alterar '
-                                'legendas na seção abaixo, sem assumir a OS.</p>')
+                        corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>Salvar fotos e legendas</b> para guardar as fotos e legendas sem finalizar.</p></div>'
+                        corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/fotos" formnovalidate>Salvar fotos e legendas</button>'
                     if pode_nota:
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
                         corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
@@ -2068,10 +2066,6 @@ class PortalPrestador:
                         if responsavel==s['pid']:
                             corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/rascunho/salvar" formnovalidate>{rotulo_salvar}</button>'
                             corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
-                        else:
-                            corpo+=('<span class="notice">Esta OS está com outro responsável. '
-                                    'Você pode adicionar fotos e legendas abaixo; para salvar '
-                                    'rascunho ou concluir, assuma a OS ou peça transferência.</span>')
                     else:
                         corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
                 if unslop:
@@ -2080,36 +2074,6 @@ class PortalPrestador:
                     corpo+='</div></form>'
                 if unslop and oid:
                     corpo+='</div><aside class="os-rail">'
-                if oid and d['status'] in ext.ATIVAS and responsavel != s['pid']:
-                    existentes=''
-                    for a in anexos:
-                        vis=imagens_v9.get(a['id'],{})
-                        legenda=esc(vis.get('legenda',''))
-                        incluido='1' if vis.get('visivel',1) else '0'
-                        existentes+=('<div class="card">'
-                            +'<img src="/arquivos/anexo/'+str(a['id'])+'" alt="Foto" loading="lazy" '
-                             'style="width:110px;height:90px;object-fit:cover;display:block">'
-                            +'<b>'+esc(a['nome_original'])+'</b>'
-                            +'<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" '
-                            +f'value="{legenda}" placeholder="Ex.: Quadro antes do reparo"></label>'
-                            +f'<input type="hidden" name="anexo_id[]" value="{a["id"]}">'
-                            +'<label>Incluir no PDF<select name="anexo_visivel[]">'
-                            +f'<option value="1" {"selected" if incluido=="1" else ""}>Sim — incluir</option>'
-                            +f'<option value="0" {"selected" if incluido=="0" else ""}>Não — ocultar por privacidade</option>'
-                            +'</select></label>'
-                            +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button></div>')
-                    corpo+=card('Adicionar fotos e legendas sem assumir a OS',
-                        '<p class="muted">Você pode enviar novas fotos e alterar legendas '
-                        'mesmo sem ser o responsável; elas entram no relatório quando a OS for concluída.</p>'
-                        +f'<form method="post" action="/os/{oid}/fotos" data-ajax-preserve="1" enctype="multipart/form-data">{token}'
-                        +('<h3>Legendas das fotos existentes</h3>'+existentes if existentes else '')
-                        +'<label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
-                        +'<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple '
-                         'accept="image/jpeg,image/png,image/webp">'
-                        +'<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
-                        +'<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
-                        +'<p class="muted">A prévia e o campo de legenda aparecem abaixo para cada foto.</p>'
-                        +'<button type="submit">Salvar fotos e legendas</button></form>')
                 if not oid:
                     corpo+='<p class="muted">Depois de salvar a OS, você poderá atribuir um prestador e, no encerramento, anexar imagens e publicar PDF.</p>'
                     if unslop:
@@ -2866,6 +2830,10 @@ class PortalPrestador:
                         return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
                         oid=int(partes[1]);aid=int(partes[3])
+                        with ext.db(banco) as c:
+                            admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+                            if ext.responsavel_atual(c,oid)!=pid and not admin:
+                                raise PermissionError('Somente o responsável ou administrador edita fotos.')
                         ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
                         return self.redir(f'/os/{oid}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='publico':
@@ -2883,6 +2851,9 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                                (oid,)).fetchone()
+                            admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+                            if ext.responsavel_atual(c,oid)!=pid and not admin:
+                                raise PermissionError('Somente o responsável ou administrador edita fotos e legendas.')
                         if not os_atual or os_atual['status'] not in ext.ATIVAS:
                             raise ValueError('Somente OS ativas podem receber fotos.')
                         def _lista(valor):
@@ -2905,7 +2876,7 @@ class PortalPrestador:
                             for i,(nome,conteudo) in enumerate(imagens):
                                 ext.registrar_imagem_transacao(
                                     c,oid,pid,nome,conteudo,
-                                    permitir_colaboracao=True,
+                                    permitir_colaboracao=admin,
                                     chave=chaves[i] if i<len(chaves) else None,
                                     legenda=legendas[i] if i<len(legendas) else '',
                                     visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1)

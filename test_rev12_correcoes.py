@@ -466,9 +466,10 @@ class CorrecoesRev12(unittest.TestCase):
                 'SELECT status FROM ordens_servico WHERE id=?', (oid,)).fetchone()[0],
                 'Aberta')
 
-    def test_fotos_sem_assumir_os(self):
+    def test_admin_adiciona_fotos_em_os_de_outro(self):
         a = self._prestador('Técnico Foto A', email='foto.a@exemplo.com.br')
         b = self._prestador('Técnico Foto B', email='foto.b@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
         cid = self._cliente(a, 'Condomínio Foto')
         dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
                  'tecnico': 'T', 'forma_pagamento': 'PIX',
@@ -479,8 +480,10 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente_b = self._login(base, 'foto.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
-        self.assertIn(f'action="/os/{oid}/fotos"', html)
-        self.assertIn('Adicionar fotos e legendas sem assumir a OS', html)
+        self.assertIn(f'formaction="/os/{oid}/fotos"', html)
+        self.assertIn('Salvar fotos e legendas', html)
+        self.assertNotIn('Adicionar fotos e legendas sem assumir a OS', html)
+        self.assertNotIn('sem assumir', html)
         self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
         self.assertNotIn('name="modo_envio" value="encerrar"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
@@ -1011,6 +1014,30 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente_b, base, '/financeiro')
         self.assertIn('A receber (minha produção)</span><strong>R$ 0,00</strong>', html)
         self.assertIn('Recebido (minha produção)</span><strong>R$ 300,00</strong>', html)
+
+    def test_nao_admin_nao_edita_fotos_de_outro(self):
+        a = self._prestador('Técnico Foto Responsável', email='foto.resp@exemplo.com.br')
+        b = self._prestador('Técnico Foto Comum', email='foto.comum@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Foto Comum')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente_b = self._login(base, 'foto.comum@exemplo.com.br')
+        _, html = req(cliente_b, base, f'/os/{oid}')
+        self.assertNotIn('Salvar fotos e legendas', html)
+        self.assertIn('Somente o responsável ou administrador', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        buffer = io.BytesIO()
+        Image.new('RGB', (4, 4), 'blue').save(buffer, 'PNG')
+        status, _ = multipart(
+            cliente_b, base, f'/os/{oid}/fotos',
+            [('csrf', token)], [('imagens_encerramento[]', 'foto.png',
+                                 buffer.getvalue(), 'image/png')])
+        self.assertEqual(status, 403)
 
     def test_garantia_mao_obra_zero_material_cobrado(self):
         """Garantia: mão de obra 0,00 + material cobrado deve concluir e cobrar só o material."""

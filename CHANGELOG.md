@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.30 — fotos da OS sem texto de atribuição — 2026-11-06 — develop
+
+- **Fotos da OS:** o editor normal de fotos e legendas aparece para o responsável e para administradores, dentro da aba Fotos. Foi removido o cartão extra e todas as mensagens sobre “assumir/atribuir a OS”. Administradores editam fotos e legendas livremente; a responsabilidade da OS não muda e a conclusão continua com o responsável.
+- **Permissão:** `/fotos` e `Girar 90°` aceitam responsável ou administrador; os demais prestadores veem as fotos em modo leitura.
+- **Teste:** administrador adiciona foto em OS de outro prestador; não-admin recebe 403; a página não contém o texto “sem assumir”.
+
 ## 9.6.0-dev.29 — feedback no mobile unslop — 2026-11-06 — develop
 
 - **Feedback no mobile:** no modo unslop em telas de até 980 px, o rodapé da sidebar fica oculto e o botão flutuante estava com `display:none`; agora o botão **Dê um feedback** volta a aparecer no canto inferior direito. No modo clássico ele já aparecia.
