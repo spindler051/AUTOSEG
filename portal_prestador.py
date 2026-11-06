@@ -469,7 +469,7 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app.menu-open .side-nav.open{overflow:hidden;padding:10px 16px 82px;gap:2px}
   body.ui-app.menu-open .side-nav.open .side-group{gap:0}
   body.ui-app.menu-open .side-nav.open .side-label{display:none}
-  body.ui-app.menu-open .side-nav.open .side-link{min-height:38px;padding:0 10px;font-size:14px}
+  body.ui-app.menu-open .side-nav.open .side-link{min-height:42px;padding:0 10px;font-size:15px}
   body.ui-app.menu-open .side-nav.open .side-link svg{width:18px;height:18px;flex:0 0 18px}
   body.ui-app.menu-open .side-foot{padding:8px 16px}
   body.ui-app.menu-open .side-foot .side-user{padding:0}
