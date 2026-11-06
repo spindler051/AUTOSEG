@@ -2361,6 +2361,7 @@ class PortalPrestador:
                     pago=float(x['pago_centavos'] or 0)/100
                     enviado=float(x['enviado_centavos'] or 0)/100
                     recebido=pago>=valor-0.009
+                    cliente_recebido=str(x.get('financeiro_status') or '')=='Recebido'
                     if recebido:
                         status='Recebido'
                         detalhe=f'Repasse · confirmado em {x.get("confirmado_em") or "—"}'
@@ -2368,7 +2369,11 @@ class PortalPrestador:
                     else:
                         status='A receber'
                         pendente=max(0,enviado-pago)
-                        if pendente>0:
+                        if not cliente_recebido:
+                            detalhe=('Repasse · aguardando o finalizador confirmar '
+                                     'o recebimento do cliente')
+                            acao='<span class="warn">Aguardando cliente</span>'
+                        elif pendente>0:
                             detalhe=f'Repasse · {dinheiro(pago)} confirmado · {dinheiro(pendente)} aguardando você'
                             acao=(f'<form method="post" action="/financeiro/repasse/confirmar">{token}'
                                   f'<input type="hidden" name="os_id" value="{int(x["os_id"])}">'
@@ -2432,13 +2437,15 @@ class PortalPrestador:
                         acao='<span class="warn">Aguardando confirmação do colega</span>'
                     else:
                         acao='<span class="good">Confirmado pelo colega</span>'
-                    repasses.append((esc(item['numero_os']),esc(item['tecnico']),
+                    repasses.append((f'<a href="/os/{int(item["os_id"])}">{esc(item["numero_os"])}</a>',
+                                     esc(item['tecnico']),
                                      dinheiro(item['valor_centavos']/100),
                                      dinheiro(confirmado/100),dinheiro(enviado/100),
                                      dinheiro(a_enviar/100),acao))
                 repasses_card=card('Repasses a outros técnicos',
-                    '<p class="muted">O valor da parcela já foi definido no rateio. Registre o envio; '
-                    'o colega confirma o recebimento na coluna A receber do financeiro dele.</p>'
+                    '<p class="muted">Os repasses aparecem aqui depois que você confirma o '
+                    'recebimento do cliente. O valor da parcela já foi definido no rateio; '
+                    'registre o envio e o colega confirma na coluna A receber do financeiro dele.</p>'
                     +tabela(['OS','Colega','Parcela','Confirmado','Aguardando confirmação',
                              'A enviar','Ação'],repasses))
                 a_receber_total=0.0

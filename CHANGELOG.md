@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.36 — repasses somente após recebimento do cliente — 2026-11-06 — develop
+
+- **Repasses a outros técnicos:** a seção só mostra OS cujo recebimento do cliente já foi confirmado pelo finalizador. Antes disso, o envio do repasse fica bloqueado.
+- **Técnico secundário:** antes do recebimento do cliente, o item mostra **Aguardando cliente** e não exibe o botão de confirmação; depois do envio pelo finalizador, aparece **Confirmar que recebi**.
+- **Navegação:** o número da OS na tabela de repasses agora é um link para abrir a OS correspondente.
+- **Correção de dados:** o envio registrado indevidamente na OS-0012 antes do recebimento do cliente foi estornado e registrado no histórico; o valor será liberado normalmente após a confirmação do recebimento.
+- **Testes:** `test_rev12_correcoes.py` (44 OK, 1 skipped), `test_produtividade_rev07.py` (9 OK) e `test_gmail_integracao.py` (7 OK).
+
 ## 9.6.0-dev.35 — CNPJ do prestador no PDF e nota fiscal automática — 2026-11-06 — develop
 
 - **CNPJ no PDF:** o relatório usa o CNPJ do prestador responsável quando ele está no cadastro (`prestadores.documento`) ou nos dados bancários/cadastrais unificados; sem CNPJ, mantém o CNPJ padrão da AUTOSEG. O CNPJ explícito do cadastro tem prioridade.

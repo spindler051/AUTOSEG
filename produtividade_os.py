@@ -346,7 +346,9 @@ def financeiro_pessoal(banco,pid):
             r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,
             COALESCE(p.enviado_centavos,0) enviado_centavos,
-            p.enviado_em,p.confirmado_em,e.prestador_id de_tecnico
+            p.enviado_em,p.confirmado_em,e.prestador_id de_tecnico,
+            (SELECT f.status FROM financeiro f WHERE f.os_id=r.os_id
+             ORDER BY f.id DESC LIMIT 1) financeiro_status
             FROM produtividade_rateios r
             JOIN ordens_servico o ON o.id=r.os_id
             JOIN clientes cl ON cl.id=o.cliente_id
@@ -364,7 +366,10 @@ def financeiro_pessoal(banco,pid):
             JOIN prestadores t ON t.id=r.tecnico_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
-            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY r.os_id DESC""",(pid,))]
+            WHERE e.prestador_id=? AND COALESCE(o.arquivada,0)=0
+              AND EXISTS (SELECT 1 FROM financeiro f WHERE f.os_id=r.os_id
+                          AND f.status='Recebido')
+            ORDER BY r.os_id DESC""",(pid,))]
         return {'brutos_proprios':proprio,'receber_de_colegas':meus,'repassar_a_colegas':repassar}
 
 
@@ -380,6 +385,10 @@ def confirmar_repasse(banco,os_id,finalizador_id,secundario_id,valor=None):
         e=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone()
         if not e or e['prestador_id']!=finalizador_id:
             raise PermissionError('Somente o finalizador registra o repasse que realizou.')
+        fin=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',
+                      (os_id,)).fetchone()
+        if not fin or fin['status']!='Recebido':
+            raise ValueError('Confirme o recebimento do cliente antes de registrar o envio do repasse.')
         item=c.execute('SELECT valor_centavos FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
                        (os_id,secundario_id)).fetchone()
         if not item:raise ValueError('Parcela deste técnico não existe.')

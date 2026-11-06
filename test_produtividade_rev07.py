@@ -120,6 +120,14 @@ class ProdutividadeTestes(unittest.TestCase):
                 prod.registrar_rateios_na_transacao(
                     c,oid,self.a,1000,
                     {'rateio_tecnico[]':[str(self.b)],'rateio_valor[]':['301,00']})
+        with ext.db(self.db) as c:
+            c.execute('''INSERT INTO financeiro(os_id,cliente_id,valor,status)
+                         SELECT id,cliente_id,?,? FROM ordens_servico WHERE id=?''',
+                      (1000,'Aguardando pagamento',oid))
+        with self.assertRaisesRegex(ValueError,'Confirme o recebimento do cliente'):
+            prod.confirmar_repasse(self.db,oid,self.a,self.b,'100,00')
+        with ext.db(self.db) as c:
+            c.execute("UPDATE financeiro SET status='Recebido' WHERE os_id=?",(oid,))
         self.assertEqual(prod.confirmar_repasse(self.db,oid,self.a,self.b,'100,00'),20000)
         self.assertEqual(prod.confirmar_repasse(self.db,oid,self.a,self.b,'200,00'),0)
         with self.assertRaises(ValueError):
