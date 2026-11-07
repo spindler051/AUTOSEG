@@ -30,7 +30,9 @@ from application.contracts import (
     LancamentoFinanceiro,
     NaoEncontradoError,
     OrganizacaoPJ,
+    OSInput,
     OSOpcao,
+    OSResultado,
     OSResumo,
     PrestadorResumo,
     ResumoFinanceiro,
@@ -396,6 +398,43 @@ class LocalService:
             return None
         return ClienteOpcao(id=int(linha['id']), nome=str(linha['nome'] or ''))
 
+    def salvar_os(self, dados: OSInput) -> OSResultado:
+        from application.os_write import salvar_os
+        try:
+            return salvar_os(self.banco, dados)
+        except ValidacaoError:
+            raise
+        except ValueError as erro:
+            raise ValidacaoError(str(erro)) from erro
+
+    def contexto_os(self, os_id: int | None = None) -> dict:
+        from application.desktop_context import contexto_os
+        return contexto_os(self.banco, os_id)
+
+    def contar_anexos_os(self, os_id: int) -> int:
+        from application.desktop_context import contar_anexos_os
+        return contar_anexos_os(self.banco, os_id)
+
+    def contexto_atribuicao(self, os_id: int) -> dict:
+        from application.desktop_context import contexto_atribuicao
+        return contexto_atribuicao(self.banco, os_id)
+
+    def documento_prestador(self, prestador_id: int) -> str:
+        from application.desktop_context import documento_prestador
+        return documento_prestador(self.banco, prestador_id)
+
+    def contexto_responsavel(self) -> dict:
+        from application.desktop_context import contexto_responsavel
+        return contexto_responsavel(self.banco)
+
+    def contexto_os_rapida(self) -> dict:
+        from application.desktop_context import contexto_os_rapida
+        return contexto_os_rapida(self.banco)
+
+    def contexto_movimento_empresa(self) -> dict:
+        from application.desktop_context import contexto_movimento_empresa
+        return contexto_movimento_empresa(self.banco)
+
     def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:
         return [self._resumo(registro)
                 for registro in clientes_core.listar(termo, banco=self.banco)]
@@ -425,11 +464,14 @@ class LocalService:
 
     @staticmethod
     def _capabilities() -> tuple[str, ...]:
-        return ('health', 'resumo_inicio', 'os.listar_ativas',
+        return ('health', 'resumo_inicio', 'os.listar_ativas', 'os.salvar',
                 'os.escolha', 'os.atribuicao', 'clientes.contar',
                 'prestadores.listar', 'prestadores.alternar',
                 'prestadores.arquivar', 'sindico.contato',
                 'clientes.ativo', 'clientes.ativo_documento',
+                'desktop.contexto_os', 'desktop.contexto_atribuicao',
+                'desktop.contexto_responsavel', 'desktop.contexto_os_rapida',
+                'desktop.contexto_movimento',
                 'historico.listar', 'historico.resumo', 'pj.painel',
                 'resumo_financeiro', 'financeiro.listar', 'financeiro.receber',
                 'resumo_portal', 'solicitacoes_portal',

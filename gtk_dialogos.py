@@ -12,7 +12,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk
 
 import gtk_comum as ui
-from banco import BANCO, conectar_banco, proximo_numero_os
+from banco import BANCO
 import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
@@ -25,7 +25,15 @@ import importacao_yaml
 import completude
 import composicao
 import texto_os
-from application.contracts import AppError
+from application.contracts import AppError, OSInput
+
+
+def _servico(janela):
+    servico = getattr(janela, "service", None)
+    if servico is None:
+        from application.local_service import LocalService
+        servico = LocalService(BANCO)
+    return servico
 
 
 def _linha_custom(widget):
@@ -434,32 +442,16 @@ class DialogoOS(Adw.Dialog):
         self._construir()
 
     def _carregar(self):
-        conexao = conectar_banco()
-        try:
-            self.clientes = [dict(x) for x in conexao.execute(
-                "SELECT id,nome FROM clientes WHERE status!='Inativo' ORDER BY nome")]
-            if self.os_id is not None:
-                registro = conexao.execute("SELECT * FROM ordens_servico WHERE id=?",
-                                           (self.os_id,)).fetchone()
-                self.dados = dict(registro) if registro else None
-                if self.dados is None:
-                    raise ValueError("OS não encontrada.")
-                self.materiais = [dict(x) for x in conexao.execute(
-                    "SELECT item,quantidade,unidade,valor_unitario,valor_total FROM materiais_os "
-                    "WHERE os_id=? ORDER BY id", (self.os_id,))]
-                if self.dados.get("origem") == "Portal":
-                    original = conexao.execute(
-                        "SELECT descricao_original FROM os_solicitacoes WHERE os_id=?",
-                        (self.os_id,)).fetchone()
-                    self.original_portal = original["descricao_original"] if original else None
-                self.andamento = conexao.execute(
-                    "SELECT iniciado_em,rascunho FROM os_atendimentos WHERE os_id=?",
-                    (self.os_id,)).fetchone()
-                self.encerramento = conexao.execute(
-                    "SELECT motivo,relatorio FROM os_encerramentos WHERE os_id=?",
-                    (self.os_id,)).fetchone()
-        finally:
-            conexao.close()
+        contexto = _servico(self.janela).contexto_os(self.os_id)
+        self.clientes = contexto["clientes"]
+        if self.os_id is not None:
+            self.dados = contexto["dados"]
+            if self.dados is None:
+                raise ValueError("OS não encontrada.")
+            self.materiais = contexto["materiais"]
+            self.original_portal = contexto["original_portal"]
+            self.andamento = contexto["andamento"]
+            self.encerramento = contexto["encerramento"]
 
     def _construir(self):
         titulo_texto = "Nova ordem de serviço" if self.os_id is None else "Editar ordem de serviço"
@@ -816,12 +808,7 @@ class DialogoOS(Adw.Dialog):
     def _atualizar_anexos(self):
         if self.anexos_label is None:
             return
-        try:
-            with ext.db(BANCO) as c:
-                existentes = c.execute("SELECT COUNT(*) FROM os_anexos WHERE os_id=?",
-                                       (self.os_id,)).fetchone()[0]
-        except Exception:
-            existentes = 0
+        existentes = _servico(self.janela).contar_anexos_os(self.os_id)
         self.anexos_label.set_text(
             f"{existentes} imagem(ns) registrada(s); {len(self.imagens)} aguardando confirmação.")
 
@@ -919,150 +906,48 @@ class DialogoOS(Adw.Dialog):
                           "Preencha o relatório técnico antes de mudar o status da OS.")
             return
 
-        conexao = conectar_banco()
-        anterior = None
-        materiais_anteriores = []
+        imagens = []
+        for caminho in self.imagens:
+            try:
+                with open(caminho, "rb") as arquivo:
+                    imagens.append((Path(caminho).name, arquivo.read()))
+            except OSError as erro:
+                ui.aviso_erro(self.janela, "Imagem", str(erro))
+                return
+        entrada = OSInput(
+            os_id=self.os_id,
+            cliente_id=cliente_id,
+            tecnico=tecnico,
+            descricao=descricao,
+            valor_mao_obra=mao_obra,
+            valor_materiais=materiais,
+            custo_materiais=custo_materiais,
+            valor_total=total,
+            forma_pagamento=pagamento,
+            urgencia=ui.valor_combo(self.urgencia),
+            observacoes=observacoes,
+            texto_adicional=texto_adicional,
+            dados_incompletos=dados_incompletos,
+            tempo_horas=tempo_horas,
+            composicao_json=comp_json,
+            base_percentuais=base_persistida,
+            materiais=tuple(self.materiais),
+            acao=acao,
+            relato=relato,
+            motivo=motivo,
+            imagens=tuple(imagens),
+        )
         try:
-            cursor = conexao.cursor()
-            if self.os_id is not None:
-                anterior = cursor.execute("SELECT * FROM ordens_servico WHERE id=?",
-                                          (self.os_id,)).fetchone()
-                if anterior is None:
-                    ui.aviso_erro(self.janela, "OS não encontrada",
-                                  "A OS já não existe no banco de dados.")
-                    return
-                if anterior["origem"] == "Portal":
-                    original = cursor.execute(
-                        "SELECT cliente_id,descricao_original FROM os_solicitacoes WHERE os_id=?",
-                        (self.os_id,)).fetchone()
-                    if original:
-                        cliente_id = original["cliente_id"]
-                        descricao = original["descricao_original"]
-                materiais_anteriores = [dict(m) for m in cursor.execute(
-                    "SELECT item,quantidade,unidade,valor_unitario FROM materiais_os "
-                    "WHERE os_id=? ORDER BY id", (self.os_id,)).fetchall()]
-
-            if self.os_id is None:
-                numero_os = proximo_numero_os(cursor)
-                cursor.execute(
-                    """INSERT INTO ordens_servico
-                    (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
-                     valor_materiais,custo_materiais,valor_total,forma_pagamento,status,urgencia,observacoes,
-                     texto_adicional,dados_incompletos,tempo_horas,composicao_json,base_percentuais,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,'Aberta',?,?,?,?,?,?,?,?) """,
-                    (numero_os, cliente_id, datetime.now().strftime("%d/%m/%Y %H:%M"),
-                     tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
-                     ui.valor_combo(self.urgencia), observacoes, texto_adicional,
-                     dados_incompletos, tempo_horas, comp_json, base_persistida,
-                     datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                os_salvo_id = cursor.lastrowid
-                aten.registrar_solicitacao(cursor, os_salvo_id, cliente_id, descricao,
-                                           observacoes, "App")
-            else:
-                cursor.execute(
-                    """UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,
-                    valor_mao_obra=?,valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,
-                    urgencia=?,observacoes=?,texto_adicional=?,dados_incompletos=?,tempo_horas=?,
-                    composicao_json=?,base_percentuais=?,atualizado_em=? WHERE id=?""",
-                    (cliente_id, tecnico, descricao, mao_obra, materiais, custo_materiais, total, pagamento,
-                     ui.valor_combo(self.urgencia), observacoes, texto_adicional, dados_incompletos,
-                     tempo_horas, comp_json, base_persistida,
-                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"), self.os_id))
-                os_salvo_id = self.os_id
-
-            anteriores = [(m["item"],
-                           None if m["quantidade"] is None else float(m["quantidade"]),
-                           str(m["unidade"] or ""),
-                           float(m["valor_unitario"] or 0))
-                          for m in materiais_anteriores]
-            atuais = [(m.get("item", ""),
-                       None if m.get("quantidade") is None else float(m.get("quantidade")),
-                       str(m.get("unidade") or ""),
-                       float(m.get("valor_unitario") or 0)) for m in self.materiais]
-            if anteriores != atuais:
-                cursor.execute("DELETE FROM materiais_os WHERE os_id=?", (os_salvo_id,))
-                for material in self.materiais:
-                    qtd = material.get("quantidade")
-                    qtd = None if qtd is None else float(qtd)
-                    valor = float(material.get("valor_unitario") or 0)
-                    unidade = str(material.get("unidade") or "").strip()[:40]
-                    cursor.execute(
-                        "INSERT INTO materiais_os(os_id,item,quantidade,unidade,"
-                        "valor_unitario,valor_total) VALUES(?,?,?,?,?,?)",
-                        (os_salvo_id, material.get("item", ""), qtd, unidade,
-                         valor, (qtd or 0) * valor))
-            estoque.reconciliar_os_conexao(cursor, os_salvo_id, "Desktop")
-
-            if anterior is not None:
-                antes = {
-                    "cliente_id": anterior["cliente_id"], "tecnico": anterior["tecnico"] or "",
-                    "descricao": anterior["descricao"] or "",
-                    "valor_mao_obra": float(anterior["valor_mao_obra"] or 0),
-                    "valor_materiais": float(anterior["valor_materiais"] or 0),
-                    "custo_materiais": float(anterior["custo_materiais"] or 0)
-                    if "custo_materiais" in anterior.keys() else 0.0,
-                    "valor_total": float(anterior["valor_total"] or 0),
-                    "forma_pagamento": anterior["forma_pagamento"] or "",
-                    "observacoes": anterior["observacoes"] or "",
-                    "texto_adicional": anterior["texto_adicional"] or ""
-                    if "texto_adicional" in anterior.keys() else "",
-                    "tempo_horas": float(anterior["tempo_horas"] or 0)
-                    if "tempo_horas" in anterior.keys() else 0.0,
-                }
-                depois = {"cliente_id": cliente_id, "tecnico": tecnico, "descricao": descricao,
-                          "valor_mao_obra": mao_obra, "valor_materiais": materiais,
-                          "custo_materiais": custo_materiais,
-                          "valor_total": total, "forma_pagamento": pagamento,
-                          "observacoes": observacoes, "texto_adicional": texto_adicional,
-                          "tempo_horas": tempo_horas}
-                alteracoes = [f"{chave}: {antes[chave]!s} → {depois[chave]!s}"
-                              for chave in antes if antes[chave] != depois[chave]]
-                if alteracoes:
-                    ext.evento(cursor, os_salvo_id, "Edição administrativa",
-                               "; ".join(alteracoes))
-            elif self.os_id is None:
-                ext.evento(cursor, os_salvo_id, "OS criada",
-                           "Ordem de serviço cadastrada pelo administrador.")
-            if self.os_id is not None:
-                aten.salvar_rascunho(cursor, os_salvo_id, relato, "Administrador desktop")
-            if relato and acao:
-                ext.evento(cursor, os_salvo_id, "Relatório técnico", relato)
-            if acao == "Pendente":
-                cursor.execute(
-                    "UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')",
-                    (os_salvo_id,))
-                if cursor.rowcount != 1:
-                    conexao.rollback()
-                    ui.aviso_erro(self.janela, "Status inválido",
-                                  "Esta OS não pode ser colocada como pendente.")
-                    return
-                ext.evento(cursor, os_salvo_id, "Pendência",
-                           "OS mantida pendente pelo administrador. Consulte o relatório técnico.")
-            conexao.commit()
+            resultado = self.janela.service.salvar_os(entrada)
+        except AppError as erro:
+            ui.aviso_erro(self.janela, erro.titulo, str(erro))
+            return
         except Exception as erro:
-            conexao.rollback()
             ui.aviso_erro(self.janela, "Não foi possível salvar", str(erro))
             return
-        finally:
-            conexao.close()
 
-        if acao in ui.STATUS_FIM:
-            try:
-                with ext.db(BANCO) as conexao_encerramento:
-                    conexao_encerramento.execute("BEGIN IMMEDIATE")
-                    for caminho in self.imagens:
-                        with open(caminho, "rb") as arquivo:
-                            ext.registrar_imagem_transacao(
-                                conexao_encerramento, os_salvo_id, None,
-                                Path(caminho).name, arquivo.read())
-                    fluxo.aplicar_encerramento(
-                        conexao_encerramento, os_salvo_id, acao, relato, motivo,
-                        ator="Administrador desktop")
-            except Exception as erro:
-                ui.aviso_erro(
-                    self.janela, "Encerramento não realizado",
-                    f"Os dados da OS foram salvos, mas não foi possível encerrá-la:\n{erro}")
-                return
+        os_salvo_id = resultado.os_id
+        if resultado.encerrada:
             ui.toast(self.janela, "OS encerrada. Publicando PDF…")
             self.close()
             self.janela.publicar_pdf(os_salvo_id, enviar_email=(acao == "Concluída"))
@@ -1070,7 +955,7 @@ class DialogoOS(Adw.Dialog):
             self.janela.carregar_historico()
             return
 
-        if self.os_id is not None and anterior is not None and anterior["status"] in ui.STATUS_FIM:
+        if self.os_id is not None and resultado.status_anterior in ui.STATUS_FIM:
             ui.toast(self.janela, "OS atualizada. Republicando PDF…")
             self.close()
             self.janela.publicar_pdf(os_salvo_id)
@@ -1078,12 +963,11 @@ class DialogoOS(Adw.Dialog):
             return
 
         ui.toast(self.janela, "OS salva com dados incompletos."
-                 if dados_incompletos else "OS salva.")
+                 if resultado.dados_incompletos else "OS salva.")
         self.close()
         self.janela.carregar_os()
         self.janela.carregar_clientes()
         self.janela.carregar_financeiro()
-
 
 class DialogoAtribuicao(Adw.Dialog):
     def __init__(self, janela, os_id):
@@ -1093,12 +977,10 @@ class DialogoAtribuicao(Adw.Dialog):
         self.ordem = None
         self.prestadores = []
         self.atual_id = None
-        with ext.db(BANCO) as c:
-            self.ordem = c.execute("SELECT numero_os,status FROM ordens_servico WHERE id=?",
-                                   (os_id,)).fetchone()
-            self.prestadores = [dict(x) for x in c.execute(
-                "SELECT id,nome,email FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome")]
-            self.atual_id = ext.responsavel_atual(c, os_id)
+        contexto = _servico(janela).contexto_atribuicao(os_id)
+        self.ordem = contexto["ordem"]
+        self.prestadores = contexto["prestadores"]
+        self.atual_id = contexto["atual_id"]
         if not self.ordem or self.ordem["status"] not in ext.ATIVAS:
             raise ValueError("Somente OS ativa.")
         self.set_title("Atribuição de OS")
@@ -1338,10 +1220,7 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
         self.janela = janela
         self.prestador_id = prestador_id
         self.config = ext.obter_config_prestador(BANCO, prestador_id)
-        with ext.db(BANCO) as c:
-            registro = c.execute('SELECT documento FROM prestadores WHERE id=?',
-                                 (prestador_id,)).fetchone()
-        self.documento_atual = (registro['documento'] if registro else '') or ''
+        self.documento_atual = _servico(janela).documento_prestador(prestador_id)
         self.set_title("Integrações e pagamentos")
         self.set_content_width(620)
         self.set_content_height(680)
@@ -1627,15 +1506,9 @@ class DialogoResponsavel(Adw.Dialog):
     def __init__(self, janela):
         super().__init__()
         self.janela = janela
-        with ext.db(BANCO) as c:
-            self.orgs = [dict(x) for x in c.execute(
-                """SELECT o.id,o.nome,o.tipo,o.cnpj,r.usuario_id,u.nome responsavel
-                   FROM v9_organizacoes o
-                   LEFT JOIN v9_responsaveis r ON r.organizacao_id=o.id
-                   LEFT JOIN v9_usuarios u ON u.id=r.usuario_id
-                   WHERE o.mesclado_em IS NULL ORDER BY o.nome""").fetchall()]
-            self.pessoas = [dict(x) for x in c.execute(
-                "SELECT id,nome,cpf FROM v9_usuarios WHERE ativo=1 ORDER BY nome").fetchall()]
+        contexto = _servico(janela).contexto_responsavel()
+        self.orgs = contexto["organizacoes"]
+        self.pessoas = contexto["pessoas"]
         if not self.orgs:
             raise ValueError("Cadastre um condomínio ou empresa antes de nomear o responsável.")
         if not self.pessoas:
@@ -1726,11 +1599,9 @@ class DialogoOSRapida(Adw.Dialog):
     def __init__(self, janela):
         super().__init__()
         self.janela = janela
-        with ext.db(BANCO) as c:
-            self.clientes = [dict(x) for x in c.execute(
-                "SELECT id,nome,tipo_pessoa FROM clientes WHERE status!='Inativo' ORDER BY nome")]
-            self.prestadores = [dict(x) for x in c.execute(
-                "SELECT id,nome FROM prestadores WHERE ativo=1 ORDER BY nome")]
+        contexto = _servico(janela).contexto_os_rapida()
+        self.clientes = contexto["clientes"]
+        self.prestadores = contexto["prestadores"]
         if not self.clientes:
             raise ValueError("Cadastre um condomínio ou cliente antes de abrir a OS.")
         self.set_title("Nova ordem de serviço")
@@ -2147,17 +2018,9 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.ao_salvar = ao_salvar
-        conexao = conectar_banco()
-        try:
-            self.prestadores = [dict(x) for x in conexao.execute(
-                "SELECT id,nome FROM prestadores "
-                "WHERE ativo=1 AND excluido=0 ORDER BY nome")]
-            self.oses = [dict(x) for x in conexao.execute(
-                "SELECT o.id,o.numero_os,c.nome cliente "
-                "FROM ordens_servico o LEFT JOIN clientes c ON c.id=o.cliente_id "
-                "ORDER BY o.id DESC LIMIT 300")]
-        finally:
-            conexao.close()
+        contexto = _servico(janela).contexto_movimento_empresa()
+        self.prestadores = contexto["prestadores"]
+        self.oses = contexto["oses"]
         self.tipos = list(empresa.TIPOS.items())
         self.codigos_tipo = [codigo for codigo, _ in self.tipos]
         self.set_title("Novo lançamento da empresa")

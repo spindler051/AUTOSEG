@@ -24,6 +24,42 @@ class Health:
 
 
 @dataclass(frozen=True)
+class OSInput:
+    """Values already validated by the desktop form."""
+
+    os_id: int | None
+    cliente_id: int
+    tecnico: str
+    descricao: str
+    valor_mao_obra: float
+    valor_materiais: float
+    custo_materiais: float
+    valor_total: float
+    forma_pagamento: str
+    urgencia: str
+    observacoes: str
+    texto_adicional: str
+    dados_incompletos: int
+    tempo_horas: float
+    composicao_json: str
+    base_percentuais: str
+    materiais: tuple[Mapping[str, Any], ...]
+    acao: str
+    relato: str
+    motivo: str
+    imagens: tuple[tuple[str, bytes], ...] = ()
+
+
+@dataclass(frozen=True)
+class OSResultado:
+    os_id: int
+    criada: bool
+    encerrada: bool
+    status_anterior: str
+    dados_incompletos: int
+
+
+@dataclass(frozen=True)
 class ClienteResumo:
     """Client row used by list screens."""
 
@@ -315,4 +351,28 @@ class AppService(Protocol):
     def salvar_cliente(
         self, cliente_id: int | None, dados: Mapping[str, Any]
     ) -> Cliente:
+        ...
+
+    def salvar_os(self, dados: OSInput) -> OSResultado:
+        ...
+
+    def contexto_os(self, os_id: int | None = None) -> dict:
+        ...
+
+    def contar_anexos_os(self, os_id: int) -> int:
+        ...
+
+    def contexto_atribuicao(self, os_id: int) -> dict:
+        ...
+
+    def documento_prestador(self, prestador_id: int) -> str:
+        ...
+
+    def contexto_responsavel(self) -> dict:
+        ...
+
+    def contexto_os_rapida(self) -> dict:
+        ...
+
+    def contexto_movimento_empresa(self) -> dict:
         ...
