@@ -1,9 +1,9 @@
 # Redesenho da numeração de OS e migração
 
-**Status:** RFC de arquitetura e migração. **Nada implementado, nada migrado.**
-Esta mudança é N3/N4: mexe em identidade pública, schema, links, PDFs, e-mails e
-dados históricos. Exige backup, ensaio em cópia, validação e revisão humana
-externa antes da MAIN.
+**Status:** RFC de arquitetura e migração. **Fundação implementada em
+`develop`; nada migrado na MAIN.** Esta mudança é N3/N4: mexe em identidade
+pública, schema, links, PDFs, e-mails e dados históricos. Exige backup, ensaio
+em cópia, validação e revisão humana externa antes da MAIN.
 
 **Regra desta mudança:** nada de atalho, regex salvando o dia, `MAX+1`,
 número duplicado em tela ou reescrever documento histórico. O desenho vem
@@ -72,6 +72,32 @@ A ordem usa `criado_em` e, em empate, `id`. `data_abertura` não é confiável
 porque tem formatos misturados e pode ter sido editada.
 
 ---
+
+### 2.1 Fuso e relógio
+
+O fuso padrão é **America/Sao_Paulo**. A data da OS é a data local de criação;
+se o servidor estiver em UTC, a conversão acontece antes de compor o número.
+
+Regras de relógio:
+
+- relógio atrasado em relação à última OS emitida → **rejeitar** por padrão;
+- a mensagem orienta a corrigir data/hora e, no modo local+sync, usar o
+  horário confiável do servidor;
+- `guardas.relogio: avisar` permite continuar, mas gera warning e número
+  potencialmente fora de ordem — não é o padrão;
+- não confiar no relógio de um dispositivo offline para numeração
+  compartilhada;
+- no futuro local+sync, a autoridade de numeração precisa ser o servidor ou um
+  bloco/lease de números reservado por dispositivo;
+- Syncthing não corrige relógio. Ele pode preservar mtimes, criar conflitos e
+  sincronizar arquivos, mas não é autoridade de tempo nem de sequência.
+
+Texto de aviso previsto na UI quando o relógio estiver errado:
+
+> “O relógio deste computador está atrasado em relação à última OS emitida.
+> Corrija a data e a hora antes de emitir. Se estiver usando modo local com
+> sincronização, use o horário do servidor; não recomendamos emitir OS com
+> data/hora incorreta.”
 
 ## 3. Numeração configurável da Officina
 
@@ -284,6 +310,17 @@ Se qualquer etapa falhar: rollback e restaurar backup.
 - rollback documentado.
 
 ---
+
+## 7.1 Fundação já implementada em develop
+
+- `numeracao.yaml` — política declarativa;
+- `numeracao.py` — `Politica`, `PoliticaStore`, `preview`,
+  `proximo_numero`; modos `date_sequence`, `sequential`, `uuid` e `custom`;
+- `test_numeracao.py` — 8 testes: fuso, letras, custom, UUID, limite diário,
+  virada de dia, relógio atrasado e reload de política.
+
+Ainda **não** está ligado ao `proximo_numero_os` nem à criação real de OS.
+Ligar antes da migração criaria números misturados.
 
 ## 8. Testes obrigatórios
 

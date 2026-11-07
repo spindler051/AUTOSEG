@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.50 — fundação da numeração configurável de OS — 2026-11-07 — develop
+
+- **Política declarativa:** `numeracao.yaml` define modo, fuso, formato de data, sequência, letras, UUID, template custom e guarda de relógio.
+- **Fuso padrão:** `America/Sao_Paulo`; a data da OS é a data local de criação.
+- **Sequência:** engine transacional em `numeracao.py`, sem `MAX+1`, com limite diário configurável e erro claro ao esgotar.
+- **Relógio:** atraso em relação à última OS emitida é rejeitado por padrão; modo `avisar` gera warning.
+- **Ainda não ligado:** a criação real de OS continua no gerador antigo; ligar antes da migração criaria números misturados.
+- **Testes:** `test_numeracao.py` (8 OK).
+
 ## 9.6.0-dev.49 — servidor e GUI do site separados na linguagem — 2026-11-07 — develop
 
 - **Conceitos separados:** servidor de dados (`--api`) e GUI do site (`--site`). `--web` continua como alias antigo de `--site`.

@@ -1,0 +1,18 @@
+# Política de numeração da OS.
+# O código não deve hardcodar YYMMDD; este arquivo é a fonte de verdade.
+versao: 1
+modo: date_sequence        # date_sequence | sequential | uuid | custom
+fuso: America/Sao_Paulo
+prefixo: ""
+sufixo: ""
+separador: ""
+data:
+  formato: "%y%m%d"
+sequencia:
+  estilo: numeric          # numeric | letters
+  largura: 3
+  maximo_por_dia: 999
+custom:
+  template: "{data}{sequencia}"
+guardas:
+  relogio: rejeitar        # rejeitar | avisar

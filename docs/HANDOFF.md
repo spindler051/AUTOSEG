@@ -65,6 +65,15 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Fundação da numeração de OS
+
+- `numeracao.py` + `numeracao.yaml`: política declarativa, fuso
+  `America/Sao_Paulo`, sequência diária, letras, UUID, custom e guarda de
+  relógio.
+- `test_numeracao.py`: 8 testes OK.
+- Ainda não ligado à criação real de OS nem à MAIN; a migração continua
+  pendente de decisão/ensaio.
+
 ### Redesenho da numeração de OS
 
 - `docs/OS_NUMBERING_REDESIGN.md` registra a análise dos 23 registros da MAIN,
