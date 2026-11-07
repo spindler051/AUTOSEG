@@ -81,11 +81,15 @@ Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
 ./INICIAR_SERVIDOR_API.command
 ```
 
-Servidor com Officina Web (portais HTML + API):
+GUI do site (Officina Web) no terminal:
 
 ```bash
-./INICIAR_SERVIDOR_WEB.command
+./INICIAR_SITE.command
 ```
+
+Hoje a GUI do site ainda compartilha o processo com a API; a separação completa
+entre servidor e site é uma fase posterior. O servidor de dados é o
+`INICIAR_SERVIDOR_API.command`.
 
 O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
 `INICIAR_AUTOSEG_COM_WEB.command` somente se quiser que o próprio GTK suba os

@@ -1,7 +1,7 @@
 """AUTOSEG — interface desktop GTK4/libadwaita.
 
-Mesmo backend, banco e regras dos portais. Roda em Linux (Wayland/X11) e
-macOS. Documentação em docs/GTK4_LINUX_MACOS.md.
+Mesmo backend e banco do aplicativo. Roda em Linux (Wayland/X11) e macOS.
+Documentação em docs/GTK4_LINUX_MACOS.md.
 """
 import json
 import os
@@ -253,7 +253,7 @@ class Janela(Adw.ApplicationWindow):
             application_icon="utilities-system-monitor-symbolic",
             developer_name="AUTOSEG — Automação e Segurança",
             version=ui.VERSAO,
-            comments="Gestão de serviços, ordens, financeiro e portais.\n"
+            comments="Gestão de serviços, ordens e financeiro.\n"
                      "Interface GTK4/libadwaita sobre o backend compartilhado.",
             website="https://github.com/spindler051/AUTOSEG",
         )
@@ -340,8 +340,8 @@ class Janela(Adw.ApplicationWindow):
         subtitulo.add_css_class("title-2")
         caixa.append(subtitulo)
         caixa.append(ui.legenda(
-            "Mesmo banco e mesmas regras dos portais. "
-            "A interface é GTK4/libadwaita em Linux e macOS."))
+            "Mesmo banco e mesmas regras do aplicativo. "
+            "Interface GTK4/libadwaita em Linux e macOS."))
 
         atalhos = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         atalhos.append(ui.botao("Novo cliente", lambda: self.novo_cliente(), icone="list-add-symbolic"))
@@ -383,11 +383,6 @@ class Janela(Adw.ApplicationWindow):
             self.linha_prestador.set_activatable(True)
             self.linha_prestador.connect("activated", lambda *_args: self._abrir_portal_prestador())
             grupo.add(self.linha_prestador)
-        else:
-            grupo.add(Adw.ActionRow(
-                title="Site",
-                subtitle="Iniciado separadamente pelo terminal.",
-                icon_name="network-server-symbolic"))
         self.linha_espaco = Adw.ActionRow(
             title="Espaço em disco", subtitle="—", icon_name="drive-harddisk-symbolic")
         abrir_pasta = Gtk.Button(label="Abrir pasta")
@@ -623,13 +618,18 @@ class Janela(Adw.ApplicationWindow):
             ("Dados", 110, False, 0.5),
         ], ao_ativar=self._editar_cliente)
         pagina.append(self.tabela_clientes.widget)
-        rodape = ui.barra(
+        acoes_cliente = [
             ui.botao("Abrir / editar", self._editar_cliente),
             ui.botao("Nova OS do cliente", self._nova_os_cliente),
-            ui.botao("Excluir / desativar", self._excluir_cliente, css="destructive-action"),
-            ui.botao("Acesso web / senha", self._senha_cliente),
-            ui.botao("Abrir portal do cliente", self._abrir_portal_navegador))
-        pagina.append(rodape)
+            ui.botao("Excluir / desativar", self._excluir_cliente,
+                     css="destructive-action"),
+        ]
+        if self.web.enabled:
+            acoes_cliente.extend([
+                ui.botao("Acesso web / senha", self._senha_cliente),
+                ui.botao("Abrir portal do cliente", self._abrir_portal_navegador),
+            ])
+        pagina.append(ui.barra(*acoes_cliente))
         return pagina
 
     def novo_cliente(self):
@@ -1087,18 +1087,23 @@ class Janela(Adw.ApplicationWindow):
 
     def _pagina_prestadores(self):
         pagina = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.rotulo_portais = ui.legenda("")
-        pagina.append(ui.barra(self.rotulo_portais))
+        if self.web.enabled:
+            self.rotulo_portais = ui.legenda("")
+            pagina.append(ui.barra(self.rotulo_portais))
         self.busca_prestadores = Gtk.SearchEntry(placeholder_text="Pesquisar prestador")
         self.busca_prestadores.set_hexpand(True)
         self.busca_prestadores.connect("search-changed",
                                        lambda *_args: self.carregar_prestadores())
-        pagina.append(ui.barra(
+        acoes_prestador = [
             self.busca_prestadores,
             ui.botao("Cadastrar prestador", self._novo_prestador,
                      icone="list-add-symbolic", css="suggested-action"),
             ui.botao("Atribuir OS", self._atribuir_prestador),
-            ui.botao("Abrir portal", self._abrir_portal_prestador)))
+        ]
+        if self.web.enabled:
+            acoes_prestador.append(
+                ui.botao("Abrir portal", self._abrir_portal_prestador))
+        pagina.append(ui.barra(*acoes_prestador))
         self.tabela_prestadores = ui.Tabela([
             ("ID", 55, False, 0.5),
             ("Nome", 0, True, 0.0),
@@ -1117,16 +1122,13 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_prestadores(self):
-        if hasattr(self, "rotulo_portais"):
-            if self.web.enabled:
-                cliente = self.web.client_info()
-                texto = ("Portais: "
-                         f"prestador {self.web.provider_url or 'offline'} • "
-                         f"cliente {cliente.get('url_local') or 'offline'}")
-                if self.web.provider_error:
-                    texto += " • " + self.web.provider_error
-            else:
-                texto = "Site iniciado separadamente pelo terminal."
+        if hasattr(self, "rotulo_portais") and self.web.enabled:
+            cliente = self.web.client_info()
+            texto = ("Portais: "
+                     f"prestador {self.web.provider_url or 'offline'} • "
+                     f"cliente {cliente.get('url_local') or 'offline'}")
+            if self.web.provider_error:
+                texto += " • " + self.web.provider_error
             self.rotulo_portais.set_text(texto)
         termo = self.busca_prestadores.get_text().casefold().strip() if hasattr(
             self, "busca_prestadores") else ""
@@ -1237,12 +1239,12 @@ class Janela(Adw.ApplicationWindow):
         pagina = Adw.PreferencesPage()
         grupo = Adw.PreferencesGroup(
             title="Modo atual",
-            description="O app abre em modo local, sem iniciar o site.")
+            description="O app abre em modo local, usando o banco deste computador.")
         pagina.add(grupo)
 
         local = Adw.ActionRow(
             title="Local",
-            subtitle="Banco SQLite neste computador. O site é iniciado separadamente.",
+            subtitle="Banco SQLite neste computador.",
             icon_name="computer-symbolic")
         grupo.add(local)
 
@@ -1481,8 +1483,7 @@ class Janela(Adw.ApplicationWindow):
     def _alternar_servidor(self):
         if not self.web.enabled:
             ui.aviso_erro(self, "Portal",
-                          "Modo local: inicie o site pelo terminal com "
-                          "INICIAR_SERVIDOR_WEB.command ou servidor_backend.py --web.")
+                          "Modo local: este app usa apenas o banco local.")
             return
         if self.web.client_info().get("ativo"):
             def desligar():

@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.49 — servidor e GUI do site separados na linguagem — 2026-11-07 — develop
+
+- **Conceitos separados:** servidor de dados (`--api`) e GUI do site (`--site`). `--web` continua como alias antigo de `--site`.
+- **Atalhos:** `INICIAR_SERVIDOR_API.command` sobe o servidor; `INICIAR_SITE.command` sobe a GUI do site. `INICIAR_SERVIDOR_WEB.command` foi removido.
+- **GTK local limpo:** no modo local, botões e textos de portal/web ficam ocultos; a interface não menciona site nem o futuro Qt.
+- **Conexões:** continua sendo a última aba; fala de servidor/API, não de site.
+- **Transparência:** hoje a GUI do site ainda compartilha o processo com a API; a separação completa é uma fase posterior.
+- **Testes:** smoke local-only e com portais: OK.
+
 ## 9.6.0-dev.48 — modo local limpo e Conexões no fim — 2026-11-07 — develop
 
 - **Modo local explícito:** `INICIAR_AUTOSEG.command` e `INICIAR_AUTOSEG_DEV.command` fixam `AUTOSEG_WEB_ACCESS=0`; o app não sobe portais nem túnel.

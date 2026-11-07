@@ -65,6 +65,15 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Servidor × GUI do site
+
+- `INICIAR_SERVIDOR_API.command` = servidor de dados/API.
+- `INICIAR_SITE.command` = GUI do site (Officina Web); hoje com API embutida.
+- `INICIAR_SERVIDOR_WEB.command` foi removido para não confundir servidor com
+  site.
+- No GTK local, textos e botões de portal/web ficam ocultos; a tela Conexões
+  fala de servidor/API, não de site.
+
 ### Modo local limpo
 
 - `INICIAR_AUTOSEG.command` e `INICIAR_AUTOSEG_DEV.command` fixam modo local;
@@ -83,11 +92,13 @@ plano de big-bang.
 ### Servidor headless e GTK local-only
 
 - `servidor_backend.py --api` sobe só `/api/v1`, sem HTML, sem GTK e sem
-  Cloudflare. `--web` sobe Officina Web + API.
+  Cloudflare. O servidor de dados é separado da GUI do site.
+- `servidor_backend.py --site` sobe a GUI do site (Officina Web); hoje ela
+  compartilha o processo com a API, mas a separação completa é futura.
 - O GTK agora abre local-only por padrão; `AUTOSEG_WEB_ACCESS=1` ou
   `INICIAR_AUTOSEG_COM_WEB.command` restauram o comportamento antigo.
-- `INICIAR_SERVIDOR_API.command` e `INICIAR_SERVIDOR_WEB.command` são os
-  atalhos de terminal.
+- `INICIAR_SERVIDOR_API.command` e `INICIAR_SITE.command` são os atalhos de
+  terminal.
 - Ainda falta o login/conexão remota no GTK; o modo remoto continua em
   preparação.
 

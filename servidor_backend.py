@@ -2,8 +2,9 @@
 """Backend HTTP headless do AUTOSEG/Officina.
 
 Modos:
-  python servidor_backend.py --web   # portais HTML + API (padrão)
-  python servidor_backend.py --api   # somente /api/v1, sem HTML, sem GTK
+  python servidor_backend.py --api   # servidor: somente /api/v1, sem HTML
+  python servidor_backend.py --site  # GUI do site (Officina Web)
+  python servidor_backend.py --web   # alias antigo de --site
 
 O processo não depende do app GTK e não depende de Cloudflare. Túneis são uma
 comodidade separada; o servidor pode rodar em localhost, LAN ou atrás de um
@@ -59,7 +60,7 @@ def _esperar():
         time.sleep(0.5)
 
 
-def run_web():
+def run_site():
     from servidor_web import ServidorPortal
     from portal_prestador import PortalPrestador
 
@@ -78,13 +79,15 @@ def run_web():
         cliente.iniciar()
         prestador.iniciar()
         info = cliente.info()
-        print("Officina Web + API")
+        print("Officina Web — GUI do site")
         print("Banco:", BANCO)
         host_prestador = ("127.0.0.1" if prestador.host in ("0.0.0.0", "::")
                           else prestador.host)
         print("Cliente:", info.get("url_local"))
         print("Prestador:", f"http://{host_prestador}:{prestador.porta}")
-        print("API:", f"http://{host_prestador}:{prestador.porta}/api/v1")
+        print("API embutida no mesmo processo (temporário):",
+              f"http://{host_prestador}:{prestador.porta}/api/v1")
+        print("Para servidor separado, use --api.")
         print("Cloudflare: opcional, iniciado separadamente.")
         print("Ctrl+C para encerrar.")
         _esperar()
@@ -122,10 +125,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Backend headless do AUTOSEG/Officina.')
     modo = parser.add_mutually_exclusive_group()
-    modo.add_argument('--web', action='store_true',
-                      help='portais HTML + API (padrão)')
+    modo.add_argument('--site', '--web', dest='site', action='store_true',
+                      help='GUI do site (Officina Web); --web é alias antigo')
     modo.add_argument('--api', action='store_true',
-                      help='somente /api/v1, sem HTML')
+                      help='servidor: somente /api/v1, sem HTML')
     parser.add_argument('--host', default='127.0.0.1',
                         help='bind do modo --api (padrão: 127.0.0.1)')
     parser.add_argument('--port', type=int, default=None,
@@ -134,7 +137,7 @@ def main(argv=None):
     if args.api:
         run_api(args.host, args.port)
     else:
-        run_web()
+        run_site()
 
 
 if __name__ == '__main__':

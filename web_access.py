@@ -25,7 +25,7 @@ class WebAccessManager:
         self._client = None
         self._provider_url = ''
         self._provider_error = (
-            'Modo local: o site é iniciado separadamente.' if not self.enabled else '')
+            'Modo local: apenas o banco local.' if not self.enabled else '')
         self._client_error = ''
 
     @property
@@ -163,7 +163,7 @@ class WebAccessManager:
     def _cliente_offline(self) -> dict:
         erro = self._client_error
         if not self.enabled:
-            erro = 'Modo local: o site é iniciado separadamente.'
+            erro = 'Modo local: apenas o banco local.'
         return {
             'ativo': False,
             'porta': None,

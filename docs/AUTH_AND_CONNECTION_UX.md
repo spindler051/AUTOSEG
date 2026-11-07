@@ -176,15 +176,12 @@ Separação interna:
 
 ```text
 officina-server --api
-  API /api/v1 + SQLite + anexos
+  servidor de dados: /api/v1 + SQLite + anexos
   sem HTML, sem GUI
 
-officina-server --web
-  API + Officina Web
-  Portal do Prestador + Portal do Cliente
-
-officina-server --all
-  API + Officina Web + jobs (futuro)
+officina-web
+  GUI do site: Portal do Prestador + Portal do Cliente
+  hoje ainda compartilha o processo com a API; separação futura
 ```
 
 O GTK local não sobe nada. O GTK remoto só consome a API. O container roda

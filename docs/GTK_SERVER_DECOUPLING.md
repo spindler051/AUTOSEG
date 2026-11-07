@@ -236,8 +236,8 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 
 ### Fase 4 — Servidor no celular
 
-- `servidor_backend.py --api` (API only, sem HTML, sem GTK).
-- `servidor_backend.py --web` (Officina Web + API).
+- `servidor_backend.py --api` (servidor de dados: API only, sem HTML, sem GTK).
+- `servidor_backend.py --site` (GUI do site/Officina Web; hoje com API embutida).
 - Serviço OpenRC/systemd; bind localhost/LAN; Cloudflare opcional.
 - Health, backup, logs e limites de memória.
 - 2 GB: um PDF por vez, fotos otimizadas.
@@ -267,7 +267,7 @@ repositorios/         consultas por agregado (já iniciado)
 - `gtk_app.py`: importa `connection`/`AppService`; não importa
   `PortalPrestador` no topo.
 - `portal_prestador.py`: adaptador HTML + `/api/v1`, usando serviços.
-- `servidor_backend.py`: modos `--api` e `--web`, health.
+- `servidor_backend.py`: modos `--api` (servidor) e `--site` (GUI do site), health.
 - `runtime_config.py`: modo, URL, `web_access`, portas.
 - `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`: item #1 continua por fatias.
 - `docs/AUTH_AND_CONNECTION_UX.md`: fluxo de login local/remoto e conta admin.
