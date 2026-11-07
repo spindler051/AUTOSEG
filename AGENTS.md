@@ -61,6 +61,10 @@ generic, modular, open-source platform. Read this file before changing code.
     involving money, auth, permissions, schema/migration or deletion (N3/N4)
     require external human review or must stay in DEV behind a flag. Follow
     `docs/REVIEW_WITHOUT_DEVELOPER.md`.
+13. **External AI review is a routine, not an approval.** Use
+    `docs/EXTERNAL_AI_REVIEW_ROUTINE.md`: one file/module per cycle, code only,
+    no secrets or production data, two independent reviewers, evidence and
+    citations. It does not replace the N3/N4 human review.
 
 ## Workaholic fit check
 

@@ -97,6 +97,7 @@ Local-only GTK (no web server and no tunnel):
 - [Code comment policy](docs/CODE_COMMENT_POLICY.md)
 - [Code rot cleanup plan](docs/CODE_ROT_CLEANUP_PLAN.md)
 - [Review without a human developer](docs/REVIEW_WITHOUT_DEVELOPER.md)
+- [External AI review routine](docs/EXTERNAL_AI_REVIEW_ROUTINE.md)
 
 ## Repository layout
 

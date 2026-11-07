@@ -199,3 +199,4 @@ pode avançar em cada onda.
 - `AGENTS.md`
 - `docs/HUMAN_CENTERED_DECISIONS.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
+- `docs/EXTERNAL_AI_REVIEW_ROUTINE.md`
