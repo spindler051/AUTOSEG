@@ -688,4 +688,5 @@ quando houver evidência suficiente.
 - `docs/GTK4_LINUX_MACOS.md` — estado e limites do GTK atual.
 - `docs/GTK_SERVER_DECOUPLING.md` — separação GTK × servidor e modos local/remoto.
 - `docs/MULTI_PLATFORM_GUI_GUIDELINE.md` — guideline visual e nativa por plataforma.
+- `docs/CONDO_SHARING_AND_TENANCY.md` — compartilhamento de OS e multiempresa em condomínios.
 - `workaholic/docs/ARCHITECTURE.md` — arquitetura do protótipo Workaholic.

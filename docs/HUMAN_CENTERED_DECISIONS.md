@@ -188,3 +188,4 @@ recorded as deferred with explicit evidence triggers. Until then:
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/REVIEW_WITHOUT_DEVELOPER.md`
+- `docs/CONDO_SHARING_AND_TENANCY.md`

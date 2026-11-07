@@ -360,3 +360,4 @@ suporte, acessibilidade e manutenção.
 - `docs/PRODUCT_VISION.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
 - `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`
+- `docs/CONDO_SHARING_AND_TENANCY.md`
