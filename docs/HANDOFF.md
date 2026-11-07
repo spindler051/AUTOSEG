@@ -101,7 +101,7 @@ plano de big-bang.
 | Escrita de OS / materiais / anexos | **no serviço** | `application/os_write.py`, com teste de caracterização. |
 | Portal do Prestador | **legado** | Ainda chama `integracao/clientes.py` diretamente. |
 | Condomínios | **visão documentada** | Sem identidade, permissões, auditoria ou LGPD implementados. |
-| MAIN | **em `4bae1e9`** | Recebeu a separação GTK/servidor; o fix do feedback está só em `develop`. |
+| MAIN | **em `8b134a9`** | Recebeu texto adicional, financeiro e janela GTK sem SQL; o refactor de escrita da OS está só em `develop`. |
 | Túneis/servidor MAIN | **parados** | Links antigos não funcionam. |
 
 ---
@@ -143,6 +143,7 @@ Resultado: **41 OK**.
 - `test_pdf_relatorio.py`: **7 OK**.
 - `test_application_service.py`: **14 OK** (inclui financeiro, OS ativas, histórico e PJ).
 - `test_os_write.py`: **3 OK** (criação, edição, status, contexto).
+- Suíte completa não-visual: **278 testes, 3 falhas pré-existentes, 1 skip**.
 - Testes relacionados de portal/financeiro: **61 OK, 1 falha pré-existente**
   (`test_autoseg_http_novo`).
 
@@ -170,7 +171,15 @@ entram nessa contagem.
 
 ## 5. O que falta fazer
 
-### Prioridade 0 — promover o fix do feedback
+### Prioridade 0 — validar a escrita da OS na DEV
+
+- O refactor de `gtk_dialogos.py`/`application/os_write.py` é **N3** (escrita de
+  OS). Ele está em `develop` e **não foi promovido para a MAIN** sem revisão
+  humana externa, conforme `docs/REVIEW_WITHOUT_DEVELOPER.md`.
+- Testar criação, edição, materiais, pendência e encerramento na DEV.
+- Registrar o resultado e decidir a promoção depois.
+
+### Promover o fix do feedback
 
 - Testar o prazo de recebimento no `/financeiro` da DEV.
 - Se estiver correto, sincronizar `main` e a pasta MAIN.
