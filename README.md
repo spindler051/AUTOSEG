@@ -93,6 +93,7 @@ Local-only GTK (no web server and no tunnel):
 - [Architecture evolution plan](docs/PLANO_EVOLUCAO_ARQUITETURA.md)
 - [Fundamental structural problems](docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md)
 - [GTK and server decoupling](docs/GTK_SERVER_DECOUPLING.md)
+- [Multi-platform GUI guideline](docs/MULTI_PLATFORM_GUI_GUIDELINE.md)
 
 ## Repository layout
 

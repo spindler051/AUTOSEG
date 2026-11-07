@@ -357,3 +357,5 @@ Names, organization and repository boundaries remain open.
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/GTK_SERVER_DECOUPLING.md`
+- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md`

@@ -171,6 +171,9 @@ prometer paridade total.
 - Convenções nativas em iOS e Android; não “um site dentro de um app”.
 - Indicadores visíveis de offline, sincronizando, pendente e conflito.
 - Nenhuma regra de negócio na UI.
+- Aparência muito similar entre plataformas (mesmo produto, mesma hierarquia,
+  mesmos tokens), mas comportamento e controles nativos de cada uma. A regra
+  completa está em `docs/MULTI_PLATFORM_GUI_GUIDELINE.md`.
 
 ---
 
@@ -683,4 +686,6 @@ quando houver evidência suficiente.
 - `docs/WORKAHOLIC_INTEGRACAO.md` — integração atual do Workaholic.
 - `docs/HUMAN_CENTERED_DECISIONS.md` — decisões que precisam de humano.
 - `docs/GTK4_LINUX_MACOS.md` — estado e limites do GTK atual.
+- `docs/GTK_SERVER_DECOUPLING.md` — separação GTK × servidor e modos local/remoto.
+- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md` — guideline visual e nativa por plataforma.
 - `workaholic/docs/ARCHITECTURE.md` — arquitetura do protótipo Workaholic.
