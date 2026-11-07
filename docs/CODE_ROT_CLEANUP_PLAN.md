@@ -12,16 +12,16 @@ dados e estrutura.
 
 ## 1. O que contamos hoje
 
-Baseline em 2026-11-06, código de produção (testes fora por padrão):
+Baseline em 2026-11-06, após a fatia `AppService` (testes fora por padrão):
 
 | Indicador | Baseline | Observação |
 |---|---:|---|
 | Comentários com prompt/IA/revisão/shortcut | **0 alto, 0 baixo** | `scripts/audit_comments.py --strict` |
-| `except Exception`/bare except | **146** | nem todos são ruins; 33 são silenciosos |
-| Exceções amplas silenciosas | **33** | `pass`/`continue`/`return None` engolindo erro |
+| `except Exception`/bare except | **149** | nem todos são ruins; 32 são silenciosos |
+| Exceções amplas silenciosas | **32** | `pass`/`continue`/`return None` engolindo erro |
 | Funções com 60+ linhas | **52** | algumas são handlers aninhados; mede complexidade |
 | Classes com 400+ linhas | **4** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS` |
-| SQL direto em UI/HTTP | **130 linhas** | GTK, diálogos, portal, servidor web |
+| SQL direto em UI/HTTP | **126 linhas** | GTK, diálogos, portal, servidor web |
 | TODO/FIXME sem issue | **0** | após o ajuste do auditor |
 | Arquivos grandes | `portal_prestador.py` ~3.4k, `gtk_app.py` ~2.3k, `gtk_dialogos.py` ~2.2k | monólitos conhecidos |
 
@@ -103,7 +103,7 @@ dano real; depois o que reduz risco futuro.
 
 ### Onda 3 — Erro e observabilidade
 
-- triar os **33 broad excepts silenciosos**:
+- triar os **32 broad excepts silenciosos**:
   - P0: dinheiro, OS, PDF, estoque, autenticação → corrigir primeiro;
   - substituir por exceções específicas;
   - logar contexto sem dados pessoais;
@@ -147,9 +147,9 @@ testados.
 | ID | Item | Prioridade | Estado |
 |---|---|---|---|
 | CR-001 | Prompt/comments leakage | P3 | **Mitigado**: auditoria 0/0; manter no CI |
-| CR-002 | 33 exceções amplas silenciosas | P0/P1 | **Aberto**: triar por fluxo |
-| CR-003 | 146 `except Exception` | P1 | **Aberto**: separar borda aceitável de erro engolido |
-| CR-004 | 130 linhas de SQL em UI/HTTP | P2 | **Parcial**: clientes e resumos de OS extraídos |
+| CR-002 | 32 exceções amplas silenciosas | P0/P1 | **Aberto**: triar por fluxo |
+| CR-003 | 149 `except Exception` | P1 | **Aberto**: separar borda aceitável de erro engolido |
+| CR-004 | 126 linhas de SQL em UI/HTTP | P2 | **Parcial**: clientes, resumos de OS e portal extraídos |
 | CR-005 | 52 funções / 4 classes longas | P2 | **Aberto**: quebrar por fatia, não por estética |
 | CR-006 | Schema/migrações espalhados | P1 | **Aberto** |
 | CR-007 | Sessão/CSRF/HTML duplicados nos portais | P1 | **Aberto** |
@@ -209,7 +209,7 @@ python3 scripts/audit_code_rot.py
 ## 9. Próximas três ações
 
 1. Commitar este plano e o auditor de podridão.
-2. Triar as **33 exceções silenciosas** e corrigir primeiro as de dinheiro, OS,
+2. Triar as **32 exceções silenciosas** e corrigir primeiro as de dinheiro, OS,
    PDF e estoque.
 3. Escolher **uma** fatia P0 (por exemplo, encerramento de OS + rateio) para
    caracterização e limpeza de comportamento; não começar por comentário.
