@@ -59,6 +59,12 @@ com o usuário. Não usar nome digitado no campo `tecnico` como autorização.
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Ver qualquer OS da org | sim | não | sim | sim | não | sim | não |
 | Ver OS própria | sim | sim | sim | sim | sim | sim | própria |
+| Ver cliente vinculado à própria OS | sim | sim | sim | sim | sim | sim | próprio |
+| Ver CPF/CNPJ/e-mail de cliente vinculado | sim | sim, no detalhe | não | sim | não | não | próprio |
+| Ver CPF/CNPJ/e-mail de qualquer cliente | sim | não | não | não | não | não | não |
+| Listar todos os clientes | sim | não | nomes, sem PII | nomes, sem PII | não | não | não |
+| Buscar cliente por CPF/CNPJ/e-mail | sim | não | não | sim | não | não | não |
+| Exportar base de clientes | sim | não | não | não | não | não | não |
 | Criar OS | sim | sim | sim | não | sim | não | solicitar |
 | Editar OS própria | sim | sim | não | não | sim | não | não |
 | Editar OS de outro | sim | não | não | não | não | não | não |
@@ -109,6 +115,12 @@ de implementar.
 | AUT-013 | Último admin tenta se desativar | negado |
 | AUT-014 | Usuário desativado tenta login | negado |
 | AUT-015 | Token revogado tenta API | negado |
+| AUT-016 | Employee vê CPF/CNPJ/e-mail de cliente envolvido | permitido |
+| AUT-017 | Employee vê PII de cliente sem vínculo | negado |
+| AUT-018 | Employee busca cliente por CPF/CNPJ/e-mail | negado |
+| AUT-019 | Employee exporta base de clientes | negado |
+| AUT-020 | API de cliente omite PII para employee não envolvido | negado |
+| AUT-021 | Customer vê PII de outro cliente | negado |
 
 Esses testes devem rodar no serviço, não só na interface. Uma rota HTTP ou
 chamada direta ao `AppService` precisa falhar mesmo se a UI esconder o botão.

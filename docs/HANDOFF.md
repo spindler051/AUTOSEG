@@ -71,6 +71,8 @@ plano de big-bang.
   change requests no estilo Git.
 - Admin do tenant é root; employee vê só o próprio/involvido e não vê
   financeiro completo nem lista de funcionários; customer vê só o próprio.
+- Employee vê CPF/CNPJ/e-mail somente de clientes envolvidos em uma OS dele;
+  não lista a base inteira, não busca por documento e não exporta clientes.
 - Implementação fica em fases: política pura, enforcement, change requests,
   UI, login e revisão.
 

@@ -107,6 +107,8 @@ Regras:
 - Admin da organização pode editar OS de qualquer pessoa, inclusive de outro
   admin. Todos os admins da mesma organização têm o mesmo nível.
 - Prestador não-admin só edita OS em que é responsável/participante.
+- Prestador não-admin vê CPF/CNPJ/e-mail somente de clientes envolvidos em uma
+  OS dele; não lista a base inteira nem busca por documento.
 - Permissão é validada no servidor/serviço, não só na tela.
 - Toda ação sensível gera auditoria.
 - Não é possível remover o último admin ativo.

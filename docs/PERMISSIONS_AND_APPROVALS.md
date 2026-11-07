@@ -67,6 +67,17 @@ people.view.all
 people.manage
 roles.manage
 
+customer.view.own
+customer.view.involved
+customer.view.all
+customer.pii.view.own
+customer.pii.view.involved
+customer.pii.view.all
+customer.contact.view.involved
+customer.search.by_document
+customer.export.involved
+customer.export.all
+
 report.publish.own
 report.publish.all
 stock.view
@@ -174,9 +185,26 @@ Pode ver:
 
 - suas próprias OS e as OS em que participa;
 - os dados do cliente necessários para executar o serviço;
+- CPF/CNPJ e e-mail **somente de clientes envolvidos em uma OS dele**;
 - seu próprio financeiro/repasses;
 - nomes de colegas atribuídos à mesma OS (necessário para o trabalho), mas não
   o diretório completo de funcionários.
+
+Não pode:
+
+- listar todos os clientes;
+- buscar cliente por CPF/CNPJ/e-mail;
+- ver CPF/CNPJ/e-mail de cliente sem vínculo com uma OS dele;
+- exportar a base de clientes;
+- ver a quantidade de clientes da empresa.
+
+“Envolvido” significa: o cliente tem uma OS em que o usuário é responsável
+atual ou participante ativo. Não é “mesma cidade”, “mesmo nome” ou “cliente
+que eu atendi uma vez”.
+
+Na lista, os dados pessoais aparecem mascarados; o detalhe da OS pode revelar
+o CPF/CNPJ/e-mail do cliente envolvido. A revelação é registrada para
+auditoria.
 
 ### 4.3 Customer
 
@@ -207,7 +235,39 @@ Pode:
 
 ---
 
-## 5. Fluxo de aprovação tipo Git
+## 5. Dados pessoais e acesso por campo
+
+CPF, CNPJ, e-mail, telefone e endereço não são a mesma coisa. A permissão deve
+ser por campo e por vínculo:
+
+| Campo | Admin do tenant | Employee envolvido | Employee não envolvido | Customer |
+|---|---|---|---|---|
+| Nome do cliente | sim | sim | não | próprio |
+| Telefone/endereço operacional | sim | sim | não | próprio |
+| CPF/CNPJ | sim | sim, no detalhe | não | próprio |
+| E-mail | sim | sim, no detalhe | não | próprio |
+| Lista completa de clientes | sim | não | não | não |
+| Busca por CPF/CNPJ/e-mail | sim | não | não | não |
+| Exportar base de clientes | sim | não | não | não |
+| Quantidade de clientes | sim | não | não | não |
+
+Regras:
+
+- a lista de clientes do employee mostra somente clientes vinculados às OS
+  dele;
+- PII aparece mascarada na lista (`***.***.***-**`, `a***@***`);
+- o detalhe da OS pode revelar o PII do cliente envolvido;
+- toda revelação de PII é auditada;
+- busca por CPF/CNPJ/e-mail é privilégio de admin/financeiro, não de employee;
+- exportação em massa é privilégio de admin;
+- o servidor projeta apenas os campos permitidos; não envia PII e esconde na
+  UI;
+- o cliente vê apenas os próprios dados.
+
+Isso é minimização de dados (LGPD) e “need to know”, não apenas estética de
+tela.
+
+## 6. Fluxo de aprovação tipo Git
 
 ### 5.1 Criar OS como employee
 
@@ -295,7 +355,7 @@ Auditoria:
 
 ---
 
-## 6. Política de aprovação configurável
+## 7. Política de aprovação configurável
 
 Por tenant e por ação:
 
@@ -325,7 +385,7 @@ O dono pode mudar esses padrões por organização.
 
 ---
 
-## 7. O que é genérico e o que é AUTOSEG
+## 8. O que é genérico e o que é AUTOSEG
 
 Núcleo Officina/Workaholic:
 
@@ -348,7 +408,7 @@ Outro prestador pode usar os mesmos mecanismos com outros nomes e políticas.
 
 ---
 
-## 8. Segurança
+## 9. Segurança
 
 - Negar por padrão.
 - Validar no `AppService`, não na UI.
@@ -364,7 +424,7 @@ Outro prestador pode usar os mesmos mecanismos com outros nomes e políticas.
 
 ---
 
-## 9. Fases
+## 10. Fases
 
 ### Fase 0 — política pura
 
@@ -412,13 +472,15 @@ Outro prestador pode usar os mesmos mecanismos com outros nomes e políticas.
 
 ---
 
-## 10. Decisões abertas
+## 11. Decisões abertas
 
 - Admin pode aprovar a própria mudança? (recomendação: sim para root do
   tenant, não quando a política exigir segundo aprovador)
 - Employee pode ver nomes de colegas na mesma OS? (recomendação: sim, somente
   os participantes)
-- Employee pode ver o cliente completo ou só o necessário?
+- Employee pode ver o cliente completo ou só o necessário? (recomendação:
+  nome/telefone/endereço para executar; CPF/CNPJ/e-mail somente do cliente
+  envolvido, com revelação auditada)
 - Qual o limite de valor que exige aprovação financeira?
 - Excluir OS é arquivar ou apagar? (recomendação: arquivar)
 - Papéis customizados são por tenant ou globais?
@@ -429,7 +491,7 @@ Outro prestador pode usar os mesmos mecanismos com outros nomes e políticas.
 
 ---
 
-## 11. Relação com os outros documentos
+## 12. Relação com os outros documentos
 
 - `docs/PERMISSIONS_P0.md` — matriz inicial e testes AUT.
 - `docs/APP_MODES_ROLES_AND_SERVERS.md` — modos e papéis.
