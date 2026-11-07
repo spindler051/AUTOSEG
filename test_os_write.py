@@ -119,6 +119,15 @@ class OSWriteTest(unittest.TestCase):
                 conexao.execute('SELECT status FROM ordens_servico WHERE id=?',
                                 (criada.os_id,)).fetchone()[0],
                 'Concluída')
+            encerramento = conexao.execute(
+                'SELECT situacao FROM os_encerramentos WHERE os_id=?',
+                (criada.os_id,)).fetchone()
+            financeiro = conexao.execute(
+                'SELECT valor,status FROM financeiro WHERE os_id=?',
+                (criada.os_id,)).fetchone()
+        self.assertEqual(encerramento['situacao'], 'Concluída')
+        self.assertEqual(float(financeiro['valor']), 10.0)
+        self.assertEqual(financeiro['status'], 'Aguardando pagamento')
 
 
 if __name__ == '__main__':
