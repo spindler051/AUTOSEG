@@ -230,16 +230,25 @@ The final split is not decided. The recommended path is:
 2. Split into separate repositories when the module contracts and release
    cadence are stable.
 
-A possible future layout:
+A possible future layout, if the **Officina** name is confirmed:
 
 ```text
-<org>/workaholic          engine, CLI, contracts, tests
-<org>/<generic-app>       GTK4/libadwaita shell
+<org>/workaholic          engine, protocol, engine CLI, contracts, tests
+<org>/officina            generic platform/meta: contracts, docs, design
+<org>/officina-gtk        GTK4/libadwaita client
+<org>/officina-qt         Qt client (only if justified)
+<org>/officina-winui      Windows/WinUI client
+<org>/officina-web        generic web client
+<org>/officina-cli        application CLI
+<org>/officina-crane      Android/Jetpack Compose client (internal codename)
+<org>/officina-swiftui    Apple client
 <org>/autoseg             AUTOSEG flavor/distribution
 <org>/autoseg-br          Brazilian locale/fiscal modules
 ```
 
-Names, organization and repository boundaries remain open.
+Names, organization and repository boundaries remain open. Start with a
+monorepo; split only when contracts, API and release engineering justify it.
+See `docs/NAMING_AND_CLI.md` section 9.
 
 ## 7. Roadmap — phases, not dates
 

@@ -209,3 +209,74 @@ built:
 - Do we want `workaholic gui` as a convenience command?
 - Which name passes trademark/domain/package checks?
 - Who approves the final name and branding?
+
+## 9. Future repository layout — proposal
+
+This section is a **proposal for the future**, conditional on the name
+**Officina** being confirmed. It does not authorize creating these repositories
+now.
+
+### 9.1 Naming convention
+
+Use lowercase, hyphen-separated repository names:
+
+```text
+workaholic              engine, protocol contracts, engine CLI
+officina                generic platform/meta repository (contracts, docs, design)
+officina-gtk            GTK4/libadwaita client
+officina-qt             Qt client (only if justified)
+officina-winui          Windows/WinUI client
+officina-web            generic web client
+officina-cli            user-facing application CLI (if separate from engine CLI)
+officina-crane          Android/Jetpack Compose client (internal codename “Crane”)
+officina-swiftui        Apple client (SwiftUI/UIKit)
+autoseg                 AUTOSEG flavor/distribution
+autoseg-br              Brazilian locale/fiscal modules
+```
+
+- `workaholic` remains the **engine** and its developer CLI.
+- `officina-cli` is the **application** CLI, not a replacement for the engine
+  CLI. If this distinction is unnecessary, keep only `workaholic`.
+- `officina-crane` is acceptable as an internal codename, but the README must
+  say clearly “Crane = Android/Jetpack Compose client”. If the goal is maximum
+  clarity for contributors, `officina-android` or `officina-compose` is better.
+  “Crane” is not the official name of Jetpack Compose; it is our codename.
+- `officina-swiftui` can be `officina-apple` if the repository is platform-first
+  rather than toolkit-first. Do not mix the two conventions.
+
+### 9.2 Monorepo first, split only when it hurts
+
+The recommended path remains:
+
+1. **Now:** keep the current monorepo. Contracts, design tokens, clients and
+   flavor evolve together; one CI and one review process.
+2. **When contracts and API are stable:** split the engine (`workaholic`), the
+   platform/meta (`officina`) and the clients.
+3. **Per-client split criteria:** app-store signing, entitlements,
+   permissions, CI matrix, independent release cadence or repository access
+   control. Do not split just for aesthetic symmetry.
+4. **Flavors do not get a client repo per toolkit.** AUTOSEG is a flavor of
+   Officina; it should configure/build the same clients. A separate
+   `autoseg-gtk`/`autoseg-qt` would duplicate code.
+
+### 9.3 Versioning and compatibility
+
+- API/contract version: `api-v1`, `contract-v1` or equivalent.
+- Each client may have its own release version, but declares the compatible
+  contract range.
+- Flavor releases (`autoseg-*`) pin a platform/client version and a contract
+  version.
+- Tags should be namespaced by repository; do not assume the same `vX.Y.Z`
+  exists everywhere.
+
+### 9.4 What not to create now
+
+- eight empty repositories with no code;
+- one repository per Python module;
+- `officina-core` duplicating Workaholic;
+- one client repository per flavor;
+- separate repos before the API/contract and design tokens exist.
+
+The current monorepo is the right place to stabilize the contract, the design
+tokens and the first two clients (web + GTK). Repository splitting is a
+release-engineering decision, not the first step.
