@@ -240,7 +240,11 @@ autoseg-br              Brazilian locale/fiscal modules
 - `officina-crane` is acceptable as an internal codename, but the README must
   say clearly “Crane = Android/Jetpack Compose client”. If the goal is maximum
   clarity for contributors, `officina-android` or `officina-compose` is better.
-  “Crane” is not the official name of Jetpack Compose; it is our codename.
+  “Crane” was the historical internal codename of the Jetpack Compose UI
+  toolkit; the official name today is **Jetpack Compose**. In this project,
+  Crane is also our client/repository codename. There is additionally an
+  official Compose sample app called Crane, so the README should distinguish
+  the toolkit, the sample and our client.
 - `officina-swiftui` can be `officina-apple` if the repository is platform-first
   rather than toolkit-first. Do not mix the two conventions.
 
