@@ -63,6 +63,12 @@ Development database and ports:
 ./INICIAR_AUTOSEG_DEV.command
 ```
 
+Local-only GTK (no web server and no tunnel):
+
+```bash
+./INICIAR_AUTOSEG_SEM_WEB.command
+```
+
 ## Documentation
 
 - [Product vision](docs/PRODUCT_VISION.md)
@@ -86,6 +92,7 @@ Development database and ports:
 - [Modular migration ledger](docs/MIGRACAO_MODULAR.md)
 - [Architecture evolution plan](docs/PLANO_EVOLUCAO_ARQUITETURA.md)
 - [Fundamental structural problems](docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md)
+- [GTK and server decoupling](docs/GTK_SERVER_DECOUPLING.md)
 
 ## Repository layout
 

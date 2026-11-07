@@ -96,6 +96,16 @@ def client_server(port: int | None = None, host: str | None = None) -> ServerCon
     return ServerConfig(final_host, final_port, False)
 
 
+def web_access_enabled() -> bool:
+    """Whether the GTK app should start local web portals.
+
+    Default is on, preserving current behavior. ``AUTOSEG_WEB_ACCESS=0`` or
+    the ``--no-web`` flag makes the desktop app run fully local, without
+    opening ports 8765/8766.
+    """
+    return os.environ.get('AUTOSEG_WEB_ACCESS', '1') != '0'
+
+
 def client_port(default: int = 8765) -> int:
     """Port used in links between the provider portal and the client portal.
 

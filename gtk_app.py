@@ -20,8 +20,6 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 import gtk_comum as ui
 import gtk_dialogos as dialogos
 from banco import BANCO, conectar_banco
-from servidor_web import ServidorPortal
-from portal_prestador import PortalPrestador
 import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
@@ -88,6 +86,8 @@ class Janela(Adw.ApplicationWindow):
         return False
 
     def _iniciar_backend(self):
+        self.portal_prestador = None
+        self.servidor_portal = None
         try:
             ui.BASE.mkdir(parents=True, exist_ok=True)
             from banco import criar_banco
@@ -105,23 +105,28 @@ class Janela(Adw.ApplicationWindow):
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
                 print("Aviso: recuperação de PDFs anteriores:", erro)
-            prestador_cfg = runtime_config.provider_server()
-            self.portal_prestador = PortalPrestador(
-                BANCO, host=prestador_cfg.host, porta=prestador_cfg.port)
-            try:
-                self.url_prestador = self.portal_prestador.iniciar()
-            except Exception as erro:
-                self.aviso_prestador = str(erro)
-                print("Portal do prestador indisponível:", erro)
-            cliente_cfg = runtime_config.client_server()
-            self.servidor_portal = ServidorPortal(
-                BANCO, ui.PASTA_APP,
-                porta=cliente_cfg.port, host=cliente_cfg.host)
-            try:
-                self.servidor_portal.iniciar()
-            except Exception as erro:
-                self.erro_portal = str(erro)
-                print("Portal do cliente indisponível:", erro)
+            if runtime_config.web_access_enabled():
+                from portal_prestador import PortalPrestador
+                from servidor_web import ServidorPortal
+                prestador_cfg = runtime_config.provider_server()
+                self.portal_prestador = PortalPrestador(
+                    BANCO, host=prestador_cfg.host, porta=prestador_cfg.port)
+                try:
+                    self.url_prestador = self.portal_prestador.iniciar()
+                except Exception as erro:
+                    self.aviso_prestador = str(erro)
+                    print("Portal do prestador indisponível:", erro)
+                cliente_cfg = runtime_config.client_server()
+                self.servidor_portal = ServidorPortal(
+                    BANCO, ui.PASTA_APP,
+                    porta=cliente_cfg.port, host=cliente_cfg.host)
+                try:
+                    self.servidor_portal.iniciar()
+                except Exception as erro:
+                    self.erro_portal = str(erro)
+                    print("Portal do cliente indisponível:", erro)
+            else:
+                self.aviso_prestador = "Servidor web desativado (modo local)."
         except Exception as erro:
             self.erro_portal = str(erro)
             self.portal_prestador = None
@@ -2326,6 +2331,9 @@ class Aplicativo(Adw.Application):
 
 
 def main():
+    if '--no-web' in sys.argv:
+        os.environ['AUTOSEG_WEB_ACCESS'] = '0'
+        sys.argv = [arg for arg in sys.argv if arg != '--no-web']
     Adw.init()
     return Aplicativo().run(sys.argv)
 

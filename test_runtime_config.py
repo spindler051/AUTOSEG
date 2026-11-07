@@ -10,7 +10,7 @@ import runtime_config
 KEYS = (
     'AUTOSEG_BASE', 'GESTAO_BANCO', 'AUTOSEG_DEV',
     'PRESTADOR_PORT', 'PRESTADOR_BIND', 'PRESTADOR_HTTPS',
-    'CLIENTE_PORT', 'CLIENTE_BIND',
+    'CLIENTE_PORT', 'CLIENTE_BIND', 'AUTOSEG_WEB_ACCESS',
 )
 
 
@@ -62,6 +62,13 @@ class RuntimeConfigTest(unittest.TestCase):
         client = runtime_config.client_server(port=0)
         self.assertEqual(provider.port, 0)
         self.assertEqual(client.port, 0)
+
+    def test_web_access_is_on_by_default_and_can_be_disabled(self):
+        self.assertTrue(runtime_config.web_access_enabled())
+        os.environ['AUTOSEG_WEB_ACCESS'] = '0'
+        self.assertFalse(runtime_config.web_access_enabled())
+        os.environ['AUTOSEG_WEB_ACCESS'] = '1'
+        self.assertTrue(runtime_config.web_access_enabled())
 
     def test_data_paths_follow_base_and_database_env(self):
         os.environ['AUTOSEG_BASE'] = '/tmp/autoseg-base'
