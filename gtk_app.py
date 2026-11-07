@@ -35,6 +35,7 @@ import importacao_yaml
 import completude
 import composicao
 from integracao import clientes as clientes_core
+from repositorios import ordens as ordens_repo
 import runtime_config
 
 if os.environ.get("AUTOSEG_DEV") == "1":
@@ -410,18 +411,8 @@ class Janela(Adw.ApplicationWindow):
 
     def _atualizar_inicio(self):
         clientes = clientes_core.contar_ativos(BANCO)
-        conexao = conectar_banco()
-        try:
-            resumo_os = conexao.execute(
-                "SELECT COALESCE(SUM(status='Aberta'),0) abertas, "
-                "COALESCE(SUM(status='Iniciada'),0) iniciadas, "
-                "COALESCE(SUM(status='Pendente'),0) pendentes FROM ordens_servico").fetchone()
-            resumo_fin = conexao.execute(
-                "SELECT COALESCE(SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END),0) a_receber, "
-                "COALESCE(SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END),0) recebido "
-                "FROM financeiro").fetchone()
-        finally:
-            conexao.close()
+        resumo_os = ordens_repo.resumo(BANCO)
+        resumo_fin = ordens_repo.financeiro_resumo(BANCO)
         self.cards["abertas"].set_text(str(resumo_os["abertas"]))
         self.cards["iniciadas"].set_text(str(resumo_os["iniciadas"]))
         self.cards["pendentes"].set_text(str(resumo_os["pendentes"]))

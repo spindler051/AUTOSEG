@@ -40,6 +40,7 @@ import socket
 from versao_app import versao_local
 import runtime_config
 from integracao import clientes as clientes_core
+from repositorios import ordens as ordens_repo
 
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
@@ -1069,14 +1070,7 @@ class PortalPrestador:
 
             def os_lista(self,s,concluidas=False):
                 if concluidas:
-                    with ext.db(banco) as c:
-                        lista=c.execute('''SELECT o.id,o.numero_os,o.status,o.descricao,o.data_abertura,
-                            o.valor_total,cl.nome cliente,MAX(d.versao) versao
-                            FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
-                            LEFT JOIN os_documentos d ON d.os_id=o.id AND d.tipo='relatorio_pdf'
-                            WHERE o.status NOT IN ('Aberta','Iniciada','Pendente')
-                              AND COALESCE(o.arquivada,0)=0
-                            GROUP BY o.id ORDER BY o.id DESC LIMIT 500''').fetchall()
+                    lista=ordens_repo.listar_historico(banco)
                     rows=[]
                     for x in lista:
                         link_pdf=(botao('Baixar PDF',f'/os/{x["id"]}/pdf') if x['versao'] else
@@ -1124,20 +1118,9 @@ class PortalPrestador:
 
             def inicio(self,s):
                 clientes_ativos=clientes_core.contar_ativos(banco)
-                with ext.db(banco) as c:
-                    o=c.execute('''SELECT COUNT(*) total,
-                        SUM(CASE WHEN status='Aberta' THEN 1 ELSE 0 END) abertas,
-                        SUM(CASE WHEN status='Iniciada' THEN 1 ELSE 0 END) iniciadas,
-                        SUM(CASE WHEN status='Pendente' THEN 1 ELSE 0 END) pendentes,
-                        SUM(CASE WHEN status='Concluída' THEN 1 ELSE 0 END) concluidas
-                        FROM ordens_servico WHERE COALESCE(arquivada,0)=0''').fetchone()
-                    f=c.execute('''SELECT SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END) recebido,
-                        SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END) pendente FROM financeiro''').fetchone()
-                    recentes=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,
-                        o.cliente_id,cl.nome cliente
-                        FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
-                        WHERE COALESCE(o.arquivada,0)=0
-                        ORDER BY o.id DESC LIMIT 6''').fetchall()
+                o=ordens_repo.resumo(banco)
+                f=ordens_repo.financeiro_resumo(banco)
+                recentes=ordens_repo.recentes(banco, limite=6)
                 if self.ui_app():
                     def stat(rotulo,valor,href):
                         return (f'<a class="stat" href="{href}"><span>{esc(rotulo)}</span>'
@@ -2484,10 +2467,7 @@ class PortalPrestador:
                 return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):
-                with ext.db(banco) as c:
-                    oses=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,c.nome cliente
-                        FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id
-                        WHERE COALESCE(o.arquivada,0)=0 ORDER BY o.id DESC LIMIT 500''').fetchall()
+                oses=ordens_repo.listar_relatorios(banco)
                 if tipo=='emails':
                     title='E-mails para clientes'; explanation='Gere um rascunho .eml com o PDF anexado. Nenhum e-mail será enviado automaticamente.'
                     acao=lambda o:(botao('Preparar .eml',f'/os/{o["id"]}/email')
@@ -2517,8 +2497,7 @@ class PortalPrestador:
                 info+=('<p class="muted">O Portal do Cliente é um site separado, na porta 8765. '
                        'O login dele é por CPF e senha e não se mistura com o login do prestador. '
                        'As solicitações registradas lá aparecem nesta lista e no desktop.</p>')
-                with ext.db(banco) as c:
-                    web=c.execute("SELECT id,numero_os,status,data_abertura FROM ordens_servico WHERE origem='Portal' ORDER BY id DESC LIMIT 100").fetchall()
+                web=ordens_repo.listar_origem_portal(banco)
                 registros=[(f'<a href="/os/{o["id"]}">{esc(o["numero_os"])}</a>',esc(o['status']),esc(o['data_abertura'])) for o in web]
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
 

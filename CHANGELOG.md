@@ -14,6 +14,7 @@
 - **PDF de OS pendente:** o anexo do próximo e-mail passa a incluir o relatório técnico completo salvo no atendimento, além do resumo em três campos. OS concluídas, finalizadas e canceladas não foram alteradas.
 - **Configuração de runtime:** portas, bind, TLS e caminhos-base dos portais passam por `runtime_config.py`, preservando os mesmos defaults (8765/8766 no MAIN, 8865/8866 no DEV), as mesmas variáveis de ambiente e o comportamento visual.
 - **Clientes fora da UI:** as leituras de clientes do Portal do Prestador e a contagem do painel GTK passam por `integracao/clientes.py`; filtros, paginação, colunas e interface permanecem iguais.
+- **Resumos de OS fora da UI:** painel, histórico, relatórios e solicitações do portal usam `repositorios/ordens.py`; consultas, ordem, limites e telas permanecem iguais.
 - **Testes:** `test_rev12_correcoes.py` (47 OK, 1 skipped), `test_feedback_portal.py` + `test_api_financeiro.py` + `test_meu_auto_financeiro.py` (40 OK), `test_produtividade_rev07.py` + `test_gmail_integracao.py` (16 OK), `test_autoseg_melhorias.py` + `test_composicao.py` + `test_pdf_relatorio.py` (41 OK).
 
 ## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop
