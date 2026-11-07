@@ -271,6 +271,7 @@ repositorios/         consultas por agregado (já iniciado)
 - **PDF:** servidor (fila) versus cliente; para e-mail/automação, servidor.
 - **Rust:** núcleo/protocolo no futuro, não a UI; não começar por Rust.
 - **2 GB/celular:** 3 usuários e 2 simultâneos são viáveis; serializar PDFs.
+  Medições e limites na seção 10.
 
 ---
 
@@ -280,3 +281,80 @@ Começar pela **Fase 0** (servidor fora do caminho local) e pela **Fase 1**
 (clientes no `AppService`). São pequenas, reversíveis e provam o desenho sem
 reescrever o app. A separação completa só deve avançar com testes de contrato
 e um servidor remoto real (Mac → celular) antes de migrar OS/financeiro.
+
+---
+
+## 10. Servidor no celular com 2 GB — medições e limites
+
+Cenário: Galaxy J6 (Exynos 7870, 2 GB de RAM) com Nura/Alpine, rodando **somente o Portal do Prestador** em modo headless.
+O port do J6 no Nura é experimental/testing; valide boot, rede, sono e
+temperatura antes de confiar nele.
+
+### 10.1 Números medidos no código atual
+
+| Cenário | Resultado |
+|---|---|
+| Servidor headless (portais + SQLite, sem GTK) | **~48 MB RSS** |
+| PDF com 10 fotos 3000×2000 | **~173 MB de pico**, ~4,4 s, PDF de ~3,7 MB (Mac) |
+| PDF no J6 (estimativa) | 15–40 s, memória parecida; A53 é mais lenta |
+| 2 PDFs simultâneos | ~350 MB de pico + CPU disputada |
+| ffmpeg | **não é usado hoje** |
+| cloudflared | processo separado, rede/criptografia; pouca CPU |
+
+O gargalo não é o número de usuários navegando. É **PDF com muitas fotos**.
+
+### 10.2 Três usuários, dois simultâneos
+
+- 2 pessoas navegando/editando OS: tranquilo.
+- 2 pessoas enviando fotos: ok, com pico moderado.
+- 2 pessoas gerando PDF ao mesmo tempo: funciona, mas **serialize**; um PDF
+  por vez reduz memória e evita disputa de CPU/GIL.
+- 2 pessoas + interface gráfica pesada do Nura + navegador no próprio celular:
+  aperta. Prefira acessar de outro dispositivo.
+
+### 10.3 Configuração recomendada
+
+- rodar **provider-only**, sem portal do cliente e sem GTK;
+- PDF em fila, **1 por vez**, com limite de 10–15 fotos por relatório;
+- cliente redimensiona/comprime antes do upload: ~1600 px, JPEG ~80;
+- `zram`/swap de 1–2 GB;
+- monitorar `free -m` e RSS; se passar de ~1,2 GB, reduzir fotos ou mover o PDF
+  para outro computador;
+- manter na tomada e com ventilação; é desenvolvimento/teste, não produção.
+
+---
+
+## 11. Rust, GPU e ffmpeg
+
+### 11.1 Rust
+
+Rust pode reduzir o baseline e melhorar CPU/concorrência, mas **não resolve
+sozinho** o pico de memória: o custo dominante é decodificar/redimensionar
+imagens e montar o PDF. Um rewrite completo do PDF é caro e arriscado
+(ReportLab já resolve layout, tabelas, fontes e quebra de página).
+
+Ordem recomendada:
+
+1. otimizar a pipeline de imagem (Pillow `draft()`, `libvips`, limite de fotos);
+2. colocar PDF em fila, um por vez;
+3. só depois avaliar um worker Rust para imagem/HTTP;
+4. manter Rust para núcleo/protocolo quando o contrato estiver estável.
+
+### 11.2 GPU
+
+O J6 tem Mali-T830 e o driver mainline pode estar aceitável, mas o servidor
+atual **não usa GPU**: ReportLab/Pillow são CPU-bound. A GPU ajuda na interface
+e no preview/redimensionamento do **cliente**, não na geração de PDF do
+servidor.
+
+### 11.3 ffmpeg
+
+ffmpeg não faz parte do servidor atual. Se entrar vídeo no futuro, ele vira uma
+nova carga pesada e precisa de fila, limites e, se possível, encode/decode por
+hardware (V4L2) — mas isso é outro projeto.
+
+### 11.4 O que mover para o cliente
+
+- **Sim:** resize/compressão de fotos, thumbnail, preview, cache local.
+- **Não:** regras de negócio, permissões, financeiro e PDF final com e-mail.
+- **Talvez:** PDF no desktop controlado; nunca como única opção para web/mobile.
