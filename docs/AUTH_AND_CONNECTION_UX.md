@@ -15,6 +15,10 @@ O modo híbrido (local + sync) é uma fase posterior.
 
 ## 1. Tela de entrada
 
+> A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
+> descoberta de servidores e solicitação sem login está em
+> `docs/APP_MODES_ROLES_AND_SERVERS.md`.
+
 ```text
 ┌─────────────────────────────────────────────┐
 │  AUTOSEG / Officina                         │

@@ -100,6 +100,7 @@ Local-only GTK (no web server and no tunnel):
 - [Review without a human developer](docs/REVIEW_WITHOUT_DEVELOPER.md)
 - [External AI review routine](docs/EXTERNAL_AI_REVIEW_ROUTINE.md)
 - [Login, local account and server connection](docs/AUTH_AND_CONNECTION_UX.md)
+- [App modes, roles and server discovery](docs/APP_MODES_ROLES_AND_SERVERS.md)
 - [Condominiums, OS sharing and tenancy](docs/CONDO_SHARING_AND_TENANCY.md)
 
 ## Repository layout

@@ -65,6 +65,13 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Modos, papéis e descoberta de servidores
+
+- `docs/APP_MODES_ROLES_AND_SERVERS.md` decompõe o produto em problemas
+  menores: prestador × cliente, admin × não-admin, paridade web/GTK/Qt/nativo,
+  descoberta de servidores, solicitação sem login e fases P0–P4.
+- Nada foi implementado; auth/permissões continuam N3/N4.
+
 ### Login local e conexão com servidor
 
 - A UX de primeira conta admin, usuários locais e “lembrar este dispositivo”
