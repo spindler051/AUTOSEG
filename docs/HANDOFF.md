@@ -65,6 +65,17 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Servidor headless e GTK local-only
+
+- `servidor_backend.py --api` sobe só `/api/v1`, sem HTML, sem GTK e sem
+  Cloudflare. `--web` sobe Officina Web + API.
+- O GTK agora abre local-only por padrão; `AUTOSEG_WEB_ACCESS=1` ou
+  `INICIAR_AUTOSEG_COM_WEB.command` restauram o comportamento antigo.
+- `INICIAR_SERVIDOR_API.command` e `INICIAR_SERVIDOR_WEB.command` são os
+  atalhos de terminal.
+- Ainda falta o login/conexão remota no GTK; o modo remoto continua em
+  preparação.
+
 ### Permissões configuráveis e aprovações
 
 - `docs/PERMISSIONS_AND_APPROVALS.md` define grupos, papéis, flags, escopos e

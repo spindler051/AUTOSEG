@@ -194,8 +194,11 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 - `INICIAR_AUTOSEG_SEM_WEB.command` é o atalho local-only.
 - `web_access.py` agora concentra o ciclo de vida dos dois portais. O GTK não
   importa as classes dos portais nem chama `iniciar`/`parar` diretamente.
-- O padrão continua “ligado” durante a transição; o botão “Ligar servidor”
-  cria o servidor do cliente sob demanda.
+- O padrão agora é **local-only**: o GTK abre sem subir os portais. Para o
+  comportamento antigo, use `AUTOSEG_WEB_ACCESS=1` ou
+  `INICIAR_AUTOSEG_COM_WEB.command`.
+- O botão “Ligar servidor” do Portal do Cliente continua existindo, mas o
+  caminho recomendado é subir o site pelo terminal.
 - Ainda falta uma preferência visual “Ativar acesso web” e o controle do
   portal do prestador na tela de configurações.
 
@@ -233,7 +236,8 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 
 ### Fase 4 — Servidor no celular
 
-- `servidor_backend.py --only-provider` (sem portal do cliente, sem GTK).
+- `servidor_backend.py --api` (API only, sem HTML, sem GTK).
+- `servidor_backend.py --web` (Officina Web + API).
 - Serviço OpenRC/systemd; bind localhost/LAN; Cloudflare opcional.
 - Health, backup, logs e limites de memória.
 - 2 GB: um PDF por vez, fotos otimizadas.
@@ -263,7 +267,7 @@ repositorios/         consultas por agregado (já iniciado)
 - `gtk_app.py`: importa `connection`/`AppService`; não importa
   `PortalPrestador` no topo.
 - `portal_prestador.py`: adaptador HTML + `/api/v1`, usando serviços.
-- `servidor_backend.py`: opção `--only-provider` e health.
+- `servidor_backend.py`: modos `--api` e `--web`, health.
 - `runtime_config.py`: modo, URL, `web_access`, portas.
 - `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`: item #1 continua por fatias.
 - `docs/AUTH_AND_CONNECTION_UX.md`: fluxo de login local/remoto e conta admin.

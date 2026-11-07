@@ -26,7 +26,7 @@ class ConnectionMode(str, Enum):
 class ConnectionSettings:
     mode: ConnectionMode = ConnectionMode.LOCAL
     server_url: str = ''
-    web_access: bool = True
+    web_access: bool = False
     tunnel: bool = False
     last_user: str = ''
 
@@ -63,7 +63,7 @@ def load_settings(path: Path | None = None) -> ConnectionSettings:
     if 'AUTOSEG_WEB_ACCESS' in os.environ:
         web_access = runtime_config.web_access_enabled()
     else:
-        web_access = bool(dados.get('web_access', True))
+        web_access = bool(dados.get('web_access', False))
     return ConnectionSettings(
         mode=mode,
         server_url=server_url,

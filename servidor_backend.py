@@ -1,34 +1,41 @@
 #!/usr/bin/env python3
-"""Backend HTTP headless do AUTOSEG.
+"""Backend HTTP headless do AUTOSEG/Officina.
 
-Sobe somente os portais do cliente e do prestador, sem interface gráfica. Útil para
-deixar o banco no macOS e acessar os portais do Linux via túnel SSH.
+Modos:
+  python servidor_backend.py --web   # portais HTML + API (padrão)
+  python servidor_backend.py --api   # somente /api/v1, sem HTML, sem GTK
+
+O processo não depende do app GTK e não depende de Cloudflare. Túneis são uma
+comodidade separada; o servidor pode rodar em localhost, LAN ou atrás de um
+proxy reverso com domínio próprio.
 
 Variáveis:
   GESTAO_BANCO / AUTOSEG_BASE   banco e pastas de dados
-  CLIENTE_PORT / CLIENTE_BIND   portal do cliente
+  CLIENTE_PORT / CLIENTE_BIND   portal do cliente (modo --web)
   PRESTADOR_PORT / PRESTADOR_BIND
   AUTOSEG_DEV=1                 portas 8865/8866 por padrão
 """
+from __future__ import annotations
+
+import argparse
 import signal
 import time
 from pathlib import Path
 
 from banco import BANCO, criar_banco
-from servidor_web import ServidorPortal
 import runtime_config
-from portal_prestador import PortalPrestador
 import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
 import cadastros_v9 as cad9
 import estoque_materiais as estoque
 import catalogo_servicos as catalogo
+import produtividade_os as prod
 
 PASTA_APP = Path(__file__).resolve().parent
 
 
-def main():
+def _instalar_base():
     criar_banco()
     ext.instalar(BANCO)
     fluxo.instalar(BANCO)
@@ -36,7 +43,27 @@ def main():
     cad9.instalar(BANCO)
     estoque.instalar(BANCO)
     catalogo.instalar(BANCO)
+    prod.instalar(BANCO)
 
+
+def _esperar():
+    parar = False
+
+    def encerrar(*_args):
+        nonlocal parar
+        parar = True
+
+    signal.signal(signal.SIGINT, encerrar)
+    signal.signal(signal.SIGTERM, encerrar)
+    while not parar:
+        time.sleep(0.5)
+
+
+def run_web():
+    from servidor_web import ServidorPortal
+    from portal_prestador import PortalPrestador
+
+    _instalar_base()
     cliente_cfg = runtime_config.client_server()
     prestador_cfg = runtime_config.provider_server()
     cliente = ServidorPortal(
@@ -47,29 +74,20 @@ def main():
         BANCO,
         host=prestador_cfg.host,
         porta=prestador_cfg.port)
-
-    parar = False
-
-    def encerrar(*_args):
-        nonlocal parar
-        parar = True
-
-    signal.signal(signal.SIGINT, encerrar)
-    signal.signal(signal.SIGTERM, encerrar)
-
     try:
         cliente.iniciar()
         prestador.iniciar()
         info = cliente.info()
-        print("AUTOSEG backend headless")
+        print("Officina Web + API")
         print("Banco:", BANCO)
         host_prestador = ("127.0.0.1" if prestador.host in ("0.0.0.0", "::")
                           else prestador.host)
         print("Cliente:", info.get("url_local"))
         print("Prestador:", f"http://{host_prestador}:{prestador.porta}")
+        print("API:", f"http://{host_prestador}:{prestador.porta}/api/v1")
+        print("Cloudflare: opcional, iniciado separadamente.")
         print("Ctrl+C para encerrar.")
-        while not parar:
-            time.sleep(0.5)
+        _esperar()
     finally:
         try:
             prestador.parar()
@@ -81,5 +99,43 @@ def main():
             pass
 
 
-if __name__ == "__main__":
+def run_api(host='127.0.0.1', port=None):
+    from api_server import start, url
+
+    _instalar_base()
+    if port is None:
+        port = runtime_config.provider_server().port
+    server = start(BANCO, host, port)
+    print("Officina API headless")
+    print("Banco:", BANCO)
+    print("API:", url(server))
+    print("Sem HTML, sem GTK e sem Cloudflare.")
+    print("Ctrl+C para encerrar.")
+    try:
+        _esperar()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description='Backend headless do AUTOSEG/Officina.')
+    modo = parser.add_mutually_exclusive_group()
+    modo.add_argument('--web', action='store_true',
+                      help='portais HTML + API (padrão)')
+    modo.add_argument('--api', action='store_true',
+                      help='somente /api/v1, sem HTML')
+    parser.add_argument('--host', default='127.0.0.1',
+                        help='bind do modo --api (padrão: 127.0.0.1)')
+    parser.add_argument('--port', type=int, default=None,
+                        help='porta do modo --api (padrão: porta do prestador)')
+    args = parser.parse_args(argv)
+    if args.api:
+        run_api(args.host, args.port)
+    else:
+        run_web()
+
+
+if __name__ == '__main__':
     main()

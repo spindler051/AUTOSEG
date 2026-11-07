@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.46 — servidor headless e GTK local-only por padrão — 2026-11-07 — develop
+
+- **Servidor no terminal:** `servidor_backend.py --api` sobe somente `/api/v1`, sem HTML, sem GTK e sem Cloudflare. `--web` sobe Officina Web + API.
+- **API-only real:** novo `api_server.py` serve JSON e devolve 404 JSON para rotas não-API; não importa os portais HTML.
+- **GTK limpo:** o padrão agora é local-only. O app não sobe os portais ao abrir; o site é iniciado separadamente.
+- **Compatibilidade:** `AUTOSEG_WEB_ACCESS=1` e `INICIAR_AUTOSEG_COM_WEB.command` restauram o comportamento antigo.
+- **Atalhos:** `INICIAR_SERVIDOR_API.command` e `INICIAR_SERVIDOR_WEB.command`.
+- **Cloudflare:** continua opcional; o servidor não depende dele. Túneis são comodidade separada.
+- **Testes:** `test_api_server.py` (2 OK), `test_web_access.py`, `test_application_service.py`, `test_runtime_config.py` (26 OK); smoke GTK local-only sem portas.
+
 ## 9.6.0-dev.45 — política de permissões em runtime — 2026-11-07 — develop
 
 - **Política declarativa:** `policy.yaml` define papéis, permissões e escopo de campos (nome, telefone, endereço, e-mail, documento).

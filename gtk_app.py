@@ -30,10 +30,9 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import composicao
-from application.connection import build_service
+from application.connection import build_service, load_settings
 from application.local_service import LocalService
 from web_access import WebAccessManager
-import runtime_config
 
 if os.environ.get("AUTOSEG_DEV") == "1":
     import tuneis_dev as tuneis
@@ -101,10 +100,12 @@ class Janela(Adw.ApplicationWindow):
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
                 print("Aviso: recuperação de PDFs anteriores:", erro)
-            self.service = build_service(BANCO)
+            settings = load_settings()
+            self.service = build_service(BANCO, settings)
+            web_enabled = (settings.web_access
+                           and settings.mode.value == 'local')
             self.web = WebAccessManager(
-                BANCO, ui.PASTA_APP,
-                enabled=runtime_config.web_access_enabled())
+                BANCO, ui.PASTA_APP, enabled=web_enabled)
             self.web.start()
         except Exception as erro:
             if self.service is None:
@@ -1334,7 +1335,8 @@ class Janela(Adw.ApplicationWindow):
     def _alternar_servidor(self):
         if not self.web.enabled:
             ui.aviso_erro(self, "Portal",
-                          self.web.client_error or "Servidor web desativado (modo local).")
+                          "Modo local: inicie o site pelo terminal com "
+                          "INICIAR_SERVIDOR_WEB.command ou servidor_backend.py --web.")
             return
         if self.web.client_info().get("ativo"):
             def desligar():

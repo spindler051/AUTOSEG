@@ -58,7 +58,7 @@ class WebAccessManagerTest(unittest.TestCase):
         estado = manager.start()
         self.assertFalse(estado['enabled'])
         self.assertFalse(estado['provider']['ativo'])
-        self.assertIn('desativado', manager.provider_error)
+        self.assertIn('Modo local', manager.provider_error)
         self.assertFalse(manager.client_info()['ativo'])
         self.assertEqual(manager.consume_events(), [])
         manager.stop()

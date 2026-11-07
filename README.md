@@ -45,10 +45,16 @@ licenses. The Workaholic subproject has its own
 
 ## Running the current app
 
-macOS:
+macOS desktop (local, sem servidor):
 
 ```bash
 ./INICIAR_AUTOSEG.command
+```
+
+Desktop com os portais locais ligados (comportamento antigo):
+
+```bash
+./INICIAR_AUTOSEG_COM_WEB.command
 ```
 
 Linux/GTK development:
@@ -68,6 +74,22 @@ Local-only GTK (no web server and no tunnel):
 ```bash
 ./INICIAR_AUTOSEG_SEM_WEB.command
 ```
+
+Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
+
+```bash
+./INICIAR_SERVIDOR_API.command
+```
+
+Servidor com Officina Web (portais HTML + API):
+
+```bash
+./INICIAR_SERVIDOR_WEB.command
+```
+
+O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
+`INICIAR_AUTOSEG_COM_WEB.command` somente se quiser que o próprio GTK suba os
+portais.
 
 ## Documentation
 
