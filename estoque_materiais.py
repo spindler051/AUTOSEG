@@ -202,7 +202,7 @@ def reconciliar_os_conexao(c,os_id,ator='OS'):
 
 
 def registrar_legado_sem_baixa(banco):
-    """Uso manual antes da REV04: nunca executar como migração automática sem aprovação."""
+    """Uso manual em bancos legados: não executar como migração automática sem aprovação."""
     raise RuntimeError('Não é permitida importação retroativa automática de saldos.')
 
 

@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import io
 import re
 import tokenize
@@ -77,6 +78,24 @@ def _find(comment: str, patterns):
             yield reason
 
 
+def _docstrings(path: Path):
+    try:
+        texto = path.read_text(encoding='utf-8')
+        tree = ast.parse(texto)
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef)):
+            continue
+        doc = ast.get_docstring(node, clean=False)
+        if not doc:
+            continue
+        fallback = getattr(node, 'lineno', 1)
+        linha = getattr(node.body[0], 'lineno', fallback) if node.body else fallback
+        yield linha, doc
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--include-tests', action='store_true',
@@ -94,6 +113,10 @@ def main(argv=None):
             for motivo in _find(comment, LOW_PATTERNS):
                 baixos += 1
                 print(f'{path.relative_to(ROOT)}:{linha}: [BAIXO] {motivo}: {comment.strip()[:180]}')
+        for linha, doc in _docstrings(path):
+            for motivo in _find(doc, HIGH_PATTERNS):
+                altos += 1
+                print(f'{path.relative_to(ROOT)}:{linha}: [ALTO][DOC] {motivo}: {doc.strip().splitlines()[0][:180]}')
 
     print(f'\nResumo: {altos} achado(s) alto(s), {baixos} achado(s) baixo(s).')
     if args.strict and altos:

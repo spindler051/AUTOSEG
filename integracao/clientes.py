@@ -4,10 +4,10 @@ O Workaholic cuida de validação, CRUD e versionamento. Este adaptador mapeia
 o registro genérico para a tabela legada ``clientes`` e mantém as regras
 específicas do AUTOSEG: CPF/CNPJ, completude e sincronização PJ.
 
-shortcut: escritores legados (portal, desktop, importadores) ainda não
-incrementam ``versao``; a tela mantém o comportamento último-que-salva,
-igual ao anterior. O bloqueio otimista do repositório só é usado por chamadas
-diretas. Migrar os demais escritores antes de remover as escritas diretas.
+Legacy writers (portal, desktop, importers) still bypass this adapter and do
+not increment ``versao``. UI writes therefore remain last-write-wins; direct
+adapter callers use optimistic locking. Those writers must be migrated before
+the legacy path can be removed.
 """
 from __future__ import annotations
 

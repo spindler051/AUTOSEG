@@ -108,11 +108,14 @@ python3 scripts/audit_comments.py --strict
 
 - `[ALTO]` — prompt/IA/revisão/shortcut: corrigir.
 - `[BAIXO]` — linguagem imperativa: revisar; pode ser invariante legítima.
+- `[DOC]` — achado em docstring, não apenas em `#`.
 - `--strict` retorna código 1 se houver achados altos; use no CI quando o
   workflow tiver permissão.
 
-O script ignora `feedback_ai.py`/`feedback_portal.py`, onde IA e prompt são o
-próprio domínio, e não substitui revisão humana.
+O script varre comentários e docstrings, ignora arquivos de teste por padrão
+(`--include-tests` para incluí-los) e ignora `feedback_ai.py`/
+`feedback_portal.py`, onde IA e prompt são o próprio domínio. Ele não substitui
+revisão humana.
 
 ## 6. Checklist de revisão
 

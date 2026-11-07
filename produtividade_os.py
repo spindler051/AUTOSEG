@@ -1,4 +1,4 @@
-"""AUTOSEG produtividade REV07: estado de deslocamento, rascunhos e políticas.
+"""AUTOSEG produtividade: estado de deslocamento, rascunhos e políticas.
 Migrações aditivas em SQLite, sem rede externa e sem mover dados antigos.
 """
 import json
