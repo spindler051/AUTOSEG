@@ -1,5 +1,30 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.43 — janela GTK sem SQL direto — 2026-11-07 — develop
+
+- **Janela principal:** `gtk_app.py` não executa mais SQL direto. Histórico, PJ/chamados, prestadores, seletores de OS e lookup de cliente YAML usam `AppService`/`LocalService`.
+- **Sem mudança de UI:** filtros, colunas, status, permissões visíveis e mensagens continuam iguais.
+- **Separação:** o SQL restante do GTK está nos diálogos (`gtk_dialogos.py`), principalmente carregamento e gravação da OS, materiais e anexos.
+- **Números:** SQL direto em UI/HTTP caiu de 117 para 86 linhas; `gtk_app.py` está em zero.
+- **Testes:** 54 OK na suíte dirigida; smoke GTK local-only OK.
+
+## 9.6.0-dev.42 — financeiro e OS ativas via AppService — 2026-11-07 — develop
+
+- **Financeiro no contrato:** cartões, lista e marcação de recebimento do GTK usam `LocalService`; o SQL saiu de `gtk_app.py` para a camada de aplicação.
+- **OS ativas no contrato:** a lista de OS abertas/iniciadas/pendentes usa `LocalService`, preservando filtro, ordem, colunas, responsável e aviso de dados incompletos.
+- **Sem mudança de UI:** rótulos, valores, filtros e ações visíveis continuam iguais.
+- **Separação:** o GTK agora usa o serviço em clientes, painel, Portal do Cliente, financeiro e lista de OS ativas. Escrita de OS, PJ, estoque e diálogos ainda acessam o banco diretamente.
+- **Testes:** 53 OK na suíte dirigida; smoke GTK local-only OK. SQL direto em UI/HTTP caiu de 126 para 117 linhas.
+
+## 9.6.0-dev.41 — campo de texto adicional configurável na OS — 2026-11-07 — develop
+
+- **Campo genérico:** `ordens_servico.texto_adicional` guarda um texto livre por OS. O código não atribui significado fixo ao campo; ele pode conter garantia, condições de pagamento, aviso ou qualquer outro texto.
+- **Configuração:** `texto_os.yaml` define `rotulo`, `titulo_pdf`, `padrao` e `ajuda`. O texto padrão começa vazio e pode ser decidido sem alterar código.
+- **GTK e portal:** o campo aparece no cadastro/edição da OS, pré-preenhido com o padrão configurado em novas OS.
+- **PDF:** a seção configurada aparece somente quando há texto, sem numeração fixa e sem hardcode de “garantia”.
+- **Migração:** coluna aditiva e idempotente em `banco.criar_banco`; bancos antigos recebem o campo vazio.
+- **Testes:** `test_texto_os.py` (4 OK), `test_pdf_relatorio.py` (7 OK) e testes relacionados (29 OK).
+
 ## 9.6.0-dev.40 — prazo de recebimento e atraso no financeiro — 2026-11-07 — develop
 
 - **Prazo de recebimento:** cada lançamento em aberto no `/financeiro` ganhou um campo opcional de vencimento. O prazo fica salvo em `financeiro.vencimento` e pode ser alterado ou removido pelo finalizador ou administrador.

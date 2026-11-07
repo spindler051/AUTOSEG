@@ -208,9 +208,10 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 - `application/local_service.py` implementa saúde, resumo do início, listar,
   obter e salvar clientes, além do resumo e da lista de solicitações do Portal
   do Cliente.
-- O GTK usa o serviço na lista de clientes, no diálogo de cliente, nos cartões
-  do início e nos cartões/lista do Portal do Cliente. O SQL de OS/PJ ainda não
-  foi migrado.
+- O GTK usa o serviço em clientes, painel, Portal do Cliente, financeiro,
+  histórico, PJ e lista de OS ativas. `gtk_app.py` está sem SQL direto.
+- `gtk_dialogos.py` ainda concentra a leitura/gravação da OS, materiais e
+  anexos; é a última fatia grande do desktop.
 - `application/connection.py` guarda modo local/remoto; o modo remoto ainda só
   tem `health` (`HttpService`). Não há fallback silencioso para o banco local.
 - Testes: `test_application_service.py` e `test_web_access.py`.

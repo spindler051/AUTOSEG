@@ -22,7 +22,7 @@ Current session handoff: `docs/HANDOFF.md`.
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
 | Fiscal / NF-e / NFS-e | `prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
 | Email / payments | `gmail_service.py`, future payment integrations | Generic integration contracts + adapters | **legacy only** | Define provider interfaces; keep credentials outside code. |
-| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; app boundary started** | Client reads/writes, dashboard and portal summary/cards use `AppService`/`LocalService`; web portals are owned by `WebAccessManager`. OS/PJ screens still contain direct SQL and must migrate one slice at a time. |
+| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; app boundary started** | The main GTK window has no direct SQL; clients, dashboard, portal, finance, history, PJ and active-OS lists use `AppService`/`LocalService`. `gtk_dialogos.py` still contains the OS/material/attachment write path, which is the next slice. Web portals are owned by `WebAccessManager`. |
 | CLI | `workaholic/src/workaholic/cli` | Workaholic CLI | **prototype** | Keep tests; add commands only when a real consumer exists. |
 
 ## Workaholic adoption

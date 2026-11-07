@@ -1,7 +1,7 @@
 # Handoff — estado atual do projeto
 
 **Última atualização:** 2026-11-07
-**Versão:** `9.6.0-dev.40`
+**Versão:** `9.6.0-dev.43`
 **Branch de trabalho:** `develop`
 **Regra do dia:** a MAIN não foi aberta nem sincronizada; servidor e túneis
 continuam parados.
@@ -40,6 +40,32 @@ plano de big-bang.
 - `gtk_dialogos.py` — diálogo de cliente usa o serviço.
 - `repositorios/ordens.py` — resumo e lista de solicitações do portal.
 
+### Separação GTK: janela principal sem SQL
+
+- `gtk_app.py` não executa mais SQL direto.
+- Histórico, PJ/chamados, prestadores, seletores de OS e lookup de cliente YAML
+  usam `AppService`/`LocalService`.
+- SQL direto em UI/HTTP caiu de 117 para 86 linhas.
+- O SQL restante do GTK está em `gtk_dialogos.py` (diálogo de OS, materiais,
+  anexos e escrita transacional).
+
+### Separação GTK: financeiro e OS ativas
+
+- Cartões, lista e marcação de recebimento do financeiro usam
+  `LocalService`/`AppService`.
+- A lista de OS ativas usa `LocalService`, com o mesmo filtro, ordem,
+  responsável e aviso de dados incompletos.
+- SQL direto em UI/HTTP caiu de 126 para 117 linhas.
+
+### Campo genérico de texto na OS
+
+- `ordens_servico.texto_adicional` é um texto livre, sem semântica fixa no
+  código.
+- `texto_os.yaml` define rótulo, título do PDF, texto padrão e ajuda.
+- O campo aparece no GTK e no portal; o PDF imprime a seção somente se houver
+  texto.
+- O texto padrão está vazio para ser decidido pelo dono.
+
 ### Feedback novo corrigido
 
 - `/financeiro` ganhou prazo opcional de recebimento e destaque **Atrasado** em
@@ -61,10 +87,10 @@ plano de big-bang.
 
 | Área | Estado | Observação |
 |---|---|---|
-| GTK → `AppService` | **parcial** | Clientes, painel e Portal do Cliente usam `LocalService`. |
+| GTK → `AppService` | **parcial** | Janela principal sem SQL; diálogos de OS, materiais e anexos ainda acessam o banco. |
 | Portais HTTP | **fora do GTK** | `WebAccessManager` inicia/para; HTML e rotas não mudaram. |
 | Modo remoto | **só health** | `HttpService` não lista/salva clientes ainda. |
-| OS / PJ / financeiro / estoque | **legado** | SQL direto no GTK e regras nos módulos atuais. |
+| Escrita de OS / materiais / anexos | **legado** | `gtk_dialogos.py` ainda concentra a escrita transacional da OS. |
 | Portal do Prestador | **legado** | Ainda chama `integracao/clientes.py` diretamente. |
 | Condomínios | **visão documentada** | Sem identidade, permissões, auditoria ou LGPD implementados. |
 | MAIN | **em `4bae1e9`** | Recebeu a separação GTK/servidor; o fix do feedback está só em `develop`. |
@@ -75,6 +101,9 @@ plano de big-bang.
 ## 3. Commits desta sessão
 
 ```text
+e9b8728 refactor: historico, PJ e prestadores via AppService
+cd79f19 refactor: financeiro e OS ativas via AppService
+d6b1e50 feat: campo de texto adicional configuravel na OS
 efc7e3c feat: prazo de recebimento e destaque de atraso
 197a2c8 docs: atualiza baseline apos fatia AppService
 b1cdab7 feat: separa GTK dos portais e inicia AppService
@@ -101,6 +130,9 @@ dc18fa1 docs: plano de limpeza de podridao e auditor de codigo
 Resultado: **41 OK**.
 
 - `test_financeiro_vencimento.py`: **4 OK**.
+- `test_texto_os.py`: **4 OK**.
+- `test_pdf_relatorio.py`: **7 OK**.
+- `test_application_service.py`: **14 OK** (inclui financeiro, OS ativas, histórico e PJ).
 - Testes relacionados de portal/financeiro: **61 OK, 1 falha pré-existente**
   (`test_autoseg_http_novo`).
 
