@@ -430,3 +430,34 @@ def financeiro_receber(banco,fid,pid):
             (datetime.now().strftime('%d/%m/%Y'),fid))
         ext.evento(c,f['os_id'],'Pagamento recebido',f'Recebimento confirmado no portal: {dinheiro(f["valor"])}',pid,'Prestador')
         audit(c,pid,'Recebimento confirmado',fid,dinheiro(f['valor']))
+
+
+def financeiro_definir_vencimento(banco,fid,pid,vencimento=''):
+    """Define ou remove o prazo de recebimento sem alterar o valor da OS."""
+    texto=str(vencimento or '').strip()
+    if texto:
+        try:
+            data=datetime.strptime(texto,'%Y-%m-%d').date()
+        except ValueError:
+            raise ValueError('Vencimento inválido. Use uma data no formato AAAA-MM-DD.')
+        if not 2000<=data.year<=2100:
+            raise ValueError('Vencimento fora do intervalo permitido.')
+        texto=data.isoformat()
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        f=c.execute('SELECT os_id,status,valor,vencimento FROM financeiro WHERE id=?',(fid,)).fetchone()
+        if not f: raise ValueError('Lançamento não encontrado.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin else False
+        if (not final or int(final['prestador_id'])!=int(pid)) and not admin:
+            raise PermissionError('Somente o finalizador ou administrador pode definir o vencimento.')
+        if f['status'] in ('Recebido','Cancelado'):
+            raise ValueError('Vencimento não pode ser alterado depois do recebimento ou cancelamento.')
+        c.execute('UPDATE financeiro SET vencimento=? WHERE id=?',(texto or None,fid))
+        ext.evento(c,f['os_id'],'Prazo de recebimento definido',
+                   f'Vencimento: {texto or "removido"}',pid,'Prestador')
+        audit(c,pid,'Vencimento do recebimento alterado',fid,texto or 'removido')
+        return texto

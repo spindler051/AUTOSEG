@@ -64,6 +64,11 @@ CSS_MOBILE = """
 .finance-item-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px}
 .finance-item-foot form{margin:0}
 .finance-item-foot button{min-height:36px;padding:8px 12px;font-size:13px}
+.finance-item-foot .prazo{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.finance-item-foot .prazo label{display:flex;align-items:center;gap:6px;margin:0;font-size:12px}
+.finance-item-foot .prazo input{min-height:34px;padding:6px 8px;font-size:13px}
+.finance-item-foot .prazo button{min-height:34px;padding:6px 10px}
+.finance-item-foot .tag.bad{background:#451b1b;color:#ffb3b3;border:1px solid #b75151}
 .foto-incluir{display:flex!important;align-items:center;gap:8px;margin:8px 0;font-weight:600}
 .foto-incluir input{width:18px;height:18px;min-height:0}
 .foto-comprimir{display:flex!important;align-items:center;gap:8px;margin:12px 0 4px;font-weight:600}
@@ -413,6 +418,8 @@ body.ui-app .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var
 body.ui-app .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
 body.ui-app .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
 body.ui-app .finance-item-foot .tag{margin:0}
+body.ui-app .finance-item-foot .tag.bad{background:rgba(223,133,133,.12);color:var(--u-bad);border:1px solid rgba(223,133,133,.35)}
+body.ui-app .finance-item-foot .prazo input{background:var(--u-card);border:1px solid var(--u-line-2);color:var(--u-text);border-radius:8px}
 
 /* login */
 body.ui-app.ui-login main{min-height:100vh;max-width:none;margin:0;padding:0}
@@ -2321,18 +2328,25 @@ class PortalPrestador:
                 pessoal=prod.financeiro_pessoal(banco,s['pid'])
                 token=self.hidden(s)
                 banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
+                hoje=time.strftime('%Y-%m-%d')
 
                 def _item_finalizador(x):
                     bruto=float(x['valor'] or 0)
                     repasses=float(x['partes_centavos'] or 0)/100
                     meu=bruto-repasses
                     recebido=x['status']=='Recebido'
+                    vencimento=str(x.get('vencimento') or '')[:10]
+                    atrasado=bool(vencimento and vencimento<hoje and not recebido)
                     detalhe=(f'Bruto {dinheiro(bruto)} · Repasses {dinheiro(repasses)} · '
-                             f'{x.get("forma_pagamento") or "—"} · venc. {x.get("vencimento") or "—"}')
+                             f'{x.get("forma_pagamento") or "—"} · venc. {data_curta(vencimento) or "—"}')
                     if recebido:
                         acao='<span class="good">Recebido</span>'
                     else:
-                        acao=(f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/receber" '
+                        prazo=(f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/vencimento" class="prazo">'
+                               f'{token}<label>Vencimento <input type="date" name="vencimento" value="{esc(vencimento)}"></label>'
+                               '<button type="submit">Salvar prazo</button></form>')
+                        acao=(prazo
+                              +f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/receber" '
                               'data-confirm="Confirma que o valor foi realmente recebido?">'
                               f'{token}<button type="submit">Confirmar recebimento</button></form>'
                               f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/cancelar" '
@@ -2340,7 +2354,8 @@ class PortalPrestador:
                               f'{token}<button type="submit" class="danger">Cancelar pagamento</button></form>')
                     return {'tipo':'Finalizei','os_id':x['os_id'],'numero_os':x['numero_os'],
                             'cliente':x.get('cliente') or '','meu':meu,
-                            'status':'Recebido' if recebido else 'A receber',
+                            'status':'Atrasado' if atrasado else ('Recebido' if recebido else 'A receber'),
+                            'status_classe':'bad' if atrasado else '',
                             'detalhe':detalhe,'acao':acao,'recebido':recebido}
 
                 def _item_secundario(x):
@@ -2373,7 +2388,8 @@ class PortalPrestador:
                             acao='<span class="warn">Aguardando confirmação</span>'
                     return {'tipo':'Secundário','os_id':x['os_id'],'numero_os':x['numero_os'],
                             'cliente':x.get('cliente') or '','meu':valor,
-                            'status':status,'detalhe':detalhe,'acao':acao,'recebido':recebido}
+                            'status':status,'status_classe':'',
+                            'detalhe':detalhe,'acao':acao,'recebido':recebido}
 
                 lancamentos=[_item_finalizador(x) for x in pessoal['brutos_proprios']]
                 lancamentos+=[_item_secundario(x) for x in pessoal['receber_de_colegas']]
@@ -2392,7 +2408,7 @@ class PortalPrestador:
                             '<div class="finance-item-values"><span>Minha parcela</span>'
                             f'<strong>{dinheiro(item["meu"])}</strong></div>'
                             f'<p class="finance-item-detail">{esc(item["detalhe"])}</p>'
-                            f'<div class="finance-item-foot"><span class="tag">{esc(item["status"])}</span>'
+                            f'<div class="finance-item-foot"><span class="tag {esc(item.get("status_classe") or "")}">{esc(item["status"])}</span>'
                             f'{item["acao"]}</div></article>')
 
                 def _coluna(titulo,itens,vazio):
@@ -3368,7 +3384,7 @@ class PortalPrestador:
                         prod.confirmar_recebimento_repasse(
                             banco,int(d['os_id']),pid,None)
                         return self.redir('/financeiro')
-                    if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2] in ('receber','cancelar'):
+                    if len(partes)==3 and partes[0]=='financeiro' and partes[1].isdigit() and partes[2] in ('receber','cancelar','vencimento'):
                         fid=int(partes[1])
                         with ext.db(banco) as c:
                             autorizado=c.execute('''SELECT 1 FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id
@@ -3377,6 +3393,9 @@ class PortalPrestador:
                             raise PermissionError('Financeiro restrito ao técnico finalizador ou administrador.')
                         if partes[2]=='cancelar':
                             neg.financeiro_cancelar(banco,fid,pid,str(d.get('motivo_cancelamento','')))
+                        elif partes[2]=='vencimento':
+                            neg.financeiro_definir_vencimento(
+                                banco,fid,pid,str(d.get('vencimento','')))
                         else:
                             neg.financeiro_receber(banco,fid,pid)
                         return self.redir('/financeiro')
