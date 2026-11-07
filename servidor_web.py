@@ -37,7 +37,7 @@ from email.policy import default as email_policy
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from banco import BANCO, PASTA_APP, criar_banco
 import cadastros_v9 as cad
@@ -49,6 +49,7 @@ import fluxo_os as fluxo
 import portal_cliente_v94 as cliente
 import prestadores_ext as ext
 from versao_app import versao_local
+from repositorios import ordens as ordens_repo
 
 VERSAO = versao_local('9.6.0')
 PORTA_PADRAO = 8765
@@ -276,7 +277,8 @@ class ServidorPortal:
                 linhas = []
                 for r in registros:
                     publicado = fluxo.ultimo_documento(banco, r['id']) if r['status'] in fluxo.FIM else None
-                    doc = (botao('Baixar relatório PDF', f'/legado/os/{r["id"]}/pdf')
+                    numero_url = quote(str(r['numero_os'] or r['id']), safe='')
+                    doc = (botao('Baixar relatório PDF', f'/legado/os/{numero_url}/pdf')
                            if publicado and nome and nome['tipo_pessoa']=='Física' else '<span class="muted">Relatório restrito ao titular PF ou síndico autorizado</span>')
                     linhas.append((esc(r['numero_os']), esc(r['descricao'] or '')[:160],
                                    '<span class="tag">' + esc(r['status']) + '</span>', doc))
@@ -368,11 +370,14 @@ class ServidorPortal:
                             return self._legado_login()
                         return self._legado_lista(s)
                     partes = path.strip('/').split('/')
-                    if len(partes) == 4 and partes[0] == 'legado' and partes[1] == 'os' and partes[2].isdigit() and partes[3] == 'pdf':
+                    if len(partes) == 4 and partes[0] == 'legado' and partes[1] == 'os' and partes[3] == 'pdf':
+                        registro = ordens_repo.obter_por_token(banco, unquote(partes[2]))
+                        if not registro:
+                            return self.erro('OS não encontrada.', 404)
                         s = self._legado_sessao()
                         if not s:
                             return self._legado_login('Entre com ID e senha.')
-                        return self._legado_pdf(s, int(partes[2]))
+                        return self._legado_pdf(s, int(registro['id']))
 
                     return cliente.get(self, self._rel(path), banco)
                 except PermissionError as exc:

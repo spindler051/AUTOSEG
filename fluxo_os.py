@@ -244,7 +244,9 @@ def publicar_relatorio(banco,os_id):
         arq=Path(ext.gerar_pdf(banco,os_id))
         if not arq.is_file() or arq.stat().st_size<100: raise ValueError('PDF não foi gerado corretamente.')
         pasta=ext.RELATORIOS/'publicados';pasta.mkdir(parents=True,exist_ok=True)
-        nome_limpo=re.sub(r'[^A-Za-z0-9_-]','_',str(o['numero_os'] or '')).strip('_') or f'OS_{os_id}'
+        nome_limpo=re.sub(r'[^A-Za-z0-9_-]','_',str(o['numero_os'] or '')).strip('_')
+        if not nome_limpo:
+            raise ValueError('OS sem número público; não é possível publicar o relatório.')
         destino=pasta/f'{nome_limpo}_relatorio_v{proximo}.pdf'
         temp=pasta/f'.{secrets.token_hex(12)}.tmp'
         try:

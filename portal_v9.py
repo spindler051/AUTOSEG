@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 import prestadores_ext as ext
 import cadastros_v9 as cad
 import links_publicos as links
+from repositorios import ordens as ordens_repo
 
 SESSOES = {}
 FALHAS = {}
@@ -201,7 +202,7 @@ def administrar(h,banco,s):
         if r['status']=='Autorizado' and not r['os_id']:
             acao=(f'<form method="post" action="/chamados/{r["id"]}/criar-os">{formulario_csrf(s)}'
                   '<button>Criar OS autorizada</button></form>')
-        if r['os_id']:acao+=botao('Abrir OS',f'/os/{r["os_id"]}')
+        if r['os_id']:acao+=botao('Abrir OS',ordens_repo.url_os(banco,r['os_id']))
         if r['status'] not in ('Cancelado','Recusado'):
             acao+=(f'<form method="post" action="/chamados/{r["id"]}/cancelar">{formulario_csrf(s)}'
                    '<input name="motivo" required minlength="5" placeholder="Motivo do cancelamento">'

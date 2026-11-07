@@ -107,6 +107,11 @@ class CorrecoesRev12(unittest.TestCase):
         return ext.cadastrar(self.db, nome, email or f'{nome.lower().replace(" ", ".")}@exemplo.com.br',
                              'senha-bem-segura-2026', documento=documento)
 
+    def _numero(self, oid):
+        with ext.db(self.db) as c:
+            return c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                             (oid,)).fetchone()[0]
+
     def _cliente(self, pid, nome='Condomínio Alfa', **extras):
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome=nome, tipo_pessoa='Jurídica', status='Ativo')
@@ -241,7 +246,7 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('os-form-app', html)
         self.assertIn('data-auto-save="1"', html)
         self.assertIn('rascunho-auto-status', html)
-        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
+        self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
         self.assertIn('os-summary', html)
         self.assertIn('os-ticket', html)
         self.assertIn('os-workflow', html)
@@ -436,7 +441,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente = self._login(base)
         _, html = req(cliente, base, f'/os/{oid}')
         self.assertIn('Documento anterior', html)
-        self.assertNotIn(f'href="/os/{oid}/pdf"', html)
+        self.assertNotIn(f'href="/os/{self._numero(oid)}/pdf"', html)
         self.assertNotIn('Baixar PDF publicado', html)
 
     def test_preview_pdf_os_ativa_sem_publicar(self):
@@ -452,7 +457,7 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente_b = self._login(base, 'preview.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
-        self.assertIn(f'/os/{oid}/pdf-preview', html)
+        self.assertIn(f'/os/{self._numero(oid)}/pdf-preview', html)
         self.assertIn('Baixar preview do PDF', html)
         pedido = urllib.request.Request(base + f'/os/{oid}/pdf-preview')
         with cliente_b.open(pedido, timeout=30) as resposta:
@@ -481,11 +486,11 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente_b = self._login(base, 'foto.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
-        self.assertIn(f'formaction="/os/{oid}/fotos"', html)
+        self.assertIn(f'formaction="/os/{self._numero(oid)}/fotos"', html)
         self.assertIn('Salvar fotos e legendas', html)
         self.assertNotIn('Adicionar fotos e legendas sem assumir a OS', html)
         self.assertNotIn('sem assumir', html)
-        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
+        self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
         self.assertIn('name="modo_envio" value="encerrar"', html)
         self.assertIn('Assumir OS', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
@@ -511,7 +516,7 @@ class CorrecoesRev12(unittest.TestCase):
 
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn('name="anexo_incluir[]"', html)
-        self.assertIn(f'data-mover="/os/{oid}/anexo/{foto["id"]}/mover"', html)
+        self.assertIn(f'data-mover="/os/{self._numero(oid)}/anexo/{foto["id"]}/mover"', html)
         with cliente_b.open(urllib.request.Request(
                 base + f'/arquivos/anexo/{foto["id"]}/thumb'), timeout=30) as resposta:
             self.assertEqual(resposta.status, 200)
@@ -816,7 +821,7 @@ class CorrecoesRev12(unittest.TestCase):
         token = self._csrf(base, cliente, oid)
         _, html = req(cliente, base, f'/os/{oid}')
         self.assertIn('data-auto-upload-nf', html)
-        self.assertIn(f'data-upload-url="/os/{oid}/nota-fiscal"', html)
+        self.assertIn(f'data-upload-url="/os/{self._numero(oid)}/nota-fiscal"', html)
         campos = [('csrf', token), ('cliente_id', str(cid)), ('descricao', 'Serviço'),
                   ('tecnico', 'T'), ('forma_pagamento', 'PIX'), ('valor_mao_obra', '10'),
                   ('materiais_presentes', '1'), ('v9_execucao', 'Execução preservada'),
@@ -833,8 +838,8 @@ class CorrecoesRev12(unittest.TestCase):
                              'ORDER BY id DESC LIMIT 1', (oid,)).fetchone()
         _, html = req(cliente, base, f'/os/{oid}')
         self.assertIn('PDF anexado', html)
-        self.assertIn(f'/os/{oid}/nota-fiscal/{nota["id"]}/preview', html)
-        self.assertIn(f'/os/{oid}/nota-fiscal/{nota["id"]}/remover', html)
+        self.assertIn(f'/os/{self._numero(oid)}/nota-fiscal/{nota["id"]}/preview', html)
+        self.assertIn(f'/os/{self._numero(oid)}/nota-fiscal/{nota["id"]}/remover', html)
         with cliente.open(base + f'/os/{oid}/nota-fiscal/{nota["id"]}/preview',
                           timeout=20) as resposta:
             self.assertEqual(resposta.status, 200)
@@ -1043,7 +1048,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente = self._login(base, 'finalizador.manual@exemplo.com.br')
         _, html = req(cliente, base, f'/os/{oid}')
         self.assertIn('Rateio e repasses', html)
-        self.assertIn(f'formaction="/os/{oid}/rateio"', html)
+        self.assertIn(f'formaction="/os/{self._numero(oid)}/rateio"', html)
         self.assertIn('R$ 300,00', html)
         self.assertEqual(prod.definir_rateio_manual(self.db, oid, a, b, '400,00'), 40000)
         with self.assertRaisesRegex(ValueError, 'ultrapassa'):
@@ -1076,7 +1081,7 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente = self._login(base, 'finalizador.cancelar@exemplo.com.br')
         _, html = req(cliente, base, '/financeiro')
-        self.assertNotIn(f'href="/os/{oid}"', html)
+        self.assertNotIn(f'href="/os/{self._numero(oid)}"', html)
 
     def test_admin_assume_os_de_outro(self):
         a = self._prestador('Responsável Original', email='original.assume@exemplo.com.br')
@@ -1131,7 +1136,7 @@ class CorrecoesRev12(unittest.TestCase):
         neg.financeiro_receber(self.db, fid, a)
         _, html_a = req(cliente_a, base, '/financeiro')
         self.assertIn('Registrar envio de R$ 300,00', html_a)
-        self.assertIn(f'href="/os/{oid}"', html_a)
+        self.assertIn(f'href="/os/{self._numero(oid)}"', html_a)
         _, html_b = req(cliente_b, base, '/financeiro')
         self.assertIn('Aguardando envio', html_b)
         self.assertNotIn('action="/financeiro/repasse/confirmar"', html_b)
@@ -1212,7 +1217,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_b = self._login(base, 'foto.comum@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertNotIn('Salvar fotos e legendas', html)
-        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
+        self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
         self.assertIn('Somente o responsável ou administrador', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
@@ -1278,7 +1283,7 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_b = self._login(base, 'arquivar.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn('OS arquivada', html)
-        self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
+        self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
 
     def test_admin_arquiva_os_concluida(self):
         a = self._prestador('Técnico Arquivar Concluída', email='arquivar.concluida@exemplo.com.br')

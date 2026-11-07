@@ -1,9 +1,10 @@
 # Redesenho da numeração de OS e migração
 
-**Status:** fundação implementada e **DEV de teste migrada**; **MAIN ainda
-não migrada**. Esta mudança é N3/N4: mexe em identidade pública, schema, links,
-PDFs, e-mails e dados históricos. Exige backup, ensaio em cópia, validação e
-revisão humana externa antes da MAIN.
+**Status:** fundação implementada, **DEV de teste migrada** e **superfícies
+padronizadas no código**; **MAIN ainda não migrada**. Esta mudança é N3/N4:
+mexe em identidade pública, schema, links, PDFs, e-mails e dados históricos.
+Exige backup, ensaio em cópia, validação e revisão humana externa antes da
+MAIN.
 
 **Regra desta mudança:** nada de atalho, regex salvando o dia, `MAX+1`,
 número duplicado em tela ou reescrever documento histórico. O desenho vem
@@ -251,6 +252,20 @@ Se a colisão numérica for inaceitável, usar um namespace explícito
 - O PDF não deve exibir “número + id” como se fossem dois números.
 
 ---
+
+## 6.4 Superfícies padronizadas
+
+- Site: links e formulários usam o número canônico; `/os/<id>` e aliases
+  redirecionam para `/os/<numero>`.
+- Resolver: `repositorios/ordens.obter_por_token` aceita número, alias e id;
+  número vence alias, alias vence id.
+- GTK: tabelas, diálogos e títulos usam `numero_os`.
+- PDF: arquivo novo é `<numero>.pdf`; não inclui `OS_` nem id.
+- Relatório publicado: `<numero>_relatorio_vN.pdf`.
+- E-mail: assunto, corpo e nome do `.eml` usam o número.
+- Nota fiscal: `<numero>.json` / `nota_fiscal_rascunho_<numero>.json`.
+- API: campo `os.numero` é o número canônico.
+- Documentos antigos permanecem imutáveis; aliases preservam links e buscas.
 
 ## 7. Migração dos 23 registros
 

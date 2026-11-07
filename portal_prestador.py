@@ -20,7 +20,7 @@ from email.policy import default
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse, quote, urlencode as urllib_parse_urlencode
+from urllib.parse import parse_qs, quote, unquote, urlparse, quote, urlencode as urllib_parse_urlencode
 import prestadores_ext as ext
 import portal_negocios as neg
 import fluxo_os as fluxo
@@ -563,6 +563,11 @@ LOCK_LOGIN = threading.Lock()
 MAX_POST = 90 * 1024 * 1024
 
 
+def url_os(banco, token, sufixo=''):
+    """Canonical public URL for an OS, alias or internal id."""
+    return ordens_repo.url_os(banco, token, sufixo)
+
+
 def esc(s):
     return html.escape(str(s if s is not None else ''), quote=True)
 
@@ -1064,7 +1069,8 @@ class PortalPrestador:
                 for p in historico:
                     if p['status'] == 'Aguardando verificação':
                         continue
-                    os_link = (f'<a href="/os/{p["os_id"]}">OS {esc(p["os_id"])}</a>'
+                    os_link = (f'<a href="{url_os(banco, p["os_id"])}">'
+                               f'{esc(ordens_repo.numero_os(banco, p["os_id"]) or p["os_id"])}</a>'
                                if p['os_id'] else '—')
                     hist.append((f'PJ-{p["id"]:04d}', esc(p['organizacao']), esc(p['nome']),
                                  esc(p['status']), os_link, esc(p['motivo'] or ''), esc(p['decidido_em'] or '')))
@@ -1081,9 +1087,9 @@ class PortalPrestador:
                     lista=ordens_repo.listar_historico(banco)
                     rows=[]
                     for x in lista:
-                        link_pdf=(botao('Baixar PDF',f'/os/{x["id"]}/pdf') if x['versao'] else
-                            '<span class="warn">Não publicado</span> '+botao('Abrir para republicar',f'/os/{x["id"]}','secondary'))
-                        rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
+                        link_pdf=(botao('Baixar PDF',f'{url_os(banco, x["id"])}/pdf') if x['versao'] else
+                            '<span class="warn">Não publicado</span> '+botao('Abrir para republicar',f'{url_os(banco, x["id"])}','secondary'))
+                        rows.append((f'<a href="{url_os(banco, x["id"])}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
                             f'<span class="tag">{esc(x["status"])}</span>',dinheiro(x['valor_total']),
                             str(x['versao'] or '—'),link_pdf))
                     resumo=f'<p class="muted">Ordens encerradas, relatórios publicados e PDFs centralizados. Anexos só durante o encerramento da OS.</p>'
@@ -1100,7 +1106,7 @@ class PortalPrestador:
                             if ext.em_rota_atual(c, x['id']): estado='Em rota'
                     except Exception:
                         pass
-                    rows.append((f'<a href="/os/{x["id"]}">{esc(x["numero_os"])}</a>',
+                    rows.append((f'<a href="{url_os(banco, x["id"])}">{esc(x["numero_os"])}</a>',
                         f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>',
                         f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
@@ -1139,7 +1145,7 @@ class PortalPrestador:
                            +stat('OS concluídas',o['concluidas'] or 0,'/historico'))
                     linhas=[]
                     for x in recentes:
-                        linhas.append((f'<a href="/os/{int(x["id"])}">{esc(x["numero_os"])}</a>',
+                        linhas.append((f'<a href="{url_os(banco, x["id"])}">{esc(x["numero_os"])}</a>',
                                        f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>',
                                        chip_status(x['status']),
                                        f'<span class="mono">{dinheiro(x["valor_total"])}</span>',
@@ -1780,18 +1786,17 @@ class PortalPrestador:
                 rotulo_salvar='Salvar rascunho' if app else 'SALVAR RASCUNHO'
                 classe_form=' class="os-form-app" novalidate' if app else ''
                 titulo=(('Ordem de serviço' if app else f'OS {d["numero_os"]}') if oid else 'Nova ordem de serviço')
-                action=f'/os/{oid}/salvar' if oid else '/os/nova/salvar'
+                action=f'{url_os(banco, oid)}/salvar' if oid else '/os/nova/salvar'
                 corpo='' if app else botao('← Ordens de serviço','/os','secondary')
                 if oid and not app:
-                    corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b> · '
-                    f'identificador interno do link: <code>/os/{oid}</code></p>'
+                    corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b></p>'
                 if oid and app:
                     cliente_info=next((x for x in cl if x['id']==d.get('cliente_id')),None)
                     cliente_nome=cliente_info['nome'] if cliente_info else ''
                     local=' · '.join(str(cliente_info[k] or '') for k in ('bairro','cidade') if cliente_info and cliente_info[k])
                     resp_nome=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     status_exibicao='Em rota' if em_rota and d['status'] in ext.ATIVAS else d['status']
-                    partes_meta=[x for x in (local,f'Aberta em {data_curta(d.get("data_abertura"))}',f'/os/{oid}') if x]
+                    partes_meta=[x for x in (local,f'Aberta em {data_curta(d.get("data_abertura"))}',f'{url_os(banco, oid)}') if x]
                     corpo+=('<section class="os-ticket os-summary">'
                         '<div class="os-ticket-stub">'
                         '<p class="os-kicker">Ficha da OS</p>'
@@ -1806,7 +1811,7 @@ class PortalPrestador:
                         f'<div><span>Total</span><strong class="money">{dinheiro(d.get("valor_total") or 0)}</strong></div>'
                         f'<div><span>Fotos</span><strong>{len(anexos)}</strong></div>'
                         '</div></div>'
-                        f'<div class="os-ticket-actions"><a class="btn secondary" href="/os/{oid}/pdf-preview">'
+                        f'<div class="os-ticket-actions"><a class="btn secondary" href="{url_os(banco, oid)}/pdf-preview">'
                         +icone('file')+'Baixar preview do PDF</a></div>'
                         '</section>')
                 if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
@@ -1838,7 +1843,7 @@ class PortalPrestador:
                                 f'Responsável: <b>{esc(nome_resp)}</b> · Participantes: '
                                 f'{esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>')
                     if s.get('admin') and not arquivada and d['status'] not in ext.ATIVAS:
-                        corpo+=(f'<form method="post" action="/os/{oid}/arquivar" '
+                        corpo+=(f'<form method="post" action="{url_os(banco, oid)}/arquivar" '
                                 f'data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">'
                                 f'{token}<button type="submit" class="danger">Arquivar OS</button></form>')
                 if oid and app:
@@ -1913,15 +1918,15 @@ class PortalPrestador:
                                  'As ações de cancelar e arquivar ficam no fim desta aba.</p>')
                     bloco.append('<div class="os-status-actions">')
                     if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente' or s.get('admin')):
-                        bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/assumir" formnovalidate>{rotulo_assumir}</button>')
+                        bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/assumir" formnovalidate>{rotulo_assumir}</button>')
                         bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
                     if responsavel in (None, s['pid']) and not iniciado:
                         if em_rota:
                             bloco.append(f'<p class="notice">{aviso_rota}</p>')
-                            bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/cancelar-rota" formnovalidate>{rotulo_cancelar_rota}</button>')
+                            bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/cancelar-rota" formnovalidate>{rotulo_cancelar_rota}</button>')
                         else:
-                            bloco.append(f'<button type="submit" class="secondary" formaction="/os/{oid}/em-rota" formnovalidate>{rotulo_em_rota}</button>')
-                        bloco.append(f'<button type="submit" class="iniciar-atendimento" formaction="/os/{oid}/iniciar" formnovalidate>{rotulo_iniciar}</button>')
+                            bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/em-rota" formnovalidate>{rotulo_em_rota}</button>')
+                        bloco.append(f'<button type="submit" class="iniciar-atendimento" formaction="{url_os(banco, oid)}/iniciar" formnovalidate>{rotulo_iniciar}</button>')
                         bloco.append(f'<p class="muted">{texto_iniciar}</p>')
                     elif iniciado:
                         bloco.append(f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}.</p>')
@@ -2001,9 +2006,9 @@ class PortalPrestador:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     corpo+='<div class="os-danger-actions">'
-                    corpo+=botao('Exportar relatório em YAML', f'/os/{oid}/relatorio.yaml','secondary')
+                    corpo+=botao('Exportar relatório em YAML', f'{url_os(banco, oid)}/relatorio.yaml','secondary')
                     if s.get('admin'):
-                        corpo+=(f'<button type="submit" class="secondary" formaction="/os/{oid}/arquivar" formnovalidate '
+                        corpo+=(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/arquivar" formnovalidate '
                                 f'data-confirm="Arquivar {esc(d["numero_os"])}? Ela sai das listas operacionais, mas o histórico é preservado.">'
                                 'Arquivar OS</button>')
                     if responsavel==s['pid'] or s.get('admin'):
@@ -2115,7 +2120,7 @@ class PortalPrestador:
                             'rateio_manual_tecnico',opcoes_manual,'')+'</div>'
                         corpo+='<div>'+campos_escuros('Valor do rateio (R$)',
                             'rateio_manual_valor','',placeholder='0,00')+'</div></div>'
-                        corpo+=f'<button type="submit" class="secondary" formaction="/os/{oid}/rateio" formnovalidate>Salvar rateio</button>'
+                        corpo+=f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/rateio" formnovalidate>Salvar rateio</button>'
                         corpo+='<p class="muted">Use 0,00 para remover a parcela. O total cobrado do cliente não muda; '
                         corpo+='o restante fica com o finalizador. Depois de enviado/confirmado, o repasse não pode ser alterado.</p></div>'
                 corpo+=status_bloco
@@ -2147,9 +2152,9 @@ class PortalPrestador:
                                 corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
                                     +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
                                     +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
-                                    +f'<button class="secondary" type="button" data-mover="/os/{oid}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
-                                    +f'<button class="secondary" type="button" data-mover="/os/{oid}/anexo/{a["id"]}/mover" data-direcao="down" title="Mover para baixo">↓</button>'
-                                    +f'<button class="secondary" type="submit" formaction="/os/{oid}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
+                                    +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
+                                    +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="down" title="Mover para baixo">↓</button>'
+                                    +f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
                             corpo+='</div></div>'
@@ -2167,7 +2172,7 @@ class PortalPrestador:
                                 f'{" checked" if comprimir_pdf else ""}> Comprimir fotos no PDF</label>')
                         corpo+='<p class="muted">As imagens do site são sempre otimizadas; o original permanece no banco. '
                         corpo+='Desmarque para usar alta qualidade no PDF.</p>'
-                        corpo+=f'<button class="secondary" type="submit" formaction="/os/{oid}/fotos" formnovalidate>Salvar fotos e legendas</button>'
+                        corpo+=f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/fotos" formnovalidate>Salvar fotos e legendas</button>'
                     if pode_nota:
                         nota_atual=notas_fiscais[-1] if notas_fiscais else None
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
@@ -2175,23 +2180,23 @@ class PortalPrestador:
                             nid=int(nota_atual['id'])
                             corpo+=(f'<p class="good" id="nota-fiscal-status">PDF anexado: '
                                     f'<b>{esc(nota_atual["nome_original"])}</b></p>'
-                                    f'<a class="btn secondary" href="/os/{oid}/nota-fiscal/{nid}/preview" '
+                                    f'<a class="btn secondary" href="{url_os(banco, oid)}/nota-fiscal/{nid}/preview" '
                                     'target="_blank" rel="noopener">Visualizar PDF</a> '
-                                    f'<a class="btn secondary" href="/os/{oid}/nota-fiscal/{nid}">Baixar PDF</a> '
+                                    f'<a class="btn secondary" href="{url_os(banco, oid)}/nota-fiscal/{nid}">Baixar PDF</a> '
                                     '<button type="submit" class="danger" '
-                                    f'formaction="/os/{oid}/nota-fiscal/{nid}/remover" formnovalidate '
+                                    f'formaction="{url_os(banco, oid)}/nota-fiscal/{nid}/remover" formnovalidate '
                                     'data-confirm="Remover o PDF anexado?">Remover PDF</button>'
                                     '<p class="muted">Para substituir, remova o PDF atual e escolha outro arquivo.</p>')
                         else:
                             corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
                             corpo+=(f'<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" '
                                     'accept="application/pdf" data-auto-upload-nf '
-                                    f'data-upload-url="/os/{oid}/nota-fiscal">')
+                                    f'data-upload-url="{url_os(banco, oid)}/nota-fiscal">')
                             corpo+=('<p class="muted" id="nota-fiscal-auto-status" data-nf-status>'
                                     'O PDF será anexado automaticamente ao escolher o arquivo '
                                     'e o rascunho será salvo.</p>')
                             corpo+=(f'<noscript><button class="secondary" type="submit" '
-                                    f'formaction="/os/{oid}/nota-fiscal" formnovalidate>Enviar PDF</button></noscript>')
+                                    f'formaction="{url_os(banco, oid)}/nota-fiscal" formnovalidate>Enviar PDF</button></noscript>')
                             corpo+='<div style="margin-top:12px;padding:12px;border:1px solid #E2B800;border-radius:8px;background:#2a2617">'
                             corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> Não precisa de nota fiscal</label>'
                             corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
@@ -2233,7 +2238,7 @@ class PortalPrestador:
                     itens=[]
                     for a in anexos:
                         vis=imagens_v9.get(a['id'],{})
-                        form=(f'<form method="post" action="/os/{oid}/anexo/{a["id"]}/publico">{token}'
+                        form=(f'<form method="post" action="{url_os(banco, oid)}/anexo/{a["id"]}/publico">{token}'
                               +campos_escuros('Legenda para o PDF','legenda',vis.get('legenda',''))
                               +select('Incluir no PDF','visivel',[('1','Sim — incluir foto (padrão)'),('0','Não — ocultar por privacidade')],str(vis.get('visivel',1)))
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
@@ -2251,30 +2256,30 @@ class PortalPrestador:
                 if publicado and d['status'] in fluxo.FIM:
                     corpo+=card('Documento liberado ao cliente',
                         '<p class="good">PDF publicado, disponível para baixar no portal do cliente. Versão '+esc(publicado['versao'])+'.</p>'
-                        +f'<form method="post" action="/os/{oid}/publicar">{token}<button class="secondary" type="submit">Publicar nova versão do relatório</button></form>')
+                        +f'<form method="post" action="{url_os(banco, oid)}/publicar">{token}<button class="secondary" type="submit">Publicar nova versão do relatório</button></form>')
                 elif publicado:
                     corpo+=card('Documento anterior',
                         f'<p class="muted">Existe uma versão anterior (v{esc(publicado["versao"])}), '
                         'mas o PDF só fica disponível após o encerramento da OS.</p>')
                 elif d['status'] in fluxo.FIM:
                     corpo+=card('Documento pendente de publicação',
-                        f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="/os/{oid}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
+                        f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="{url_os(banco, oid)}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
                 if d['status'] in ext.ATIVAS:
                     if app:
                         docs=('<p class="muted">Use o botão <b>Baixar preview do PDF</b> na ficha '
                               'da OS. A prévia não publica, não envia e-mail e não altera o status.</p>')
                     else:
                         docs=(botao('Baixar preview do PDF (não publicado)',
-                                    f'/os/{oid}/pdf-preview','secondary')
+                                    f'{url_os(banco, oid)}/pdf-preview','secondary')
                               + '<p class="muted">Prévia para conferência do relatório atual. '
                                 'Não publica o PDF, não envia e-mail e não altera o status da OS.</p>')
                 elif publicado:
-                    docs=(botao('Baixar PDF publicado',f'/os/{oid}/pdf')
-                        +botao('Preparar e-mail + PDF (.eml)',f'/os/{oid}/email'))
+                    docs=(botao('Baixar PDF publicado',f'{url_os(banco, oid)}/pdf')
+                        +botao('Preparar e-mail + PDF (.eml)',f'{url_os(banco, oid)}/email'))
                     if d['status']=='Concluída':
-                        docs+=botao('Preparar nota fiscal (.json)',f'/os/{oid}/nota')
+                        docs+=botao('Preparar nota fiscal (.json)',f'{url_os(banco, oid)}/nota')
                     if responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid']):
-                        docs+=(f'<form method="post" action="/os/{oid}/reenviar-email" style="display:inline">'
+                        docs+=(f'<form method="post" action="{url_os(banco, oid)}/reenviar-email" style="display:inline">'
                                f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
                                '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
                 elif d['status'] in fluxo.FIM:
@@ -2284,9 +2289,9 @@ class PortalPrestador:
                 itens_notas=''
                 for nota in notas_fiscais:
                     itens_notas+=(f'<p><b>{esc(nota["nome_original"])}</b> '
-                                  f'<a href="/os/{oid}/nota-fiscal/{nota["id"]}/preview" target="_blank" '
+                                  f'<a href="{url_os(banco, oid)}/nota-fiscal/{nota["id"]}/preview" target="_blank" '
                                   'rel="noopener">Visualizar</a> · '
-                                  f'<a href="/os/{oid}/nota-fiscal/{nota["id"]}">Baixar</a>'
+                                  f'<a href="{url_os(banco, oid)}/nota-fiscal/{nota["id"]}">Baixar</a>'
                                   f' <small>{esc(nota["criado_em"])}</small></p>')
                 if not itens_notas:
                     itens_notas='<p class="muted">Nenhuma nota fiscal anexada.</p>'
@@ -2296,13 +2301,13 @@ class PortalPrestador:
                     itens_notas=f'<p class="good">{rotulo_nf}</p>'+itens_notas
                 upload_nf=''
                 if (responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid'])) and (not app or d['status'] not in ext.ATIVAS) and not arquivada:
-                    upload_nf=(f'<form id="form-nota-fiscal-upload" method="post" action="/os/{oid}/nota-fiscal" '
+                    upload_nf=(f'<form id="form-nota-fiscal-upload" method="post" action="{url_os(banco, oid)}/nota-fiscal" '
                                'enctype="multipart/form-data" style="margin-top:10px">'
                                f'{token}'
                                '<label for="nota-fiscal-concluida">Anexar / atualizar nota fiscal (PDF, até 20 MB)</label>'
                                '<input type="file" id="nota-fiscal-concluida" name="nota_fiscal" '
                                'accept="application/pdf" required data-auto-upload-nf '
-                               f'data-upload-url="/os/{oid}/nota-fiscal">'
+                               f'data-upload-url="{url_os(banco, oid)}/nota-fiscal">'
                                '<p class="muted" id="nota-fiscal-concluida-status" data-nf-status>'
                                'O PDF será anexado automaticamente ao escolher o arquivo.</p>'
                                '<noscript><button type="submit" class="secondary">Enviar PDF</button></noscript></form>')
@@ -2405,7 +2410,7 @@ class PortalPrestador:
                 def _item_html(item):
                     return ('<article class="finance-item">'
                             '<div class="finance-item-top">'
-                            f'<a class="finance-item-os" href="/os/{int(item["os_id"])}">{esc(item["numero_os"])}</a>'
+                            f'<a class="finance-item-os" href="{url_os(banco, item["os_id"])}">{esc(item["numero_os"])}</a>'
                             f'<span class="finance-item-type">{esc(item["tipo"])}</span>'
                             '</div>'
                             f'<p class="finance-item-client">{esc(item["cliente"])}</p>'
@@ -2444,7 +2449,7 @@ class PortalPrestador:
                         acao='<span class="warn">Aguardando confirmação do colega</span>'
                     else:
                         acao='<span class="good">Confirmado pelo colega</span>'
-                    repasses.append((f'<a href="/os/{int(item["os_id"])}">{esc(item["numero_os"])}</a>',
+                    repasses.append((f'<a href="{url_os(banco, item["os_id"])}">{esc(item["numero_os"])}</a>',
                                      esc(item['tecnico']),
                                      dinheiro(item['valor_centavos']/100),
                                      dinheiro(confirmado/100),dinheiro(enviado/100),
@@ -2490,22 +2495,22 @@ class PortalPrestador:
                 oses=ordens_repo.listar_relatorios(banco)
                 if tipo=='emails':
                     title='E-mails para clientes'; explanation='Gere um rascunho .eml com o PDF anexado. Nenhum e-mail será enviado automaticamente.'
-                    acao=lambda o:(botao('Preparar .eml',f'/os/{o["id"]}/email')
+                    acao=lambda o:(botao('Preparar .eml',f'{url_os(banco, o["id"])}/email')
                                    if o['status'] in fluxo.FIM else
                                    '<span class="muted">Após encerrar</span>')
                 elif tipo=='notas':
                     title='Notas fiscais'; explanation='Rascunho JSON para futura integração NFS-e. Este arquivo NÃO é documento fiscal válido.'
-                    acao=lambda o:(botao('Preparar rascunho JSON',f'/os/{o["id"]}/nota')
+                    acao=lambda o:(botao('Preparar rascunho JSON',f'{url_os(banco, o["id"])}/nota')
                                    if o['status'] in fluxo.FIM else
                                    '<span class="muted">Após encerrar</span>')
                 else:
                     title='Relatórios gerais e PDFs'; explanation='Histórico das OS e relatórios individuais com materiais, atividades e anexos.'
-                    acao=lambda o:(botao('Baixar PDF',f'/os/{o["id"]}/pdf')
+                    acao=lambda o:(botao('Baixar PDF',f'{url_os(banco, o["id"])}/pdf')
                                    if o['status'] in fluxo.FIM else
-                                   (botao('Preview PDF',f'/os/{o["id"]}/pdf-preview','secondary')
+                                   (botao('Preview PDF',f'{url_os(banco, o["id"])}/pdf-preview','secondary')
                                     if o['status'] in ext.ATIVAS else
                                     '<span class="muted">Após encerrar</span>'))
-                rows=[(f'<a href="/os/{r["id"]}">{esc(r["numero_os"])}</a>',esc(r['cliente']),esc(r['status']),dinheiro(r['valor_total']),acao(r)) for r in oses]
+                rows=[(f'<a href="{url_os(banco, r["id"])}">{esc(r["numero_os"])}</a>',esc(r['cliente']),esc(r['status']),dinheiro(r['valor_total']),acao(r)) for r in oses]
                 resumo=(f'<div class="kpis"><div class="kpi"><span>Ordens de serviço</span><strong>{len(oses)}</strong></div>'
                         f'<div class="kpi"><span>Total exibido</span><strong>{dinheiro(sum(float(x["valor_total"] or 0) for x in oses))}</strong></div></div>') if tipo=='relatorios' else ''
                 return self.pagina(title,f'<p class="muted">{esc(explanation)}</p>{resumo}'+card('Ordens disponíveis',tabela(['OS','Cliente','Status','Valor','Ação'],rows)),s)
@@ -2518,7 +2523,7 @@ class PortalPrestador:
                        'O login dele é por CPF e senha e não se mistura com o login do prestador. '
                        'As solicitações registradas lá aparecem nesta lista e no desktop.</p>')
                 web=ordens_repo.listar_origem_portal(banco)
-                registros=[(f'<a href="/os/{o["id"]}">{esc(o["numero_os"])}</a>',esc(o['status']),esc(o['data_abertura'])) for o in web]
+                registros=[(f'<a href="{url_os(banco, o["id"])}">{esc(o["numero_os"])}</a>',esc(o['status']),esc(o['data_abertura'])) for o in web]
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
 
             def documentos(self,s,oid,kind):
@@ -2580,6 +2585,26 @@ class PortalPrestador:
                     return self.erro('Anexo fora do diretório autorizado.',403,s)
                 return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg')
 
+            def _normalizar_os(self, path):
+                partes = path.strip('/').split('/')
+                if len(partes) >= 2 and partes[0] == 'os' and partes[1] not in ('nova', 'rapida', 'yaml'):
+                    token = unquote(partes[1])
+                    registro = ordens_repo.obter_por_token(banco, token)
+                    if registro:
+                        partes[1] = str(registro['id'])
+                        return '/' + '/'.join(partes)
+                return path
+
+            def _redirecionar_os(self, path):
+                partes = path.strip('/').split('/')
+                if len(partes) >= 2 and partes[0] == 'os' and partes[1] not in ('nova', 'rapida', 'yaml'):
+                    token = unquote(partes[1])
+                    registro = ordens_repo.obter_por_token(banco, token)
+                    if registro and token != str(registro['numero_os']):
+                        sufixo = ('/' + '/'.join(partes[2:])) if len(partes) > 2 else ''
+                        return ordens_repo.url_os(banco, token, sufixo)
+                return None
+
             def do_OPTIONS(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
@@ -2590,6 +2615,11 @@ class PortalPrestador:
 
             def do_GET(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
+                redirecionar = self._redirecionar_os(path)
+                if redirecionar:
+                    query = urlparse(self.path).query
+                    return self.redir(redirecionar + (('?' + query) if query else ''))
+                path = self._normalizar_os(path)
                 try:
                     if path=='/api/versao':
                         dados=json.dumps({'app':'Gestão de Serviços — AUTOSEG','versao':VERSAO_PORTAL,
@@ -2774,6 +2804,7 @@ class PortalPrestador:
 
             def do_POST(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
+                path = self._normalizar_os(path)
                 quer_json = ('application/json' in self.headers.get('Accept','')
                              or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                 try:
@@ -3050,7 +3081,7 @@ class PortalPrestador:
                                 f'<p class="good">A OS <b>{esc(numero)}</b> foi criada como <b>Aberta</b>.</p>'
                                 '<p class="muted">Você não precisa preencher o atendimento agora. '
                                 'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
-                                +botao('Abrir OS',f'/os/{oid}')
+                                +botao('Abrir OS',f'{url_os(banco, oid)}')
                                 +botao('Abrir outra OS','/os/rapida','secondary')
                                 +botao('Voltar às OS','/os','secondary')),s)
                     if path=='/os/yaml':
@@ -3072,14 +3103,14 @@ class PortalPrestador:
                         return self.os_form(s,None,preenchimento=preenchimento)
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='mover':
                         oid=int(partes[1]);aid=int(partes[3])
                         movido=ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
                         if quer_json:
                             return self.send_bytes(json.dumps({'ok':True,'movido':bool(movido)}).encode(),
                                                    'application/json; charset=utf-8')
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
                         oid=int(partes[1]);aid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3087,7 +3118,7 @@ class PortalPrestador:
                             if ext.responsavel_atual(c,oid)!=pid and not admin:
                                 raise PermissionError('Somente o responsável ou administrador edita fotos.')
                         ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='publico':
                         oid=int(partes[1]);aid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3097,7 +3128,7 @@ class PortalPrestador:
                             if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                 raise PermissionError('Somente o técnico responsável ou administrador edita a legenda do anexo.')
                         cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='fotos':
                         oid=int(partes[1])
                         with ext.db(banco) as c:
@@ -3154,7 +3185,7 @@ class PortalPrestador:
                                     c,oid,anexo_id,
                                     anexo_legendas[i] if i<len(anexo_legendas) else '',
                                     visivel)
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','auto']:
                         oid=int(partes[1])
                         prod.salvar_rascunho(banco,oid,pid,d)
@@ -3171,7 +3202,7 @@ class PortalPrestador:
                         if quer_json:
                             return self.send_bytes(json.dumps({'ok':True}).encode(),
                                                    'application/json; charset=utf-8')
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:
                         oid=int(partes[1])
                         prod.salvar_rascunho(banco,oid,pid,d)
@@ -3196,12 +3227,12 @@ class PortalPrestador:
                                 LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
                         return self.pagina('Rascunho salvo',card('Rascunho',
                             '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
-                            +botao('Voltar à OS',f'/os/{oid}')),s)
+                            +botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
                     if len(partes)==3 and partes[0]=='pj-publicas' and partes[1].isdigit() and partes[2] in ('aceitar','recusar'):
                         sid=int(partes[1])
                         if partes[2]=='aceitar':
                             resultado=pj_publico.aceitar(banco,sid,ator=s['nome'])
-                            return self.redir(f'/os/{resultado["os_id"]}')
+                            return self.redir(f'{url_os(banco, resultado["os_id"])}')
                         pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'])
                         return self.redir('/pj-publicas')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='rateio':
@@ -3212,7 +3243,7 @@ class PortalPrestador:
                             raise ValueError('Selecione o técnico secundário.')
                         prod.definir_rateio_manual(banco,oid,pid,tecnico,
                                                    str(d.get('rateio_manual_valor','0')))
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='remover':
                         oid=int(partes[1]);nid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3222,7 +3253,7 @@ class PortalPrestador:
                         if quer_json:
                             return self.send_bytes(json.dumps({'ok':True}).encode(),
                                                    'application/json; charset=utf-8')
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal':
                         oid=int(partes[1])
                         arquivo=d.get('nota_fiscal')
@@ -3250,7 +3281,7 @@ class PortalPrestador:
                         if quer_json:
                             return self.send_bytes(json.dumps({'ok':True,'nota_id':nota_id}).encode(),
                                                    'application/json; charset=utf-8')
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
                         if acao=='arquivar':
@@ -3259,7 +3290,7 @@ class PortalPrestador:
                             return self.redir('/os')
                         if acao=='rota':
                             prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
-                            return self.redir(f'/os/{oid}')
+                            return self.redir(f'{url_os(banco, oid)}')
                         if acao=='salvar':
                             if d.get('modo_envio') in ('rascunho','salvar'):
                                 try:
@@ -3288,7 +3319,7 @@ class PortalPrestador:
                                         except Exception as falha:
                                             LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
                                     return self.pagina('Rascunho salvo',card('Rascunho',
-                                        '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'/os/{oid}')),s)
+                                        '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
                                 except Exception as e:
                                     LOG.exception('Falha ao salvar rascunho da OS %s', oid)
                                     return self.erro(str(e),400,s)
@@ -3335,7 +3366,7 @@ class PortalPrestador:
                                     return self.pagina('OS encerrada — PDF pendente',card('Encerramento salvo',
                                         '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
                                         +f'<p class="bad">{esc(str(falha)[:400])}</p>'
-                                        +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
+                                        +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
                                 if destinatarios:
                                     # Disparo automático do e-mail em segundo plano:
                                     # Não bloqueia a resposta da conclusão da OS.
@@ -3375,7 +3406,7 @@ class PortalPrestador:
                             import gmail_service
                             gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
                         else:return self.erro('Operação desconhecida.',404,s)
-                        return self.redir(f'/os/{oid}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if path=='/financeiro/banco/salvar':
                         prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
                         return self.redir('/financeiro')

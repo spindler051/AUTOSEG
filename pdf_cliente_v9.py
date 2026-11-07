@@ -198,7 +198,10 @@ def gerar(banco,os_id):
             except Exception:continue
     linhas.append(Spacer(1,9))
     linhas.append(Paragraph('Documento de atendimento técnico. A situação financeira não equivale a comprovante de quitação nem a nota fiscal.',estilo['AutosegPequenoV9']))
-    nome=f'OS_{re.sub(r"[^A-Za-z0-9_-]","_",str(os_["numero_os"]))}_{os_id}.pdf'
+    numero_limpo=re.sub(r"[^A-Za-z0-9_-]","_",str(os_["numero_os"] or "")).strip("_")
+    if not numero_limpo:
+        raise ValueError('OS sem número público; não é possível gerar o PDF.')
+    nome=f'{numero_limpo}.pdf'
     destino=ext.RELATORIOS/nome
     def rodape(cv,doc):
         cv.setStrokeColor(amarelo);cv.line(40,34,A4[0]-40,34)

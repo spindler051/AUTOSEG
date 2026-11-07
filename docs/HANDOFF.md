@@ -65,6 +65,15 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Numeração de OS: superfícies padronizadas
+
+- O site resolve `/os/<numero>`, `/os/<alias>` e `/os/<id>`; número/alias
+  redirecionam para o número canônico.
+- Links, formulários, financeiro, histórico, PDFs, e-mails e API usam o número.
+- PDF novo: `<numero>.pdf`; relatório publicado: `<numero>_relatorio_vN.pdf`.
+- GTK exibe `numero_os`; nenhuma tela usa “OS-” como parte do número.
+- A MAIN continua em `OS-00xx` até a migração; a DEV já está em `YYMMDDNNN`.
+
 ### Numeração de OS: DEV migrada
 
 - `numeracao_migracao.py` + `scripts/migrar_numeracao_os.py` migram números

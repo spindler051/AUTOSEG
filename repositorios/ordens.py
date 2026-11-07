@@ -119,3 +119,57 @@ def listar_solicitacoes_portal(banco=None, limite=50) -> list[dict]:
             WHERE os.origem='Portal' ORDER BY os.id DESC LIMIT ?
         """, (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
+
+
+def numero_os(banco, os_id) -> str:
+    """Return the public number for an OS id, or an empty string."""
+    try:
+        with ext.db(_banco(banco)) as conexao:
+            linha = conexao.execute(
+                'SELECT numero_os FROM ordens_servico WHERE id=?',
+                (int(os_id),)).fetchone()
+    except (TypeError, ValueError):
+        return ''
+    return str(linha['numero_os'] or '') if linha else ''
+
+
+def obter_por_token(banco, token) -> dict | None:
+    """Resolve a public number, a legacy alias or a numeric id to an OS row.
+
+    Public number wins over legacy alias, which wins over the internal id. That
+    avoids a future custom numbering that happens to look like an old id.
+    """
+    texto = str(token or '').strip()
+    if not texto:
+        return None
+    with ext.db(_banco(banco)) as conexao:
+        linha = conexao.execute(
+            'SELECT id,numero_os,status FROM ordens_servico WHERE numero_os=?',
+            (texto,)).fetchone()
+        if linha:
+            return dict(linha)
+        tabela = conexao.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='os_numero_alias'"
+        ).fetchone()
+        if tabela:
+            linha = conexao.execute(
+                '''SELECT o.id,o.numero_os,o.status
+                   FROM os_numero_alias a JOIN ordens_servico o ON o.id=a.os_id
+                   WHERE a.alias=?''', (texto,)).fetchone()
+            if linha:
+                return dict(linha)
+        if texto.isdigit():
+            linha = conexao.execute(
+                'SELECT id,numero_os,status FROM ordens_servico WHERE id=?',
+                (int(texto),)).fetchone()
+            if linha:
+                return dict(linha)
+    return None
+
+
+def url_os(banco, token, sufixo: str = '') -> str:
+    """Canonical public URL for an OS number, alias or id."""
+    from urllib.parse import quote
+    registro = obter_por_token(banco, token)
+    numero = str(registro['numero_os'] or '') if registro else str(token or '')
+    return '/os/' + quote(numero, safe='') + (sufixo or '')

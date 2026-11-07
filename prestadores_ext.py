@@ -600,7 +600,10 @@ def gerar_pdf(banco,os_id):
         enc=c.execute('SELECT situacao,motivo,relatorio,encerrado_em FROM os_encerramentos WHERE os_id=?',(os_id,)).fetchone() if tem_encerramento else None
         sol=c.execute('SELECT descricao_original,criado_em FROM os_solicitacoes WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_solicitacoes'").fetchone() else None
         andamento=c.execute('SELECT iniciado_em,ator_inicio FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='os_atendimentos'").fetchone() else None
-    nome=f'OS_{re.sub(r"[^a-zA-Z0-9_-]","_",str(o["numero_os"]))}_{os_id}.pdf'
+    numero_limpo=re.sub(r"[^a-zA-Z0-9_-]","_",str(o["numero_os"] or "")).strip("_")
+    if not numero_limpo:
+        raise ValueError('OS sem número público; não é possível gerar o PDF.')
+    nome=f'{numero_limpo}.pdf'
     caminho=RELATORIOS/nome
     estilos=getSampleStyleSheet(); estilos.add(ParagraphStyle(name='AUTOTitulo',parent=estilos['Title'],textColor=colors.HexColor('#222222'),spaceAfter=15))
     estilos.add(ParagraphStyle(name='AUTOCorpo',parent=estilos['BodyText'],leading=15,spaceAfter=7))
@@ -764,7 +767,9 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     if caminho_nf:
         msg.add_attachment(Path(caminho_nf).read_bytes(),maintype='application',subtype='pdf',
                            filename=Path(nota['nome_original']).name if nota else Path(caminho_nf).name)
-    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or f'OS-{os_id}')).strip('_')
+    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or '')).strip('_')
+    if not nome_os:
+        raise ValueError('OS sem número público; não é possível preparar o e-mail.')
     path=RASCUNHOS/f'email_{nome_os}_p{prestador_id if prestador_id is not None else 0}_{secrets.token_hex(4)}.eml';path.write_bytes(msg.as_bytes(policy=SMTP));return str(path)
 
 def criar_rascunho_fiscal(banco,os_id):
@@ -774,7 +779,9 @@ def criar_rascunho_fiscal(banco,os_id):
     if r['status']!='Concluída':
         raise ValueError('Rascunho fiscal disponível somente para OS concluída. Cancelamentos e serviços não realizados não devem emitir nota automaticamente.')
     payload={'status':'RASCUNHO_NAO_EMITIDO','ordem_servico_id':os_id,'numero_os':r['numero_os'],'tomador':{'nome':r['cliente_nome'],'documento':r['cliente_documento'],'email':r['cliente_email']},'descricao':r['descricao'],'valor_servico':r['valor_total'],'moeda':'BRL','integracao_api':None,'observacao':'Não é nota fiscal válida. Requer dados do emitente, município, tributos, autorização e API oficial.'}
-    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or f'OS-{os_id}')).strip('_')
+    nome_os=re.sub(r'[^A-Za-z0-9_-]','_',str(r['numero_os'] or '')).strip('_')
+    if not nome_os:
+        raise ValueError('OS sem número público; não é possível preparar a nota fiscal.')
     path=RASCUNHOS/f'nota_fiscal_rascunho_{nome_os}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
 
 def desatribuir(banco, os_id, ator='Administrador'):

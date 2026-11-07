@@ -167,6 +167,13 @@ class PdfRelatorioTest(unittest.TestCase):
                      for pagina in leitor.pages for pagina_imagem in pagina.images]
         self.assertIn((60, 120), dimensoes)
 
+    def test_pdf_filename_uses_only_public_number(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute("UPDATE ordens_servico SET numero_os='261107001' WHERE id=10")
+        caminho = Path(ext.gerar_pdf(self.db, 10))
+        self.assertEqual(caminho.name, '261107001.pdf')
+        self.assertNotIn('OS-', caminho.name)
+
     def test_pdf_inclui_texto_adicional_generico(self):
         with sqlite3.connect(self.db) as c:
             c.execute("UPDATE ordens_servico SET texto_adicional=? WHERE id=10",

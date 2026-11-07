@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.52 — número único em todas as superfícies — 2026-11-07 — develop
+
+- **Links do site:** `/os/<numero>` é canônico; `/os/<alias>` e `/os/<id>` redirecionam para ele.
+- **Resolver central:** `repositorios/ordens.obter_por_token` aceita número, alias e id; número vence alias, alias vence id.
+- **Formulários e ações:** detalhe, financeiro, histórico, PJ e anexos usam o número canônico.
+- **PDF:** `<numero>.pdf`; relatório publicado `<numero>_relatorio_vN.pdf`; sem `OS_` e sem id.
+- **E-mail:** assunto, corpo e nome do `.eml` usam o número.
+- **GTK:** tabelas, diálogos e títulos exibem `numero_os`.
+- **Testes:** `test_numero_publico.py` (2 OK), `test_rev12_correcoes.py` (47 OK, 1 skip), `test_pdf_relatorio.py` (8 OK), `test_numeracao*.py` (12 OK).
+
 ## 9.6.0-dev.51 — migração da numeração na DEV de teste — 2026-11-07 — develop
 
 - **Migração real na DEV:** 17 OS de `dados_teste/autoseg_teste.db` convertidas para `YYMMDDNNN`; backup criado antes.
