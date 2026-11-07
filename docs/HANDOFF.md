@@ -65,6 +65,14 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Modo local limpo
+
+- `INICIAR_AUTOSEG.command` e `INICIAR_AUTOSEG_DEV.command` fixam modo local;
+  não sobem portais nem túnel.
+- No modo local, a página do Portal do Cliente, links externos e botões de
+  túnel ficam ocultos; a home informa que o site é iniciado separadamente.
+- A aba **Conexões** é a última da barra lateral.
+
 ### Tela de conexão no GTK
 
 - Nova página **Conexão** em libadwaita: modo local, URL do servidor, teste de

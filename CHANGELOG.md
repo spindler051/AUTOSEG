@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.48 — modo local limpo e Conexões no fim — 2026-11-07 — develop
+
+- **Modo local explícito:** `INICIAR_AUTOSEG.command` e `INICIAR_AUTOSEG_DEV.command` fixam `AUTOSEG_WEB_ACCESS=0`; o app não sobe portais nem túnel.
+- **Interface local:** no modo local, a página “Portal do cliente”, os links externos e os botões de túnel ficam ocultos. A home mostra “Site iniciado separadamente pelo terminal”.
+- **Conexões no fim:** a aba **Conexões** é a última opção da barra lateral.
+- **Teste de servidor:** continua disponível na aba Conexões, com health check e salvamento do endereço.
+- **Testes:** smoke local-only e smoke com portais: OK.
+
 ## 9.6.0-dev.47 — tela de conexão no GTK — 2026-11-07 — develop
 
 - **Nova página Conexão:** segue GTK4/libadwaita com `Adw.PreferencesPage`, `Adw.PreferencesGroup`, `Adw.EntryRow` e `Adw.ActionRow`.

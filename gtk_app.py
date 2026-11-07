@@ -168,18 +168,22 @@ class Janela(Adw.ApplicationWindow):
         self.lista_navegacao.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.nav_itens = [
             ("inicio", "Início", "go-home-symbolic"),
-            ("conexao", "Conexão", "network-wired-symbolic"),
             ("clientes", "Clientes", "system-users-symbolic"),
             ("os", "Ordens de serviço", "document-edit-symbolic"),
             ("historico", "Histórico e relatórios", "document-open-recent-symbolic"),
             ("financeiro", "Financeiro", "accessories-calculator-symbolic"),
             ("prestadores", "Prestadores", "avatar-default-symbolic"),
-            ("portal", "Portal do cliente", "network-server-symbolic"),
+        ]
+        if self.web.enabled:
+            self.nav_itens.append(
+                ("portal", "Portal do cliente", "network-server-symbolic"))
+        self.nav_itens.extend([
             ("pj", "Condomínios e chamados", "view-grid-symbolic"),
             ("catalogo", "Serviços e valores", "view-list-symbolic"),
             ("composicao", "Composição de valores", "emblem-important-symbolic"),
             ("estoque", "Materiais e estoque", "package-x-generic-symbolic"),
-        ]
+            ("conexao", "Conexões", "network-wired-symbolic"),
+        ])
         for _nome, titulo_texto, icone in self.nav_itens:
             linha = Adw.ActionRow(title=titulo_texto, icon_name=icone)
             linha.set_activatable(True)
@@ -225,7 +229,6 @@ class Janela(Adw.ApplicationWindow):
 
         self.stack = Adw.ViewStack()
         self.stack.add_titled(self._pagina_inicio(), "inicio", "Início")
-        self.stack.add_titled(self._pagina_conexao(), "conexao", "Conexão")
         self.stack.add_titled(self._pagina_clientes(), "clientes", "Clientes")
         self.stack.add_titled(self._pagina_os(), "os", "Ordens de serviço")
         self.stack.add_titled(self._pagina_historico(), "historico", "Histórico")
@@ -236,6 +239,7 @@ class Janela(Adw.ApplicationWindow):
         self.stack.add_titled(self._pagina_catalogo(), "catalogo", "Serviços e valores")
         self.stack.add_titled(self._pagina_composicao(), "composicao", "Composição de valores")
         self.stack.add_titled(self._pagina_estoque(), "estoque", "Materiais e estoque")
+        self.stack.add_titled(self._pagina_conexao(), "conexao", "Conexões")
         self.toast_overlay = Adw.ToastOverlay(child=self.stack)
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)
@@ -299,6 +303,8 @@ class Janela(Adw.ApplicationWindow):
     def _carregar_tudo(self):
         for nome in ("clientes", "os", "historico", "financeiro", "prestadores",
                      "portal", "pj", "catalogo", "composicao", "estoque"):
+            if nome == "portal" and not self.web.enabled:
+                continue
             self._atualizar_pagina(nome)
         self._atualizar_inicio()
         self._atualizar_links_async()
@@ -340,8 +346,9 @@ class Janela(Adw.ApplicationWindow):
         atalhos = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         atalhos.append(ui.botao("Novo cliente", lambda: self.novo_cliente(), icone="list-add-symbolic"))
         atalhos.append(ui.botao("Nova OS", lambda: self.nova_os_rapida(), icone="document-new-symbolic"))
-        atalhos.append(ui.botao("Abrir portal do cliente", self._abrir_portal_navegador,
-                                icone="web-browser-symbolic"))
+        if self.web.enabled:
+            atalhos.append(ui.botao("Abrir portal do cliente", self._abrir_portal_navegador,
+                                    icone="web-browser-symbolic"))
         atalhos.append(ui.botao("Preparar e-mail", self._email_admin))
         atalhos.append(ui.botao("Rascunho fiscal", self._nota_admin))
         caixa.append(atalhos)
@@ -363,18 +370,24 @@ class Janela(Adw.ApplicationWindow):
 
         grupo = Adw.PreferencesGroup(title="Sistema")
         caixa.append(grupo)
-        self.linha_portal = Adw.ActionRow(
-            title="Portal do cliente", subtitle="Verificando…",
-            icon_name="network-server-symbolic")
-        self.linha_portal.set_activatable(True)
-        self.linha_portal.connect("activated", lambda *_args: self._abrir_portal_navegador())
-        grupo.add(self.linha_portal)
-        self.linha_prestador = Adw.ActionRow(
-            title="Portal do prestador", subtitle="Verificando…",
-            icon_name="network-workgroup-symbolic")
-        self.linha_prestador.set_activatable(True)
-        self.linha_prestador.connect("activated", lambda *_args: self._abrir_portal_prestador())
-        grupo.add(self.linha_prestador)
+        if self.web.enabled:
+            self.linha_portal = Adw.ActionRow(
+                title="Portal do cliente", subtitle="Verificando…",
+                icon_name="network-server-symbolic")
+            self.linha_portal.set_activatable(True)
+            self.linha_portal.connect("activated", lambda *_args: self._abrir_portal_navegador())
+            grupo.add(self.linha_portal)
+            self.linha_prestador = Adw.ActionRow(
+                title="Portal do prestador", subtitle="Verificando…",
+                icon_name="network-workgroup-symbolic")
+            self.linha_prestador.set_activatable(True)
+            self.linha_prestador.connect("activated", lambda *_args: self._abrir_portal_prestador())
+            grupo.add(self.linha_prestador)
+        else:
+            grupo.add(Adw.ActionRow(
+                title="Site",
+                subtitle="Iniciado separadamente pelo terminal.",
+                icon_name="network-server-symbolic"))
         self.linha_espaco = Adw.ActionRow(
             title="Espaço em disco", subtitle="—", icon_name="drive-harddisk-symbolic")
         abrir_pasta = Gtk.Button(label="Abrir pasta")
@@ -386,22 +399,23 @@ class Janela(Adw.ApplicationWindow):
             title="Banco local", subtitle="—", icon_name="x-office-database-symbolic")
         grupo.add(self.linha_banco)
 
-        grupo_links = Adw.PreferencesGroup(title="Links externos atuais")
-        caixa.append(grupo_links)
-        self.linhas_links = {}
-        for porta in links9.PORTAS:
-            linha = Adw.ActionRow(
-                title=f"Link público — porta {porta}", subtitle="Não detectado",
-                icon_name="globe-symbolic")
-            linha.set_activatable(True)
-            linha.connect("activated", lambda *_args, p=porta: self._abrir_link_publico(p))
-            grupo_links.add(linha)
-            self.linhas_links[porta] = linha
-        acoes_tuneis = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        acoes_tuneis.set_margin_top(4)
-        acoes_tuneis.append(ui.botao("Iniciar / reconectar túneis", self._iniciar_tuneis))
-        acoes_tuneis.append(ui.botao("Início automático", self._configurar_auto))
-        caixa.append(acoes_tuneis)
+        if self.web.enabled:
+            grupo_links = Adw.PreferencesGroup(title="Links externos atuais")
+            caixa.append(grupo_links)
+            self.linhas_links = {}
+            for porta in links9.PORTAS:
+                linha = Adw.ActionRow(
+                    title=f"Link público — porta {porta}", subtitle="Não detectado",
+                    icon_name="globe-symbolic")
+                linha.set_activatable(True)
+                linha.connect("activated", lambda *_args, p=porta: self._abrir_link_publico(p))
+                grupo_links.add(linha)
+                self.linhas_links[porta] = linha
+            acoes_tuneis = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            acoes_tuneis.set_margin_top(4)
+            acoes_tuneis.append(ui.botao("Iniciar / reconectar túneis", self._iniciar_tuneis))
+            acoes_tuneis.append(ui.botao("Início automático", self._configurar_auto))
+            caixa.append(acoes_tuneis)
 
         clamp.set_child(caixa)
         rolagem.set_child(clamp)
@@ -416,19 +430,20 @@ class Janela(Adw.ApplicationWindow):
         self.cards["recebido"].set_text(ui.brl(resumo.financeiro_recebido))
         self.cards["clientes"].set_text(str(resumo.clientes_ativos))
 
-        info = self.web.client_info()
-        if info["ativo"]:
-            rede = self._url_rede_portal(info)
-            self.linha_portal.set_subtitle(
-                f"Online • {info['url_local']}" + (f" • {rede}" if rede else " • somente este computador"))
-        else:
-            self.linha_portal.set_subtitle(
-                f"Offline • {info.get('erro') or 'clique para abrir o portal'}")
-        if self.web.provider_url:
-            self.linha_prestador.set_subtitle(f"Online • {self.web.provider_url}")
-        else:
-            self.linha_prestador.set_subtitle(
-                self.web.provider_error or "Offline • porta 8766 indisponível")
+        if getattr(self, "linha_portal", None) is not None:
+            info = self.web.client_info()
+            if info["ativo"]:
+                rede = self._url_rede_portal(info)
+                self.linha_portal.set_subtitle(
+                    f"Online • {info['url_local']}" + (f" • {rede}" if rede else " • somente este computador"))
+            else:
+                self.linha_portal.set_subtitle(
+                    f"Offline • {info.get('erro') or 'clique para abrir o portal'}")
+            if self.web.provider_url:
+                self.linha_prestador.set_subtitle(f"Online • {self.web.provider_url}")
+            else:
+                self.linha_prestador.set_subtitle(
+                    self.web.provider_error or "Offline • porta 8766 indisponível")
 
         try:
             uso = shutil.disk_usage(ui.BASE)
@@ -457,6 +472,8 @@ class Janela(Adw.ApplicationWindow):
         ui.abrir_uri(url, self)
 
     def _atualizar_links_async(self):
+        if not self.web.enabled:
+            return True
         if self._links_busy:
             return True
         self._links_busy = True
@@ -1101,12 +1118,15 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_prestadores(self):
         if hasattr(self, "rotulo_portais"):
-            cliente = self.web.client_info()
-            texto = ("Portais: "
-                     f"prestador {self.web.provider_url or 'offline'} • "
-                     f"cliente {cliente.get('url_local') or 'offline'}")
-            if self.web.provider_error:
-                texto += " • " + self.web.provider_error
+            if self.web.enabled:
+                cliente = self.web.client_info()
+                texto = ("Portais: "
+                         f"prestador {self.web.provider_url or 'offline'} • "
+                         f"cliente {cliente.get('url_local') or 'offline'}")
+                if self.web.provider_error:
+                    texto += " • " + self.web.provider_error
+            else:
+                texto = "Site iniciado separadamente pelo terminal."
             self.rotulo_portais.set_text(texto)
         termo = self.busca_prestadores.get_text().casefold().strip() if hasattr(
             self, "busca_prestadores") else ""
@@ -1216,24 +1236,19 @@ class Janela(Adw.ApplicationWindow):
     def _pagina_conexao(self):
         pagina = Adw.PreferencesPage()
         grupo = Adw.PreferencesGroup(
-            title="Modo de conexão",
-            description="O app pode usar o banco local ou, no futuro, os dados de um servidor.")
+            title="Modo atual",
+            description="O app abre em modo local, sem iniciar o site.")
         pagina.add(grupo)
 
         local = Adw.ActionRow(
-            title="Modo local",
+            title="Local",
             subtitle="Banco SQLite neste computador. O site é iniciado separadamente.",
             icon_name="computer-symbolic")
         grupo.add(local)
-        remoto = Adw.ActionRow(
-            title="Modo servidor",
-            subtitle="Em preparação: a API de dados será habilitada na próxima fase.",
-            icon_name="network-server-symbolic")
-        grupo.add(remoto)
 
         grupo_servidor = Adw.PreferencesGroup(
             title="Servidor",
-            description="Usado para testar a API e, no futuro, conectar os dados.")
+            description="Teste a API e guarde o endereço para a próxima fase.")
         pagina.add(grupo_servidor)
         self.conexao_url = Adw.EntryRow(title="URL do servidor")
         self.conexao_url.set_text(self._url_servidor_salva())
