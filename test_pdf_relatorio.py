@@ -167,6 +167,13 @@ class PdfRelatorioTest(unittest.TestCase):
                      for pagina in leitor.pages for pagina_imagem in pagina.images]
         self.assertIn((60, 120), dimensoes)
 
+    def test_pdf_inclui_texto_adicional_generico(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute("UPDATE ordens_servico SET texto_adicional=? WHERE id=10",
+                      ("Texto livre configurável no relatório.",))
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("Texto livre configurável no relatório.", texto)
+
     def test_composicao_soma_total(self):
         # Garante que a composição da OS-0010 soma exatamente o total.
         self.assertEqual(COMP_OS0010["total_centavos"], 115833)

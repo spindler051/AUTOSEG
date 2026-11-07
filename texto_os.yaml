@@ -1,0 +1,10 @@
+# Texto livre adicional da OS.
+# O código não atribui significado a este campo: ele pode conter garantia,
+# condições de pagamento, avisos ou qualquer outro texto.
+versao: 1
+campo:
+  rotulo: "Garantia"
+  titulo_pdf: "Garantia"
+  # Preencha com o texto que deve vir preenchido em novas OS.
+  padrao: ""
+  ajuda: "Texto livre que aparece no relatório do cliente."

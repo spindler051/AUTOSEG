@@ -87,6 +87,7 @@ def criar_banco(caminho=None):
             status TEXT DEFAULT 'Aberta',
             data_conclusao TEXT,
             observacoes TEXT,
+            texto_adicional TEXT DEFAULT '',
             criado_em TEXT,
             origem TEXT NOT NULL DEFAULT 'App',
             urgencia TEXT DEFAULT 'Normal',
@@ -149,6 +150,7 @@ def criar_banco(caminho=None):
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "base_percentuais", "TEXT NOT NULL DEFAULT 'total'")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "arquivada", "INTEGER NOT NULL DEFAULT 0")
     adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "comprimir_fotos_pdf", "INTEGER NOT NULL DEFAULT 1")
+    adicionar_coluna_se_nao_existir(cursor, "ordens_servico", "texto_adicional", "TEXT DEFAULT ''")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_cliente ON ordens_servico(cliente_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_status ON ordens_servico(status)")

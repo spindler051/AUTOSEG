@@ -7,6 +7,7 @@ import prestadores_ext as ext
 import pdf_identidade as identidade
 import composicao
 import cadastros_v9 as cad
+import texto_os
 
 def data_br(valor):
     s=str(valor or '').strip()
@@ -161,6 +162,10 @@ def gerar(banco,os_id):
     valores=[['TOTAL',brl(os_['valor_total'])],
             ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
     tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
+    texto_adicional=str(os_['texto_adicional'] or '').strip() if 'texto_adicional' in os_.keys() else ''
+    if texto_adicional:
+        linhas.append(S(texto_os.titulo_pdf()))
+        linhas.append(P(texto_adicional))
     if anexos:
         comprimir=True
         if 'comprimir_fotos_pdf' in os_.keys():

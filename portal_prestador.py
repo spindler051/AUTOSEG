@@ -39,6 +39,7 @@ import solicitacoes_pj as pj_publico
 import socket
 from versao_app import versao_local
 import runtime_config
+import texto_os
 from integracao import clientes as clientes_core
 from repositorios import ordens as ordens_repo
 
@@ -2075,6 +2076,9 @@ class PortalPrestador:
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
                 corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Relato técnico complementar (histórico interno)','relatorio_tecnico',d.get('relatorio_tecnico',(andamento['rascunho'] if andamento else '')) or '',rows=4)
+                corpo+=textarea(texto_os.rotulo(),'texto_adicional',d.get('texto_adicional',texto_os.padrao()) or '',rows=4)
+                if texto_os.ajuda():
+                    corpo+=f'<p class="muted">{esc(texto_os.ajuda())}</p>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     if andamento and andamento['iniciado_em']:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
