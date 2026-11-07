@@ -65,6 +65,14 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Login local e conexão com servidor
+
+- A UX de primeira conta admin, usuários locais e “lembrar este dispositivo”
+  foi documentada em `docs/AUTH_AND_CONNECTION_UX.md`.
+- Nada foi implementado; autenticação é N3/N4 e exige revisão humana.
+- O documento cobre localhost, LAN e Cloudflare Tunnel, e separa conta local
+  de conta do servidor.
+
 ### Campo genérico de texto na OS
 
 - `ordens_servico.texto_adicional` é um texto livre, sem semântica fixa no

@@ -99,6 +99,7 @@ Local-only GTK (no web server and no tunnel):
 - [Code rot cleanup plan](docs/CODE_ROT_CLEANUP_PLAN.md)
 - [Review without a human developer](docs/REVIEW_WITHOUT_DEVELOPER.md)
 - [External AI review routine](docs/EXTERNAL_AI_REVIEW_ROUTINE.md)
+- [Login, local account and server connection](docs/AUTH_AND_CONNECTION_UX.md)
 - [Condominiums, OS sharing and tenancy](docs/CONDO_SHARING_AND_TENANCY.md)
 
 ## Repository layout

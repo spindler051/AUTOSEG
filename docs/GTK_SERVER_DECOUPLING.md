@@ -266,6 +266,7 @@ repositorios/         consultas por agregado (já iniciado)
 - `servidor_backend.py`: opção `--only-provider` e health.
 - `runtime_config.py`: modo, URL, `web_access`, portas.
 - `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`: item #1 continua por fatias.
+- `docs/AUTH_AND_CONNECTION_UX.md`: fluxo de login local/remoto e conta admin.
 
 ---
 
