@@ -65,6 +65,14 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Redesenho da numeração de OS
+
+- `docs/OS_NUMBERING_REDESIGN.md` registra a análise dos 23 registros da MAIN,
+  o formato `YYMMDDNNN`, a política configurável e o plano de migração.
+- Nada foi migrado nem implementado; a mudança é N3/N4 e exige backup, ensaio
+  em cópia e revisão humana.
+- O próximo passo é decidir os 10 pontos abertos do documento.
+
 ### Servidor × GUI do site
 
 - `INICIAR_SERVIDOR_API.command` = servidor de dados/API.

@@ -128,6 +128,7 @@ portais.
 - [Login, local account and server connection](docs/AUTH_AND_CONNECTION_UX.md)
 - [App modes, roles and server discovery](docs/APP_MODES_ROLES_AND_SERVERS.md)
 - [P0 permissions matrix](docs/PERMISSIONS_P0.md)
+- [OS numbering redesign and migration](docs/OS_NUMBERING_REDESIGN.md)
 - [Configurable permissions and approvals](docs/PERMISSIONS_AND_APPROVALS.md)
 - [Condominiums, OS sharing and tenancy](docs/CONDO_SHARING_AND_TENANCY.md)
 
