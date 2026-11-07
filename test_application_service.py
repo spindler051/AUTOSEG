@@ -10,6 +10,7 @@ from pathlib import Path
 
 import banco
 import cadastros_v9 as cad9
+import fluxo_os
 import prestadores_ext as ext
 from application.contracts import ServicoIndisponivelError, ValidacaoError
 from application.http_service import HttpService
@@ -122,6 +123,29 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(
             [item.numero_os for item in self.service.listar_os_ativas('A1')],
             ['OS-A1'])
+
+    def test_history_slice_uses_contract_dtos(self):
+        fluxo_os.instalar(self.db)
+        self.criar(nome='Alfa')
+        with sqlite3.connect(self.db) as conexao:
+            for numero, status, valor in (('OS-H1', 'Concluída', 300),
+                                          ('OS-H2', 'Aberta', 100)):
+                conexao.execute(
+                    "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
+                    "data_abertura,origem,arquivada) VALUES(?,1,?,?, '2026-11-06','App',0)",
+                    (numero, status, valor))
+            concluida = conexao.execute(
+                "SELECT id FROM ordens_servico WHERE numero_os='OS-H1'").fetchone()[0]
+            conexao.execute(
+                "INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
+                "VALUES(?,'relatorio_pdf',1,'/tmp/x.pdf','abc','2026-11-06')",
+                (concluida,))
+        resumo = self.service.resumo_historico()
+        self.assertEqual((resumo.total, resumo.abertas, resumo.concluidas), (2, 1, 1))
+        self.assertEqual(resumo.valor_concluido, 300.0)
+        linhas = self.service.listar_historico('H1')
+        self.assertEqual(len(linhas), 1)
+        self.assertTrue(linhas[0].pdf_disponivel)
 
     def test_finance_slice_uses_contract_dtos(self):
         self.criar(nome='Alfa')

@@ -18,7 +18,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 import gtk_comum as ui
 import gtk_dialogos as dialogos
-from banco import BANCO, conectar_banco
+from banco import BANCO
 import prestadores_ext as ext
 import fluxo_os as fluxo
 import atendimento_os as aten
@@ -477,14 +477,11 @@ class Janela(Adw.ApplicationWindow):
         return False
 
     def _escolher_os(self, titulo_texto, ao_escolher):
-        with ext.db(BANCO) as c:
-            registros = c.execute(
-                "SELECT id,numero_os,status FROM ordens_servico ORDER BY id DESC LIMIT 250"
-            ).fetchall()
+        registros = self.service.listar_os_para_escolha()
         if not registros:
             ui.info(self, "Ordens de serviço", "Nenhuma OS cadastrada.")
             return
-        mapa = {f"{r['numero_os']} — {r['status']} [ID {r['id']}]": r["id"]
+        mapa = {f"{r.numero_os} — {r.status} [ID {r.id}]": r.id
                 for r in registros}
         ui.DialogoEscolha(self, titulo_texto, "Ordem de serviço", list(mapa),
                           lambda texto: ao_escolher(mapa.get(texto))).present(self)
@@ -655,12 +652,7 @@ class Janela(Adw.ApplicationWindow):
         if not valores:
             return
         cliente_id, nome = valores[0], valores[1]
-        conexao = conectar_banco()
-        try:
-            total = conexao.execute("SELECT COUNT(*) FROM ordens_servico WHERE cliente_id=?",
-                                    (cliente_id,)).fetchone()[0]
-        finally:
-            conexao.close()
+        total = self.service.contar_os_cliente(cliente_id)
         if total:
             def desativar():
                 try:
@@ -831,25 +823,15 @@ class Janela(Adw.ApplicationWindow):
             arquivo = dialogo.open_finish(resultado)
             caminho = Path(arquivo.get_path())
             pre = importacao_yaml.ordem_servico(caminho.name, caminho.read_bytes())
-            conexao = conectar_banco()
-            try:
-                if pre.get("cliente_id"):
-                    row = conexao.execute(
-                        "SELECT id,nome FROM clientes WHERE id=? AND status!='Inativo'",
-                        (pre["cliente_id"],)).fetchone()
-                else:
-                    doc = cad9.digitos(pre.get("cliente_documento", ""))
-                    row = conexao.execute(
-                        """SELECT id,nome FROM clientes
-                           WHERE status!='Inativo' AND replace(
-                               replace(replace(replace(documento,'.',''),'/',''),'-',''),' ','')=?
-                           LIMIT 1""", (doc,)).fetchone()
-            finally:
-                conexao.close()
+            if pre.get("cliente_id"):
+                row = self.service.obter_cliente_ativo(pre["cliente_id"])
+            else:
+                row = self.service.obter_cliente_ativo_por_documento(
+                    pre.get("cliente_documento", ""))
             if not row:
                 raise ValueError("Cliente do YAML não encontrado. Informe cliente_id ou "
                                  "cliente_documento de um cliente ativo.")
-            pre["cliente_id"] = row["id"]
+            pre["cliente_id"] = row.id
         except Exception as erro:
             ui.aviso_erro(self, "YAML de ordem de serviço", str(erro))
             return
@@ -859,12 +841,7 @@ class Janela(Adw.ApplicationWindow):
         self._baixar_modelo_yaml("modelo_ordem_servico.yaml", importacao_yaml.MODELO_OS_VAZIO)
 
     def nova_os(self, cliente_id=None):
-        conexao = conectar_banco()
-        try:
-            total = conexao.execute(
-                "SELECT COUNT(*) FROM clientes WHERE status!='Inativo'").fetchone()[0]
-        finally:
-            conexao.close()
+        total = self.service.contar_clientes_ativos()
         if not total:
             ui.aviso_erro(self, "Nenhum cliente",
                           "Cadastre pelo menos um cliente antes de criar uma OS.")
@@ -955,48 +932,17 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_historico(self):
         termo = self.busca_historico.get_text().strip() if hasattr(self, "busca_historico") else ""
-        conexao = conectar_banco()
-        try:
-            if termo:
-                registros = conexao.execute(
-                    """SELECT os.id,os.numero_os,c.nome cliente,os.data_conclusao,
-                              os.valor_total,os.forma_pagamento,os.status,
-                              (SELECT COUNT(*) FROM os_documentos d
-                                 WHERE d.os_id=os.id AND d.tipo='relatorio_pdf') pdfs
-                       FROM ordens_servico os JOIN clientes c ON c.id=os.cliente_id
-                       WHERE os.status IN ('Concluída','Cancelada','Não realizada')
-                         AND (os.numero_os LIKE ? OR c.nome LIKE ? OR os.descricao LIKE ?)
-                       ORDER BY os.id DESC""",
-                    (f"%{termo}%", f"%{termo}%", f"%{termo}%")).fetchall()
-            else:
-                registros = conexao.execute(
-                    """SELECT os.id,os.numero_os,c.nome cliente,os.data_conclusao,
-                              os.valor_total,os.forma_pagamento,os.status,
-                              (SELECT COUNT(*) FROM os_documentos d
-                                 WHERE d.os_id=os.id AND d.tipo='relatorio_pdf') pdfs
-                       FROM ordens_servico os JOIN clientes c ON c.id=os.cliente_id
-                       WHERE os.status IN ('Concluída','Cancelada','Não realizada')
-                       ORDER BY os.id DESC""").fetchall()
-            resumo = conexao.execute(
-                """SELECT COUNT(*) total,
-                          COALESCE(SUM(status='Aberta'),0) abertas,
-                          COALESCE(SUM(status='Iniciada'),0) iniciadas,
-                          COALESCE(SUM(status='Pendente'),0) pendentes,
-                          COALESCE(SUM(status='Concluída'),0) concluidas,
-                          COALESCE(SUM(CASE WHEN status='Concluída' THEN valor_total ELSE 0 END),0) valor_concluido,
-                          COALESCE(SUM(CASE WHEN status IN ('Aberta','Iniciada','Pendente') THEN valor_total ELSE 0 END),0) valor_aberto
-                   FROM ordens_servico""").fetchone()
-        finally:
-            conexao.close()
+        resumo = self.service.resumo_historico()
+        registros = self.service.listar_historico(termo)
         for chave in ("total", "abertas", "iniciadas", "pendentes", "concluidas"):
-            self.cards_hist[chave].set_text(str(resumo[chave]))
+            self.cards_hist[chave].set_text(str(getattr(resumo, chave)))
         self.resumo_valores.set_text(
-            f"Valor das OS concluídas: {ui.brl(resumo['valor_concluido'])}   •   "
-            f"Valor em OS ativas: {ui.brl(resumo['valor_aberto'])}")
+            f"Valor das OS concluídas: {ui.brl(resumo.valor_concluido)}   •   "
+            f"Valor em OS ativas: {ui.brl(resumo.valor_aberto)}")
         self.tabela_historico.definir_linhas([
-            (r["id"], r["numero_os"], r["cliente"], r["data_conclusao"],
-             ui.brl(r["valor_total"]), r["forma_pagamento"], r["status"],
-             "Disponível" if r["pdfs"] else "Pendente")
+            (r.id, r.numero_os, r.cliente, r.data_conclusao,
+             ui.brl(r.valor_total), r.forma_pagamento, r.status,
+             "Disponível" if r.pdf_disponivel else "Pendente")
             for r in registros
         ])
 
@@ -1153,18 +1099,14 @@ class Janela(Adw.ApplicationWindow):
             self.rotulo_portais.set_text(texto)
         termo = self.busca_prestadores.get_text().casefold().strip() if hasattr(
             self, "busca_prestadores") else ""
-        with ext.db(BANCO) as c:
-            registros = c.execute(
-                "SELECT id,nome,documento,email,especialidade,ativo FROM prestadores "
-                "WHERE excluido=0 ORDER BY nome").fetchall()
         linhas = []
-        for p in registros:
-            cnpj = cad9.formatar_documento(p['documento'])
-            texto = f"{p['nome']} {cnpj} {p['email']} {p['especialidade'] or ''}".casefold()
+        for p in self.service.listar_prestadores():
+            cnpj = cad9.formatar_documento(p.documento)
+            texto = f"{p.nome} {cnpj} {p.email} {p.especialidade}".casefold()
             if termo and termo not in texto:
                 continue
-            linhas.append((p["id"], p["nome"], cnpj, p["email"], p["especialidade"] or "",
-                           "Sim" if p["ativo"] else "Não"))
+            linhas.append((p.id, p.nome, cnpj, p.email, p.especialidade,
+                           "Sim" if p.ativo else "Não"))
         self.tabela_prestadores.definir_linhas(linhas)
 
     def _prestador_selecionado(self):
@@ -1181,8 +1123,7 @@ class Janela(Adw.ApplicationWindow):
         valores = self._prestador_selecionado()
         if not valores:
             return
-        with ext.db(BANCO) as c:
-            c.execute("UPDATE prestadores SET ativo=1-ativo WHERE id=?", (valores[0],))
+        self.service.alternar_prestador(valores[0])
         self.carregar_prestadores()
 
     def _admin_prestador(self):
@@ -1220,8 +1161,7 @@ class Janela(Adw.ApplicationWindow):
             return
 
         def excluir():
-            with ext.db(BANCO) as c:
-                c.execute("UPDATE prestadores SET ativo=0,excluido=1 WHERE id=?", (valores[0],))
+            self.service.arquivar_prestador(valores[0])
             self.carregar_prestadores()
             ui.toast(self, "Prestador arquivado; histórico preservado.")
 
@@ -1232,15 +1172,11 @@ class Janela(Adw.ApplicationWindow):
             excluir, destrutivo=True, rotulo_ok="Excluir")
 
     def _atribuir_prestador(self):
-        with ext.db(BANCO) as c:
-            ordens = c.execute(
-                """SELECT o.id,o.numero_os,c.nome cliente,o.status FROM ordens_servico o
-                   JOIN clientes c ON c.id=o.cliente_id
-                   WHERE o.status IN ('Aberta','Iniciada','Pendente') ORDER BY o.id DESC""").fetchall()
+        ordens = self.service.listar_os_para_atribuicao()
         if not ordens:
             ui.info(self, "Atribuição", "Não há OS ativas para atribuir.")
             return
-        mapa = {f"{o['numero_os']} — {o['cliente']} ({o['status']}) [ID {o['id']}]": o["id"]
+        mapa = {f"{o.numero_os} — {o.cliente} ({o.status}) [ID {o.id}]": o.id
                 for o in ordens}
 
         def escolher(texto):
@@ -1496,27 +1432,15 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_pj(self):
-        with ext.db(BANCO) as c:
-            chamados = c.execute(
-                """SELECT h.id,h.os_id,o.nome organizacao,u.nome solicitante,h.status,h.descricao
-                   FROM v9_chamados h JOIN v9_organizacoes o ON o.id=h.organizacao_id
-                   JOIN v9_usuarios u ON u.id=h.usuario_id ORDER BY h.id DESC LIMIT 300""").fetchall()
-            organizacoes = c.execute(
-                "SELECT id,nome,tipo,situacao,cliente_id FROM v9_organizacoes "
-                "WHERE mesclado_em IS NULL ORDER BY nome").fetchall()
-            vinculos = c.execute(
-                """SELECT v.id,o.nome organizacao,u.nome pessoa,v.papel
-                   FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id
-                   JOIN v9_usuarios u ON u.id=v.usuario_id
-                   WHERE v.situacao='Pendente' ORDER BY v.id DESC""").fetchall()
+        chamados, organizacoes, vinculos = self.service.painel_pj()
         self.tabela_chamados.definir_linhas([
-            (h["id"], h["os_id"] or "—", h["organizacao"], h["solicitante"],
-             h["status"], (h["descricao"] or "")[:140]) for h in chamados])
+            (h.id, h.os_id or "—", h.organizacao, h.solicitante,
+             h.status, h.descricao[:140]) for h in chamados])
         self.tabela_organizacoes.definir_linhas([
-            (o["id"], o["nome"], o["tipo"], o["situacao"], o["cliente_id"] or "—")
+            (o.id, o.nome, o.tipo, o.situacao, o.cliente_id or "—")
             for o in organizacoes])
         self.tabela_vinculos.definir_linhas([
-            (v["id"], v["organizacao"], v["pessoa"], v["papel"]) for v in vinculos])
+            (v.id, v.organizacao, v.pessoa, v.papel) for v in vinculos])
 
     def _chamado_selecionado(self):
         valores = self.tabela_chamados.selecionado()
@@ -1651,12 +1575,9 @@ class Janela(Adw.ApplicationWindow):
         valores = self._organizacao_selecionada()
         if not valores:
             return
-        with ext.db(BANCO) as c:
-            atual = c.execute(
-                "SELECT sindico_nome,sindico_telefone FROM v9_organizacoes WHERE id=?",
-                (valores[0],)).fetchone()
-        nome = atual["sindico_nome"] or ""
-        telefone = atual["sindico_telefone"] or ""
+        atual = self.service.obter_contato_sindico(valores[0])
+        nome = atual.nome
+        telefone = atual.telefone
 
         def salvar(texto):
             partes = texto.split("|", 1)

@@ -37,6 +37,14 @@ class ClienteResumo:
 
 
 @dataclass(frozen=True)
+class ClienteOpcao:
+    """Client id/name option used by YAML import and pickers."""
+
+    id: int
+    nome: str
+
+
+@dataclass(frozen=True)
 class Cliente:
     """Client record used by the edit dialog."""
 
@@ -60,6 +68,84 @@ class OSResumo:
     responsavel: str
     status: str
     incompleto: bool
+
+
+@dataclass(frozen=True)
+class OSOpcao:
+    """Minimal service-order option used by pickers."""
+
+    id: int
+    numero_os: str
+    status: str
+    cliente: str = ''
+
+
+@dataclass(frozen=True)
+class PrestadorResumo:
+    id: int
+    nome: str
+    documento: str
+    email: str
+    especialidade: str
+    ativo: bool
+
+
+@dataclass(frozen=True)
+class SindicoContato:
+    nome: str
+    telefone: str
+
+
+@dataclass(frozen=True)
+class HistoricoOS:
+    """Finished service-order row used by the history screen."""
+
+    id: int
+    numero_os: str
+    cliente: str
+    data_conclusao: str
+    valor_total: float
+    forma_pagamento: str
+    status: str
+    pdf_disponivel: bool
+
+
+@dataclass(frozen=True)
+class ResumoHistorico:
+    total: int
+    abertas: int
+    iniciadas: int
+    pendentes: int
+    concluidas: int
+    valor_concluido: float
+    valor_aberto: float
+
+
+@dataclass(frozen=True)
+class ChamadoPJ:
+    id: int
+    os_id: int | None
+    organizacao: str
+    solicitante: str
+    status: str
+    descricao: str
+
+
+@dataclass(frozen=True)
+class OrganizacaoPJ:
+    id: int
+    nome: str
+    tipo: str
+    situacao: str
+    cliente_id: int | None
+
+
+@dataclass(frozen=True)
+class VinculoPJ:
+    id: int
+    organizacao: str
+    pessoa: str
+    papel: str
 
 
 @dataclass(frozen=True)
@@ -167,6 +253,40 @@ class AppService(Protocol):
     def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
         ...
 
+    def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
+        ...
+
+    def listar_os_para_atribuicao(self) -> list[OSOpcao]:
+        ...
+
+    def contar_os_cliente(self, cliente_id: int) -> int:
+        ...
+
+    def contar_clientes_ativos(self) -> int:
+        ...
+
+    def listar_prestadores(self) -> list[PrestadorResumo]:
+        ...
+
+    def alternar_prestador(self, prestador_id: int) -> None:
+        ...
+
+    def arquivar_prestador(self, prestador_id: int) -> None:
+        ...
+
+    def obter_contato_sindico(self, organizacao_id: int) -> SindicoContato:
+        ...
+
+    def listar_historico(self, termo: str = '') -> list[HistoricoOS]:
+        ...
+
+    def resumo_historico(self) -> ResumoHistorico:
+        ...
+
+    def painel_pj(self) -> tuple[list[ChamadoPJ], list[OrganizacaoPJ],
+                                 list[VinculoPJ]]:
+        ...
+
     def resumo_financeiro(self) -> ResumoFinanceiro:
         ...
 
@@ -176,6 +296,14 @@ class AppService(Protocol):
         ...
 
     def marcar_recebido(self, lancamento_id: int) -> None:
+        ...
+
+    def obter_cliente_ativo(self, cliente_id: int) -> ClienteOpcao | None:
+        ...
+
+    def obter_cliente_ativo_por_documento(
+        self, documento: str
+    ) -> ClienteOpcao | None:
         ...
 
     def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:
