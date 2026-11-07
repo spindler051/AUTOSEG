@@ -6,6 +6,8 @@ truth`, `flavor/locale module`, `not started`.
 This ledger is the single place to see what is generic, what is still legacy,
 and what the next small step is. Update it in the same PR that changes a slice.
 
+Current session handoff: `docs/HANDOFF.md`.
+
 ## Current slices
 
 | Slice | Legacy source | Target | Status | Remaining work / next step |

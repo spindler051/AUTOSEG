@@ -12,21 +12,26 @@ Linux** (por exemplo, um celular com Nura/Alpine).
 
 ## 1. Situação atual
 
-- `gtk_app.py` abre o banco SQLite local diretamente e chama módulos de domínio.
-- No `__init__`, o GTK **inicia automaticamente** o `PortalPrestador` e o
-  `ServidorPortal`, mesmo quando ninguém vai usar o navegador.
-- O Portal do Cliente já tem botão “Ligar/Desligar servidor”; o Portal do
-  Prestador ainda não tem esse controle.
+- `gtk_app.py` ainda abre o SQLite local diretamente para OS, PJ, financeiro e
+  estoque, mas a primeira fatia de clientes, painel e Portal do Cliente já usa
+  `AppService`/`LocalService`.
+- O `WebAccessManager` inicia e para os dois portais. O padrão continua com o
+  acesso web ligado; `--no-web`/`AUTOSEG_WEB_ACCESS=0` abre o modo local-only
+  sem importar os portais.
+- O Portal do Cliente tem botão “Ligar/Desligar servidor”; o Portal do
+  Prestador ainda não tem controle visual próprio.
 - O banco é global (`banco.BANCO`), definido no import.
 - Existe uma API JSON read-only de financeiro (`api_financeiro.py`,
   `/api/v1`) com bearer token, paginação, auditoria e OpenAPI. Ela é um bom
   precedente de contrato, mas cobre só leitura financeira.
+- O `HttpService` já implementa `health`, mas ainda não lista/salva clientes.
 - O gerenciador de túneis Cloudflare (`tuneis`/`links_publicos`) já é separado
   do domínio.
 
 O acoplamento principal não é o HTTP em si; é o GTK conhecer **SQL, banco e
-módulos de negócio diretamente**. Para rodar remoto, ele precisa falar com um
-contrato estável, não com o SQLite do celular.
+módulos de negócio diretamente**. A primeira fatia reduziu esse acoplamento em
+clientes/painel/portal; OS, PJ, financeiro e estoque ainda precisam de fatias
+próprias.
 
 ---
 

@@ -72,6 +72,7 @@ Local-only GTK (no web server and no tunnel):
 ## Documentation
 
 - [Product vision](docs/PRODUCT_VISION.md)
+- [Current handoff](docs/HANDOFF.md)
 - [Agent rules](AGENTS.md)
 - [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
 - [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
