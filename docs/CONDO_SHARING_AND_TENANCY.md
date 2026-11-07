@@ -108,7 +108,83 @@ expira.
   permissões, dinheiro, anexos);
 - não começar por P2P entre condomínio e prestadora.
 
-## 6. Escala
+## 6. Modelos de implantação e open source
+
+O mesmo código pode rodar em modelos diferentes. A escolha não é só técnica:
+define quem responde por backup, atualização, segurança e suporte.
+
+| Modelo | Quem opera | Onde ficam os dados | Responsabilidade | Quando faz sentido |
+|---|---|---|---|---|
+| **Local desktop** | condomínio/zelador | máquina local | usuário faz backup; sem acesso remoto | teste, condomínio pequeno, operação offline |
+| **Servidor local** | condomínio | servidor/NAS na rede do condomínio | condomínio atualiza, faz backup e protege a rede | portaria/zelador com infraestrutura |
+| **Auto-hospedado** | condomínio ou administradora | VPS/nuvem contratada por eles | eles cuidam de TLS, backup, patch e disponibilidade | condomínio com TI/administradora |
+| **Hospedado por nós** | AUTOSEG ou parceiro | infraestrutura nossa | SLA, backup, atualização, suporte e incidente | condomínio sem TI e que quer delegar |
+| **Híbrido/federado** | ambos | cada lado mantém o seu | consentimento, exportação/API e resolução de conflito | quando prestadora e condomínio trocam OS |
+
+Detalhe importante: “local” pode ser o app GTK no notebook do zelador ou um
+servidor headless na rede do condomínio. São operações diferentes; o modo
+`--no-web` já cobre o primeiro, e o portal web cobre o segundo. O que falta é
+empacotamento, instalador, atualização, backup e identidade.
+
+### Open source muda a discussão
+
+- A licença 0BSD permite usar, modificar e redistribuir, inclusive
+  comercialmente, sem garantia.
+- A marca, o suporte e a hospedagem são serviços separados do código. O projeto
+  não controla forks.
+- Receita provável: hospedagem gerenciada, implantação, suporte, SLA, treinamento
+  e integração — não licença.
+- Qualquer condomínio pode rodar sozinho. Isso é uma feature, não um problema;
+  exige documentação de instalação, backup e atualização.
+- O suporte precisa de matriz de versões: não dá para manter todas as versões e
+  forks.
+- Atualização de segurança precisa de canal e prazo; auto-hospedado sem patch
+  vira risco.
+- Formato de exportação e backup precisam ser abertos o suficiente para não
+  prender o condomínio.
+- Se nós hospedamos, viramos operadores de dados pessoais; é preciso
+  contrato/DPA, retenção, exclusão e resposta a incidente. Se o condomínio
+  hospeda, ele é o controlador e nós somos, no máximo, fornecedores.
+- Multi-tenant só depois de identidade, permissão e isolamento testados. No
+  início, uma instância por condomínio é mais simples e mais segura que um banco
+  compartilhado.
+- “Open source” não significa “suporte ilimitado de graça”. O escopo de suporte
+  precisa estar escrito.
+
+### Responsabilidades por modelo
+
+| Atividade | Condomínio local/auto-hospedado | Hospedado por nós |
+|---|---|---|
+| Instalação | condomínio | nós |
+| Atualização | condomínio (com aviso nosso) | nós |
+| Backup/restore | condomínio | nós |
+| TLS/domínio | condomínio | nós |
+| Monitoramento | condomínio | nós |
+| Suporte de uso | condomínio/contrato | incluído no contrato |
+| Incidente de dados | condomínio lidera | nós lideramos |
+| Exportação/portabilidade | condomínio | condomínio, com nosso apoio |
+
+### O que não prometer
+
+- que todo condomínio vai conseguir operar sozinho sem suporte;
+- que um fork antigo continuará compatível;
+- que hospedagem gerenciada é só “ligar o servidor”;
+- que open source elimina custo operacional;
+- que a mesma instância atende vários condomínios sem isolamento;
+- que o condomínio pode editar OS da prestadora só porque tem uma instância.
+
+### Sequência recomendada
+
+1. exportação com consentimento (não depende de hospedagem);
+2. portal read-only hospedado por nós, uma instância por condomínio se possível;
+3. documentar instalação local/auto-hospedada e backup;
+4. oferecer hospedagem gerenciada como serviço separado;
+5. só depois workspace/federação.
+
+Isso preserva a possibilidade de o condomínio ser independente sem obrigar a
+AUTOSEG a virar provedora de infraestrutura para todos.
+
+## 7. Escala
 
 O que escala bem:
 
@@ -127,7 +203,7 @@ O que não escala:
 - tentar virar marketplace de serviços antes de resolver permissões e
   identidade.
 
-## 7. Riscos e detalhes provavelmente inviáveis
+## 8. Riscos e detalhes provavelmente inviáveis
 
 - **Exportar sem consentimento** — viola expectativa de privacidade e LGPD.
 - **Um link público permanente** — vaza dados e não tem revogação.
@@ -142,7 +218,7 @@ O que não escala:
 - **Achar que “exportar PDF” é integração** — é o nível 1, não o produto
   completo.
 
-## 8. Fases possíveis
+## 9. Fases possíveis
 
 ### Fase A — Exportação com consentimento
 
@@ -174,7 +250,7 @@ O que não escala:
 - reputação, cobrança, disputas, SLAs;
 - só com equipe, operação e suporte compatíveis.
 
-## 9. Decisões abertas
+## 10. Decisões abertas
 
 - O condomínio é **tenant** ou apenas um **contato** da prestadora?
 - Quem é o controlador dos dados da OS: prestadora, condomínio ou ambos?
@@ -186,21 +262,29 @@ O que não escala:
 - Quem paga a conta do workspace do condomínio?
 - O condomínio pode convidar outros prestadores? Com qual contrato?
 - Como evitar que o condomínio veja dados de outros clientes da prestadora?
+- Quem hospeda por padrão: condomínio, AUTOSEG ou um parceiro?
+- Qual é o SLA e o que acontece quando o serviço cai?
+- Quem paga a hospedagem e o que acontece se o condomínio parar de pagar?
+- Como migrar de auto-hospedado para gerenciado — e o contrário — sem perder dados?
+- Qual é a política de versões, forks e suporte?
+- Quanto tempo os dados ficam retidos após o fim do contrato?
 
-## 10. Recomendação
+## 11. Recomendação
 
 Começar pelo **nível 1/2** quando o portal atual e o `AppService` estiverem
 estáveis:
 
 1. exportação com consentimento e auditoria;
 2. portal read-only com papéis e revogação;
-3. só depois pensar em workspace/marketplace.
+3. documentação de instalação local/auto-hospedada e backup;
+4. hospedagem gerenciada como serviço separado;
+5. só depois pensar em workspace/marketplace.
 
 Nada disso deve entrar antes de permissões, identidade, auditoria e LGPD
 estarem resolvidas. É uma direção promissora, mas **sem compromisso de prazo**
 e sem prometer que o condomínio vai gerenciar as OS da AUTOSEG.
 
-## 11. Relação com os outros documentos
+## 12. Relação com os outros documentos
 
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/GTK_SERVER_DECOUPLING.md`
