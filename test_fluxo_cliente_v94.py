@@ -13,7 +13,7 @@ import prestadores_ext as ext
 import atendimento_os as aten
 import fluxo_os
 import cadastros_v9 as cad
-from portal_prestador import PortalPrestador
+from servidor_web import ServidorPortal
 from test_portal_v4 import schema
 from test_v9 import cpf, cnpj
 
@@ -55,8 +55,8 @@ def main():
         with ext.db(db) as c:
             campos={r['name'] for r in c.execute('PRAGMA table_info(v9_usuarios)')}
             check('schema aditivo',{'perfil_completo','endereco','cliente_pf_id'}.issubset(campos))
-        server=PortalPrestador(db,'127.0.0.1',0);server.iniciar()
-        base='http://127.0.0.1:'+str(server.servidor.server_port)
+        server=ServidorPortal(caminho_banco=db,host='127.0.0.1',porta=0);server.iniciar()
+        base='http://127.0.0.1:'+str(server.porta)
         try:
             c=browser();st,body,_=req(c,base,'/cliente')
             check('login principal CPF/senha',st==200 and 'name="cpf"' in body and 'name="senha"' in body)
@@ -66,7 +66,7 @@ def main():
             st,body,_=req(c,base,'/cliente/cadastrar',{'cpf':doc,'senha':'Senha-Boa-123456','confirmar_senha':'Senha-Boa-123456'})
             check('cadastro mínimo autentica imediatamente',st==200 and 'Meu painel' in body)
             st,body,_=req(c,base,'/cliente/nova')
-            check('OS particular bloqueada sem perfil',st==200 and 'Complete seu cadastro' in body and 'action="/cliente/os/nova"' not in body)
+            check('OS particular bloqueada sem perfil',st==200 and 'Complete seu cadastro' in body and 'action="/os/nova"' not in body)
             st,body,_=req(c,base,'/cliente/perfil')
             csrf0=csrf(body)
             st,body,_=req(c,base,'/cliente/perfil',{'csrf':csrf0,'nome':'Cliente Particular Teste','telefone':'51999998888',
@@ -74,7 +74,7 @@ def main():
                       'bairro':'Centro','cidade':'Porto Alegre','uf':'RS','cep':'90000000'})
             check('salvar perfil PF',st==200 and 'Meu painel' in body)
             st,body,_=req(c,base,'/cliente/nova')
-            check('formulário PF liberado',st==200 and 'action="/cliente/os/nova"' in body)
+            check('formulário PF liberado',st==200 and 'action="/os/nova"' in body)
             st,body,_=req(c,base,'/cliente/os/nova',{'csrf':csrf(body),'descricao':'Revisar o portão de garagem particular','urgencia':'Normal'})
             check('OS PF aberta',st==200 and 'Revisar o portão de garagem particular' in body)
             with ext.db(db) as dbconn:
@@ -89,29 +89,43 @@ def main():
             st,body,_=req(user2,base,'/cliente/nova-organizacao')
             check('pré-cadastro com apartamento/cargo e endereço',st==200 and 'name="unidade"' in body and 'name="endereco"' in body)
             st,body,_=req(user2,base,'/cliente/nova-organizacao',{'csrf':csrf(body),'nome':'Condomínio Teste Azul','tipo':'Condomínio',
-                'cnpj':'','endereco':'Av Teste 100, Cidade/RS','unidade':'Apto 303','papel':'Morador','cidade':'Porto Alegre'})
-            check('pré-cadastro seguido de chamado',st==200 and 'Apto 303' in body and 'Registrar solicitação' in body)
-            st,body,_=req(user2,base,'/cliente/chamado/novo',{'csrf':csrf(body),'org_id':str(1 if False else 0),
-                    'papel':'Morador','unidade':'Apto 303','descricao':'Portão com problema de abertura','urgencia':'Alta'})
+                'cnpj':'','endereco':'Av Teste 100, Cidade/RS','unidade':'Apto 303','papel':'Morador',
+                'cidade':'Porto Alegre','telefone':'51999998888',
+                'solicitante_nome':'Pessoa do Teste','solicitante_telefone':'51999997777',
+                'descricao':'Portão da garagem com falha intermitente.'})
+            check('pré-cadastro seguido de chamado',
+                  st==200 and 'Apto 303' in body and 'Solicitação registrada' in body)
+            st,body,_=req(user2,base,'/cliente/painel')
+            token_atual=csrf(body)
+            dados_chamado={'papel':'Morador','solicitante_nome':'Pessoa do Teste',
+                           'solicitante_telefone':'51999997777','unidade':'Apto 303',
+                           'descricao':'Portão com problema de abertura','urgencia':'Alta'}
+            st,body,_=req(user2,base,'/cliente/chamado/novo',
+                          {'csrf':token_atual,'org_id':'0',**dados_chamado})
             # Descobrir organização criada e repetir após chamada sem org_id, que deve ser rejeitada.
             check('chamado sem organização rejeitado',st in (400,409,500))
             with ext.db(db) as conn:
                 org=conn.execute("SELECT id FROM v9_organizacoes WHERE nome='Condomínio Teste Azul'").fetchone()['id']
             st,body,_=req(user2,base,f'/cliente/chamado/novo?org={org}')
-            st,body,_=req(user2,base,'/cliente/chamado/novo',{'csrf':csrf(body),'org_id':str(org),
-                    'papel':'Morador','unidade':'Apto 303','descricao':'Portão com problema de abertura','urgencia':'Alta'})
+            st,body,_=req(user2,base,'/cliente/chamado/novo',
+                          {'csrf':csrf(body),'org_id':str(org),**dados_chamado})
             check('morador abre chamado sem perfil completo',st==200 and 'Portão com problema' in body)
             with ext.db(db) as conn:
                 r=conn.execute('SELECT status,unidade FROM v9_chamados ORDER BY id DESC LIMIT 1').fetchone()
                 check('status de análise e unidade',r['status']=='Aguardando AUTOSEG' and r['unidade']=='Apto 303')
             st,body,_=req(user2,base,'/cliente/organizacoes?q='+urllib.parse.quote('Condomínio Teste'))
             check('pesquisa por nome',st==200 and 'Condomínio Teste Azul' in body)
-            # cadastrar outra organização como responsável: CNPJ obrigatório, vínculo não é aprovado automaticamente.
+            # Nomeação administrativa é exclusiva do prestador/desktop.
             st,body,_=req(user2,base,'/cliente/administrar-organizacao')
-            check('cadastro PJ após login',st==200 and 'name="cnpj"' in body)
-            st,body,_=req(user2,base,'/cliente/administrar-organizacao',{'csrf':csrf(body),'nome':'Empresa Nova','tipo':'Empresa',
-                'cnpj':cnpj(),'endereco':'Rua Industrial 80'})
-            check('criação de PJ como administrador pendente',st==200 and 'Empresa Nova' in body)
+            check('cadastro PJ após login é restrito',
+                  st==200 and 'somente pelo prestador ou pelo desktop' in body
+                  and 'name="cnpj"' not in body)
+            # Simula o cadastro feito pelo desktop e confirma vínculo pendente.
+            with ext.db(db) as conn:
+                uid2=conn.execute('SELECT id FROM v9_usuarios WHERE cpf=?',(doc2,)).fetchone()['id']
+            cad.criar_organizacao(db,uid2,'Empresa Nova','Empresa',cnpj=cnpj(),
+                                  cidade='Porto Alegre',papel='Administrador',
+                                  endereco='Rua Industrial 80')
             with ext.db(db) as conn:
                 r=conn.execute("SELECT v.papel,v.situacao FROM v9_vinculos v JOIN v9_organizacoes o ON o.id=v.organizacao_id WHERE o.nome='Empresa Nova'").fetchone()
                 check('autorização admin não é automática',r['papel']=='Administrador' and r['situacao']=='Pendente')
@@ -132,8 +146,8 @@ def main():
             st,body,_=req(terceiro,base,f'/cliente/sindico?org={empresaid}')
             check('não concede visão de síndico sem validação',st==403)
             # Acesso ID/senha antigo continua disponível.
-            st,body,_=req(browser(),base,'/cliente/legado')
-            check('portal legado preservado',st==200 and 'cliente_id' in body)
+            st,body,_=req(browser(),base,'/legado')
+            check('portal legado preservado',st==200 and 'name="cliente_id"' in body)
         finally:server.parar()
     print('PASSOU: fluxo de clientes AUTOSEG v9.4')
 

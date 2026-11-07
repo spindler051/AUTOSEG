@@ -18,6 +18,8 @@ from versao_app import versao_local
 
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 
+FUNCOES_RESPONSAVEL = ('Síndico', 'Proprietário', 'Representante legal', 'Administrador')
+
 
 def u():
     return v9.ui()

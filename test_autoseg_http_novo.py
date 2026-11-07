@@ -52,7 +52,8 @@ class HttpTest(unittest.TestCase):
                 html=pedido(bc,web_cliente,f'/chamado/novo?org={org}')
                 self.assertIn('name="org_id"',html)
                 html=pedido(bc,web_cliente,'/chamado/novo',{'csrf':token(html),'org_id':str(org),
-                    'papel':'Morador','solicitante_nome':'Morador de Testes','unidade':'Apto 101',
+                    'papel':'Morador','solicitante_nome':'Morador de Testes',
+                    'solicitante_telefone':'(51) 99999-0000','unidade':'Apto 101',
                     'urgencia':'Normal','descricao':'Portão automático falhou durante os testes.'})
                 self.assertIn('Sua solicitação foi registrada',html)
                 # Login do prestador; a OS deve estar na fila normal, mesmo sem CNPJ.
@@ -62,9 +63,10 @@ class HttpTest(unittest.TestCase):
                 self.assertIn('Condomínio HTTP de Testes',html)
                 html=pedido(bp,web_prestador,'/os')
                 self.assertIn('Condomínio HTTP de Testes',html)
-                self.assertIn('Pendente',html)
+                self.assertIn('Aberta',html)
                 html=pedido(bp,web_prestador,'/os/1')
-                self.assertIn('id="fotos-relatorio"',html)
+                # A OS ainda não é do prestador: fotos exigem responsável ou admin.
+                self.assertIn('Somente o responsável ou administrador pode adicionar fotos',html)
                 html=pedido(bp,web_prestador,'/os/nova')
                 self.assertIn('id="busca-cliente-os"',html)
                 self.assertIn('id="modelo-material"',html)

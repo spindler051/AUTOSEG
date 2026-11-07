@@ -57,6 +57,9 @@ class PF_PJ_HTTP(unittest.TestCase):
                 html=request(bc,base_c,'/entrar-pf',{'cpf':cpf_ficticio('987644450'),
                                                     'senha':'senha-pf-ficticia-123'})
                 self.assertIn('Meu painel',html)
+                html=request(bc,base_c,'/cliente/vinculo/novo?org=1')
+                self.assertIn('name="cnpj"',html)
+                self.assertIn('Representante legal',html)
                 with self.assertRaises(urllib.error.HTTPError) as err:
                     request(bc,base_c,'/sindico?org=1')
                 self.assertEqual(err.exception.code,403)

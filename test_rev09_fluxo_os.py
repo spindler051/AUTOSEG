@@ -143,8 +143,8 @@ def main():
 
             # 1. Assumir sem iniciar.
             status, body = req(staff, base, f'/os/{os_id}')
-            check('botão ASSUMIR OS visível', status == 200 and 'ASSUMIR OS' in body)
-            check('botão SALVAR RASCUNHO visível', 'SALVAR RASCUNHO' in body)
+            check('botão ASSUMIR OS visível', status == 200 and 'Assumir OS' in body)
+            check('salvamento automático visível', 'Salvamento automático ativo' in body)
             check('fluxo antigo removido', 'INICIAR OS — ASSUMIR AUTOMATICAMENTE' not in body)
             status, body = req(staff, base, f'/os/{os_id}/assumir', {'csrf': token})
             check('assumir responde', status == 200)
@@ -159,7 +159,7 @@ def main():
 
             # 2. Em rota e idempotência.
             status, body = req(staff, base, f'/os/{os_id}')
-            check('botão EM ROTA visível', status == 200 and 'EM ROTA' in body)
+            check('botão EM ROTA visível', status == 200 and 'Em rota' in body)
             req(staff, base, f'/os/{os_id}/em-rota', {'csrf': token})
             req(staff, base, f'/os/{os_id}/em-rota', {'csrf': token})
             with ext.db(banco) as cursor:

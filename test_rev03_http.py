@@ -45,7 +45,8 @@ class Rev03HttpTest(unittest.TestCase):
                 dados={'csrf':csrf(b),'nome':'Condomínio Vinte e Um Fictício','tipo':'Condomínio',
                        'endereco':'Avenida das Flores 123','cidade':'Porto Alegre','bairro':'Centro',
                        'telefone':'(51) 98888-7777','cnpj':'','papel':'Morador','unidade':'Portaria',
-                       'solicitante_nome':'Cliente de Teste','descricao':'Portão parou de funcionar ao amanhecer.',
+                       'solicitante_nome':'Cliente de Teste','solicitante_telefone':'(51) 98888-7777',
+                       'descricao':'Portão parou de funcionar ao amanhecer.',
                        'urgencia':'Normal'}
                 b,_=request(bc,cli,'/nova-organizacao',dados)
                 self.assertIn('Solicitação registrada'.encode(),b)
@@ -55,7 +56,7 @@ class Rev03HttpTest(unittest.TestCase):
                 self.assertIn('Condomínio Vinte e Um'.encode(),b)
                 b,_=request(bp,pre,'/os')
                 self.assertIn('Condomínio Vinte e Um'.encode(),b)
-                self.assertIn(b'Pendente',b)
+                self.assertIn(b'Aberta',b)
                 b,_=request(bp,pre,'/servicos/novo')
                 self.assertIn(b'name="preco_servico"',b)
                 b,_=request(bp,pre,'/servicos/salvar',{

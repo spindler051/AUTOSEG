@@ -38,7 +38,11 @@ class Operacoes(unittest.TestCase):
 
     def test_yml_relatorio_reutilizavel_em_qualquer_os(self):
         modelo=Path(__file__).with_name('modelo_relatorio_os.yaml').read_bytes()
-        report=imp.relatorio('modelo.yaml',modelo)
+        # O modelo oficial atual é um formulário em branco; a importação não
+        # inventa diagnóstico nem materiais.
+        self.assertEqual(imp.relatorio('modelo.yaml',modelo),{})
+        preenchido=('versao: 1\nos:\n  diagnostico: Inspeção do automatizador.\n  materiais: []\n').encode('utf-8')
+        report=imp.relatorio('preenchido.yaml',preenchido)
         self.assertEqual(report['v9_diagnostico'],'Inspeção do automatizador.')
         self.assertEqual(report['material_yaml'],[])
         self.assertNotIn('numero',report)

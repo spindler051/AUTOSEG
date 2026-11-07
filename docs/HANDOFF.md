@@ -253,26 +253,28 @@ Resultado: **41 OK**.
 - `test_pdf_relatorio.py`: **7 OK**.
 - `test_application_service.py`: **14 OK** (inclui financeiro, OS ativas, histórico e PJ).
 - `test_os_write.py`: **3 OK** (criação, edição, status, contexto).
-- Suíte completa não-visual: **278 testes, 3 falhas pré-existentes, 1 skip**.
-- Testes relacionados de portal/financeiro: **61 OK, 1 falha pré-existente**
-  (`test_autoseg_http_novo`).
+- Suíte completa não-visual: **301 testes, 0 falhas, 1 skip**.
+- Scripts de aceitação atualizados: `test_portal_v4.py`, `test_fluxo_v5.py`,
+  `test_fluxo_v6.py`, `test_fluxo_v7.py`, `test_fluxo_cliente_v94.py` e
+  `test_rev09_fluxo_os.py`.
 
 - Smoke GTK local-only (`--no-web`): **exit 0**.
 - Smoke GTK com portas efêmeras: **exit 0**.
 - Manager real: portais subiram em portas efêmeras, portal do cliente
   respondeu **HTTP 200** e `/api/v1/health` respondeu **ok**.
 - Auditoria de comentários: **0 alto, 0 baixo**.
-- Baseline de podridão: **149** exceções amplas, **32** silenciosas,
-  **126** linhas de SQL em UI/HTTP.
+- Baseline de podridão: **152** exceções amplas, **32** silenciosas,
+  **56** funções longas, **5** classes longas, **43** linhas de SQL em UI/HTTP.
 
-### Falhas pré-existentes da suíte completa
+### Falhas pré-existentes resolvidas
 
-A suíte não-visual rodou **259 testes** com **3 erros** confirmados também no
-commit anterior `5ca6b2c`:
+Em 2026-11-07, as três falhas antigas da suíte foram corrigidas:
 
-1. `test_autoseg_http_novo.HttpTest.test_cliente_para_pendencias_prestador_e_formularios` — HTTP 400.
-2. `test_rev03_http.Rev03HttpTest.test_cadastro_direto_e_orcamento_pdf` — HTTP 400.
-3. `test_rev04_operacoes.Operacoes.test_yml_relatorio_reutilizavel_em_qualquer_os` — `KeyError: v9_diagnostico`.
+1. `test_autoseg_http_novo` — formulário atual exige telefone e a OS nasce
+   `Aberta`; fotos exigem responsável ou administrador.
+2. `test_rev03_http` — mesmo contrato de telefone e status inicial.
+3. `test_rev04_operacoes` — o modelo oficial é um formulário em branco; a
+   importação não inventa diagnóstico nem materiais.
 
 Os testes visuais Playwright precisam dos portais rodando em 8865/8866 e não
 entram nessa contagem.
@@ -350,8 +352,9 @@ O documento de visão existe, mas nada disso está autorizado ou agendado.
 
 - **Sem dev humano:** N3/N4 continuam exigindo revisor humano externo ou
   ficam em DEV/flag. IA revisora é evidência, não aprovação.
-- **3 testes pré-existentes falhando:** não foram causados por esta fatia, mas
-  precisam de issue e correção em onda separada.
+- **Scripts históricos:** `test_v9.py`, `test_v91.py`, `test_v92.py` e
+  `test_v94_correcoes.py` descrevem a arquitetura anterior à separação dos
+  portais. Eles não indicam regressão e não substituem a suíte atual.
 - **Workflows de CI:** `.github/workflows/develop-ci.yml` e
   `.github/workflows/estabilidade-main.yml` continuam modificados e não
   commitados; a publicação depende de token GitHub com escopo `workflow`.

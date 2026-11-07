@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.53 — suíte limpa e scripts de aceitação atualizados — 2026-11-07 — develop
+
+- **Suíte completa:** 301 testes, 0 falhas, 1 skip.
+- **Três falhas antigas corrigidas:** `test_autoseg_http_novo`, `test_rev03_http` e `test_rev04_operacoes`.
+- **Scripts atualizados:** `test_portal_v4.py`, `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`, `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.
+- **Portal do cliente:** restaurada a constante `FUNCOES_RESPONSAVEL`, que causava HTTP 500 em `/cliente/vinculo/novo`.
+- **Regressão:** `test_pf_pj_http` agora cobre o formulário de vínculo e o campo CNPJ.
+- **Testes históricos:** `test_v9.py`, `test_v91.py`, `test_v92.py` e `test_v94_correcoes.py` ficam documentados como legado da arquitetura anterior à separação dos portais.
+
 ## 9.6.0-dev.52 — número único em todas as superfícies — 2026-11-07 — develop
 
 - **Links do site:** `/os/<numero>` é canônico; `/os/<alias>` e `/os/<id>` redirecionam para ele.
