@@ -187,3 +187,4 @@ recorded as deferred with explicit evidence triggers. Until then:
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/REVIEW_WITHOUT_DEVELOPER.md`

@@ -185,8 +185,10 @@ python3 scripts/audit_code_rot.py
 - **Não trocar tudo por Rust para “limpar”.** Linguagem não resolve design.
 - **Não medir sucesso por linha removida.** Medir por risco reduzido,
   comportamento preservado e teste verde.
-- **Revisão humana explícita:** a IA pode propor e executar, mas não aprovar a
-  própria limpeza.
+- **Revisão independente:** a IA pode propor, executar e revisar em outra
+  sessão, mas não aprovar a própria mudança. N3/N4 exigem revisão humana
+  externa; sem revisor, ficam em DEV/flag. Ver
+  `docs/REVIEW_WITHOUT_DEVELOPER.md`.
 - **Pequenos commits:** um por fatia/onda, com mensagem que diga o que foi
   limpo e o que foi preservado.
 

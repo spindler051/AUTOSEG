@@ -57,6 +57,10 @@ generic, modular, open-source platform. Read this file before changing code.
     names, revision history or shortcut notes into code comments. Comments
     explain *why*, invariants and non-obvious constraints; behaviour belongs in
     tests and docs. Run `python3 scripts/audit_comments.py --strict` before a PR.
+12. **No self-approval.** AI review is evidence, not human approval. Changes
+    involving money, auth, permissions, schema/migration or deletion (N3/N4)
+    require external human review or must stay in DEV behind a flag. Follow
+    `docs/REVIEW_WITHOUT_DEVELOPER.md`.
 
 ## Workaholic fit check
 

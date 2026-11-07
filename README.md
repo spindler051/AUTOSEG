@@ -96,6 +96,7 @@ Local-only GTK (no web server and no tunnel):
 - [Multi-platform GUI guideline](docs/MULTI_PLATFORM_GUI_GUIDELINE.md)
 - [Code comment policy](docs/CODE_COMMENT_POLICY.md)
 - [Code rot cleanup plan](docs/CODE_ROT_CLEANUP_PLAN.md)
+- [Review without a human developer](docs/REVIEW_WITHOUT_DEVELOPER.md)
 
 ## Repository layout
 
