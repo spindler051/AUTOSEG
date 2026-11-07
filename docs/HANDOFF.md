@@ -1,7 +1,7 @@
 # Handoff — estado atual do projeto
 
-**Última atualização:** 2026-11-06
-**Versão:** `9.6.0-dev.39`
+**Última atualização:** 2026-11-07
+**Versão:** `9.6.0-dev.40`
 **Branch de trabalho:** `develop`
 **Regra do dia:** a MAIN não foi aberta nem sincronizada; servidor e túneis
 continuam parados.
@@ -40,6 +40,14 @@ plano de big-bang.
 - `gtk_dialogos.py` — diálogo de cliente usa o serviço.
 - `repositorios/ordens.py` — resumo e lista de solicitações do portal.
 
+### Feedback novo corrigido
+
+- `/financeiro` ganhou prazo opcional de recebimento e destaque **Atrasado** em
+  vermelho para lançamentos vencidos e ainda não recebidos.
+- A alteração usa `financeiro.vencimento`, é restrita ao finalizador/admin e
+  gera auditoria.
+- Feedback registrado como FB-0001 em `docs/feedback/PENDENCIAS_DEV.md`.
+
 ### Comportamento preservado
 
 - O padrão continua com os portais ligados.
@@ -59,7 +67,7 @@ plano de big-bang.
 | OS / PJ / financeiro / estoque | **legado** | SQL direto no GTK e regras nos módulos atuais. |
 | Portal do Prestador | **legado** | Ainda chama `integracao/clientes.py` diretamente. |
 | Condomínios | **visão documentada** | Sem identidade, permissões, auditoria ou LGPD implementados. |
-| MAIN | **não sincronizada** | Código novo está em `develop`; MAIN segue no estado anterior. |
+| MAIN | **em `4bae1e9`** | Recebeu a separação GTK/servidor; o fix do feedback está só em `develop`. |
 | Túneis/servidor MAIN | **parados** | Links antigos não funcionam. |
 
 ---
@@ -67,6 +75,7 @@ plano de big-bang.
 ## 3. Commits desta sessão
 
 ```text
+efc7e3c feat: prazo de recebimento e destaque de atraso
 197a2c8 docs: atualiza baseline apos fatia AppService
 b1cdab7 feat: separa GTK dos portais e inicia AppService
 5ca6b2c docs: modelos de implantacao e open source em condominios
@@ -91,6 +100,10 @@ dc18fa1 docs: plano de limpeza de podridao e auditor de codigo
 
 Resultado: **41 OK**.
 
+- `test_financeiro_vencimento.py`: **4 OK**.
+- Testes relacionados de portal/financeiro: **61 OK, 1 falha pré-existente**
+  (`test_autoseg_http_novo`).
+
 - Smoke GTK local-only (`--no-web`): **exit 0**.
 - Smoke GTK com portas efêmeras: **exit 0**.
 - Manager real: portais subiram em portas efêmeras, portal do cliente
@@ -114,6 +127,12 @@ entram nessa contagem.
 ---
 
 ## 5. O que falta fazer
+
+### Prioridade 0 — promover o fix do feedback
+
+- Testar o prazo de recebimento no `/financeiro` da DEV.
+- Se estiver correto, sincronizar `main` e a pasta MAIN.
+- O feedback FB-0001 continua como “Corrigido na DEV” até a promoção.
 
 ### Prioridade 1 — validar a fatia atual com uso real
 

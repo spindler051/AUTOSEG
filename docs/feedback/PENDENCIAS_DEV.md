@@ -92,18 +92,32 @@ snapshot; this ledger is curated by a human.
 
 ## 5. Current cycle
 
-No feedback item has been promoted to this ledger yet. The channel was
-implemented in `9.6.0-dev.16` and has not run in production.
-
-When the first cycle starts, use this template:
-
-```markdown
 ## Cycle 2026-11 — DEV
 
 | ID | Page | Report (anonymized) | Decision | Fix / test |
 |---|---|---|---|---|
-| FB-0001 | `/servicos` | Could not find where to change the service price. | Explain path; add help text if repeated. | `docs/features/FEEDBACK_PORTAL.md` |
-```
+| FB-0001 | `/financeiro` | Add a due date for receipt; if the date passes without confirming receipt, show it in red as overdue. | Corrigido na DEV | `efc7e3c`; `test_financeiro_vencimento.py` |
+
+### FB-0001 — Prazo de recebimento e destaque de atraso
+
+- **Page:** `/financeiro`
+- **Reported:** the provider asked for an optional due date on receivables.
+  When the date passes without the “recebido” confirmation, the item should be
+  visibly overdue.
+- **Expected:** each open receivable can store a due date; open items past the
+  date show “Atrasado” in red; received or cancelled items are not marked
+  overdue.
+- **Category / urgency:** product improvement / P2. No change to money,
+  commission, tax or payment state.
+- **Decision:** Corrigido na DEV.
+- **Human note:** the date is optional and stored in the existing
+  `financeiro.vencimento` column. Only the finalizer or an administrator can
+  change it. The operation is audited.
+- **Fix:** `efc7e3c` — `portal_negocios.py`, `portal_prestador.py`,
+  `test_financeiro_vencimento.py`.
+- **Test:** `.venv/bin/python -m unittest -v test_financeiro_vencimento.py`
+  (4 OK); related portal tests also pass.
+- **Promotion:** pending `main`.
 
 Open follow-ups before production:
 

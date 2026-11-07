@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.40 — prazo de recebimento e atraso no financeiro — 2026-11-07 — develop
+
+- **Prazo de recebimento:** cada lançamento em aberto no `/financeiro` ganhou um campo opcional de vencimento. O prazo fica salvo em `financeiro.vencimento` e pode ser alterado ou removido pelo finalizador ou administrador.
+- **Atraso visível:** lançamentos em aberto com vencimento anterior a hoje aparecem como **Atrasado** em vermelho. Recebidos e cancelados não entram como atrasados.
+- **Sem mudança de dinheiro:** valor, rateio, comissão, status de pagamento e cálculos não foram alterados; a mudança é de data e apresentação.
+- **Auditoria:** alteração de vencimento gera evento na OS e registro em `portal_auditoria`.
+- **Feedback:** FB-0001 do ciclo 2026-11 em `docs/feedback/PENDENCIAS_DEV.md`.
+- **Testes:** `test_financeiro_vencimento.py` (4 OK) e testes relacionados de portal/financeiro (61 OK, 1 falha pré-existente em `test_autoseg_http_novo`).
+
 ## 9.6.0-dev.39 — fronteira de aplicação e portais fora do GTK — 2026-11-06 — develop
 
 - **Separação GTK × servidor:** o GTK passa a consumir o contrato `AppService`; a primeira fatia cobre saúde, resumo do início, clientes (listar, obter e salvar) e os cartões/solicitações do Portal do Cliente. `LocalService` executa no processo, sem abrir porta HTTP.
