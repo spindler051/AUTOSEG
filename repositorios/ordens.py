@@ -94,3 +94,28 @@ def listar_origem_portal(banco=None, limite=100) -> list[dict]:
             WHERE origem='Portal' ORDER BY id DESC LIMIT ?
         """, (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
+
+
+def resumo_portal(banco=None) -> dict[str, int]:
+    """Counts for the portal cards, preserving the previous SQL semantics."""
+    with ext.db(_banco(banco)) as conexao:
+        linha = conexao.execute("""
+            SELECT COUNT(*) total,
+                   COALESCE(SUM(status IN ('Aberta','Iniciada','Pendente')),0) andamento,
+                   COALESCE(SUM(status='Concluída'),0) concluidas
+            FROM ordens_servico WHERE origem='Portal'
+        """).fetchone()
+    return {chave: int(linha[chave] or 0)
+            for chave in ('total', 'andamento', 'concluidas')}
+
+
+def listar_solicitacoes_portal(banco=None, limite=50) -> list[dict]:
+    """Portal rows with the client name, as shown in the desktop table."""
+    with ext.db(_banco(banco)) as conexao:
+        linhas = conexao.execute("""
+            SELECT os.id,os.numero_os,c.nome cliente,os.data_abertura,
+                   os.urgencia,os.status FROM ordens_servico os
+            JOIN clientes c ON c.id=os.cliente_id
+            WHERE os.origem='Portal' ORDER BY os.id DESC LIMIT ?
+        """, (int(limite),)).fetchall()
+    return [dict(linha) for linha in linhas]

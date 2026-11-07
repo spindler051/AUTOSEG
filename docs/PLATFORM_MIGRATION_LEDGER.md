@@ -10,7 +10,7 @@ and what the next small step is. Update it in the same PR that changes a slice.
 
 | Slice | Legacy source | Target | Status | Remaining work / next step |
 |---|---|---|---|---|
-| Clients | `clientes` | Workaholic `cliente` schema + `integracao/clientes.py` | **adapter read/write (partial)** | Portal/GTK client reads now go through `integracao/clientes.py`; remove remaining direct writes from portal/desktop/importers and migrate OS/quote client selectors. Keep legacy integer IDs as origin metadata. |
+| Clients | `clientes` | Workaholic `cliente` schema + `integracao/clientes.py` + `application/local_service.py` | **adapter read/write + application slice (partial)** | GTK list/dialog/dashboard now use `LocalService`; portal still calls the adapter directly. Remove remaining direct writes from portal/desktop/importers and expose clients through the remote API. Keep legacy integer IDs as origin metadata. |
 | Service catalog | `catalogo_servicos` | Generic catalog/item schema + adapter | **legacy only** | Define generic service/item fields; characterize catalog CRUD; start with reads. |
 | Materials / stock | `materiais_os`, `estoque_produtos`, `estoque_movimentos` | Generic materials/stock contracts + adapter | **legacy only** | Separate charged price from internal cost as generic concepts; migrate stock movement reads. |
 | Service orders | `ordens_servico`, `os_encerramentos`, `os_eventos` | Generic work-order schema + adapter | **legacy only** | Dashboard/history/report/portal read summaries now live in `repositorios/ordens.py`; characterize OS detail and active-list reads before the Workaholic adapter. Do not change status semantics. |
@@ -20,7 +20,7 @@ and what the next small step is. Update it in the same PR that changes a slice.
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
 | Fiscal / NF-e / NFS-e | `prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
 | Email / payments | `gmail_service.py`, future payment integrations | Generic integration contracts + adapters | **legacy only** | Define provider interfaces; keep credentials outside code. |
-| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today** | Keep AUTOSEG-specific screens in flavor; extract generic shell only when a second flavor exists. |
+| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; app boundary started** | Client reads/writes, dashboard and portal summary/cards use `AppService`/`LocalService`; web portals are owned by `WebAccessManager`. OS/PJ screens still contain direct SQL and must migrate one slice at a time. |
 | CLI | `workaholic/src/workaholic/cli` | Workaholic CLI | **prototype** | Keep tests; add commands only when a real consumer exists. |
 
 ## Workaholic adoption
@@ -50,7 +50,7 @@ high-level vision, cost drivers and likely infeasible parts are in
 | Qt desktop | not started | decide after GTK parity and real demand |
 | iOS native | not started | PWA or one native platform first; protocol must be stable |
 | Android native | not started | same as iOS; one mobile platform at a time |
-| Local-only mode | partial | backup/restore, export/import and offline startup tests |
+| Local-only mode | partial | `WebAccessManager` and `--no-web` are in place; next: backup/restore, export/import and offline startup tests |
 | Protocol v0 | not started | application contract + conformance tests; no network |
 | Hub sync | not started | server authority; two devices + visible conflicts |
 | LAN group sync | not started | only after hub sync is stable |
@@ -65,6 +65,8 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-04 | Treat Workaholic as a first-class workstream, not a side prototype. | Avoid orphaned engine work; every generic capability needs a consumer. |
 | 2026-11-04 | Keep Brazilian fiscal/payment rules outside the generic core. | The base must remain flavorless and usable in other countries/professions. |
 | 2026-11-04 | Prefer a monorepo until module contracts and release cadence are stable. | Avoid premature repository split and duplicated CI. |
+| 2026-11-06 | Start the application boundary with one slice: clients + dashboard. | Prove the contract without a big-bang rewrite; keep UI and behavior unchanged. |
+| 2026-11-06 | Let `WebAccessManager` own portal lifecycle. | The GTK shell must not import or start HTTP servers directly. |
 
 ## Next recommended micro-slices
 

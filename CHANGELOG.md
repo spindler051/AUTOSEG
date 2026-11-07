@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.39 — fronteira de aplicação e portais fora do GTK — 2026-11-06 — develop
+
+- **Separação GTK × servidor:** o GTK passa a consumir o contrato `AppService`; a primeira fatia cobre saúde, resumo do início, clientes (listar, obter e salvar) e os cartões/solicitações do Portal do Cliente. `LocalService` executa no processo, sem abrir porta HTTP.
+- **Portais sob demanda:** `WebAccessManager` concentra o ciclo de vida do Portal do Prestador e do Portal do Cliente. O GTK não importa mais as classes dos portais no topo nem inicia servidores diretamente; o padrão continua com os portais ligados.
+- **Modo local:** `--no-web` e `AUTOSEG_WEB_ACCESS=0` continuam abrindo o app sem portas 8765/8766. O botão do Portal do Cliente liga/desliga o servidor pelo manager.
+- **Conexão futura:** `application/connection.py` registra modo local/remoto e URL do servidor. O modo remoto ainda expõe somente `health`; não há fallback silencioso para o banco local.
+- **Comportamento preservado:** telas, rótulos, filtros, cálculos e HTML dos portais não mudaram. O SQL de OS/PJ/portal continua no lugar e será migrado em fatias seguintes.
+- **Testes:** `test_application_service.py` + `test_web_access.py` + `test_integracao_clientes.py` + `test_repositorios_ordens.py` + `test_runtime_config.py` + `test_versionador.py` (41 OK); smoke GTK local-only e com portas efêmeras (exit 0); manager real com portais em portas efêmeras e `/api/v1/health` OK.
+
 ## 9.6.0-dev.38 — feedbacks 71–81, interface padrão e financeiro — 2026-11-06 — develop
 
 - **Interface padrão:** o layout atual passa a ser o único em todas as páginas; a alternância de interface foi removida. O menu mobile abre em tela cheia, bloqueia a rolagem do fundo e mostra conta, ícones e textos maiores.

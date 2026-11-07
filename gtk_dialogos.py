@@ -24,7 +24,7 @@ import catalogo_servicos as catalogo
 import importacao_yaml
 import completude
 import composicao
-from integracao import clientes as clientes_core
+from application.contracts import AppError
 
 
 def _linha_custom(widget):
@@ -38,10 +38,14 @@ class DialogoCliente(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.cliente_id = cliente_id
+        self.servico = getattr(janela, "service", None)
+        if self.servico is None:
+            from application.local_service import LocalService
+            self.servico = LocalService(BANCO)
         self.dados = dict(importado) if importado else {}
         if cliente_id is not None:
-            registro = clientes_core.obter(cliente_id)
-            self.dados = dict(registro["fields"]) if registro else {}
+            registro = self.servico.obter_cliente(cliente_id)
+            self.dados = dict(registro.campos) if registro else {}
 
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
@@ -241,15 +245,15 @@ class DialogoCliente(Adw.Dialog):
             "status": ui.valor_combo(self.status),
         }
         try:
-            registro = clientes_core.salvar(self.cliente_id, dados)
-        except clientes_core.ErroCliente as erro:
+            registro = self.servico.salvar_cliente(self.cliente_id, dados)
+        except AppError as erro:
             ui.aviso_erro(self.janela, erro.titulo, str(erro))
             return
         except Exception as erro:
             ui.aviso_erro(self.janela, "Cadastro não salvo", str(erro))
             return
         ui.toast(self.janela, "Cliente salvo com dados incompletos."
-                 if registro["fields"]["dados_incompletos"] else "Cliente salvo.")
+                 if registro.incompleto else "Cliente salvo.")
         self.janela.carregar_clientes()
         self.close()
 

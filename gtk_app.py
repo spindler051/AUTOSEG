@@ -32,8 +32,9 @@ import links_publicos as links9
 import importacao_yaml
 import completude
 import composicao
-from integracao import clientes as clientes_core
-from repositorios import ordens as ordens_repo
+from application.connection import build_service
+from application.local_service import LocalService
+from web_access import WebAccessManager
 import runtime_config
 
 if os.environ.get("AUTOSEG_DEV") == "1":
@@ -69,9 +70,8 @@ class Janela(Adw.ApplicationWindow):
         self._links_estado = {}
         self._links_busy = False
         self._pagina_atual = "inicio"
-        self.url_prestador = ""
-        self.aviso_prestador = ""
-        self.erro_portal = ""
+        self.service = None
+        self.web = None
         self._iniciar_backend()
         self._construir()
         self.connect("close-request", self._ao_fechar)
@@ -86,8 +86,6 @@ class Janela(Adw.ApplicationWindow):
         return False
 
     def _iniciar_backend(self):
-        self.portal_prestador = None
-        self.servidor_portal = None
         try:
             ui.BASE.mkdir(parents=True, exist_ok=True)
             from banco import criar_banco
@@ -105,33 +103,19 @@ class Janela(Adw.ApplicationWindow):
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
                 print("Aviso: recuperação de PDFs anteriores:", erro)
-            if runtime_config.web_access_enabled():
-                from portal_prestador import PortalPrestador
-                from servidor_web import ServidorPortal
-                prestador_cfg = runtime_config.provider_server()
-                self.portal_prestador = PortalPrestador(
-                    BANCO, host=prestador_cfg.host, porta=prestador_cfg.port)
-                try:
-                    self.url_prestador = self.portal_prestador.iniciar()
-                except Exception as erro:
-                    self.aviso_prestador = str(erro)
-                    print("Portal do prestador indisponível:", erro)
-                cliente_cfg = runtime_config.client_server()
-                self.servidor_portal = ServidorPortal(
-                    BANCO, ui.PASTA_APP,
-                    porta=cliente_cfg.port, host=cliente_cfg.host)
-                try:
-                    self.servidor_portal.iniciar()
-                except Exception as erro:
-                    self.erro_portal = str(erro)
-                    print("Portal do cliente indisponível:", erro)
-            else:
-                self.aviso_prestador = "Servidor web desativado (modo local)."
+            self.service = build_service(BANCO)
+            self.web = WebAccessManager(
+                BANCO, ui.PASTA_APP,
+                enabled=runtime_config.web_access_enabled())
+            self.web.start()
         except Exception as erro:
-            self.erro_portal = str(erro)
-            self.portal_prestador = None
-            self.servidor_portal = None
-            print("Falha ao iniciar o backend:", erro)
+            if self.service is None:
+                self.service = LocalService(BANCO)
+                print("Falha no serviço configurado; usando serviço local:", erro)
+            if self.web is None:
+                self.web = WebAccessManager(
+                    BANCO, ui.PASTA_APP, enabled=False)
+                print("Falha ao iniciar acesso web:", erro)
 
     # ------------------------------------------------------------------
     # Estrutura principal
@@ -415,30 +399,27 @@ class Janela(Adw.ApplicationWindow):
         return rolagem
 
     def _atualizar_inicio(self):
-        clientes = clientes_core.contar_ativos(BANCO)
-        resumo_os = ordens_repo.resumo(BANCO)
-        resumo_fin = ordens_repo.financeiro_resumo(BANCO)
-        self.cards["abertas"].set_text(str(resumo_os["abertas"]))
-        self.cards["iniciadas"].set_text(str(resumo_os["iniciadas"]))
-        self.cards["pendentes"].set_text(str(resumo_os["pendentes"]))
-        self.cards["receber"].set_text(ui.brl(resumo_fin["a_receber"]))
-        self.cards["recebido"].set_text(ui.brl(resumo_fin["recebido"]))
-        self.cards["clientes"].set_text(str(clientes))
+        resumo = self.service.resumo_inicio()
+        self.cards["abertas"].set_text(str(resumo.os_abertas))
+        self.cards["iniciadas"].set_text(str(resumo.os_iniciadas))
+        self.cards["pendentes"].set_text(str(resumo.os_pendentes))
+        self.cards["receber"].set_text(ui.brl(resumo.financeiro_a_receber))
+        self.cards["recebido"].set_text(ui.brl(resumo.financeiro_recebido))
+        self.cards["clientes"].set_text(str(resumo.clientes_ativos))
 
-        info = self.servidor_portal.info() if getattr(self, "servidor_portal", None) else {
-            "ativo": False, "url_local": "", "url_rede": "", "erro": self.erro_portal}
+        info = self.web.client_info()
         if info["ativo"]:
             rede = self._url_rede_portal(info)
             self.linha_portal.set_subtitle(
                 f"Online • {info['url_local']}" + (f" • {rede}" if rede else " • somente este computador"))
         else:
             self.linha_portal.set_subtitle(
-                f"Offline • {info.get('erro') or self.erro_portal or 'clique para abrir o portal'}")
-        if self.url_prestador:
-            self.linha_prestador.set_subtitle(f"Online • {self.url_prestador}")
+                f"Offline • {info.get('erro') or 'clique para abrir o portal'}")
+        if self.web.provider_url:
+            self.linha_prestador.set_subtitle(f"Online • {self.web.provider_url}")
         else:
             self.linha_prestador.set_subtitle(
-                self.aviso_prestador or "Offline • porta 8766 indisponível")
+                self.web.provider_error or "Offline • porta 8766 indisponível")
 
         try:
             uso = shutil.disk_usage(ui.BASE)
@@ -646,14 +627,12 @@ class Janela(Adw.ApplicationWindow):
     def carregar_clientes(self):
         termo = self.busca_clientes.get_text().strip() if hasattr(self, "busca_clientes") else ""
         linhas = []
-        for registro in clientes_core.listar(termo):
-            dados = dict(registro["fields"])
+        for registro in self.service.listar_clientes(termo):
             linhas.append((
-                int(registro["id"]), dados.get("nome") or "(sem nome)",
-                cad9.formatar_documento(dados.get("documento", "")),
-                dados.get("cidade") or "", dados.get("telefone") or "",
-                dados.get("status") or "",
-                "Incompletos" if completude.cliente_faltantes(dados) else "OK"))
+                registro.id, registro.nome or "(sem nome)",
+                cad9.formatar_documento(registro.documento),
+                registro.cidade, registro.telefone, registro.status,
+                "Incompletos" if registro.incompleto else "OK"))
         self.tabela_clientes.definir_linhas(linhas)
 
     def _cliente_selecionado(self):
@@ -1221,12 +1200,12 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_prestadores(self):
         if hasattr(self, "rotulo_portais"):
-            cliente = self.servidor_portal.info() if getattr(self, "servidor_portal", None) else {}
+            cliente = self.web.client_info()
             texto = ("Portais: "
-                     f"prestador {self.url_prestador or 'offline'} • "
+                     f"prestador {self.web.provider_url or 'offline'} • "
                      f"cliente {cliente.get('url_local') or 'offline'}")
-            if self.aviso_prestador:
-                texto += " • " + self.aviso_prestador
+            if self.web.provider_error:
+                texto += " • " + self.web.provider_error
             self.rotulo_portais.set_text(texto)
         termo = self.busca_prestadores.get_text().casefold().strip() if hasattr(
             self, "busca_prestadores") else ""
@@ -1333,11 +1312,11 @@ class Janela(Adw.ApplicationWindow):
                           escolher).present(self)
 
     def _abrir_portal_prestador(self):
-        if not self.url_prestador:
+        if not self.web.provider_url:
             ui.aviso_erro(self, "Portal do prestador",
-                          self.aviso_prestador or "Servidor do prestador indisponível (porta 8766).")
+                          self.web.provider_error or "Servidor do prestador indisponível (porta 8766).")
             return
-        ui.abrir_uri(self.url_prestador, self)
+        ui.abrir_uri(self.web.provider_url, self)
 
     # ------------------------------------------------------------------
     # Portal do cliente
@@ -1411,17 +1390,14 @@ class Janela(Adw.ApplicationWindow):
         linha.add_suffix(botao)
 
     def carregar_portal(self):
-        if not getattr(self, "servidor_portal", None):
-            self.portal_status.set_subtitle(self.erro_portal or "Servidor indisponível.")
-            return
-        info = self.servidor_portal.info()
+        info = self.web.client_info()
         if info["ativo"]:
             self.portal_status.set_subtitle(
                 f"Online desde {info['iniciado_em']} • porta {info['porta']}")
             self.portal_status_icon.set_from_icon_name("emblem-ok-symbolic")
         else:
             self.portal_status.set_subtitle(
-                info.get("erro") or self.erro_portal or "Offline")
+                info.get("erro") or "Offline")
             self.portal_status_icon.set_from_icon_name("dialog-error-symbolic")
         self.portal_local.set_subtitle(info.get("url_local") or "—")
         rede = self._url_rede_portal(info)
@@ -1436,25 +1412,14 @@ class Janela(Adw.ApplicationWindow):
                 self.botao_portal.remove_css_class("destructive-action")
                 self.botao_portal.add_css_class("suggested-action")
         self._aplicar_links(self._links_estado)
-        conexao = conectar_banco()
-        try:
-            resumo = conexao.execute(
-                """SELECT COUNT(*) total,
-                          COALESCE(SUM(status IN ('Aberta','Iniciada','Pendente')),0) andamento,
-                          COALESCE(SUM(status='Concluída'),0) concluidas
-                   FROM ordens_servico WHERE origem='Portal'""").fetchone()
-            registros = conexao.execute(
-                """SELECT os.id,os.numero_os,c.nome cliente,os.data_abertura,
-                          os.urgencia,os.status FROM ordens_servico os
-                   JOIN clientes c ON c.id=os.cliente_id
-                   WHERE os.origem='Portal' ORDER BY os.id DESC LIMIT 50""").fetchall()
-        finally:
-            conexao.close()
-        for chave in ("total", "andamento", "concluidas"):
-            self.cards_portal[chave].set_text(str(resumo[chave]))
+        resumo = self.service.resumo_portal()
+        registros = self.service.listar_solicitacoes_portal()
+        self.cards_portal["total"].set_text(str(resumo.total))
+        self.cards_portal["andamento"].set_text(str(resumo.andamento))
+        self.cards_portal["concluidas"].set_text(str(resumo.concluidas))
         self.tabela_portal.definir_linhas([
-            (r["id"], r["numero_os"], r["cliente"], r["data_abertura"],
-             r["urgencia"] or "Normal", r["status"]) for r in registros
+            (r.id, r.numero_os, r.cliente, r.data_abertura,
+             r.urgencia, r.status) for r in registros
         ])
 
     def _abrir_os_portal(self):
@@ -1465,7 +1430,7 @@ class Janela(Adw.ApplicationWindow):
         self.abrir_os_id(valores[0])
 
     def _abrir_portal_navegador(self):
-        info = self.servidor_portal.info() if getattr(self, "servidor_portal", None) else {}
+        info = self.web.client_info()
         if not info.get("ativo"):
             ui.aviso_erro(self, "Portal desligado",
                           "Ligue o servidor do Portal do Cliente antes de abrir no navegador.")
@@ -1473,12 +1438,12 @@ class Janela(Adw.ApplicationWindow):
         ui.abrir_uri(info["url_local"], self)
 
     def _url_rede_portal(self, info):
-        if info.get("ativo") and getattr(self.servidor_portal, "host", "") in ("0.0.0.0", "::"):
+        if info.get("ativo") and self.web.client_on_network():
             return info.get("url_rede") or ""
         return ""
 
     def _copiar_link(self, local):
-        info = self.servidor_portal.info() if getattr(self, "servidor_portal", None) else {}
+        info = self.web.client_info()
         link = info.get("url_local") if local else (self._url_rede_portal(info) or info.get("url_local"))
         if not link:
             ui.aviso_erro(self, "Portal desligado",
@@ -1487,12 +1452,13 @@ class Janela(Adw.ApplicationWindow):
         ui.copiar(link, self)
 
     def _alternar_servidor(self):
-        if not getattr(self, "servidor_portal", None):
-            ui.aviso_erro(self, "Portal", self.erro_portal or "Servidor indisponível.")
+        if not self.web.enabled:
+            ui.aviso_erro(self, "Portal",
+                          self.web.client_error or "Servidor web desativado (modo local).")
             return
-        if self.servidor_portal.ativo:
+        if self.web.client_info().get("ativo"):
             def desligar():
-                self.servidor_portal.parar()
+                self.web.stop_client()
                 self.carregar_portal()
                 self._atualizar_inicio()
                 ui.toast(self, "Portal do cliente desligado.")
@@ -1501,10 +1467,8 @@ class Janela(Adw.ApplicationWindow):
                       "Deseja desligar?", desligar, destrutivo=True, rotulo_ok="Desligar")
         else:
             try:
-                self.servidor_portal.iniciar()
-                self.erro_portal = ""
+                self.web.start_client()
             except Exception as erro:
-                self.erro_portal = str(erro)
                 ui.aviso_erro(self, "Erro no portal", str(erro))
                 return
             self.carregar_portal()
@@ -1512,10 +1476,10 @@ class Janela(Adw.ApplicationWindow):
             ui.toast(self, "Portal do cliente ligado.")
 
     def _processar_eventos_portal(self):
-        if not self._ativo or not getattr(self, "servidor_portal", None):
+        if not self._ativo:
             return True
         try:
-            for evento in self.servidor_portal.consumir_eventos():
+            for evento in self.web.consume_events():
                 if evento.get("tipo") == "nova_os":
                     ui.toast(self, f"{evento.get('numero','Nova OS')} • "
                                    f"{evento.get('cliente','')} recebida pelo portal.")
@@ -2306,15 +2270,10 @@ class Janela(Adw.ApplicationWindow):
         except Exception as erro:
             print("Não foi possível encerrar túnel gerenciado:", erro)
         try:
-            if getattr(self, "portal_prestador", None):
-                self.portal_prestador.parar()
-        except Exception:
-            pass
-        try:
-            if getattr(self, "servidor_portal", None):
-                self.servidor_portal.parar()
+            if getattr(self, "web", None):
+                self.web.stop()
         except Exception as erro:
-            print("Erro encerrando o portal:", erro)
+            print("Erro encerrando o acesso web:", erro)
         return False
 
 

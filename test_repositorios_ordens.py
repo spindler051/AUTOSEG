@@ -68,6 +68,15 @@ class OrdensRepositoryTest(unittest.TestCase):
         self.assertEqual(linhas[0]['versao'], None)
         self.assertEqual(linhas[1]['versao'], 2)
 
+    def test_portal_summary_and_rows_preserve_previous_semantics(self):
+        dados = ordens.resumo_portal(self.db)
+        self.assertEqual(dados['total'], 1)
+        self.assertEqual(dados['andamento'], 1)
+        self.assertEqual(dados['concluidas'], 0)
+        linhas = ordens.listar_solicitacoes_portal(self.db)
+        self.assertEqual([x['numero_os'] for x in linhas], ['OS-7'])
+        self.assertEqual(linhas[0]['cliente'], 'Cliente A')
+
     def test_relatorios_e_origem_portal(self):
         relatorios = ordens.listar_relatorios(self.db)
         self.assertEqual(len(relatorios), 6)

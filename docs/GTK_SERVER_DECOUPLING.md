@@ -182,30 +182,33 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 
 ## 6. O que fazer no código, em ordem
 
-### Fase 0 — Tirar o servidor do caminho local (base implementada)
+### Fase 0 — Tirar o servidor do caminho local (implementada)
 
-- `--no-web` e `AUTOSEG_WEB_ACCESS=0` já abrem o GTK sem subir os portais e sem
+- `--no-web` e `AUTOSEG_WEB_ACCESS=0` abrem o GTK sem subir os portais e sem
   importar `portal_prestador`/`servidor_web` no início.
 - `INICIAR_AUTOSEG_SEM_WEB.command` é o atalho local-only.
-- Ainda falta transformar o start em um `WebAccessManager` com botão para
-  subir/parar os portais sob demanda.
-- Criar `WebAccessManager` no GTK para iniciar/parar os portais.
-- Mover o start de `PortalPrestador`/`ServidorPortal` do `__init__` para o
-  manager.
-- Adicionar preferência “Ativar acesso web” e variável
-  `AUTOSEG_WEB_ACCESS=0` para modo local-only.
-- O padrão pode continuar “ligado” durante a transição; o importante é existir
-  o caminho sem servidor.
-- O botão “Ligar servidor” deve criar o servidor sob demanda, não falhar.
+- `web_access.py` agora concentra o ciclo de vida dos dois portais. O GTK não
+  importa as classes dos portais nem chama `iniciar`/`parar` diretamente.
+- O padrão continua “ligado” durante a transição; o botão “Ligar servidor”
+  cria o servidor do cliente sob demanda.
+- Ainda falta uma preferência visual “Ativar acesso web” e o controle do
+  portal do prestador na tela de configurações.
 
 **Resultado:** GTK abre e funciona sem porta 8765/8766 e sem Cloudflare.
 
-### Fase 1 — `AppService` + `LocalService`
+### Fase 1 — `AppService` + `LocalService` (primeira fatia implementada)
 
-- Criar `application/` (ou `core/services/`) com o contrato e DTOs.
-- Implementar `LocalService` para uma fatia pequena: **clientes**.
-- Fazer o GTK usar `LocalService` nessa fatia.
-- Testes de contrato e caracterização; comportamento/HTML inalterados.
+- `application/contracts.py` define o contrato de casos de uso, DTOs e erros
+  estáveis.
+- `application/local_service.py` implementa saúde, resumo do início, listar,
+  obter e salvar clientes, além do resumo e da lista de solicitações do Portal
+  do Cliente.
+- O GTK usa o serviço na lista de clientes, no diálogo de cliente, nos cartões
+  do início e nos cartões/lista do Portal do Cliente. O SQL de OS/PJ ainda não
+  foi migrado.
+- `application/connection.py` guarda modo local/remoto; o modo remoto ainda só
+  tem `health` (`HttpService`). Não há fallback silencioso para o banco local.
+- Testes: `test_application_service.py` e `test_web_access.py`.
 
 ### Fase 2 — `HttpService` + primeira API
 
