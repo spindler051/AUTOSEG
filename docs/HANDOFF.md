@@ -1,7 +1,7 @@
 # Handoff — estado atual do projeto
 
 **Última atualização:** 2026-11-07
-**Versão:** `9.6.0-dev.43`
+**Versão:** `9.6.0-dev.44`
 **Branch de trabalho:** `develop`
 **Regra do dia:** a MAIN não foi aberta nem sincronizada; servidor e túneis
 continuam parados.
@@ -39,6 +39,14 @@ plano de big-bang.
   fatia migrada.
 - `gtk_dialogos.py` — diálogo de cliente usa o serviço.
 - `repositorios/ordens.py` — resumo e lista de solicitações do portal.
+
+### Separação GTK: shell completo sem SQL
+
+- `gtk_app.py` e `gtk_dialogos.py` não executam mais SQL direto.
+- A escrita transacional da OS foi para `application/os_write.py`; as leituras
+  dos diálogos foram para `application/desktop_context.py`.
+- SQL direto em UI/HTTP caiu para 43 linhas, todas no site.
+- O shell GTK está em zero SQL.
 
 ### Separação GTK: janela principal sem SQL
 
@@ -87,10 +95,10 @@ plano de big-bang.
 
 | Área | Estado | Observação |
 |---|---|---|
-| GTK → `AppService` | **parcial** | Janela principal sem SQL; diálogos de OS, materiais e anexos ainda acessam o banco. |
+| GTK → `AppService` | **shell concluído** | `gtk_app.py` e `gtk_dialogos.py` em zero SQL; escrita da OS em `application/os_write.py`. |
 | Portais HTTP | **fora do GTK** | `WebAccessManager` inicia/para; HTML e rotas não mudaram. |
 | Modo remoto | **só health** | `HttpService` não lista/salva clientes ainda. |
-| Escrita de OS / materiais / anexos | **legado** | `gtk_dialogos.py` ainda concentra a escrita transacional da OS. |
+| Escrita de OS / materiais / anexos | **no serviço** | `application/os_write.py`, com teste de caracterização. |
 | Portal do Prestador | **legado** | Ainda chama `integracao/clientes.py` diretamente. |
 | Condomínios | **visão documentada** | Sem identidade, permissões, auditoria ou LGPD implementados. |
 | MAIN | **em `4bae1e9`** | Recebeu a separação GTK/servidor; o fix do feedback está só em `develop`. |
@@ -101,6 +109,7 @@ plano de big-bang.
 ## 3. Commits desta sessão
 
 ```text
+b35ad58 refactor: dialogo de OS sem SQL direto
 e9b8728 refactor: historico, PJ e prestadores via AppService
 cd79f19 refactor: financeiro e OS ativas via AppService
 d6b1e50 feat: campo de texto adicional configuravel na OS
@@ -133,6 +142,7 @@ Resultado: **41 OK**.
 - `test_texto_os.py`: **4 OK**.
 - `test_pdf_relatorio.py`: **7 OK**.
 - `test_application_service.py`: **14 OK** (inclui financeiro, OS ativas, histórico e PJ).
+- `test_os_write.py`: **3 OK** (criação, edição, status, contexto).
 - Testes relacionados de portal/financeiro: **61 OK, 1 falha pré-existente**
   (`test_autoseg_http_novo`).
 

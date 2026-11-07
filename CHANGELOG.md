@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.44 — diálogo de OS sem SQL direto — 2026-11-07 — develop
+
+- **GTK sem SQL:** `gtk_dialogos.py` deixou de executar SQL direto. Carregamento de OS, materiais, atendimento, encerramento, atribuição, responsáveis e formulários rápidos usam `AppService`/`LocalService`.
+- **Escrita da OS:** a transação de salvar/atualizar OS, materiais, estoque, eventos, rascunho e encerramento foi movida para `application/os_write.py`, com teste de caracterização.
+- **Leituras de contexto:** consultas dos diálogos foram para `application/desktop_context.py`, sem regra de negócio nova.
+- **Números:** SQL direto em UI/HTTP caiu para 43 linhas, todas no site (`portal_prestador.py` e `servidor_web.py`). O shell GTK está em zero.
+- **Testes:** 57 OK na suíte dirigida; smoke GTK local-only OK.
+
 ## 9.6.0-dev.43 — janela GTK sem SQL direto — 2026-11-07 — develop
 
 - **Janela principal:** `gtk_app.py` não executa mais SQL direto. Histórico, PJ/chamados, prestadores, seletores de OS e lookup de cliente YAML usam `AppService`/`LocalService`.
