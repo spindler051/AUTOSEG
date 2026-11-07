@@ -10,7 +10,7 @@ and what the next small step is. Update it in the same PR that changes a slice.
 
 | Slice | Legacy source | Target | Status | Remaining work / next step |
 |---|---|---|---|---|
-| Clients | `clientes` | Workaholic `cliente` schema + `integracao/clientes.py` | **adapter write (partial)** | Remove remaining direct writes from portal/desktop/importers; keep legacy integer IDs as origin metadata. |
+| Clients | `clientes` | Workaholic `cliente` schema + `integracao/clientes.py` | **adapter read/write (partial)** | Portal/GTK client reads now go through `integracao/clientes.py`; remove remaining direct writes from portal/desktop/importers and migrate OS/quote client selectors. Keep legacy integer IDs as origin metadata. |
 | Service catalog | `catalogo_servicos` | Generic catalog/item schema + adapter | **legacy only** | Define generic service/item fields; characterize catalog CRUD; start with reads. |
 | Materials / stock | `materiais_os`, `estoque_produtos`, `estoque_movimentos` | Generic materials/stock contracts + adapter | **legacy only** | Separate charged price from internal cost as generic concepts; migrate stock movement reads. |
 | Service orders | `ordens_servico`, `os_encerramentos`, `os_eventos` | Generic work-order schema + adapter | **legacy only** | High-value, high-coupling slice. Start with read adapter and characterization tests; do not change status semantics. |

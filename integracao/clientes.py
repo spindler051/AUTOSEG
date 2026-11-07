@@ -165,6 +165,124 @@ def obter(cliente_id, banco=None):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Leituras legadas usadas pelos portais/GTK.
+#
+# O SQL fica nesta camada de integração, não no handler HTTP nem na janela.
+# As consultas preservam exatamente os filtros, ordem, limites e colunas do
+# código anterior; a apresentação continua na interface.
+# ---------------------------------------------------------------------------
+
+def contar_ativos(banco=None):
+    """Quantidade de clientes com status diferente de Inativo."""
+    with ext.db(banco or BANCO) as conexao:
+        return int(conexao.execute(
+            "SELECT COUNT(*) FROM clientes WHERE status!='Inativo'").fetchone()[0])
+
+
+def listar_paginado(termo="", limite=40, offset=0, banco=None):
+    """Lista paginada da tela /clientes do Portal do Prestador.
+
+    Retorna ``(total, linhas)``. O filtro por documento também aceita
+    CPF/CNPJ formatado, comparando somente os dígitos.
+    """
+    busca = str(termo or "").strip()[:110]
+    filtro = ""
+    params = []
+    if busca:
+        filtro = (" WHERE nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' "
+                  "OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
+                  "OR replace(replace(replace(documento,'.',''),'/',''),'-','') "
+                  "LIKE ? ESCAPE '!' ")
+        termo_like = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+        documentos = cad9.digitos(busca)
+        params = [termo_like] * 4 + [
+            '%' + documentos + '%' if documentos else 'documento_nunca_corresponde']
+    with ext.db(banco or BANCO) as conexao:
+        total = int(conexao.execute(
+            'SELECT COUNT(*) FROM clientes' + filtro, params).fetchone()[0])
+        linhas = conexao.execute(
+            'SELECT id,nome,documento,cidade,telefone,email,status FROM clientes'
+            + filtro + ' ORDER BY nome LIMIT ? OFFSET ?',
+            params + [int(limite), int(offset)]).fetchall()
+    return total, [dict(linha) for linha in linhas]
+
+
+def listar_para_selecao(banco=None, limite=500):
+    """Clientes ativos para selects de orçamento/OS."""
+    with ext.db(banco or BANCO) as conexao:
+        linhas = conexao.execute(
+            "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
+            "ORDER BY nome LIMIT ?", (int(limite),)).fetchall()
+    return [dict(linha) for linha in linhas]
+
+
+def listar_para_os(banco=None):
+    """Clientes ativos para o seletor do formulário completo de OS."""
+    with ext.db(banco or BANCO) as conexao:
+        linhas = conexao.execute(
+            "SELECT id,nome,cidade,bairro,endereco,numero FROM clientes "
+            "WHERE status!='Inativo' ORDER BY nome").fetchall()
+    return [dict(linha) for linha in linhas]
+
+
+def obter_linha(cliente_id, banco=None):
+    """Linha completa para o formulário de edição legado.
+
+    Diferente de ``obter``, preserva todas as colunas da tabela, incluindo
+    observações e campos que não fazem parte do schema genérico do Workaholic.
+    """
+    with ext.db(banco or BANCO) as conexao:
+        linha = conexao.execute(
+            'SELECT * FROM clientes WHERE id=?', (int(cliente_id),)).fetchone()
+    return dict(linha) if linha else None
+
+
+def obter_para_orcamento(cliente_id, banco=None):
+    """Cliente ativo e resumido para validar um orçamento."""
+    with ext.db(banco or BANCO) as conexao:
+        linha = conexao.execute(
+            "SELECT id,nome,documento FROM clientes WHERE id=? AND status!='Inativo'",
+            (int(cliente_id),)).fetchone()
+    return dict(linha) if linha else None
+
+
+def obter_resumo_ativo(cliente_id, banco=None):
+    """Cliente ativo para o cartão de abertura rápida de OS."""
+    with ext.db(banco or BANCO) as conexao:
+        linha = conexao.execute(
+            "SELECT id,nome,tipo_pessoa,cidade,bairro,email FROM clientes "
+            "WHERE id=? AND status!='Inativo'", (int(cliente_id),)).fetchone()
+    return dict(linha) if linha else None
+
+
+def buscar_rapida(termo="", banco=None, limite=100):
+    """Busca da abertura rápida de OS: nome, documento, cidade ou e-mail."""
+    termo = str(termo or "").strip()[:120]
+    with ext.db(banco or BANCO) as conexao:
+        if termo:
+            esc_like = termo.replace('!', '!!').replace('%', '!%').replace('_', '!_')
+            documentos = cad9.digitos(termo)
+            filtro = ("WHERE status!='Inativo' AND (nome LIKE ? ESCAPE '!' "
+                      "OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' "
+                      "OR email LIKE ? ESCAPE '!'")
+            params = ['%' + esc_like + '%'] * 4
+            if documentos:
+                filtro += " OR documento LIKE ? ESCAPE '!'"
+                params.append('%' + documentos + '%')
+            filtro += ")"
+            linhas = conexao.execute(
+                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                "FROM clientes " + filtro + " ORDER BY nome LIMIT ?",
+                params + [int(limite)]).fetchall()
+        else:
+            linhas = conexao.execute(
+                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                "FROM clientes WHERE status!='Inativo' ORDER BY nome LIMIT ?",
+                (int(limite),)).fetchall()
+    return [dict(linha) for linha in linhas]
+
+
 def salvar(cliente_id, dados, banco=None):
     servico = _servico(banco)
     existente = None

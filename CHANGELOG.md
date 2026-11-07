@@ -13,6 +13,7 @@
 - **Feedbacks 87–100:** menu mobile maior e sem rolagem; cancelamento de pagamento com confirmação e motivo; Meu Auto Financeiro removido do AUTOSEG; fluxo único de Nova OS com modal de sucesso; ações da OS alinhadas no mobile; abas com ícones em vez de números; histórico retrátil; textos redundantes de documentos/nota fiscal removidos; modelo de serviço apenas na criação; seletor de estoque com placeholder.
 - **PDF de OS pendente:** o anexo do próximo e-mail passa a incluir o relatório técnico completo salvo no atendimento, além do resumo em três campos. OS concluídas, finalizadas e canceladas não foram alteradas.
 - **Configuração de runtime:** portas, bind, TLS e caminhos-base dos portais passam por `runtime_config.py`, preservando os mesmos defaults (8765/8766 no MAIN, 8865/8866 no DEV), as mesmas variáveis de ambiente e o comportamento visual.
+- **Clientes fora da UI:** as leituras de clientes do Portal do Prestador e a contagem do painel GTK passam por `integracao/clientes.py`; filtros, paginação, colunas e interface permanecem iguais.
 - **Testes:** `test_rev12_correcoes.py` (47 OK, 1 skipped), `test_feedback_portal.py` + `test_api_financeiro.py` + `test_meu_auto_financeiro.py` (40 OK), `test_produtividade_rev07.py` + `test_gmail_integracao.py` (16 OK), `test_autoseg_melhorias.py` + `test_composicao.py` + `test_pdf_relatorio.py` (41 OK).
 
 ## 9.6.0-dev.37 — Meu Auto Financeiro integrado ao Portal do Prestador — 2026-11-06 — develop

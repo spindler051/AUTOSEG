@@ -39,6 +39,7 @@ import solicitacoes_pj as pj_publico
 import socket
 from versao_app import versao_local
 import runtime_config
+from integracao import clientes as clientes_core
 
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
@@ -1122,6 +1123,7 @@ class PortalPrestador:
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
             def inicio(self,s):
+                clientes_ativos=clientes_core.contar_ativos(banco)
                 with ext.db(banco) as c:
                     o=c.execute('''SELECT COUNT(*) total,
                         SUM(CASE WHEN status='Aberta' THEN 1 ELSE 0 END) abertas,
@@ -1131,7 +1133,6 @@ class PortalPrestador:
                         FROM ordens_servico WHERE COALESCE(arquivada,0)=0''').fetchone()
                     f=c.execute('''SELECT SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END) recebido,
                         SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END) pendente FROM financeiro''').fetchone()
-                    cl=c.execute("SELECT COUNT(*) total FROM clientes WHERE status!='Inativo'").fetchone()
                     recentes=c.execute('''SELECT o.id,o.numero_os,o.status,o.valor_total,o.data_abertura,
                         o.cliente_id,cl.nome cliente
                         FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
@@ -1177,7 +1178,7 @@ class PortalPrestador:
                            f'</a></section>'
                            f'<section class="panel"><div class="panel-head"><h2>Atalhos</h2></div>'
                            f'{atalhos_html}</section>'
-                           f'<a class="home-note" href="/clientes">Clientes ativos: {int(cl["total"] or 0)}</a>'
+                           f'<a class="home-note" href="/clientes">Clientes ativos: {int(clientes_ativos or 0)}</a>'
                            f'</aside></div>'
                            f'<div class="home-links">{v9.barra_links("prestador")}</div>'
                            f'<p class="home-note">As alterações são registradas com o prestador autenticado. '
@@ -1185,7 +1186,7 @@ class PortalPrestador:
                     return self.pagina('Visão geral',corpo,s)
                 indic=[('OS abertas',o['abertas'] or 0),('OS iniciadas',o['iniciadas'] or 0),
                        ('OS pendentes',o['pendentes'] or 0),('OS concluídas',o['concluidas'] or 0),
-                       ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',cl['total'])]
+                       ('A receber',dinheiro(f['pendente'])),('Recebido',dinheiro(f['recebido'])),('Clientes ativos',clientes_ativos)]
                 k='<div class="kpis">'+''.join(f'<div class="kpi"><span>{esc(n)}</span><strong>{esc(v)}</strong></div>' for n,v in indic)+'</div>'
                 corpo=f'<p>Olá, <b>{esc(s["nome"])}</b>. Acesso completo às funcionalidades operacionais, com auditoria.</p>{k}'
                 atalhos=[('Clientes','/clientes'),('Ordens de serviço','/os'),('Serviços e valores','/servicos'),('Financeiro','/financeiro'),('Notas fiscais','/notas'),('E-mails','/emails'),('Histórico e relatórios','/historico')]
@@ -1405,16 +1406,8 @@ class PortalPrestador:
                 try:pagina=max(1,min(10000,int(qs.get('pagina',['1'])[0])))
                 except (ValueError,TypeError):pagina=1
                 limite=40;offset=(pagina-1)*limite
-                filtro=(" WHERE nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
-                       "OR replace(replace(replace(documento,'.',''),'/',''),'-','') LIKE ? ESCAPE '!' ") if busca else ''
-                params=[]
-                if busca:
-                    termo='%'+busca.replace('!','!!').replace('%','!%').replace('_','!_')+'%'
-                    docs=cad9.digitos(busca)
-                    params=[termo]*4+['%'+docs+'%' if docs else 'documento_nunca_corresponde']
-                with ext.db(banco) as c:
-                    total=c.execute('SELECT COUNT(*) FROM clientes'+filtro,params).fetchone()[0]
-                    rows=c.execute('SELECT id,nome,documento,cidade,telefone,email,status FROM clientes'+filtro+' ORDER BY nome LIMIT ? OFFSET ?',params+[limite,offset]).fetchall()
+                total, rows = clientes_core.listar_paginado(
+                    busca, limite, offset, banco=banco)
                 linhas=[]
                 for r in rows:
                     linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(cad9.formatar_documento(r['documento'])),esc(r['cidade']),
@@ -1434,10 +1427,7 @@ class PortalPrestador:
                                servicos=None, materiais=None, aviso='',
                                validade='30', condicoes=''):
                 """Orçamento com cliente, vários serviços e materiais adicionais."""
-                with ext.db(banco) as c:
-                    clientes = c.execute(
-                        "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
-                        "ORDER BY nome LIMIT 500").fetchall()
+                clientes = clientes_core.listar_para_selecao(banco, limite=500)
                 catalogo_servicos = catalogo.listar(banco, ativos=True)
                 produtos = estoque.listar(banco, ativos=True)
                 if not clientes:
@@ -1600,8 +1590,7 @@ class PortalPrestador:
                            + form), s)
 
             def cliente_form(self,s,cid=None,preenchimento=None,erro=None):
-                with ext.db(banco) as c:
-                    x=c.execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone() if cid else None
+                x=clientes_core.obter_linha(cid, banco=banco) if cid else None
                 if cid and not x: return self.erro('Cliente não encontrado.',404,s)
                 d=dict(x) if x else {}
                 if cid is None and preenchimento:d.update(preenchimento)
@@ -1647,9 +1636,7 @@ class PortalPrestador:
                 """Abertura rápida com busca e cartões, no mesmo padrão do Portal do Cliente."""
                 with ext.db(banco) as c:
                     if cliente_id:
-                        cliente = c.execute(
-                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email FROM clientes "
-                            "WHERE id=? AND status!='Inativo'", (int(cliente_id),)).fetchone()
+                        cliente = clientes_core.obter_resumo_ativo(cliente_id, banco=banco)
                         if not cliente:
                             return self.os_rapida_form(
                                 s, 'Cliente não encontrado ou inativo. Escolha outro na lista.', q=q)
@@ -1696,25 +1683,8 @@ class PortalPrestador:
                             + botao('← Voltar e escolher outro cliente', '/os/rapida', 'secondary'), s)
 
                     termo = str(q or '').strip()[:120]
-                    esc_like = termo.replace('!', '!!').replace('%', '!%').replace('_', '!_')
-                    digitos = cad9.digitos(termo)
-                    if termo:
-                        filtro = ("WHERE status!='Inativo' AND (nome LIKE ? ESCAPE '!' "
-                                  "OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' "
-                                  "OR email LIKE ? ESCAPE '!'")
-                        params = ['%' + esc_like + '%'] * 4
-                        if digitos:
-                            filtro += " OR documento LIKE ? ESCAPE '!'"
-                            params.append('%' + digitos + '%')
-                        filtro += ")"
-                        clientes = c.execute(
-                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
-                            "FROM clientes " + filtro + " ORDER BY nome LIMIT 100",
-                            params).fetchall()
-                    else:
-                        clientes = c.execute(
-                            "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
-                            "FROM clientes WHERE status!='Inativo' ORDER BY nome LIMIT 100").fetchall()
+                    clientes = clientes_core.buscar_rapida(
+                        termo, banco=banco, limite=100)
 
                 busca = ('<form method="get" action="/os/rapida" class="busca-pj">'
                          '<label for="q-os-rapida">Buscar condomínio, empresa ou cliente</label>'
@@ -1746,7 +1716,7 @@ class PortalPrestador:
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
-                    cl=c.execute("SELECT id,nome,cidade,bairro,endereco,numero FROM clientes WHERE status!='Inativo' ORDER BY nome").fetchall()
+                    cl=clientes_core.listar_para_os(banco)
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
@@ -2983,10 +2953,7 @@ class PortalPrestador:
                                 s,'Informe a validade em dias (1 a 365).',cliente_id,
                                 validade=str(validade))
                         condicoes=str(d.get('condicoes','')).strip()[:1000]
-                        with ext.db(banco) as c:
-                            cliente=c.execute('SELECT id,nome,documento FROM clientes '
-                                              'WHERE id=? AND status!=\'Inativo\'',
-                                              (cliente_id,)).fetchone()
+                        cliente=clientes_core.obter_para_orcamento(cliente_id, banco=banco)
                         if not cliente:
                             return self.orcamento_form(
                                 s,'Cliente não encontrado.',cliente_id,

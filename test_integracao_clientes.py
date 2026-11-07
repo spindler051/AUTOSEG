@@ -79,6 +79,51 @@ class ClientesWorkaholicTest(unittest.TestCase):
                           clientes.listar("porto", banco=self.db)], ["Alfa"])
         self.assertEqual(len(clientes.listar(banco=self.db)), 2)
 
+    def test_listar_paginado_preserva_busca_e_paginacao(self):
+        self.criar(nome="Alfa", cidade="Porto Alegre", email="alfa@example.org")
+        self.criar(nome="Beta", tipo_pessoa="Física",
+                   documento="529.982.247-25", cidade="Canoas",
+                   email="beta@example.org")
+        self.criar(nome="Gama", cidade="Porto Alegre", status="Inativo")
+        total, linhas = clientes.listar_paginado("porto", 1, 0, banco=self.db)
+        self.assertEqual(total, 2)
+        self.assertEqual([x["nome"] for x in linhas], ["Alfa"])
+        total, linhas = clientes.listar_paginado("529982", 10, 0, banco=self.db)
+        self.assertEqual([x["nome"] for x in linhas], ["Beta"])
+        total, linhas = clientes.listar_paginado("beta@example", 10, 0, banco=self.db)
+        self.assertEqual([x["nome"] for x in linhas], ["Beta"])
+        total, linhas = clientes.listar_paginado("", 2, 0, banco=self.db)
+        self.assertEqual(total, 3)
+        self.assertEqual(len(linhas), 2)
+        total, linhas = clientes.listar_paginado("", 2, 2, banco=self.db)
+        self.assertEqual(len(linhas), 1)
+
+    def test_contar_listas_e_obtencoes_legadas(self):
+        self.criar(nome="Alfa", cidade="Porto Alegre", email="alfa@example.org",
+                   observacoes="Observação de teste")
+        beta = self.criar(nome="Beta", cidade="Canoas")
+        self.criar(nome="Gama", status="Inativo")
+        self.assertEqual(clientes.contar_ativos(banco=self.db), 2)
+        selecao = clientes.listar_para_selecao(banco=self.db, limite=10)
+        self.assertEqual([x["nome"] for x in selecao], ["Alfa", "Beta"])
+        para_os = clientes.listar_para_os(banco=self.db)
+        self.assertEqual([x["nome"] for x in para_os], ["Alfa", "Beta"])
+        self.assertIn("endereco", para_os[0])
+        linha = clientes.obter_linha(beta["id"], banco=self.db)
+        self.assertEqual(linha["nome"], "Beta")
+        self.assertIn("observacoes", linha)
+        orcamento = clientes.obter_para_orcamento(beta["id"], banco=self.db)
+        self.assertEqual(orcamento["nome"], "Beta")
+        inativo = clientes.listar("Gama", banco=self.db)[0]
+        self.assertIsNone(clientes.obter_para_orcamento(inativo["id"], banco=self.db))
+        resumo = clientes.obter_resumo_ativo(beta["id"], banco=self.db)
+        self.assertEqual(resumo["nome"], "Beta")
+        self.assertIsNone(clientes.obter_resumo_ativo(inativo["id"], banco=self.db))
+        rapida = clientes.buscar_rapida("canoas", banco=self.db, limite=10)
+        self.assertEqual([x["nome"] for x in rapida], ["Beta"])
+        todas = clientes.buscar_rapida("", banco=self.db, limite=10)
+        self.assertEqual([x["nome"] for x in todas], ["Alfa", "Beta"])
+
     def test_cliente_pj_sincroniza_organizacao(self):
         self.criar(nome="Condomínio Central", tipo_pessoa="Jurídica",
                    documento="11.222.333/0001-81")

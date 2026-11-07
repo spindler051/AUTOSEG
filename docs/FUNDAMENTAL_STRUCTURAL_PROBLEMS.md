@@ -23,7 +23,7 @@ engenharia melhora por fatias pequenas, reversíveis e testadas.
 
 | # | Problema fundamental | Evidência | Impacto | Esforço | Estado |
 |---|---|---|---|---|---|
-| 1 | **Regras de negócio e SQL dentro da UI/HTTP** | `gtk_app.py` 2.345 linhas e ~50 chamadas SQL; `gtk_dialogos.py` 2.254 e ~43; `portal_prestador.py` 3.482 e ~52. O plano 3.1/3.2/3.6 já registra o problema. | Uma mudança de regra exige tocar GTK, portal e testes; UI difícil de testar; risco de divergência. | Alto | Pendente |
+| 1 | **Regras de negócio e SQL dentro da UI/HTTP** | `gtk_app.py` 2.345 linhas e ~50 chamadas SQL; `gtk_dialogos.py` 2.254 e ~43; `portal_prestador.py` 3.482 e ~52. O plano 3.1/3.2/3.6 já registra o problema. | Uma mudança de regra exige tocar GTK, portal e testes; UI difícil de testar; risco de divergência. | Alto | **Parcial — leitura de clientes extraída nesta rodada; SQL de OS/financeiro/estoque/GTK resta** |
 | 2 | **Schema e migrações espalhados, sem versão única** | 12 `CREATE TABLE` em `prestadores_ext.py`, 11 em `cadastros_v9.py`, além de `banco.py`, `fluxo_os.py`, `produtividade_os.py`, `estoque_materiais.py`; 26 referências a `ALTER TABLE`/`CREATE TABLE` no código. | Banco antigo e novo podem divergir; rollback e migração de produção ficam frágeis. | Alto | Pendente |
 | 3 | **Arquivos monolíticos sem fronteiras de domínio** | `gtk_app.py` 2.345; `gtk_dialogos.py` 2.254; `portal_prestador.py` 3.482; `prestadores_ext.py` 983; `cadastros_v9.py` 893. | Revisão difícil, conflitos frequentes, baixa coesão e acoplamento entre cadastro, OS, PDF, e-mail e portal. | Alto | Pendente |
 | 4 | **Sessão, cookie, CSRF, formulário e HTML duplicados nos portais** | `portal_prestador.py`, `servidor_web.py`, `portal_cliente_v94.py`, `portal_v9.py` repetem handlers, cookies, validação de origem e templates. | Correção de segurança precisa ser replicada em vários lugares; comportamento diverge. | Alto | Pendente |
@@ -34,25 +34,56 @@ engenharia melhora por fatias pequenas, reversíveis e testadas.
 | 9 | **Armazenamento local acoplado a caminhos do app** | PDFs, anexos, comprovantes e rascunhos vivem sob `AUTOSEG_BASE`; não há interface `Storage`. | Backup, container, múltiplas máquinas e restauração ficam manuais e frágeis. | Médio | Pendente |
 | 10 | **Nomes legados em português + ausência de contrato público estável** | Plano de migração para inglês; docs `NAMING_AND_CLI`; módulos e colunas legadas. | Onboarding e criação de novos clientes (CLI/GTK/Qt/mobile) ficam mais caros. | Médio-alto | Pendente |
 
-### Por que o #5 foi o escolhido para corrigir agora
+### Estratégia desta rodada
 
-Os itens 1–4 são mais graves, mas também são os mais arriscados: mexem em
-regras, schema e segurança. O item 5 é:
+Os itens 1–4 são os mais graves, mas também os mais arriscados. O item 5 foi
+corrigido por ser fundamental, de baixo risco e habilitador. O item 1 foi
+iniciado pela **fatia de leitura de clientes**, escolhida por ter caracterização
+simples e não alterar HTML, CSS ou regras de apresentação.
 
-- **fundamental** — afeta todo entry point, empacotamento e diagnóstico;
-- **de baixo risco** — não altera HTML, CSS, regras ou banco;
-- **habilitador** — reduz a chance de erro ao containerizar, rodar DEV/MAIN e
-  criar os próximos clientes;
-- **reversível** — os mesmos nomes de variáveis e defaults são preservados.
-
-A regra do playbook é uma fatia por vez. Corrigir #5 agora não impede #1–#4;
-apenas remove uma fonte recorrente de erro enquanto eles são preparados.
+A regra do playbook é uma fatia por vez. O restante do #1 (SQL de OS,
+financeiro, estoque, anexos e dashboard GTK) continua documentado para as
+próximas rodadas.
 
 ---
 
-## 2. O que foi corrigido nesta fatia
+## 2. O que foi corrigido nesta rodada
 
-### Configuração de runtime centralizada
+### 2.1 Problema #1 — leitura de clientes fora do HTTP/UI
+
+O SQL de leitura de clientes saiu do handler e da janela e passou para
+`integracao/clientes.py`, junto do adaptador Workaholic já existente.
+
+Funções novas:
+
+- `contar_ativos`;
+- `listar_paginado` — busca, filtro por CPF/CNPJ formatado e paginação da tela
+  `/clientes`;
+- `listar_para_selecao` — select de clientes do orçamento;
+- `listar_para_os` — select do formulário completo de OS;
+- `obter_linha` — formulário de edição com todas as colunas legadas;
+- `obter_para_orcamento` — validação do cliente no orçamento;
+- `obter_resumo_ativo` e `buscar_rapida` — abertura rápida de OS.
+
+Consumidores migrados:
+
+- `portal_prestador.py`: `/`, `/clientes`, `/clientes/{id}`, `/orcamento`,
+  seletor de cliente da OS, busca rápida da OS e validação do orçamento;
+- `gtk_app.py`: contagem de clientes ativos do painel inicial.
+
+**Comportamento preservado:** mesmos filtros, ordem, limites, colunas e
+mensagens. Nenhum HTML, CSS, texto ou rota foi alterado. A única mudança de
+estrutura é a localização do SQL.
+
+**Testes:** `test_integracao_clientes` com 10 OK, cobrindo busca por nome,
+cidade, e-mail, documento formatado, paginação, listas ativas, formulário
+legado e busca rápida.
+
+**O que ainda falta do #1:** SQL de OS, financeiro, estoque, anexos, eventos,
+dashboard GTK e outros fluxos. Cada um deve ser migrado como uma fatia própria,
+com teste de caracterização antes.
+
+### 2.2 Configuração de runtime centralizada
 
 Foi criado `runtime_config.py`, sem dependências de UI, banco ou portal. Ele é
 a fonte única para:
@@ -103,11 +134,12 @@ continua 8765 e o texto permanece o mesmo.
 
 ## 3. Próximas fatias recomendadas
 
-1. **Configuração de dados** — mover `BASE`, `BANCO`, `ANEXOS`, `RELATORIOS`,
-   `RASCUNHOS` e `NOTAS` de `prestadores_ext.py`/`banco.py` para
-   `runtime_config.py`, mantendo aliases de compatibilidade. Baixo risco.
-2. **Um repositório por agregado** — começar por `clientes`, com
-   caracterização antes; retirar SQL de uma rota do portal e de uma tela GTK.
+1. **Configuração de dados** — as bases `BASE`/`BANCO` já usam
+   `runtime_config.py`; faltam as leituras restantes em `composicao.py`,
+   `versao_app.py`, `gtk_comum.py` e `meu_auto_financeiro.py`. Baixo risco.
+2. **Continuar o #1** — a leitura de clientes já está no adaptador; faltam
+   escritas diretas, SQL de OS/financeiro/estoque e o dashboard GTK. Uma fatia
+   por vez, com caracterização antes.
 3. **Runner de migrações versionado** — tabela `schema_version`, migrações
    numeradas e idempotentes; só depois pensar em Postgres.
 4. **Plumbing web compartilhado** — sessão, cookie, CSRF, `form()` e templates
@@ -129,15 +161,17 @@ python3 -m unittest test_meu_auto_financeiro
 Resultados desta fatia:
 
 - `test_runtime_config`: **5 OK**.
-- Suíte combinada `test_runtime_config + test_rev12_correcoes +
-  test_feedback_portal + test_api_financeiro + test_rev12_melhorias +
-  test_meu_auto_financeiro`: **102 OK, 1 skipped**.
-- `py_compile` de `runtime_config.py`, `portal_prestador.py`, `gtk_app.py` e
-  `servidor_backend.py`: **OK**.
+- `test_integracao_clientes`: **10 OK**.
+- Suíte combinada `test_runtime_config + test_integracao_clientes +
+  test_rev12_correcoes + test_feedback_portal + test_api_financeiro +
+  test_rev12_melhorias + test_meu_auto_financeiro`: **112 OK, 1 skipped**.
+- `py_compile` de `runtime_config.py`, `portal_prestador.py`, `gtk_app.py`,
+  `servidor_backend.py` e `integracao/clientes.py`: **OK**.
 - `test_autoseg_http_novo` falha também no `HEAD` anterior a esta mudança
-  (teste legado de formulário, não relacionado a configuração). Registrado como
-  dívida de teste, não como regressão desta fatia.
-- Nenhum teste de UI foi alterado; a mudança é de configuração.
+  (teste legado de formulário, não relacionado a esta fatia). Registrado como
+  dívida de teste, não como regressão.
+- A mudança é de leitura/estrutura; nenhum HTML, CSS ou texto de interface foi
+  alterado.
 
 ---
 

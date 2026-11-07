@@ -409,6 +409,7 @@ class Janela(Adw.ApplicationWindow):
         return rolagem
 
     def _atualizar_inicio(self):
+        clientes = clientes_core.contar_ativos(BANCO)
         conexao = conectar_banco()
         try:
             resumo_os = conexao.execute(
@@ -419,8 +420,6 @@ class Janela(Adw.ApplicationWindow):
                 "SELECT COALESCE(SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END),0) a_receber, "
                 "COALESCE(SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END),0) recebido "
                 "FROM financeiro").fetchone()
-            clientes = conexao.execute(
-                "SELECT COUNT(*) FROM clientes WHERE status!='Inativo'").fetchone()[0]
         finally:
             conexao.close()
         self.cards["abertas"].set_text(str(resumo_os["abertas"]))
