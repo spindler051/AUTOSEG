@@ -248,6 +248,7 @@ O GTK local não sobe nada. O GTK remoto só consome a API. O container roda
 ## 12. Relação com os outros documentos
 
 - `docs/GTK_SERVER_DECOUPLING.md` — modos local/remoto, `AppService`, `HttpService`.
+- `docs/PERMISSIONS_P0.md` — papéis, matriz e testes de autorização.
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — solo local, servidor central, híbrido.
 - `docs/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
 - `docs/CONDO_SHARING_AND_TENANCY.md` — usuários, organizações, papéis e grants.

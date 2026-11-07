@@ -65,6 +65,13 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Matriz de permissões P0
+
+- `docs/PERMISSIONS_P0.md` define atores, ações, regra de OS, isolamento por
+  tenant e 15 testes de autorização (AUT-001 a AUT-015).
+- Próximo passo: implementar a política pura, depois o serviço, depois o login.
+- Nada foi implementado; auth/permissões continuam N3/N4.
+
 ### Modos, papéis e descoberta de servidores
 
 - `docs/APP_MODES_ROLES_AND_SERVERS.md` decompõe o produto em problemas

@@ -7,6 +7,7 @@ diretório de servidores e sync híbrido são fases posteriores.
 **Relação com os outros documentos:**
 
 - `docs/AUTH_AND_CONNECTION_UX.md` — login local/remoto e primeira conta admin.
+- `docs/PERMISSIONS_P0.md` — matriz de ações e testes de autorização.
 - `docs/GTK_SERVER_DECOUPLING.md` — modos local, servidor e híbrido.
 - `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — visão multicliente.
 - `docs/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
