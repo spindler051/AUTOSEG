@@ -14,7 +14,6 @@ from enum import Enum
 from pathlib import Path
 
 import runtime_config
-from application.contracts import ServicoIndisponivelError
 
 
 class ConnectionMode(str, Enum):
@@ -90,9 +89,7 @@ def build_service(banco=None, settings: ConnectionSettings | None = None):
     if config.mode is ConnectionMode.LOCAL:
         from application.local_service import LocalService
         return LocalService(banco)
-    if not config.server_url:
-        raise ServicoIndisponivelError(
-            'Modo remoto sem URL de servidor configurada.',
-            'Conexão não configurada')
     from application.http_service import HttpService
-    return HttpService(config.server_url)
+    return HttpService(
+        config.server_url,
+        token=os.environ.get('AUTOSEG_DESKTOP_TOKEN', ''))

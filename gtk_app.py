@@ -90,7 +90,15 @@ class Janela(Adw.ApplicationWindow):
         return False
 
     def _iniciar_backend(self):
+        settings = load_settings()
+        self.settings = settings
+        self.remote_mode = settings.mode is ConnectionMode.REMOTE
         try:
+            self.service = build_service(BANCO, settings)
+            if self.remote_mode:
+                self.web = WebAccessManager(
+                    BANCO, ui.PASTA_APP, enabled=False)
+                return
             ui.BASE.mkdir(parents=True, exist_ok=True)
             from banco import criar_banco
             criar_banco()
@@ -107,17 +115,18 @@ class Janela(Adw.ApplicationWindow):
                 fluxo.recuperar_relatorios_antigos(BANCO)
             except Exception as erro:
                 print("Aviso: recuperação de PDFs anteriores:", erro)
-            settings = load_settings()
-            self.service = build_service(BANCO, settings)
-            web_enabled = (settings.web_access
-                           and settings.mode.value == 'local')
+            web_enabled = settings.web_access
             self.web = WebAccessManager(
                 BANCO, ui.PASTA_APP, enabled=web_enabled)
             self.web.start()
         except Exception as erro:
             if self.service is None:
-                self.service = LocalService(BANCO)
-                print("Falha no serviço configurado; usando serviço local:", erro)
+                from application.http_service import HttpService
+                if self.remote_mode:
+                    self.service = HttpService(settings.server_url)
+                else:
+                    self.service = LocalService(BANCO)
+                print("Falha no serviço configurado:", erro)
             if self.web is None:
                 self.web = WebAccessManager(
                     BANCO, ui.PASTA_APP, enabled=False)
@@ -240,7 +249,17 @@ class Janela(Adw.ApplicationWindow):
         self.stack.add_titled(self._pagina_composicao(), "composicao", "Composição de valores")
         self.stack.add_titled(self._pagina_estoque(), "estoque", "Materiais e estoque")
         self.stack.add_titled(self._pagina_conexao(), "conexao", "Conexões")
-        self.toast_overlay = Adw.ToastOverlay(child=self.stack)
+        self.banner_servidor = Adw.Banner(
+            title="Servidor indisponível — os dados estão vazios.",
+            button_label="Tentar novamente")
+        self.banner_servidor.set_revealed(False)
+        self.banner_servidor.connect(
+            "button-clicked", lambda *_args: self._atualizar_tudo())
+        caixa = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        caixa.append(self.banner_servidor)
+        self.stack.set_vexpand(True)
+        caixa.append(self.stack)
+        self.toast_overlay = Adw.ToastOverlay(child=caixa)
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)
         self.lista_navegacao.select_row(self.lista_navegacao.get_row_at_index(0))
@@ -301,8 +320,13 @@ class Janela(Adw.ApplicationWindow):
             print("Falha ao atualizar", nome, erro)
 
     def _carregar_tudo(self):
+        if self.remote_mode and hasattr(self.service, "reset_offline"):
+            self.service.reset_offline()
+        disponiveis = {chave for chave, _titulo, _icone in self.nav_itens}
         for nome in ("clientes", "os", "historico", "financeiro", "prestadores",
                      "portal", "pj", "catalogo", "composicao", "estoque"):
+            if nome not in disponiveis:
+                continue
             if nome == "portal" and not self.web.enabled:
                 continue
             self._atualizar_pagina(nome)
@@ -340,6 +364,9 @@ class Janela(Adw.ApplicationWindow):
         subtitulo.add_css_class("title-2")
         caixa.append(subtitulo)
         caixa.append(ui.legenda(
+            "Modo servidor: os dados vêm da API e o banco local não é usado. "
+            "Interface GTK4/libadwaita em Linux e macOS."
+            if self.remote_mode else
             "Mesmo banco e mesmas regras do aplicativo. "
             "Interface GTK4/libadwaita em Linux e macOS."))
 
@@ -383,16 +410,21 @@ class Janela(Adw.ApplicationWindow):
             self.linha_prestador.set_activatable(True)
             self.linha_prestador.connect("activated", lambda *_args: self._abrir_portal_prestador())
             grupo.add(self.linha_prestador)
-        self.linha_espaco = Adw.ActionRow(
-            title="Espaço em disco", subtitle="—", icon_name="drive-harddisk-symbolic")
-        abrir_pasta = Gtk.Button(label="Abrir pasta")
-        abrir_pasta.add_css_class("flat")
-        abrir_pasta.connect("clicked", lambda *_args: ui.abrir_caminho(ui.BASE, self))
-        self.linha_espaco.add_suffix(abrir_pasta)
-        grupo.add(self.linha_espaco)
-        self.linha_banco = Adw.ActionRow(
-            title="Banco local", subtitle="—", icon_name="x-office-database-symbolic")
-        grupo.add(self.linha_banco)
+        if self.remote_mode:
+            self.linha_servidor = Adw.ActionRow(
+                title="Servidor", subtitle="—", icon_name="network-server-symbolic")
+            grupo.add(self.linha_servidor)
+        else:
+            self.linha_espaco = Adw.ActionRow(
+                title="Espaço em disco", subtitle="—", icon_name="drive-harddisk-symbolic")
+            abrir_pasta = Gtk.Button(label="Abrir pasta")
+            abrir_pasta.add_css_class("flat")
+            abrir_pasta.connect("clicked", lambda *_args: ui.abrir_caminho(ui.BASE, self))
+            self.linha_espaco.add_suffix(abrir_pasta)
+            grupo.add(self.linha_espaco)
+            self.linha_banco = Adw.ActionRow(
+                title="Banco local", subtitle="—", icon_name="x-office-database-symbolic")
+            grupo.add(self.linha_banco)
 
         if self.web.enabled:
             grupo_links = Adw.PreferencesGroup(title="Links externos atuais")
@@ -424,6 +456,17 @@ class Janela(Adw.ApplicationWindow):
         self.cards["receber"].set_text(ui.brl(resumo.financeiro_a_receber))
         self.cards["recebido"].set_text(ui.brl(resumo.financeiro_recebido))
         self.cards["clientes"].set_text(str(resumo.clientes_ativos))
+        self._atualizar_banner_servidor()
+
+        if self.remote_mode:
+            url = getattr(self, "settings", None)
+            endereco = url.server_url if url is not None else ""
+            self.rotulo_armazenamento.set_text("Modo: servidor")
+            self.rotulo_banco.set_text("Sem banco local")
+            if getattr(self, "linha_servidor", None) is not None:
+                self.linha_servidor.set_subtitle(endereco or "URL não configurada")
+            self._aplicar_links(self._links_estado)
+            return
 
         if getattr(self, "linha_portal", None) is not None:
             info = self.web.client_info()
@@ -458,6 +501,21 @@ class Janela(Adw.ApplicationWindow):
         except OSError:
             self.linha_banco.set_subtitle(str(BANCO))
         self._aplicar_links(self._links_estado)
+
+    def _atualizar_banner_servidor(self):
+        banner = getattr(self, "banner_servidor", None)
+        if banner is None:
+            return
+        if not self.remote_mode:
+            banner.set_revealed(False)
+            return
+        info = self.service.health()
+        if info.status == 'ok':
+            banner.set_revealed(False)
+            return
+        detalhe = info.detail or "Abra o servidor antes de usar o modo DEV."
+        banner.set_title("Servidor indisponível — os dados estão vazios. " + detalhe)
+        banner.set_revealed(True)
 
     def _abrir_link_publico(self, porta):
         url = self._links_estado.get(str(porta), {}).get("url", "")
@@ -516,12 +574,7 @@ class Janela(Adw.ApplicationWindow):
         if os_id is None:
             return
         try:
-            publicado = fluxo.ultimo_documento(BANCO, os_id)
-            if not publicado:
-                raise ValueError("Esta OS não possui PDF publicado. Encerre-a ou use "
-                                 "Republicar PDF no Histórico.")
-            pdf = fluxo.validar_pdf_publicado(publicado)
-            rascunho = ext.criar_email_rascunho(BANCO, os_id, pdf)
+            rascunho = self.service.preparar_email(os_id)
             ui.info(self, "E-mail preparado",
                     f"Rascunho .eml com PDF:\n{rascunho}\n\nNenhum e-mail foi enviado.")
             ui.abrir_caminho(rascunho, self)
@@ -535,7 +588,7 @@ class Janela(Adw.ApplicationWindow):
         if os_id is None:
             return
         try:
-            caminho = ext.criar_rascunho_fiscal(BANCO, os_id)
+            caminho = self.service.preparar_nota(os_id)
             ui.info(self, "Rascunho fiscal",
                     f"Dados preparados em:\n{caminho}\n\nNENHUMA NOTA FISCAL FOI EMITIDA.")
         except Exception as erro:
@@ -684,7 +737,7 @@ class Janela(Adw.ApplicationWindow):
         if total:
             def desativar():
                 try:
-                    cad9.desativar_cliente(BANCO, cliente_id, "AUTOSEG desktop")
+                    self.service.desativar_cliente(cliente_id, "AUTOSEG desktop")
                 except Exception as erro:
                     ui.aviso_erro(self, "Cadastro", str(erro))
                     return
@@ -699,7 +752,7 @@ class Janela(Adw.ApplicationWindow):
 
         def excluir():
             try:
-                neg.cliente_excluir(BANCO, cliente_id, 0)
+                self.service.excluir_cliente(cliente_id)
             except Exception as erro:
                 ui.aviso_erro(self, "Exclusão bloqueada", str(erro))
                 return
@@ -885,9 +938,8 @@ class Janela(Adw.ApplicationWindow):
     def publicar_pdf(self, os_id, enviar_email=False):
         def worker():
             try:
-                caminho = fluxo.publicar_relatorio(BANCO, os_id)
-                if enviar_email:
-                    # Envio em segundo plano para não bloquear a interface.
+                caminho = self.service.publicar_pdf(os_id)
+                if enviar_email and not self.remote_mode:
                     try:
                         import gmail_service
                         gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)
@@ -992,13 +1044,7 @@ class Janela(Adw.ApplicationWindow):
             return
         os_id = valores[0]
         try:
-            publicado = fluxo.ultimo_documento(BANCO, os_id)
-            if not publicado:
-                fluxo.recuperar_relatorios_antigos(BANCO, os_id=os_id)
-                publicado = fluxo.ultimo_documento(BANCO, os_id)
-            if not publicado:
-                raise ValueError("PDF ainda não encontrado. Use Republicar PDF para esta OS.")
-            caminho = fluxo.validar_pdf_publicado(publicado)
+            caminho = self.service.pdf_publicado(os_id)
             ui.abrir_caminho(caminho, self)
         except Exception as erro:
             ui.aviso_erro(self, "PDF", str(erro))
@@ -1163,7 +1209,7 @@ class Janela(Adw.ApplicationWindow):
         valores = self._prestador_selecionado()
         if not valores:
             return
-        atual = cad9.prestador_admin(BANCO, valores[0])
+        atual = self.service.prestador_admin(valores[0])
         texto = ("Revogar a permissão ADMINISTRADOR?" if atual else
                  "Conceder acesso ADMINISTRADOR? Permite analisar, autorizar chamados "
                  "e acessar cadastros/financeiro.")
@@ -1172,7 +1218,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _definir_admin(self, prestador_id, ativo):
         try:
-            cad9.definir_admin(BANCO, prestador_id, ativo)
+            self.service.definir_admin(prestador_id, ativo)
         except Exception as erro:
             ui.aviso_erro(self, "Permissão", str(erro))
             return
@@ -1237,20 +1283,31 @@ class Janela(Adw.ApplicationWindow):
 
     def _pagina_conexao(self):
         pagina = Adw.PreferencesPage()
+        modo = "Servidor" if self.remote_mode else "Local"
+        descricao = (
+            "O app usa a API do servidor. O banco local não é aberto."
+            if self.remote_mode else
+            "O app abre em modo local, usando o banco deste computador.")
         grupo = Adw.PreferencesGroup(
-            title="Modo atual",
-            description="O app abre em modo local, usando o banco deste computador.")
+            title="Modo atual", description=f"{modo}. {descricao}")
         pagina.add(grupo)
 
-        local = Adw.ActionRow(
-            title="Local",
-            subtitle="Banco SQLite neste computador.",
-            icon_name="computer-symbolic")
-        grupo.add(local)
+        if not self.remote_mode:
+            local = Adw.ActionRow(
+                title="Local",
+                subtitle="Banco SQLite neste computador.",
+                icon_name="computer-symbolic")
+            grupo.add(local)
+        else:
+            servidor = Adw.ActionRow(
+                title="Servidor",
+                subtitle=self._url_servidor_salva() or "URL não configurada",
+                icon_name="network-server-symbolic")
+            grupo.add(servidor)
 
         grupo_servidor = Adw.PreferencesGroup(
             title="Servidor",
-            description="Teste a API e guarde o endereço para a próxima fase.")
+            description="Endereço da API usada pelo desktop.")
         pagina.add(grupo_servidor)
         self.conexao_url = Adw.EntryRow(title="URL do servidor")
         self.conexao_url.set_text(self._url_servidor_salva())
@@ -1334,7 +1391,7 @@ class Janela(Adw.ApplicationWindow):
             return
         atual = load_settings()
         novo = ConnectionSettings(
-            mode=ConnectionMode.LOCAL,
+            mode=atual.mode,
             server_url=url,
             web_access=atual.web_access,
             tunnel=atual.tunnel,
@@ -1345,6 +1402,11 @@ class Janela(Adw.ApplicationWindow):
         except OSError as erro:
             ui.aviso_erro(self, "Conexão", str(erro))
             return
+        self.settings = novo
+        if self.remote_mode and hasattr(self.service, "base_url"):
+            self.service.base_url = url
+            self.service.reset_offline()
+            self._atualizar_tudo()
         ui.toast(self, "Endereço do servidor salvo.")
 
     # ------------------------------------------------------------------
@@ -1608,10 +1670,11 @@ class Janela(Adw.ApplicationWindow):
         if not valores:
             return
         try:
-            url, destino = cad9.url_whatsapp(
-                BANCO, valores[0], self._links_estado.get(str(links9.PORTAS[1]), {}).get("url", ""))
-            ui.abrir_uri(url, self)
-            ui.toast(self, f"WhatsApp aberto para o {destino}.")
+            dados = self.service.url_whatsapp_chamado(
+                valores[0],
+                self._links_estado.get(str(links9.PORTAS[1]), {}).get("url", ""))
+            ui.abrir_uri(dados["url"], self)
+            ui.toast(self, f"WhatsApp aberto para o {dados['destino']}.")
         except Exception as erro:
             ui.aviso_erro(self, "WhatsApp", str(erro))
 
@@ -1622,8 +1685,8 @@ class Janela(Adw.ApplicationWindow):
 
         def analisar(observacao):
             try:
-                cad9.analisar(BANCO, valores[0], "AUTOSEG desktop",
-                              "Aguardando síndico", observacao)
+                self.service.analisar_chamado(
+                    valores[0], "Aguardando síndico", observacao)
             except Exception as erro:
                 ui.aviso_erro(self, "Chamado", str(erro))
                 return False
@@ -1645,7 +1708,7 @@ class Janela(Adw.ApplicationWindow):
                               "Informe o nome do síndico e o meio de confirmação.")
                 return False
             try:
-                cad9.confirmar(BANCO, valores[0], "AUTOSEG desktop — " + texto.strip(), True)
+                self.service.confirmar_chamado(valores[0], texto.strip())
             except Exception as erro:
                 ui.aviso_erro(self, "Confirmação", str(erro))
                 return False
@@ -1661,7 +1724,7 @@ class Janela(Adw.ApplicationWindow):
         if not valores:
             return
         try:
-            cad9.gerar_os(BANCO, valores[0], "AUTOSEG desktop")
+            self.service.gerar_os_chamado(valores[0])
         except Exception as erro:
             ui.aviso_erro(self, "Gerar OS", str(erro))
             return
@@ -1679,7 +1742,7 @@ class Janela(Adw.ApplicationWindow):
                 ui.aviso_erro(self, "Recusa", "Informe o motivo da recusa.")
                 return False
             try:
-                cad9.analisar(BANCO, valores[0], "AUTOSEG desktop", "Recusado", motivo)
+                self.service.analisar_chamado(valores[0], "Recusado", motivo)
             except Exception as erro:
                 ui.aviso_erro(self, "Recusa", str(erro))
                 return False
@@ -1709,7 +1772,7 @@ class Janela(Adw.ApplicationWindow):
                 ui.aviso_erro(self, "Vincular", "Informe um ID de cliente numérico.")
                 return False
             try:
-                cad9.validar_organizacao(BANCO, valores[0], cliente_id, "AUTOSEG desktop")
+                self.service.validar_organizacao(valores[0], cliente_id)
             except Exception as erro:
                 ui.aviso_erro(self, "Cadastro PJ", str(erro))
                 return False
@@ -1734,8 +1797,8 @@ class Janela(Adw.ApplicationWindow):
                 ui.aviso_erro(self, "Síndico", "Use: nome | telefone com DDD")
                 return False
             try:
-                cad9.atualizar_sindico(BANCO, valores[0], partes[0].strip(),
-                                       partes[1].strip(), "AUTOSEG desktop")
+                self.service.atualizar_sindico(
+                    valores[0], partes[0].strip(), partes[1].strip())
             except Exception as erro:
                 ui.aviso_erro(self, "WhatsApp", str(erro))
                 return False
@@ -1761,7 +1824,7 @@ class Janela(Adw.ApplicationWindow):
             def mesclar(destino_texto):
                 try:
                     destino = int(destino_texto.strip())
-                    cad9.mesclar_organizacoes(BANCO, origem, destino, "AUTOSEG desktop")
+                    self.service.mesclar_organizacoes(origem, destino)
                 except Exception as erro:
                     ui.aviso_erro(self, "Mesclagem", str(erro))
                     return False
@@ -1785,7 +1848,7 @@ class Janela(Adw.ApplicationWindow):
 
         def confirmar():
             try:
-                cad9.alterar_vinculo(BANCO, valores[0], aprovar, "AUTOSEG desktop")
+                self.service.alterar_vinculo(valores[0], aprovar)
             except Exception as erro:
                 ui.aviso_erro(self, "Vínculos", str(erro))
                 return
@@ -1824,7 +1887,7 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_catalogo(self):
-        registros = catalogo.listar(BANCO)
+        registros = self.service.catalogo_listar()
         termo = self.busca_catalogo.get_text().casefold().strip() if hasattr(
             self, "busca_catalogo") else ""
         linhas = []
@@ -1856,7 +1919,7 @@ class Janela(Adw.ApplicationWindow):
         valores = self._servico_selecionado()
         if not valores:
             return
-        registro = catalogo.obter(BANCO, valores[0])
+        registro = self.service.catalogo_obter(valores[0])
         if not registro:
             return
         ui.alerta(
@@ -1868,7 +1931,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _executar_exclusao_servico(self, servico_id):
         try:
-            catalogo.excluir(BANCO, servico_id)
+            self.service.catalogo_excluir(servico_id)
         except Exception as erro:
             ui.aviso_erro(self, "Catálogo", str(erro))
             return
@@ -1879,18 +1942,18 @@ class Janela(Adw.ApplicationWindow):
         valores = self._servico_selecionado()
         if not valores:
             return
-        registro = catalogo.obter(BANCO, valores[0])
+        registro = self.service.catalogo_obter(valores[0])
         if not registro:
             return
-        acao = catalogo.arquivar if registro["ativo"] else catalogo.reativar
-        rotulo = "Arquivar" if registro["ativo"] else "Reativar"
+        ativo = bool(registro["ativo"])
+        rotulo = "Arquivar" if ativo else "Reativar"
         ui.alerta(self, f"{rotulo} serviço", f"{rotulo} “{registro['nome']}”?",
-                  lambda: self._executar_arquivamento(acao, valores[0]),
-                  destrutivo=registro["ativo"], rotulo_ok=rotulo)
+                  lambda: self._executar_arquivamento(not ativo, valores[0]),
+                  destrutivo=ativo, rotulo_ok=rotulo)
 
-    def _executar_arquivamento(self, acao, servico_id):
+    def _executar_arquivamento(self, ativo, servico_id):
         try:
-            acao(BANCO, servico_id)
+            self.service.catalogo_definir_ativo(servico_id, ativo)
         except Exception as erro:
             ui.aviso_erro(self, "Catálogo", str(erro))
             return
@@ -1950,7 +2013,7 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_composicao(self):
         try:
-            self._config_composicao = composicao.carregar()
+            self._config_composicao = self.service.composicao_config()
         except Exception as erro:
             print("Composição de valores inválida:", erro)
             self._config_composicao = {"versao": 1, "componentes": []}
@@ -1985,8 +2048,8 @@ class Janela(Adw.ApplicationWindow):
 
     def _salvar_config_composicao(self):
         try:
-            composicao.salvar(self._config_composicao)
-            composicao.recalcular_tudo(BANCO)
+            self.service.composicao_salvar(self._config_composicao)
+            self.service.composicao_recalcular()
         except Exception as erro:
             ui.aviso_erro(self, "Composição inválida", str(erro))
             return False
@@ -2083,7 +2146,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _recalcular_composicoes(self):
         try:
-            totais = composicao.recalcular_tudo(BANCO)
+            totais = self.service.composicao_recalcular()
         except Exception as erro:
             ui.aviso_erro(self, "Recalcular composições", str(erro))
             return
@@ -2137,7 +2200,7 @@ class Janela(Adw.ApplicationWindow):
     def carregar_estoque(self):
         if hasattr(self, "rotulo_caixa"):
             try:
-                resumo = empresa.resumo(BANCO)
+                resumo = self.service.empresa_resumo()
                 self.rotulo_caixa.set_text(
                     "Empresa: capital "
                     f"{ui.brl(resumo['aportes_centavos'] / 100)} · despesas "
@@ -2146,7 +2209,7 @@ class Janela(Adw.ApplicationWindow):
             except Exception:
                 self.rotulo_caixa.set_text(
                     "Empresa: não foi possível carregar os lançamentos.")
-        registros = estoque.listar(BANCO)
+        registros = self.service.listar_materiais_estoque()
         termo = estoque._chave(self.busca_estoque.get_text()) if hasattr(
             self, "busca_estoque") else ""
         linhas = []
@@ -2218,7 +2281,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _executar_exclusao_material(self, produto_id):
         try:
-            resultado = estoque.excluir(BANCO, produto_id)
+            resultado = self.service.estoque_excluir(produto_id)
         except Exception as erro:
             ui.aviso_erro(self, "Estoque", str(erro))
             return
@@ -2251,7 +2314,7 @@ class Janela(Adw.ApplicationWindow):
         if not pre:
             ui.info(self, "Importação", "Nenhum material encontrado no YAML.")
             return
-        existentes = {estoque._chave(x["nome"]) for x in estoque.listar(BANCO)}
+        existentes = {estoque._chave(x["nome"]) for x in self.service.listar_materiais_estoque()}
         repetidos = [x["nome"] for x in pre if estoque._chave(x["nome"]) in existentes]
         if repetidos:
             ui.aviso_erro(self, "Importação", "Já cadastrados: " + ", ".join(repetidos[:10]))
@@ -2266,7 +2329,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _executar_importacao_materiais(self, materiais):
         try:
-            estoque.importar_lote(BANCO, materiais)
+            self.service.estoque_importar_lote(materiais)
         except Exception as erro:
             ui.aviso_erro(self, "Importação YAML", str(erro))
             return

@@ -329,7 +329,7 @@ class DialogoEstoqueOS(Adw.Dialog):
     def __init__(self, parent, ao_adicionar):
         super().__init__()
         self.parent = parent
-        self.produtos = estoque.listar(BANCO, ativos=True)
+        self.produtos = _servico(self.parent).listar_materiais_estoque(ativos=True)
         self.ao_adicionar = ao_adicionar
         self.set_title("Selecionar material do estoque")
         self.set_content_width(520)
@@ -388,7 +388,7 @@ def _os_tem_composicao_modular(dados):
                 and comp_atual.get("base_percentuais"))
 
 
-def _composicao_da_os(dados, total, materiais, mao_obra, tempo_horas):
+def _composicao_da_os(dados, total, materiais, mao_obra, tempo_horas, config=None):
     """Recalcula a composição preservando a base modular usada pela OS.
 
     OSs criadas ou editadas pelo portal guardam a base em ``base_percentuais``.
@@ -414,12 +414,12 @@ def _composicao_da_os(dados, total, materiais, mao_obra, tempo_horas):
             materiais_centavos=materiais_centavos,
             mao_obra_centavos=mao_obra_centavos,
             horas=tempo_horas,
-            base_percentuais=base), base
+            base_percentuais=base, config=config), base
     return composicao.calcular(
         total_centavos=total_centavos,
         materiais_centavos=materiais_centavos,
         horas=tempo_horas,
-        mao_obra_centavos=mao_obra_centavos), ""
+        mao_obra_centavos=mao_obra_centavos, config=config), ""
 
 
 class DialogoOS(Adw.Dialog):
@@ -436,6 +436,7 @@ class DialogoOS(Adw.Dialog):
         self.original_portal = None
         self.andamento = None
         self.encerramento = None
+        self.config_composicao = _servico(janela).composicao_config()
         self._carregar()
         if self.os_id is None and self.importado:
             self.materiais = [dict(m) for m in self.importado.get("materiais", [])]
@@ -719,7 +720,7 @@ class DialogoOS(Adw.Dialog):
         self._atualizar_materiais()
 
     def _do_estoque(self):
-        if not estoque.listar(BANCO, ativos=True):
+        if not _servico(self.janela).listar_materiais_estoque(ativos=True):
             ui.info(self.janela, "Estoque", "Nenhum produto cadastrado no estoque.")
             return
         DialogoEstoqueOS(self.janela, self._inserir_material).present(self.janela)
@@ -814,7 +815,7 @@ class DialogoOS(Adw.Dialog):
 
     def _iniciar_atendimento(self):
         try:
-            aten.iniciar(BANCO, self.os_id)
+            _servico(self.janela).iniciar_os(self.os_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Não foi possível iniciar", str(erro))
             return
@@ -865,7 +866,8 @@ class DialogoOS(Adw.Dialog):
         tempo_horas = ui.numero(self.tempo_horas.get_text())
         try:
             comp, base_percentuais = _composicao_da_os(
-                self.dados, total, materiais, mao_obra, tempo_horas)
+                self.dados, total, materiais, mao_obra, tempo_horas,
+                config=self.config_composicao)
         except ValueError as erro:
             ui.aviso_erro(self.janela, "Composição do valor", str(erro))
             return
@@ -879,7 +881,8 @@ class DialogoOS(Adw.Dialog):
                            or str((self.dados or {}).get("base_percentuais") or "").strip()
                            or "total")
         comp_json = composicao.para_json(comp)
-        composicao.instalar_banco(BANCO)
+        if getattr(self.janela.service, "mode", "local") == "local":
+            composicao.instalar_banco(BANCO)
         observacoes = self.observacoes.get_texto()
         texto_adicional = self.texto_adicional.get_texto()
         dados_incompletos = 1 if completude.os_faltantes({
@@ -1042,7 +1045,7 @@ class DialogoAtribuicao(Adw.Dialog):
 
     def _atribuir(self, prestador_id):
         try:
-            mudou = ext.atribuir(BANCO, self.os_id, prestador_id)
+            mudou = _servico(self.janela).atribuir_os(self.os_id, prestador_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Atribuição", str(erro))
             return
@@ -1052,7 +1055,7 @@ class DialogoAtribuicao(Adw.Dialog):
 
     def _liberar(self):
         try:
-            ext.desatribuir(BANCO, self.os_id)
+            _servico(self.janela).desatribuir_os(self.os_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Atribuição", str(erro))
             return
@@ -1104,7 +1107,7 @@ class DialogoSenhaCliente(Adw.Dialog):
             ui.aviso_erro(self.janela, "Senha", "As duas senhas não coincidem.")
             return
         try:
-            fluxo.definir_senha_cliente(BANCO, self.cliente_id, senha)
+            _servico(self.janela).definir_senha_cliente(self.cliente_id, senha)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Acesso do cliente", str(erro))
             return
@@ -1155,12 +1158,14 @@ class DialogoPrestador(Adw.Dialog):
             ui.aviso_erro(self.janela, "Documento inválido", str(erro))
             return
         try:
-            ext.cadastrar(BANCO, nome=self.nome.get_text().strip(),
-                          email=self.email.get_text().strip(),
-                          senha=self.senha.get_text(),
-                          telefone=self.telefone.get_text().strip(),
-                          documento=documento,
-                          especialidade=self.especialidade.get_text().strip())
+            _servico(self.janela).criar_prestador({
+                "nome": self.nome.get_text().strip(),
+                "email": self.email.get_text().strip(),
+                "senha": self.senha.get_text(),
+                "telefone": self.telefone.get_text().strip(),
+                "documento": documento,
+                "especialidade": self.especialidade.get_text().strip(),
+            })
         except Exception as erro:
             ui.aviso_erro(self.janela, "Cadastro", str(erro))
             return
@@ -1206,7 +1211,8 @@ class DialogoRedefinirSenhaPrestador(Adw.Dialog):
             ui.aviso_erro(self.janela, "Senhas", "As duas senhas são diferentes.")
             return
         try:
-            ext.redefinir_senha_prestador_desktop(BANCO, self.prestador_id, senha)
+            _servico(self.janela).redefinir_senha_prestador(
+                self.prestador_id, senha)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Senha", str(erro))
             return
@@ -1219,7 +1225,7 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.prestador_id = prestador_id
-        self.config = ext.obter_config_prestador(BANCO, prestador_id)
+        self.config = _servico(janela).obter_config_prestador(prestador_id)
         self.documento_atual = _servico(janela).documento_prestador(prestador_id)
         self.set_title("Integrações e pagamentos")
         self.set_content_width(620)
@@ -1264,13 +1270,14 @@ class DialogoIntegracoesPrestador(Adw.Dialog):
         dados["email_remetente"] = self.remetente.get_text().strip()
         dados["dados_bancarios_texto"] = self.dados.get_texto()
         try:
-            ext.definir_documento_prestador(BANCO, self.prestador_id,
-                                            self.documento.get_text())
+            _servico(self.janela).definir_documento_prestador(
+                self.prestador_id, self.documento.get_text())
         except Exception as erro:
             ui.aviso_erro(self.janela, "CNPJ inválido", str(erro))
             return
         try:
-            ext.salvar_config_prestador(BANCO, self.prestador_id, dados)
+            _servico(self.janela).salvar_config_prestador(
+                self.prestador_id, dados)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Configuração inválida", str(erro))
             return
@@ -1283,7 +1290,7 @@ class DialogoServico(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.servico_id = servico_id
-        self.registro = catalogo.obter(BANCO, servico_id) if servico_id else None
+        self.registro = _servico(janela).catalogo_obter(servico_id) if servico_id else None
         info = importado or self.registro or {}
         self.set_title("Editar serviço" if servico_id else "Novo serviço")
         self.set_content_width(680)
@@ -1362,7 +1369,7 @@ class DialogoServico(Adw.Dialog):
             "materiais": self.materiais.get_texto(),
         }
         try:
-            catalogo.salvar(BANCO, dados, self.servico_id)
+            _servico(self.janela).catalogo_salvar(dados, self.servico_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Serviço inválido", str(erro))
             return
@@ -1376,7 +1383,7 @@ class DialogoMaterialEstoque(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.produto_id = produto_id
-        registro = next((x for x in estoque.listar(BANCO) if x["id"] == produto_id), {})
+        registro = (_servico(janela).estoque_obter(produto_id) or {})
         self.set_title("Editar material" if produto_id else "Cadastrar material")
         self.set_content_width(560)
         self.set_content_height(520)
@@ -1411,11 +1418,14 @@ class DialogoMaterialEstoque(Adw.Dialog):
 
     def _salvar(self):
         try:
-            estoque.cadastrar(
-                BANCO, nome=self.nome.get_text().strip(), sku=self.sku.get_text().strip(),
-                unidade=self.unidade.get_text().strip(),
-                custo=self.custo.get_text().strip(), venda=self.venda.get_text().strip(),
-                minimo=self.minimo.get_text().strip(), identificador=self.produto_id)
+            _servico(self.janela).estoque_cadastrar({
+                "nome": self.nome.get_text().strip(),
+                "sku": self.sku.get_text().strip(),
+                "unidade": self.unidade.get_text().strip(),
+                "custo": self.custo.get_text().strip(),
+                "venda": self.venda.get_text().strip(),
+                "minimo": self.minimo.get_text().strip(),
+            }, self.produto_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Material inválido", str(erro))
             return
@@ -1455,8 +1465,9 @@ class DialogoAjusteEstoque(Adw.Dialog):
 
     def _salvar(self):
         try:
-            estoque.ajuste(BANCO, self.produto_id, self.quantidade.get_text(),
-                           self.motivo.get_text().strip())
+            _servico(self.janela).estoque_ajuste(
+                self.produto_id, self.quantidade.get_text(),
+                self.motivo.get_text().strip())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Movimentação inválida", str(erro))
             return
@@ -1489,7 +1500,7 @@ class DialogoHistoricoEstoque(Adw.Dialog):
             ("OS", 70, False, 0.5),
             ("Motivo", 0, True, 0.0),
         ])
-        registros = estoque.movimentos(BANCO, produto_id, 300)
+        registros = _servico(self.janela).estoque_movimentos(produto_id, 300)
         tabela.definir_linhas([
             (r["criado_em"], r["nome"], f"{r['delta']:+g}", r["tipo"],
              r["os_id"] or "—", r["motivo"])
@@ -1570,8 +1581,8 @@ class DialogoResponsavel(Adw.Dialog):
         org = self._org()
         pessoa = self._pessoa()
         try:
-            papel = cad9.atribuir_responsavel(BANCO, org["id"], pessoa["id"],
-                                              "Desktop AUTOSEG")
+            papel = _servico(self.janela).atribuir_responsavel(
+                org["id"], pessoa["id"])
         except Exception as erro:
             ui.aviso_erro(self.janela, "Nomeação não realizada", str(erro))
             return
@@ -1585,7 +1596,7 @@ class DialogoResponsavel(Adw.Dialog):
             ui.toast(self.janela, "Esta organização não tem responsável nomeado.")
             return
         try:
-            cad9.remover_responsavel(BANCO, org["id"], "Desktop AUTOSEG")
+            _servico(self.janela).remover_responsavel(org["id"])
         except Exception as erro:
             ui.aviso_erro(self.janela, "Remoção não realizada", str(erro))
             return
@@ -1671,16 +1682,20 @@ class DialogoOSRapida(Adw.Dialog):
             ui.aviso_erro(self.janela, "Forma de pagamento",
                           "Escolha a forma de pagamento antes de criar a OS.")
             return
-        dados = {"cliente_id": str(cliente["id"]), "descricao": descricao, "tecnico": "",
-                 "forma_pagamento": pagamento, "valor_mao_obra": "0",
-                 "valor_materiais_manual": "0", "materiais_presentes": "1",
-                 "acao_status": "salvar"}
+        entrada = OSInput(
+            os_id=None, cliente_id=int(cliente["id"]), tecnico="",
+            descricao=descricao, valor_mao_obra=0.0, valor_materiais=0.0,
+            custo_materiais=0.0, valor_total=0.0, forma_pagamento=pagamento,
+            urgencia="Normal", observacoes="", texto_adicional="",
+            dados_incompletos=0, tempo_horas=0.0, composicao_json="",
+            base_percentuais="total", materiais=(), acao="", relato="",
+            motivo="", imagens=())
         try:
-            oid = neg.os_salvar(BANCO, dados, 0)
+            resultado = _servico(self.janela).salvar_os(entrada)
             escolhido = int(self.combo_prestador.get_selected())
             if escolhido > 0 and self.prestadores:
-                ext.atribuir(BANCO, oid, self.prestadores[escolhido - 1]["id"],
-                             ator="Desktop AUTOSEG")
+                _servico(self.janela).atribuir_os(
+                    resultado.os_id, self.prestadores[escolhido - 1]["id"])
         except Exception as erro:
             ui.aviso_erro(self.janela, "Não foi possível criar a OS", str(erro))
             return
@@ -1809,6 +1824,7 @@ class DialogoComposicao(Adw.Dialog):
                  tipo_servico=""):
         super().__init__()
         self.janela = janela
+        self.config_composicao = _servico(janela).composicao_config()
         self.set_title("Composição do valor")
         self.set_content_width(760)
         self.set_content_height(720)
@@ -1852,7 +1868,8 @@ class DialogoComposicao(Adw.Dialog):
                 total_centavos=composicao.centavos_de_reais(self.total.get_text()),
                 materiais_centavos=composicao.centavos_de_reais(self.materiais.get_text()),
                 horas=ui.numero(self.horas.get_text()),
-                tipo_servico=self.tipo.get_text().strip())
+                tipo_servico=self.tipo.get_text().strip(),
+                config=self.config_composicao)
             linhas = [
                 (item["nome"], ui.brl(item["valor_centavos"] / 100),
                  f"{item['percentual']:.2f}%".replace(".", ","))
@@ -1881,7 +1898,6 @@ class DialogoCaixaEmpresa(Adw.Dialog):
         super().__init__()
         self.janela = janela
         self.ao_atualizar = ao_atualizar
-        empresa.instalar(BANCO)
         self.set_title("Caixa e investimentos")
         self.set_content_width(900)
         self.set_content_height(700)
@@ -1944,8 +1960,8 @@ class DialogoCaixaEmpresa(Adw.Dialog):
 
     def _carregar(self):
         try:
-            resumo = empresa.resumo(BANCO)
-            movimentos = empresa.listar(BANCO)
+            resumo = _servico(self.janela).empresa_resumo()
+            movimentos = _servico(self.janela).empresa_listar()
         except Exception as erro:
             ui.aviso_erro(self.janela, "Caixa da empresa", str(erro))
             return
@@ -2003,7 +2019,7 @@ class DialogoCaixaEmpresa(Adw.Dialog):
 
     def _confirmar_arquivamento(self, movimento_id):
         try:
-            empresa.arquivar(BANCO, movimento_id, ator="Desktop")
+            _servico(self.janela).empresa_arquivar(movimento_id)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Caixa da empresa", str(erro))
             return
@@ -2110,18 +2126,18 @@ class DialogoNovoMovimentoEmpresa(Adw.Dialog):
             if indice_os > 0 and indice_os <= len(self.oses):
                 os_id = self.oses[indice_os - 1]["id"]
         try:
-            empresa.registrar(
-                BANCO, tipo=tipo,
-                descricao=self.descricao.get_text().strip(),
-                valor=self.valor.get_text().strip(),
-                data=self.data.get_text().strip(),
-                prestador_id=prestador_id,
-                os_id=os_id,
-                categoria=self.categoria.get_text().strip(),
-                finalidade=(self.finalidade.get_text().strip()
-                            if tipo == "aporte" else ""),
-                observacao=self.observacao.get_texto(),
-                criado_por="Desktop")
+            _servico(self.janela).empresa_registrar({
+                "tipo": tipo,
+                "descricao": self.descricao.get_text().strip(),
+                "valor": self.valor.get_text().strip(),
+                "data": self.data.get_text().strip(),
+                "prestador_id": prestador_id,
+                "os_id": os_id,
+                "categoria": self.categoria.get_text().strip(),
+                "finalidade": (self.finalidade.get_text().strip()
+                               if tipo == "aporte" else ""),
+                "observacao": self.observacao.get_texto(),
+            })
         except Exception as erro:
             ui.aviso_erro(self, "Lançamento inválido", str(erro))
             return

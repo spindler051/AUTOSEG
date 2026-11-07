@@ -31,6 +31,8 @@ import atendimento_os as aten
 import cadastros_v9 as cad9
 import estoque_materiais as estoque
 import catalogo_servicos as catalogo
+import composicao
+import empresa_financeiro as empresa
 import produtividade_os as prod
 
 PASTA_APP = Path(__file__).resolve().parent
@@ -44,6 +46,9 @@ def _instalar_base():
     cad9.instalar(BANCO)
     estoque.instalar(BANCO)
     catalogo.instalar(BANCO)
+    empresa.instalar(BANCO)
+    composicao.instalar()
+    composicao.instalar_banco(BANCO)
     prod.instalar(BANCO)
 
 

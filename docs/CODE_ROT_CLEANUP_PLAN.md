@@ -20,7 +20,7 @@ Baseline em 2026-11-07, após a suíte de testes e a limpeza dos scripts:
 | `except Exception`/bare except | **152** | nem todos são ruins; 32 são silenciosos |
 | Exceções amplas silenciosas | **32** | `pass`/`continue`/`return None` engolindo erro |
 | Funções com 60+ linhas | **56** | algumas são handlers aninhados; mede complexidade |
-| Classes com 400+ linhas | **5** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS` e afins |
+| Classes com 400+ linhas | **6** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS`, `LocalService`, `HttpService` |
 | SQL direto em UI/HTTP | **43 linhas** | restante no site; shell GTK em zero |
 | TODO/FIXME sem issue | **0** | após o ajuste do auditor |
 | Arquivos grandes | `portal_prestador.py` ~3.4k, `gtk_app.py` ~2.3k, `gtk_dialogos.py` ~2.2k | monólitos conhecidos |

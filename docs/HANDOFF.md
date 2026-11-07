@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-07
-**Versão:** `9.6.0-dev.54`
+**Versão:** `9.6.0-dev.55`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -18,6 +18,8 @@ Este é o ponto de retomada. O índice completo fica em
   orçamento, notas fiscais e e-mails em rascunho.
 - Permissões e aprovações documentadas; `policy.yaml` carregado em runtime.
 - Numeração configurável de OS, com aliases para números antigos.
+- DEV em modo servidor: o app usa a API e não abre o banco local.
+- Sem servidor, as listas ficam vazias e a janela mostra aviso de indisponível.
 - Workaholic integrado apenas na fatia de clientes; o restante continua no
   código legado.
 
@@ -31,7 +33,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **301 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **305 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.
@@ -45,7 +47,8 @@ Este é o ponto de retomada. O índice completo fica em
 2. **Login/auth:** conta local × conta do servidor, token revogável e troca real
    de modo no GTK; tudo atrás de flag até revisão externa.
 3. **Permissões:** ligar a política pura ao `AppService` e aplicar no servidor.
-4. **API remota:** expor clientes e OS; completar `HttpService`; depois sync.
+4. **API remota:** clientes, OS, prestadores, financeiro, PJ e PDF já passam
+   pelo servidor; faltam catálogo, estoque, composição e sync.
 5. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de
    revisão externa em dinheiro/OS/PDF.
 6. **CI:** workflows continuam modificados e não publicados por falta de token

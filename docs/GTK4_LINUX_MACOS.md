@@ -124,14 +124,17 @@ grim /tmp/autoseg.png   # screenshot Wayland nativo
 AUTOSEG_SMOKE=1 python3 gtk_app.py
 ```
 
-Para testar com dados fictícios:
+Para testar com dados fictícios no modo servidor:
 
 ```bash
 AUTOSEG_DEV=1 GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db" \
   python3 CRIAR_CADASTROS_FICTICIOS_DEV.py
-AUTOSEG_DEV=1 GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db" \
-  CLIENTE_PORT=8865 PRESTADOR_PORT=8866 python3 gtk_app.py
+./INICIAR_SERVIDOR_DEV.command    # terminal 1
+./INICIAR_AUTOSEG_DEV.command     # terminal 2
 ```
+
+O app DEV não abre o banco local. Sem o servidor, as listas ficam vazias e a
+janela mostra o aviso de servidor indisponível.
 
 ## macOS
 

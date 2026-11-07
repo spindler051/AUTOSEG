@@ -8,8 +8,14 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import api_server
+import atendimento_os
 import banco
 import cadastros_v9 as cad9
+import catalogo_servicos
+import composicao
+import empresa_financeiro
+import estoque_materiais
 import fluxo_os
 import prestadores_ext as ext
 from application.contracts import ServicoIndisponivelError, ValidacaoError
@@ -229,15 +235,16 @@ class ConnectionSettingsTest(unittest.TestCase):
         carregado = load_settings(self.path)
         self.assertTrue(carregado.web_access)
 
-    def test_remote_without_url_fails_instead_of_falling_back(self):
+    def test_remote_without_url_returns_unavailable_service(self):
         config = ConnectionSettings(mode=ConnectionMode.REMOTE, server_url='')
-        with self.assertRaises(ServicoIndisponivelError):
-            build_service('/tmp/nao-usado.db', config)
+        servico = build_service('/tmp/nao-usado.db', config)
+        self.assertEqual(servico.mode, 'remote')
+        self.assertEqual(servico.health().status, 'unavailable')
 
 
 class _HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != '/api/v1/health':
+        if self.path not in ('/api/v1/health','/api/v1/desktop/health'):
             self.send_response(404)
             self.end_headers()
             return
@@ -270,12 +277,129 @@ class HttpServiceTest(unittest.TestCase):
         self.assertEqual(info.mode, 'remote')
         self.assertEqual(info.version, '9.9.9')
 
-    def test_client_slice_is_not_silently_local(self):
-        servico = HttpService(self.base)
-        with self.assertRaises(ServicoIndisponivelError):
-            servico.listar_clientes('')
+    def test_reads_degrade_but_writes_do_not_fall_back_to_local(self):
+        servico = HttpService('http://127.0.0.1:1', timeout=0.2)
+        self.assertEqual(servico.listar_clientes(''), [])
+        self.assertIsNone(servico.obter_cliente(1))
+        self.assertTrue(servico.health().status != 'ok')
         with self.assertRaises(ServicoIndisponivelError):
             servico.salvar_cliente(None, {'nome': 'X'})
+
+
+class DesktopApiTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='desktop_api_')
+        self.db = str(Path(self.tmp.name) / 'api.db')
+        banco.criar_banco(self.db)
+        ext.instalar(self.db)
+        fluxo_os.instalar(self.db)
+        atendimento_os.instalar(self.db)
+        cad9.instalar(self.db)
+        estoque_materiais.instalar(self.db)
+        catalogo_servicos.instalar(self.db)
+        empresa_financeiro.instalar(self.db)
+        composicao.instalar()
+        composicao.instalar_banco(self.db)
+        self.server = api_server.start(self.db, '127.0.0.1', 0)
+        self.base = f'http://127.0.0.1:{self.server.server_address[1]}'
+        self.service = HttpService(self.base)
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.tmp.cleanup()
+
+    def test_health_and_client_roundtrip(self):
+        info = self.service.health()
+        self.assertEqual(info.status, 'ok')
+        self.assertEqual(info.mode, 'remote')
+        criado = self.service.salvar_cliente(
+            None, {'tipo_pessoa': 'Jurídica', 'documento': '',
+                   'nome': 'Condomínio API', 'status': 'Ativo'})
+        self.assertGreater(criado.id, 0)
+        lista = self.service.listar_clientes('API')
+        self.assertEqual([item.nome for item in lista], ['Condomínio API'])
+        self.assertEqual(self.service.contar_clientes_ativos(), 1)
+        self.assertEqual(self.service.obter_cliente(criado.id).campos['nome'],
+                         'Condomínio API')
+        self.assertIsNone(self.service.obter_cliente(99999))
+
+    def test_catalog_stock_company_and_composition_roundtrip(self):
+        servico_id = self.service.catalogo_salvar({
+            'nome': 'Serviço API', 'descricao': 'Teste',
+            'preco_servico': '100', 'materiais': '',
+            'relatorio_padrao': ''})
+        self.assertEqual(self.service.catalogo_obter(servico_id)['nome'],
+                         'Serviço API')
+        produto_id = self.service.estoque_cadastrar({
+            'nome': 'Material API', 'sku': 'API1', 'unidade': 'un',
+            'custo': '5', 'venda': '10', 'minimo': '1'})
+        self.assertEqual(self.service.estoque_obter(produto_id)['nome'],
+                         'Material API')
+        self.service.estoque_ajuste(produto_id, '+3', 'teste')
+        self.assertEqual(len(self.service.estoque_movimentos(produto_id)), 1)
+        investidor = self.service.criar_prestador({
+            'nome': 'Investidor API', 'email': 'investidor@example.invalid',
+            'senha': 'senha-ficticia-123'})
+        self.service.empresa_registrar({
+            'tipo': 'aporte', 'descricao': 'Aporte API', 'valor': '100',
+            'data': '', 'prestador_id': investidor, 'os_id': None,
+            'categoria': 'Capital', 'finalidade': 'Teste', 'observacao': ''})
+        self.assertEqual(self.service.empresa_resumo()['aportes_centavos'],
+                         10000)
+        self.assertIn('componentes', self.service.composicao_config())
+
+    def test_provider_and_os_actions_roundtrip(self):
+        prestador = self.service.criar_prestador({
+            'nome': 'Técnico API', 'email': 'tecnico-api@example.invalid',
+            'senha': 'senha-ficticia-12345', 'telefone': '',
+            'documento': '', 'especialidade': 'Teste'})
+        self.assertGreater(prestador, 0)
+        self.assertEqual([p.nome for p in self.service.listar_prestadores()],
+                         ['Técnico API'])
+        self.service.definir_admin(prestador, True)
+        self.assertTrue(self.service.prestador_admin(prestador))
+        cliente = self.service.salvar_cliente(
+            None, {'tipo_pessoa': 'Jurídica', 'documento': '',
+                   'nome': 'Condomínio Ações', 'status': 'Ativo'})
+        from application.contracts import OSInput
+        resultado = self.service.salvar_os(OSInput(
+            os_id=None, cliente_id=cliente.id, tecnico='',
+            descricao='Ações via API', valor_mao_obra=0,
+            valor_materiais=0, custo_materiais=0, valor_total=0,
+            forma_pagamento='PIX', urgencia='Normal', observacoes='',
+            texto_adicional='', dados_incompletos=0, tempo_horas=0,
+            composicao_json='', base_percentuais='total', materiais=(),
+            acao='', relato='', motivo='', imagens=()))
+        self.assertTrue(self.service.atribuir_os(resultado.os_id, prestador))
+        self.service.iniciar_os(resultado.os_id)
+        contexto = self.service.contexto_atribuicao(resultado.os_id)
+        self.assertEqual(contexto['atual_id'], prestador)
+        self.assertEqual(
+            self.service.obter_cliente_ativo(cliente.id).nome,
+            'Condomínio Ações')
+        self.service.desativar_cliente(cliente.id)
+        self.assertIsNone(self.service.obter_cliente_ativo(cliente.id))
+
+    def test_os_create_and_context(self):
+        cliente = self.service.salvar_cliente(
+            None, {'tipo_pessoa': 'Jurídica', 'documento': '',
+                   'nome': 'Condomínio OS', 'status': 'Ativo'})
+        from application.contracts import OSInput
+        entrada = OSInput(
+            os_id=None, cliente_id=cliente.id, tecnico='',
+            descricao='Teste via API', valor_mao_obra=0,
+            valor_materiais=0, custo_materiais=0, valor_total=0,
+            forma_pagamento='PIX', urgencia='Normal', observacoes='',
+            texto_adicional='', dados_incompletos=0, tempo_horas=0,
+            composicao_json='', base_percentuais='total', materiais=(),
+            acao='', relato='', motivo='', imagens=())
+        resultado = self.service.salvar_os(entrada)
+        self.assertEqual(resultado.os_id, 1)
+        self.assertEqual(len(self.service.listar_os_ativas()), 1)
+        contexto = self.service.contexto_os(resultado.os_id)
+        self.assertEqual(contexto['dados']['descricao'], 'Teste via API')
+        self.assertEqual(self.service.resumo_inicio().os_abertas, 1)
 
 
 if __name__ == '__main__':

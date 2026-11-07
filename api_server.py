@@ -2,7 +2,7 @@
 
 This process serves only ``/api/v1``. It does not import the HTML portals, does
 not open the client/provider sites and has no Cloudflare dependency. The GTK
-desktop can point at this process when remote mode is ready.
+desktop uses this process in server mode.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+import api_desktop
 import api_financeiro as api_financeiro
 from versao_app import versao_local
 
@@ -33,16 +34,18 @@ class _APIHandler(BaseHTTPRequestHandler):
         self._encaminhar('GET')
 
     def do_POST(self):
-        self._metodo_nao_permitido()
+        self._encaminhar('POST')
 
     def do_PUT(self):
-        self._metodo_nao_permitido()
+        self._encaminhar('PUT')
 
     def do_DELETE(self):
-        self._metodo_nao_permitido()
+        self._encaminhar('DELETE')
 
     def _encaminhar(self, metodo):
         caminho = urlparse(self.path).path
+        if api_desktop.handle(self, caminho, self.server.banco, metodo):
+            return
         if caminho == api_financeiro.API_PREFIX or caminho.startswith(
                 api_financeiro.API_PREFIX + '/'):
             api_financeiro.handle(self, caminho, self.server.banco, metodo)
@@ -108,6 +111,10 @@ def main(argv=None):
     from banco import BANCO, criar_banco
     import atendimento_os as aten
     import cadastros_v9 as cad9
+    import catalogo_servicos as catalogo
+    import composicao
+    import empresa_financeiro as empresa
+    import estoque_materiais as estoque
     import fluxo_os as fluxo
     import prestadores_ext as ext
     import produtividade_os as prod
@@ -117,6 +124,11 @@ def main(argv=None):
     fluxo.instalar(banco)
     aten.instalar(banco)
     cad9.instalar(banco)
+    estoque.instalar(banco)
+    catalogo.instalar(banco)
+    empresa.instalar(banco)
+    composicao.instalar()
+    composicao.instalar_banco(banco)
     prod.instalar(banco)
     api_financeiro.instalar(banco)
 

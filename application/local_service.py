@@ -9,8 +9,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Mapping
 
+import atendimento_os as aten
 import cadastros_v9 as cad9
+import catalogo_servicos as catalogo
 import completude
+import composicao
+import empresa_financeiro as empresa
+import estoque_materiais as estoque
+import fluxo_os as fluxo
+import portal_negocios as neg
 import prestadores_ext as ext
 from banco import BANCO
 from integracao import clientes as clientes_core
@@ -398,6 +405,45 @@ class LocalService:
             return None
         return ClienteOpcao(id=int(linha['id']), nome=str(linha['nome'] or ''))
 
+    def url_whatsapp_chamado(self, chamado_id: int,
+                             link_publico: str = '') -> dict:
+        url, destino = cad9.url_whatsapp(
+            self.banco, int(chamado_id), str(link_publico or ''))
+        return {'url': url, 'destino': destino}
+
+    def analisar_chamado(self, chamado_id: int, decisao: str,
+                         observacao: str = '') -> None:
+        cad9.analisar(self.banco, int(chamado_id), 'Desktop AUTOSEG',
+                      str(decisao), str(observacao or ''))
+
+    def confirmar_chamado(self, chamado_id: int, confirmacao: str) -> None:
+        cad9.confirmar(self.banco, int(chamado_id),
+                       'Desktop AUTOSEG — ' + str(confirmacao).strip(), True)
+
+    def gerar_os_chamado(self, chamado_id: int) -> int:
+        return int(cad9.gerar_os(self.banco, int(chamado_id),
+                                 'Desktop AUTOSEG'))
+
+    def validar_organizacao(self, organizacao_id: int,
+                            cliente_id: int) -> None:
+        cad9.validar_organizacao(
+            self.banco, int(organizacao_id), int(cliente_id),
+            'Desktop AUTOSEG')
+
+    def atualizar_sindico(self, organizacao_id: int, nome: str,
+                          telefone: str) -> None:
+        cad9.atualizar_sindico(
+            self.banco, int(organizacao_id), str(nome or ''),
+            str(telefone or ''), 'Desktop AUTOSEG')
+
+    def mesclar_organizacoes(self, origem: int, destino: int) -> None:
+        cad9.mesclar_organizacoes(
+            self.banco, int(origem), int(destino), 'Desktop AUTOSEG')
+
+    def alterar_vinculo(self, vinculo_id: int, aprovar: bool) -> None:
+        cad9.alterar_vinculo(
+            self.banco, int(vinculo_id), bool(aprovar), 'Desktop AUTOSEG')
+
     def salvar_os(self, dados: OSInput) -> OSResultado:
         from application.os_write import salvar_os
         try:
@@ -445,6 +491,180 @@ class LocalService:
             return None
         return self._cliente(registro)
 
+    def desativar_cliente(self, cliente_id: int, motivo: str = '') -> None:
+        cad9.desativar_cliente(self.banco, int(cliente_id),
+                               motivo or 'Desktop AUTOSEG')
+
+    def excluir_cliente(self, cliente_id: int) -> None:
+        neg.cliente_excluir(self.banco, int(cliente_id), 0)
+
+    def definir_senha_cliente(self, cliente_id: int, senha: str | None = None) -> str:
+        return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha)
+
+    def atribuir_os(self, os_id: int, prestador_id: int) -> bool:
+        return bool(ext.atribuir(self.banco, int(os_id), int(prestador_id),
+                                 ator='Desktop AUTOSEG'))
+
+    def desatribuir_os(self, os_id: int) -> bool:
+        return bool(ext.desatribuir(self.banco, int(os_id),
+                                    ator='Desktop AUTOSEG'))
+
+    def iniciar_os(self, os_id: int) -> None:
+        aten.iniciar(self.banco, int(os_id))
+
+    def atribuir_responsavel(self, organizacao_id: int, usuario_id: int) -> str:
+        return cad9.atribuir_responsavel(
+            self.banco, int(organizacao_id), int(usuario_id),
+            'Desktop AUTOSEG')
+
+    def remover_responsavel(self, organizacao_id: int) -> None:
+        cad9.remover_responsavel(self.banco, int(organizacao_id),
+                                 'Desktop AUTOSEG')
+
+    def criar_prestador(self, dados: Mapping[str, Any]) -> int:
+        return int(ext.cadastrar(
+            self.banco,
+            nome=str(dados.get('nome') or ''),
+            email=str(dados.get('email') or ''),
+            senha=str(dados.get('senha') or ''),
+            telefone=str(dados.get('telefone') or ''),
+            documento=str(dados.get('documento') or ''),
+            especialidade=str(dados.get('especialidade') or '')))
+
+    def redefinir_senha_prestador(self, prestador_id: int, senha: str) -> None:
+        ext.redefinir_senha_prestador_desktop(
+            self.banco, int(prestador_id), str(senha))
+
+    def obter_config_prestador(self, prestador_id: int) -> dict:
+        return dict(ext.obter_config_prestador(self.banco, int(prestador_id)))
+
+    def salvar_config_prestador(self, prestador_id: int,
+                                dados: Mapping[str, Any]) -> None:
+        ext.salvar_config_prestador(self.banco, int(prestador_id), dict(dados))
+
+    def definir_documento_prestador(self, prestador_id: int,
+                                    documento: str) -> str:
+        return ext.definir_documento_prestador(
+            self.banco, int(prestador_id), str(documento))
+
+    def publicar_pdf(self, os_id: int) -> str:
+        return str(fluxo.publicar_relatorio(self.banco, int(os_id)))
+
+    def preparar_email(self, os_id: int) -> str:
+        publicado = fluxo.ultimo_documento(self.banco, int(os_id))
+        if not publicado:
+            raise ValueError('Esta OS não possui PDF publicado.')
+        pdf = fluxo.validar_pdf_publicado(publicado)
+        return str(ext.criar_email_rascunho(self.banco, int(os_id), pdf))
+
+    def preparar_nota(self, os_id: int) -> str:
+        return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+
+    def pdf_publicado(self, os_id: int) -> str:
+        publicado = fluxo.ultimo_documento(self.banco, int(os_id))
+        if not publicado:
+            fluxo.recuperar_relatorios_antigos(self.banco, os_id=int(os_id))
+            publicado = fluxo.ultimo_documento(self.banco, int(os_id))
+        if not publicado:
+            raise ValueError('PDF ainda não encontrado. Use Republicar PDF.')
+        return str(fluxo.validar_pdf_publicado(publicado))
+
+    def listar_materiais_estoque(self, ativos: bool = False) -> list[dict]:
+        return [dict(item) for item in estoque.listar(
+            self.banco, ativos=bool(ativos))]
+
+    def catalogo_listar(self, ativos: bool = False) -> list[dict]:
+        return [dict(item) for item in catalogo.listar(
+            self.banco, ativos=bool(ativos))]
+
+    def catalogo_obter(self, servico_id: int) -> dict | None:
+        return catalogo.obter(self.banco, int(servico_id))
+
+    def catalogo_salvar(self, dados: Mapping[str, Any],
+                        servico_id: int | None = None) -> int:
+        return int(catalogo.salvar(
+            self.banco, dict(dados),
+            None if servico_id is None else int(servico_id)))
+
+    def catalogo_excluir(self, servico_id: int) -> None:
+        catalogo.excluir(self.banco, int(servico_id))
+
+    def catalogo_definir_ativo(self, servico_id: int, ativo: bool) -> None:
+        acao = catalogo.reativar if ativo else catalogo.arquivar
+        acao(self.banco, int(servico_id))
+
+    def estoque_cadastrar(self, dados: Mapping[str, Any],
+                          produto_id: int | None = None) -> int:
+        return int(estoque.cadastrar(
+            self.banco,
+            nome=str(dados.get('nome') or ''),
+            sku=str(dados.get('sku') or ''),
+            unidade=str(dados.get('unidade') or 'un'),
+            custo=dados.get('custo', '0'),
+            venda=dados.get('venda', '0'),
+            minimo=dados.get('minimo', '0'),
+            identificador=None if produto_id is None else int(produto_id)))
+
+    def estoque_obter(self, produto_id: int) -> dict | None:
+        alvo = int(produto_id)
+        return next((dict(item) for item in estoque.listar(self.banco)
+                     if int(item['id']) == alvo), None)
+
+    def estoque_ajuste(self, produto_id: int, delta, motivo: str) -> None:
+        estoque.ajuste(self.banco, int(produto_id), delta, str(motivo or ''),
+                       ator='Desktop')
+
+    def estoque_movimentos(self, produto_id: int,
+                           limite: int = 300) -> list[dict]:
+        return [dict(item) for item in estoque.movimentos(
+            self.banco, int(produto_id), int(limite))]
+
+    def estoque_excluir(self, produto_id: int) -> str:
+        return estoque.excluir(self.banco, int(produto_id))
+
+    def estoque_importar_lote(self, materiais: list[Mapping[str, Any]]) -> dict:
+        ids = estoque.importar_lote(self.banco, list(materiais))
+        return {'ids': list(ids or []), 'total': len(ids or [])}
+
+    def empresa_resumo(self) -> dict:
+        return dict(empresa.resumo(self.banco))
+
+    def empresa_listar(self) -> list[dict]:
+        return [dict(item) for item in empresa.listar(self.banco)]
+
+    def empresa_registrar(self, dados: Mapping[str, Any]) -> int:
+        return int(empresa.registrar(
+            self.banco,
+            tipo=dados.get('tipo', ''),
+            descricao=dados.get('descricao', ''),
+            valor=dados.get('valor', '0'),
+            data=dados.get('data', ''),
+            prestador_id=dados.get('prestador_id'),
+            os_id=dados.get('os_id'),
+            categoria=dados.get('categoria', ''),
+            finalidade=dados.get('finalidade', ''),
+            observacao=dados.get('observacao', ''),
+            criado_por='Desktop AUTOSEG'))
+
+    def empresa_arquivar(self, movimento_id: int) -> None:
+        empresa.arquivar(self.banco, int(movimento_id), ator='Desktop AUTOSEG')
+
+    def composicao_config(self) -> dict:
+        composicao.instalar()
+        return dict(composicao.carregar())
+
+    def composicao_salvar(self, config: Mapping[str, Any]) -> None:
+        composicao.salvar(dict(config))
+
+    def composicao_recalcular(self) -> dict:
+        return dict(composicao.recalcular_tudo(self.banco))
+
+    def prestador_admin(self, prestador_id: int) -> bool:
+        return bool(cad9.prestador_admin(self.banco, int(prestador_id)))
+
+    def definir_admin(self, prestador_id: int, ativo: bool) -> None:
+        cad9.definir_admin(self.banco, int(prestador_id), bool(ativo))
+
     def salvar_cliente(
         self, cliente_id: int | None, dados: Mapping[str, Any]
     ) -> Cliente:
@@ -475,7 +695,24 @@ class LocalService:
                 'historico.listar', 'historico.resumo', 'pj.painel',
                 'resumo_financeiro', 'financeiro.listar', 'financeiro.receber',
                 'resumo_portal', 'solicitacoes_portal',
-                'clientes.listar', 'clientes.obter', 'clientes.salvar')
+                'clientes.listar', 'clientes.obter', 'clientes.salvar',
+                'clientes.desativar', 'clientes.excluir', 'clientes.senha',
+                'os.atribuir', 'os.desatribuir', 'os.iniciar',
+                'responsavel.atribuir', 'responsavel.remover',
+                'prestadores.criar', 'prestadores.senha',
+                'prestadores.config', 'prestadores.documento',
+                'os.pdf.publicar', 'os.pdf.abrir', 'os.email.preparar', 'os.nota.preparar',
+                'estoque.materiais', 'prestadores.admin',
+                'pj.whatsapp', 'pj.analisar', 'pj.confirmar', 'pj.gerar_os',
+                'pj.validar', 'pj.sindico', 'pj.mesclar', 'pj.vinculo',
+                'catalogo.listar', 'catalogo.obter', 'catalogo.salvar',
+                'catalogo.excluir', 'catalogo.ativo',
+                'estoque.cadastrar', 'estoque.obter', 'estoque.ajuste',
+                'estoque.movimentos', 'estoque.excluir', 'estoque.importar',
+                'empresa.resumo', 'empresa.listar', 'empresa.registrar',
+                'empresa.arquivar',
+                'composicao.config', 'composicao.salvar',
+                'composicao.recalcular')
 
     @staticmethod
     def _resumo(registro) -> ClienteResumo:

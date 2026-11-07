@@ -22,7 +22,7 @@ Current session handoff: `docs/HANDOFF.md`.
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
 | Fiscal / NF-e / NFS-e | `prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
 | Email / payments | `gmail_service.py`, future payment integrations | Generic integration contracts + adapters | **legacy only** | Define provider interfaces; keep credentials outside code. |
-| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; app boundary started** | The main GTK window has no direct SQL; clients, dashboard, portal, finance, history, PJ and active-OS lists use `AppService`/`LocalService`. `gtk_dialogos.py` still contains the OS/material/attachment write path, which is the next slice. Web portals are owned by `WebAccessManager`. |
+| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; server mode works** | The GTK shell uses `AppService` for clients, OS, providers, finance, history, PJ, catalog, stock, company cash, composition and PDF. In server mode it does not open the local SQLite. Web portals are owned by `WebAccessManager`. |
 | CLI | `workaholic/src/workaholic/cli` | Workaholic CLI | **prototype** | Keep tests; add commands only when a real consumer exists. |
 
 ## Workaholic adoption
@@ -69,6 +69,7 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-04 | Prefer a monorepo until module contracts and release cadence are stable. | Avoid premature repository split and duplicated CI. |
 | 2026-11-06 | Start the application boundary with one slice: clients + dashboard. | Prove the contract without a big-bang rewrite; keep UI and behavior unchanged. |
 | 2026-11-06 | Let `WebAccessManager` own portal lifecycle. | The GTK shell must not import or start HTTP servers directly. |
+| 2026-11-07 | Run DEV in server mode with no local DB fallback. | Prove the desktop/server boundary with real API data; offline reads are empty and writes fail explicitly. |
 
 ## Next recommended micro-slices
 

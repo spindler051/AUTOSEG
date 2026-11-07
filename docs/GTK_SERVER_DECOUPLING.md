@@ -24,7 +24,8 @@ Linux** (por exemplo, um celular com Nura/Alpine).
 - Existe uma API JSON read-only de financeiro (`api_financeiro.py`,
   `/api/v1`) com bearer token, paginação, auditoria e OpenAPI. Ela é um bom
   precedente de contrato, mas cobre só leitura financeira.
-- O `HttpService` já implementa `health`, mas ainda não lista/salva clientes.
+- O `HttpService` implementa `health` e o contrato desktop (clientes, OS,
+  prestadores, financeiro, PJ, histórico e PDF) via `/api/v1/desktop`.
 - O gerenciador de túneis Cloudflare (`tuneis`/`links_publicos`) já é separado
   do domínio.
 
@@ -215,17 +216,18 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
   histórico, PJ e lista de OS ativas. `gtk_app.py` está sem SQL direto.
 - `gtk_dialogos.py` ainda concentra a leitura/gravação da OS, materiais e
   anexos; é a última fatia grande do desktop.
-- `application/connection.py` guarda modo local/remoto; o modo remoto ainda só
-  tem `health` (`HttpService`). Não há fallback silencioso para o banco local.
+- `application/connection.py` guarda modo local/remoto; o modo remoto usa
+  `HttpService` e não faz fallback para o banco local.
+- `api_desktop.py` expõe o contrato desktop no servidor headless.
 - Testes: `test_application_service.py` e `test_web_access.py`.
 
-### Fase 2 — `HttpService` + primeira API
+### Fase 2 — API desktop
 
-- Expor `health`, `login` e clientes no `/api/v1`.
-- Implementar `HttpService` com o mesmo contrato.
-- Tela de conexão local/remota no GTK.
-- Testar Mac → celular na LAN e via túnel.
-- Nenhuma regra no cliente; só DTOs e chamadas.
+- `health`, clientes, OS, prestadores, financeiro, PJ, histórico e PDF no
+  `/api/v1/desktop`.
+- `HttpService` com o mesmo contrato.
+- Tela de conexão no GTK e modo DEV em servidor.
+- Pendente: login, catálogo, estoque, composição e sync.
 
 ### Fase 3 — OS, financeiro e arquivos
 

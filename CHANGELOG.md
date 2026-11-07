@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.55 — modo DEV em servidor — 2026-11-07 — develop
+
+- **API desktop:** `api_desktop.py` expõe clientes, OS, prestadores, financeiro, histórico, PJ, catálogo, estoque, caixa da empresa, composição e PDF.
+- **Modo DEV:** `INICIAR_AUTOSEG_DEV.command` abre em modo servidor; `INICIAR_SERVIDOR_DEV.command` sobe a API com o banco de teste.
+- **Sem banco local:** o GTK em modo servidor não cria nem abre o SQLite local.
+- **Offline:** leituras degradam para listas vazias e a janela mostra banner de servidor indisponível; escritas falham sem fallback local.
+- **Conexões:** a opção “Banco local” desaparece no modo servidor e o endereço da API pode ser salvo e aplicado na hora.
+- **Ações remotas:** assumir/iniciar OS, atribuir responsável, senha de cliente/prestador, PJ, PDF, catálogo, estoque e caixa passam pela API.
+- **Testes:** 305 testes OK, 1 skip; smoke GTK offline e online.
+
 ## 9.6.0-dev.54 — documentação enxuta e organizada — 2026-11-07 — develop
 
 - **Índice canônico:** `docs/README.md` concentra o que é atual.
