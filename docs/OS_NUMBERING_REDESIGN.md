@@ -1,9 +1,9 @@
 # Redesenho da numeração de OS e migração
 
-**Status:** RFC de arquitetura e migração. **Fundação implementada em
-`develop`; nada migrado na MAIN.** Esta mudança é N3/N4: mexe em identidade
-pública, schema, links, PDFs, e-mails e dados históricos. Exige backup, ensaio
-em cópia, validação e revisão humana externa antes da MAIN.
+**Status:** fundação implementada e **DEV de teste migrada**; **MAIN ainda
+não migrada**. Esta mudança é N3/N4: mexe em identidade pública, schema, links,
+PDFs, e-mails e dados históricos. Exige backup, ensaio em cópia, validação e
+revisão humana externa antes da MAIN.
 
 **Regra desta mudança:** nada de atalho, regex salvando o dia, `MAX+1`,
 número duplicado em tela ou reescrever documento histórico. O desenho vem
@@ -45,6 +45,7 @@ YYMMDD + sequência diária de 3 dígitos
 2026-11-07 → 261107001, 261107002, ...
 ```
 
+- O número público é **apenas** `261107001`; não leva `OS-`.
 - `261107000` é o “dia”, não uma OS.
 - Primeira OS do dia = `001`.
 - Limite diário = **999**; aceitamos essa limitação.
@@ -126,7 +127,7 @@ Modos:
 | Modo | Exemplo | Uso |
 |---|---|---|
 | `date_sequence` | `261107001` | padrão AUTOSEG |
-| `sequential` | `OS-0001` | instalações simples |
+| `sequential` | `0001` | instalações simples |
 | `letters` | `261107AAA` | quando o cliente quer letras |
 | `uuid`/`ulid` | `01J...` | integrações e idempotência |
 | `custom` | `AUT-2026-0001` | marca/tenant |
@@ -246,8 +247,7 @@ Se a colisão numérica for inaceitável, usar um namespace explícito
 - PDFs já gerados não são reescritos.
 - E-mails já enviados não são reenviados.
 - O alias explica o número antigo.
-- Novos PDFs usam só o número canônico no nome:
-  `261107001.pdf` ou `OS-261107001.pdf`.
+- Novos PDFs usam só o número canônico no nome: `261107001.pdf`.
 - O PDF não deve exibir “número + id” como se fossem dois números.
 
 ---
@@ -322,6 +322,19 @@ Se qualquer etapa falhar: rollback e restaurar backup.
 Ainda **não** está ligado ao `proximo_numero_os` nem à criação real de OS.
 Ligar antes da migração criaria números misturados.
 
+## 7.2 Migração da DEV de teste
+
+Executada em `dados_teste/autoseg_teste.db`:
+
+- **17 OS** convertidas;
+- backup: `dados_teste/autoseg_teste.db.bak.20261107_183637`;
+- aliases antigos preservados em `os_numero_alias`;
+- `numeracao_estado.ativo=1`;
+- `banco.proximo_numero_os` usa o novo motor nesse banco;
+- próximo número de hoje verificado como `261107001`.
+
+A MAIN continua intocada, com os 23 registros em `OS-00xx`.
+
 ## 8. Testes obrigatórios
 
 - geração sequencial no mesmo dia;
@@ -362,7 +375,7 @@ Ligar antes da migração criaria números misturados.
 1. Data base: `criado_em` (recomendado) ou `data_abertura`?
 2. Fuso: `America/Sao_Paulo` ou fuso do servidor?
 3. URL pública: número, alias, `/os/n/<numero>` ou UUID?
-4. Prefixo visual: nenhum (`261107001`) ou `OS-` (`OS-261107001`)?
+4. Prefixo visual: **decidido: nenhum**; o número é `261107001`.
 5. Limite 999: erro, fila para o próximo dia ou bloqueio administrativo?
 6. Numeração por instalação ou por tenant?
 7. Letras: base 26 (`A..Z, AA..`) ou outro alfabeto?

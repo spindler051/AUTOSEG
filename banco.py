@@ -175,6 +175,16 @@ def adicionar_coluna_se_nao_existir(cursor, tabela, coluna, definicao):
 # ============================================================
 
 def proximo_numero_os(cursor):
+    """Return the next OS number.
+
+    Databases migrated to the configurable numbering use ``numeracao``.
+    Unmigrated databases keep the legacy ``OS-0001`` sequence. There is no
+    silent fallback: if the migrated state is active and the policy is invalid,
+    the error propagates.
+    """
+    import numeracao
+    if numeracao.estado_ativo(cursor):
+        return numeracao.proximo_numero(cursor)
     cursor.execute("""
         SELECT MAX(CAST(SUBSTR(numero_os, 4) AS INTEGER)) AS maior
         FROM ordens_servico

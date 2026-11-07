@@ -201,7 +201,7 @@ Plano:
 
 - toda OS tem UUID;
 - número humano provisório local: `OS-<device>-<sequência>`;
-- ao sincronizar, o servidor atribui o número canônico `OS-0001`;
+- ao sincronizar, o servidor atribui o número canônico `261107001`;
 - a interface mostra “provisório” até o servidor confirmar;
 - nunca reutilizar número;
 - PDF de OS provisória, se emitido, carrega o UUID e o número provisório.

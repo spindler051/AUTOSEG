@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.51 — migração da numeração na DEV de teste — 2026-11-07 — develop
+
+- **Migração real na DEV:** 17 OS de `dados_teste/autoseg_teste.db` convertidas para `YYMMDDNNN`; backup criado antes.
+- **Números somente dígitos:** `261107001`, sem `OS-`.
+- **Aliases:** números antigos preservados em `os_numero_alias`; documentos e referências históricas continuam localizáveis.
+- **Estado de migração:** `numeracao_estado.ativo=1`; `banco.proximo_numero_os` usa o novo motor nesse banco.
+- **MAIN intocada:** 23 registros continuam em `OS-00xx` até a janela de migração.
+- **Ferramentas:** `numeracao_migracao.py`, `scripts/migrar_numeracao_os.py` e `test_numeracao_migracao.py`.
+- **Testes:** 41 OK na suíte dirigida.
+
 ## 9.6.0-dev.50 — fundação da numeração configurável de OS — 2026-11-07 — develop
 
 - **Política declarativa:** `numeracao.yaml` define modo, fuso, formato de data, sequência, letras, UUID, template custom e guarda de relógio.

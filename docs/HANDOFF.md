@@ -65,6 +65,17 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Numeração de OS: DEV migrada
+
+- `numeracao_migracao.py` + `scripts/migrar_numeracao_os.py` migram números
+  legados em transação, com backup, aliases e validação.
+- A DEV de teste foi migrada: 17 OS, backup em
+  `dados_teste/autoseg_teste.db.bak.20261107_183637`.
+- Novos números são **somente dígitos** (`261107001`), sem `OS-`.
+- `banco.proximo_numero_os` usa o motor novo quando o banco está marcado como
+  migrado; bancos antigos continuam no formato legado até a migração.
+- MAIN ainda não migrada; 23 registros continuam `OS-00xx`.
+
 ### Fundação da numeração de OS
 
 - `numeracao.py` + `numeracao.yaml`: política declarativa, fuso

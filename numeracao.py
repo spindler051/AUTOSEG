@@ -191,6 +191,18 @@ def _letras(valor: int) -> str:
     return saida
 
 
+def estado_ativo(cursor) -> bool:
+    """True when a migrated database has the new numbering enabled."""
+    tabela = cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='numeracao_estado'"
+    ).fetchone()
+    if not tabela:
+        return False
+    linha = cursor.execute(
+        "SELECT valor FROM numeracao_estado WHERE chave='ativo'").fetchone()
+    return bool(linha and str(linha[0]) == '1')
+
+
 def preview(politica: Politica | None = None,
             quando: datetime | None = None, sequencia: int = 1) -> str:
     return (politica or carregar()).compor(quando, sequencia)
