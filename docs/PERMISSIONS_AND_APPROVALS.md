@@ -521,6 +521,6 @@ Outro prestador pode usar os mesmos mecanismos com outros nomes e políticas.
 - `docs/PERMISSIONS_P0.md` — matriz inicial e testes AUT.
 - `docs/APP_MODES_ROLES_AND_SERVERS.md` — modos e papéis.
 - `docs/AUTH_AND_CONNECTION_UX.md` — login local/remoto.
-- `docs/CONDO_SHARING_AND_TENANCY.md` — tenant, usuários e grants.
-- `docs/PLANO_MODO_LOCAL_SYNC.md` — sync e conflitos.
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md` — tenant, usuários e grants.
+- `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — sync e conflitos.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — N3/N4.

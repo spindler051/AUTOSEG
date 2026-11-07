@@ -13,7 +13,7 @@ Related documents:
 - `docs/ENGLISH_MIGRATION_PLAN.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `workaholic/docs/ARCHITECTURE.md`
-- `docs/MIGRACAO_MODULAR.md`
+- `docs/archive/MIGRACAO_MODULAR.md` (histórico)
 
 ## 1. The core rule: one small platform delta per change
 

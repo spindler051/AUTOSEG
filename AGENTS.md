@@ -5,6 +5,7 @@ generic, modular, open-source platform. Read this file before changing code.
 
 ## Read first
 
+0. `docs/README.md` — canonical documentation index.
 1. `docs/PRODUCT_VISION.md` — product boundaries and long-term direction.
 2. `docs/PLATFORM_MIGRATION_PLAYBOOK.md` — how to migrate one slice at a time.
 3. `docs/HUMAN_CENTERED_DECISIONS.md` — how to defer decisions that need human

@@ -15,9 +15,9 @@ O modo híbrido (local + sync) é uma fase posterior.
 
 ## 1. Tela de entrada
 
-> Implementação parcial em `9.6.0-dev.47`: o GTK já tem a página **Conexão**
-> com modo local, URL do servidor, teste de `/api/v1/health` e salvamento em
-> `connection.json`. Login/senha e troca real de modo ainda não.
+> Implementação parcial: o GTK já tem a página **Conexão** com modo local, URL
+> do servidor, teste de `/api/v1/health` e salvamento em `connection.json`.
+> Login/senha e troca real de modo ainda não.
 
 > A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
 > descoberta de servidores e solicitação sem login está em
@@ -251,8 +251,8 @@ O GTK local não sobe nada. O GTK remoto só consome a API. O container roda
 - `docs/GTK_SERVER_DECOUPLING.md` — modos local/remoto, `AppService`, `HttpService`.
 - `docs/PERMISSIONS_P0.md` — papéis, matriz e testes de autorização.
 - `docs/PERMISSIONS_AND_APPROVALS.md` — permissões configuráveis e aprovações.
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — solo local, servidor central, híbrido.
-- `docs/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
-- `docs/CONDO_SHARING_AND_TENANCY.md` — usuários, organizações, papéis e grants.
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — solo local, servidor central, híbrido.
+- `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md` — usuários, organizações, papéis e grants.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — N3/N4 e revisão humana.
 - `docs/NAMING_AND_CLI.md` — `officina-web`, `officina-gtk`, `officina-cli`.

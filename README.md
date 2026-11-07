@@ -10,9 +10,12 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
+Versão de desenvolvimento: `9.6.0-dev.54` (`develop`).
+
 - Working vertical application for security/automation.
 - GTK4 desktop application and two local web portals.
 - Local-first SQLite storage.
+- Suíte não visual: **301 testes, 0 falhas, 1 skip**.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a
@@ -97,40 +100,14 @@ portais.
 
 ## Documentation
 
+- [Documentation index](docs/README.md) — ponto de entrada canônico.
+- [Current handoff](docs/HANDOFF.md) — estado e próximos passos.
+- [Roadmap](docs/ROADMAP.md)
 - [Product vision](docs/PRODUCT_VISION.md)
-- [Current handoff](docs/HANDOFF.md)
+- [Tests](TESTES.md)
 - [Agent rules](AGENTS.md)
-- [Human-centered decisions](docs/HUMAN_CENTERED_DECISIONS.md)
-- [User feedback guide](docs/USER_FEEDBACK_GUIDE.md)
-- [Provider portal feedback channel](docs/features/FEEDBACK_PORTAL.md)
-- [Feedback DEV backlog](docs/feedback/PENDENCIAS_DEV.md)
-- [English migration plan](docs/ENGLISH_MIGRATION_PLAN.md)
-- [Naming and CLI contract](docs/NAMING_AND_CLI.md)
-- [Open telemetry proposal](docs/features/OPEN_TELEMETRY.md)
-- [Provider finance API v1](docs/features/API_FINANCEIRO.md)
-- [Experimental unslop interface](docs/features/UNSLOP_UI.md)
-- [Materiais e composição da OS](docs/features/MATERIAIS_COMPOSICAO_OS.md)
-- [Company cash ledger](docs/features/CAIXA_EMPRESA.md)
-- [OS financial correction UI plan](docs/features/OS_FINANCIAL_CORRECTION_UI.md)
-- [Platform migration playbook](docs/PLATFORM_MIGRATION_PLAYBOOK.md)
-- [Migration ledger](docs/PLATFORM_MIGRATION_LEDGER.md)
-- [GTK4/libadwaita guide](docs/GTK4_LINUX_MACOS.md)
-- [Workaholic integration](docs/WORKAHOLIC_INTEGRACAO.md)
-- [Modular migration ledger](docs/MIGRACAO_MODULAR.md)
-- [Architecture evolution plan](docs/PLANO_EVOLUCAO_ARQUITETURA.md)
-- [Fundamental structural problems](docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md)
-- [GTK and server decoupling](docs/GTK_SERVER_DECOUPLING.md)
-- [Multi-platform GUI guideline](docs/MULTI_PLATFORM_GUI_GUIDELINE.md)
-- [Code comment policy](docs/CODE_COMMENT_POLICY.md)
-- [Code rot cleanup plan](docs/CODE_ROT_CLEANUP_PLAN.md)
-- [Review without a human developer](docs/REVIEW_WITHOUT_DEVELOPER.md)
-- [External AI review routine](docs/EXTERNAL_AI_REVIEW_ROUTINE.md)
-- [Login, local account and server connection](docs/AUTH_AND_CONNECTION_UX.md)
-- [App modes, roles and server discovery](docs/APP_MODES_ROLES_AND_SERVERS.md)
-- [P0 permissions matrix](docs/PERMISSIONS_P0.md)
-- [OS numbering redesign and migration](docs/OS_NUMBERING_REDESIGN.md)
-- [Configurable permissions and approvals](docs/PERMISSIONS_AND_APPROVALS.md)
-- [Condominiums, OS sharing and tenancy](docs/CONDO_SHARING_AND_TENANCY.md)
+- [Changelog](CHANGELOG.md)
+- [Archived documentation](docs/archive/README.md) — histórico, não vigente.
 
 ## Repository layout
 
@@ -141,7 +118,8 @@ portal_negocios.py, fluxo_os.py, ...        business rules
 runtime_config.py                           runtime paths, bind and ports
 workaholic/                                 generic engine prototype
 integracao/                                 AUTOSEG adapters to Workaholic
-docs/                                       product, architecture and operations
+docs/                                       current docs; features/, operations/, planning/
+docs/archive/                               historical docs, not current
 ```
 
 The codebase is gradually being migrated to English. Legacy Portuguese module

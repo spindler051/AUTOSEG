@@ -6,7 +6,7 @@ Não é um fork: nenhum módulo de regra de negócio foi duplicado para Linux ou
 macOS.
 
 - Branch de desenvolvimento: `develop`
-- Versão lida de `versao.json`: `9.6.0-dev.12`
+- Versão vigente: `versao.json` (fonte única)
 - Backend compartilhado: `banco.py`, `cadastros_v9.py`, `prestadores_ext.py`,
   `fluxo_os.py`, `atendimento_os.py`, `estoque_materiais.py`,
   `catalogo_servicos.py`, `portal_negocios.py`, `servidor_web.py`,
@@ -327,7 +327,7 @@ Isso é configuração de sistema/usuário, não do AUTOSEG.
 
 > **Planejado:** um seletor explícito de tema claro/escuro no app e no portal
 > web, com preferência do sistema + opção manual. A direção multicliente e os
-> limites estão em `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
+> limites estão em `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
 
 ## Normas GNOME
 
@@ -363,7 +363,7 @@ libadwaita, o modo claro/escuro do sistema e as classes de status
 ## Evolução futura
 
 Plano de modularização e deploy (sem mudanças de código):
-`docs/PLANO_EVOLUCAO_ARQUITETURA.md`.
+`docs/archive/PLANO_EVOLUCAO_ARQUITETURA.md` (histórico).
 
 ## Limitações conhecidas
 

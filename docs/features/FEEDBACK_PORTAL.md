@@ -159,7 +159,7 @@ DeepSeek configuration:
 | `DEEPSEEK_TIMEOUT` | `25` | Seconds, clamped to 5–120. |
 
 The system prompt is in `feedback_portal.py`; the application knowledge base is
-`feedback_conhecimento.md`. The model is told to:
+`docs/feedback/CONHECIMENTO.md`. The model is told to:
 
 - answer in Brazilian Portuguese;
 - check the screen map before claiming a feature is missing;

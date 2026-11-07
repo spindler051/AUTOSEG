@@ -151,11 +151,11 @@ Translate developer-facing docs first:
 
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/WORKAHOLIC_INTEGRACAO.md`
-- `docs/MIGRACAO_MODULAR.md`
+- `docs/archive/MIGRACAO_MODULAR.md` (histórico)
 - `docs/COMPLETUDE.md`
 - `docs/COMPOSICAO_VALORES.md`
-- `docs/BANCO_TESTE_PRODUCAO.md`
-- `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
+- `docs/operations/BANCO_TESTE_PRODUCAO.md`
+- `docs/archive/PLANO_EVOLUCAO_ARQUITETURA.md` (histórico)
 
 Keep user-facing guides in Portuguese, preferably under a `pt_BR` path or with
 a clear language label. Do not translate historical changelogs; add a note if

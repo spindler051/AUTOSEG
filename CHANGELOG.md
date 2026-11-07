@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.54 — documentação enxuta e organizada — 2026-11-07 — develop
+
+- **Índice canônico:** `docs/README.md` concentra o que é atual.
+- **Histórico separado:** readmes, revisões e planos antigos foram para `docs/archive/`.
+- **Operação:** túnel, Gmail, Meu Auto Financeiro, banco de teste e YAML foram para `docs/operations/`.
+- **Planejamento:** visão multicliente, sync, tenancy e guideline multiplataforma foram para `docs/planning/`.
+- **Estado atual:** `docs/HANDOFF.md` foi reescrito como retomada curta; o histórico fica no changelog.
+- **Limpeza:** removidas instruções de instaladores que não existem mais e versões antigas fixas.
+- **Código:** `feedback_portal` lê o conhecimento em `docs/feedback/CONHECIMENTO.md`.
+
 ## 9.6.0-dev.53 — suíte limpa e scripts de aceitação atualizados — 2026-11-07 — develop
 
 - **Suíte completa:** 301 testes, 0 falhas, 1 skip.

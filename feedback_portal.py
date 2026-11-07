@@ -385,16 +385,22 @@ def _limite_ia(banco: str | Path, prestador_id: int) -> bool:
 
 
 def _conhecimento() -> str:
-    arquivo = Path(__file__).with_name('feedback_conhecimento.md')
-    try:
-        return arquivo.read_text(encoding='utf-8')[:30000]
-    except OSError:
-        return (
-            'AUTOSEG é um sistema de gestão de serviços com clientes, ordens de '
-            'serviço, catálogo, financeiro, notas fiscais, e-mails e portal do '
-            'cliente. O feedback deve ser analisado com cuidado: uma função pode '
-            'existir em outra página ou ter outro nome.'
-        )
+    base = Path(__file__).parent
+    candidatos = (
+        base / 'docs' / 'feedback' / 'CONHECIMENTO.md',
+        base / 'feedback_conhecimento.md',
+    )
+    for arquivo in candidatos:
+        try:
+            return arquivo.read_text(encoding='utf-8')[:30000]
+        except OSError:
+            continue
+    return (
+        'AUTOSEG é um sistema de gestão de serviços com clientes, ordens de '
+        'serviço, catálogo, financeiro, notas fiscais, e-mails e portal do '
+        'cliente. O feedback deve ser analisado com cuidado: uma função pode '
+        'existir em outra página ou ter outro nome.'
+    )
 
 
 def _prompt_sistema(pagina: str) -> str:

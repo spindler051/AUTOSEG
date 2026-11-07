@@ -355,9 +355,9 @@ suporte, acessibilidade e manutenção.
 ## 16. Documentos relacionados
 
 - `docs/GTK_SERVER_DECOUPLING.md`
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/GTK4_LINUX_MACOS.md`
 - `docs/PRODUCT_VISION.md`
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md`
-- `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`
-- `docs/CONDO_SHARING_AND_TENANCY.md`
+- `docs/archive/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md` (histórico)
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md`

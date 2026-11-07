@@ -10,10 +10,10 @@ diretório de servidores e sync híbrido são fases posteriores.
 - `docs/PERMISSIONS_P0.md` — matriz de ações e testes de autorização.
 - `docs/PERMISSIONS_AND_APPROVALS.md` — grupos, flags e aprovação tipo Git.
 - `docs/GTK_SERVER_DECOUPLING.md` — modos local, servidor e híbrido.
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — visão multicliente.
-- `docs/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
-- `docs/CONDO_SHARING_AND_TENANCY.md` — organizações, usuários, papéis e grants.
-- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md` — mesma hierarquia, controles nativos.
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — visão multicliente.
+- `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md` — organizações, usuários, papéis e grants.
+- `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md` — mesma hierarquia, controles nativos.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — auth e permissões são N3/N4.
 
 ---

@@ -1,6 +1,9 @@
-# Padrões YAML oficiais do AUTOSEG — REV04
+# Padrões YAML oficiais
 
-**Usar apenas no ambiente de desenvolvimento até homologação.** Os arquivos são texto UTF-8, com `versao: 1`, no máximo 64 KB; sem aliases, âncoras e objetos Python. A importação acontece somente em telas administrativas e preenche um formulário para revisão: **não salva automaticamente**.
+Os arquivos são texto UTF-8, com `versao: 1`, no máximo 64 KB; sem aliases,
+âncoras e objetos Python. A importação acontece somente em telas
+administrativas e preenche um formulário para revisão: **não salva
+automaticamente**.
 
 ## 1. Cadastro de cliente
 
@@ -99,7 +102,7 @@ Regras:
 - Uma importação de modelo de serviço não gera orçamento nem OS até que alguém execute essas ações.
 - Não retire o `versao: 1`, não use tabulação para indentar e não ultrapasse o limite de tamanho.
 
-## Modelo de relatório REV12 (instruções + modelo + exemplo)
+## Modelo de relatório (instruções + modelo + exemplo)
 
 O arquivo `modelo_relatorio_os.yaml` agora tem três partes:
 

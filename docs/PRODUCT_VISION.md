@@ -54,7 +54,7 @@ The family is expected to grow beyond GTK and the web portals: CLI, Qt, native
 iOS and native Android are candidates, with local-only, local-group, central
 server and peer-to-peer modes. The high-level direction, cost drivers and the
 parts that are likely infeasible are documented in
-`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. That document is planning only and
+`docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. That document is planning only and
 does not authorize a big-bang rewrite.
 
 ## 3. Design principles
@@ -186,7 +186,7 @@ to make Workaholic the real engine, not a side prototype.
 The current slice-by-slice plan and known shortcuts are documented in:
 
 - `docs/WORKAHOLIC_INTEGRACAO.md`
-- `docs/MIGRACAO_MODULAR.md`
+- `docs/archive/MIGRACAO_MODULAR.md` (histórico)
 - `workaholic/docs/ARCHITECTURE.md`
 - `workaholic/docs/MIGRATION_LEDGER.md`
 
@@ -362,10 +362,10 @@ See `docs/NAMING_AND_CLI.md` section 9.
 - `workaholic/docs/ARCHITECTURE.md`
 - `workaholic/docs/MIGRATION_LEDGER.md`
 - `docs/WORKAHOLIC_INTEGRACAO.md`
-- `docs/MIGRACAO_MODULAR.md`
+- `docs/archive/MIGRACAO_MODULAR.md` (histórico)
 - `docs/GTK4_LINUX_MACOS.md`
-- `docs/PLANO_EVOLUCAO_ARQUITETURA.md`
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/archive/PLANO_EVOLUCAO_ARQUITETURA.md` (histórico)
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/GTK_SERVER_DECOUPLING.md`
-- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md`
-- `docs/CONDO_SHARING_AND_TENANCY.md`
+- `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md`
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md`

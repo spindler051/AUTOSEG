@@ -138,7 +138,7 @@ revisão humana.
 ## 8. Relação com o restante do projeto
 
 - `AGENTS.md` — regra para agentes.
-- `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md` — dívida estrutural.
+- `docs/CODE_ROT_CLEANUP_PLAN.md` — dívida estrutural e ondas de limpeza.
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md` — uma fatia por vez.
 - `docs/GTK_SERVER_DECOUPLING.md` — separação de UI/servidor.
-- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md` — interfaces.
+- `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md` — interfaces.

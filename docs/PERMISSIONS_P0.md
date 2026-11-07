@@ -91,7 +91,7 @@ de implementar.
 - O servidor nunca confia no `tenant_id` enviado pelo cliente; deriva da sessão.
 - Admin de uma organização não vê outra.
 - Compartilhamento entre organizações só com grant explícito, escopo, prazo e
-  auditoria (`docs/CONDO_SHARING_AND_TENANCY.md`).
+  auditoria (`docs/planning/CONDO_SHARING_AND_TENANCY.md`).
 - Cliente pode ter vínculo com mais de uma organização; o papel é por vínculo.
 
 ---
@@ -202,6 +202,6 @@ A UI não é fronteira de segurança. O serviço é.
 - `docs/PERMISSIONS_AND_APPROVALS.md` — RBAC configurável e change requests.
 - `docs/AUTH_AND_CONNECTION_UX.md` — login local/remoto.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — N3/N4.
-- `docs/CONDO_SHARING_AND_TENANCY.md` — organizações e grants.
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md` — organizações e grants.
 - `docs/GTK_SERVER_DECOUPLING.md` — `AppService` e modos.
-- `docs/PLANO_MODO_LOCAL_SYNC.md` — sync e conflitos.
+- `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — sync e conflitos.

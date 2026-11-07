@@ -286,8 +286,8 @@ e sem prometer que o condomínio vai gerenciar as OS da AUTOSEG.
 
 ## 12. Relação com os outros documentos
 
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/GTK_SERVER_DECOUPLING.md`
-- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md`
+- `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md`
 - `docs/PRODUCT_VISION.md`
 - `docs/HUMAN_CENTERED_DECISIONS.md`

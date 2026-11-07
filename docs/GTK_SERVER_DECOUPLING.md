@@ -269,7 +269,7 @@ repositorios/         consultas por agregado (já iniciado)
 - `portal_prestador.py`: adaptador HTML + `/api/v1`, usando serviços.
 - `servidor_backend.py`: modos `--api` (servidor) e `--site` (GUI do site), health.
 - `runtime_config.py`: modo, URL, `web_access`, portas.
-- `docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md`: item #1 continua por fatias.
+- `docs/CODE_ROT_CLEANUP_PLAN.md`: item #1 continua por fatias.
 - `docs/AUTH_AND_CONNECTION_UX.md`: fluxo de login local/remoto e conta admin.
 
 ---

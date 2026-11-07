@@ -6,7 +6,7 @@ custos e limites — não promete prazos nem decide arquitetura irreversível.
 
 **Última atualização:** 2026-11-06  
 **Público:** dono do produto, mantenedores e agentes de IA.  
-**Documento detalhado de sincronização:** `docs/PLANO_MODO_LOCAL_SYNC.md`.
+**Documento detalhado de sincronização:** `docs/planning/PLANO_MODO_LOCAL_SYNC.md`.
 
 ---
 
@@ -76,7 +76,7 @@ GTK, Qt, web, iOS, Android — é um cliente do mesmo contrato de aplicação.
 - obrigar o usuário a entender servidor, peer, relay ou chave criptográfica.
 
 O detalhamento de por que o SQLite não deve ser sincronizado como arquivo está
-em `docs/PLANO_MODO_LOCAL_SYNC.md`.
+em `docs/planning/PLANO_MODO_LOCAL_SYNC.md`.
 
 ---
 
@@ -173,7 +173,7 @@ prometer paridade total.
 - Nenhuma regra de negócio na UI.
 - Aparência muito similar entre plataformas (mesmo produto, mesma hierarquia,
   mesmos tokens), mas comportamento e controles nativos de cada uma. A regra
-  completa está em `docs/MULTI_PLATFORM_GUI_GUIDELINE.md`.
+  completa está em `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md`.
 
 ---
 
@@ -679,7 +679,7 @@ quando houver evidência suficiente.
 ## 13. Documentos relacionados
 
 - `docs/PRODUCT_VISION.md` — visão geral da plataforma e do Workaholic.
-- `docs/PLANO_MODO_LOCAL_SYNC.md` — detalhamento técnico de offline/sync.
+- `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — detalhamento técnico de offline/sync.
 - `docs/NAMING_AND_CLI.md` — nomes e contrato da CLI.
 - `docs/PLATFORM_MIGRATION_PLAYBOOK.md` — método de migração por fatias.
 - `docs/PLATFORM_MIGRATION_LEDGER.md` — estado das fatias migradas.
@@ -687,6 +687,6 @@ quando houver evidência suficiente.
 - `docs/HUMAN_CENTERED_DECISIONS.md` — decisões que precisam de humano.
 - `docs/GTK4_LINUX_MACOS.md` — estado e limites do GTK atual.
 - `docs/GTK_SERVER_DECOUPLING.md` — separação GTK × servidor e modos local/remoto.
-- `docs/MULTI_PLATFORM_GUI_GUIDELINE.md` — guideline visual e nativa por plataforma.
-- `docs/CONDO_SHARING_AND_TENANCY.md` — compartilhamento de OS e multiempresa em condomínios.
+- `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md` — guideline visual e nativa por plataforma.
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md` — compartilhamento de OS e multiempresa em condomínios.
 - `workaholic/docs/ARCHITECTURE.md` — arquitetura do protótipo Workaholic.

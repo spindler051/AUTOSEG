@@ -1,16 +1,40 @@
-# AUTOSEG — Versionamento e homologação
+# Versionamento e homologação
 
-A versão atual é **9.6.0-dev.1 / REV08**. Não representa a homologação das 78 melhorias.
+A fonte única da versão é `versao.json`.
 
-- develop: desenvolvimento, versões X.Y.Z-dev.N.
-- main: produção, versões X.Y.Z após aprovação no Mac.
-- rc: versão candidata de homologação, ainda no develop.
-- versao.json é a fonte única de identidade da versão; schema SQLite é independente.
+## Branches
 
-Comandos: python3 versionador.py info | verificar | proxima --tipo dev | avancar --tipo dev.
+- `develop`: desenvolvimento; versões `X.Y.Z-dev.N`.
+- `main`: produção; versões `X.Y.Z` após homologação.
+- `rc`: candidata de homologação, ainda no `develop`.
 
-O comando avancar altera apenas versao.json no branch develop se o arquivo de versão estiver sem alterações; não faz commit, push, migração ou manipulação de dados.
+## Comandos
 
-AVISO: O Mac possui alterações locais em ~/GestaoServicos_DEV, incluindo YAML, catálogo e estoque ausentes ou divergentes no GitHub. Antes de atualizar: faça backup do SQLite e anexos e reconcilie os diffs. Não execute git reset --hard, git clean -fd nem git stash -u indiscriminadamente. Mantenha ~/gestaoservicos_MAIN e seus dados separados.
+```bash
+python3 versionador.py info
+python3 versionador.py verificar
+python3 versionador.py proxima --tipo dev
+python3 versionador.py avancar --tipo dev
+```
 
-Promova para main somente após testes de desktop, portais, segurança de PDF, Gmail, reversão e homologação. Registre changelog e tag anotada vX.Y.Z.
+`avancar` altera apenas `versao.json` no `develop` quando o arquivo está sem
+alterações pendentes. Não faz commit, push, migração nem toca em dados.
+
+## Regra de promoção
+
+Antes de `main`:
+
+1. suíte não visual verde;
+2. scripts de aceitação verdes;
+3. smoke manual no macOS e nos dois portais;
+4. backup e rollback descritos;
+5. revisão humana externa quando a mudança for N3/N4;
+6. `CHANGELOG.md` atualizado.
+
+O schema SQLite é independente da versão do app. Nunca usar a versão como
+número de schema.
+
+## Segurança de dados
+
+Não executar `git reset --hard`, `git clean -fd` ou `git stash -u` em pastas com
+dados. Bancos, anexos, PDFs e credenciais ficam fora do Git.

@@ -12,16 +12,16 @@ dados e estrutura.
 
 ## 1. O que contamos hoje
 
-Baseline em 2026-11-06, após a fatia `AppService` (testes fora por padrão):
+Baseline em 2026-11-07, após a suíte de testes e a limpeza dos scripts:
 
 | Indicador | Baseline | Observação |
 |---|---:|---|
 | Comentários com prompt/IA/revisão/shortcut | **0 alto, 0 baixo** | `scripts/audit_comments.py --strict` |
-| `except Exception`/bare except | **149** | nem todos são ruins; 32 são silenciosos |
+| `except Exception`/bare except | **152** | nem todos são ruins; 32 são silenciosos |
 | Exceções amplas silenciosas | **32** | `pass`/`continue`/`return None` engolindo erro |
-| Funções com 60+ linhas | **52** | algumas são handlers aninhados; mede complexidade |
-| Classes com 400+ linhas | **4** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS` |
-| SQL direto em UI/HTTP | **126 linhas** | GTK, diálogos, portal, servidor web |
+| Funções com 60+ linhas | **56** | algumas são handlers aninhados; mede complexidade |
+| Classes com 400+ linhas | **5** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS` e afins |
+| SQL direto em UI/HTTP | **43 linhas** | restante no site; shell GTK em zero |
 | TODO/FIXME sem issue | **0** | após o ajuste do auditor |
 | Arquivos grandes | `portal_prestador.py` ~3.4k, `gtk_app.py` ~2.3k, `gtk_dialogos.py` ~2.2k | monólitos conhecidos |
 

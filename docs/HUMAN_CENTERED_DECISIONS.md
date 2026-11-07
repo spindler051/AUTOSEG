@@ -97,7 +97,7 @@ pretending these questions are answered.
 
 The long-term multi-client direction (CLI, Qt, native iOS/Android, local-only,
 LAN group, central server and P2P) is documented in
-`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. The following choices remain deferred
+`docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`. The following choices remain deferred
 until there is evidence: reference client, Qt/mobile scope, P2P versus central
 authority, E2E encryption versus server-side document generation, and the Rust
 scope. Reversible groundwork and documentation are allowed; no new client or
@@ -186,6 +186,6 @@ recorded as deferred with explicit evidence triggers. Until then:
 - `docs/features/OPEN_TELEMETRY.md`
 - `docs/PLATFORM_MIGRATION_LEDGER.md`
 - `docs/GTK4_LINUX_MACOS.md`
-- `docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
+- `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`
 - `docs/REVIEW_WITHOUT_DEVELOPER.md`
-- `docs/CONDO_SHARING_AND_TENANCY.md`
+- `docs/planning/CONDO_SHARING_AND_TENANCY.md`

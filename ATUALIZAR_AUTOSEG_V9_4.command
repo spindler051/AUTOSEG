@@ -46,8 +46,8 @@ for f in "${ALTERADOS[@]}"; do
   mv -f "$DEST/.$f.v94.$$" "$DEST/$f"
 done
 mkdir -p "$DEST/docs"
-cp -p "$BASE/docs/FLUXO_CLIENTE_V9_4.md" "$DEST/docs/FLUXO_CLIENTE_V9_4.md"
-cp -p "$BASE/docs/MIGRACAO_MODULAR.md" "$DEST/docs/MIGRACAO_MODULAR.md"
+cp -p "$BASE/docs/archive/FLUXO_CLIENTE_V9_4.md" "$DEST/docs/FLUXO_CLIENTE_V9_4.md"
+cp -p "$BASE/docs/archive/MIGRACAO_MODULAR.md" "$DEST/docs/MIGRACAO_MODULAR.md"
 [[ -f "$BASE/test_fluxo_cliente_v94.py" ]] && cp -p "$BASE/test_fluxo_cliente_v94.py" "$DEST/test_fluxo_cliente_v94.py"
 "$PY" -m py_compile "$DEST/cadastros_v9.py" "$DEST/portal_prestador.py" "$DEST/portal_v9.py" "$DEST/cliente_fluxo_v94.py" "$DEST/portal_cliente_v94.py"
 echo ''

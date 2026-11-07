@@ -41,7 +41,7 @@ Current session handoff: `docs/HANDOFF.md`.
 
 This is a planning inventory, not an authorization to start all clients. The
 high-level vision, cost drivers and likely infeasible parts are in
-`docs/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
+`docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
 
 | Capability | Status | Next step |
 |---|---|---|

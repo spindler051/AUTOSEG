@@ -1,0 +1,76 @@
+# Documentação do AUTOSEG
+
+Este é o índice canônico. Se um documento não estiver aqui, trate como
+histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
+
+## Comece por
+
+- [Estado atual e próximos passos](HANDOFF.md)
+- [Roadmap vigente](ROADMAP.md)
+- [Visão de produto](PRODUCT_VISION.md)
+- [Testes](../TESTES.md)
+- [Regras para agentes e mantenedores](../AGENTS.md)
+- [Changelog](../CHANGELOG.md)
+
+## Produto, arquitetura e operação
+
+- [Modos do app, papéis e servidores](APP_MODES_ROLES_AND_SERVERS.md)
+- [Login, conta local e conexão](AUTH_AND_CONNECTION_UX.md)
+- [Permissões e aprovações](PERMISSIONS_AND_APPROVALS.md)
+- [Matriz P0 de permissões](PERMISSIONS_P0.md)
+- [Numeração de OS](OS_NUMBERING_REDESIGN.md)
+- [Separação GTK × servidor](GTK_SERVER_DECOUPLING.md)
+- [GTK4/libadwaita no Linux e macOS](GTK4_LINUX_MACOS.md)
+- [Integração com Workaholic](WORKAHOLIC_INTEGRACAO.md)
+- [Migração de plataforma — playbook](PLATFORM_MIGRATION_PLAYBOOK.md)
+- [Migração de plataforma — ledger](PLATFORM_MIGRATION_LEDGER.md)
+- [Nomes e contrato da CLI](NAMING_AND_CLI.md)
+- [Migração para inglês](ENGLISH_MIGRATION_PLAN.md)
+- [Versionamento e homologação](VERSIONAMENTO.md)
+
+## Planejamento futuro
+
+Não são compromissos nem autorização de implementação. A ordem prática está no
+[`ROADMAP.md`](ROADMAP.md).
+
+- [Guideline de interface multiplataforma](planning/MULTI_PLATFORM_GUI_GUIDELINE.md)
+- [Condomínios, compartilhamento e tenancy](planning/CONDO_SHARING_AND_TENANCY.md)
+- [Visão multicliente e local-first](planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md)
+- [Plano de modo local e sincronização](planning/PLANO_MODO_LOCAL_SYNC.md)
+
+## Qualidade e processo
+
+- [Política de comentários](CODE_COMMENT_POLICY.md)
+- [Plano de limpeza da podridão](CODE_ROT_CLEANUP_PLAN.md)
+- [Revisão sem desenvolvedor humano](REVIEW_WITHOUT_DEVELOPER.md)
+- [Rotina de revisão com IAs externas](EXTERNAL_AI_REVIEW_ROUTINE.md)
+- [Decisões centradas em pessoas](HUMAN_CENTERED_DECISIONS.md)
+- [Guia de feedback de uso](USER_FEEDBACK_GUIDE.md)
+
+## Funcionalidades
+
+- [API financeira do prestador](features/API_FINANCEIRO.md)
+- [Caixa da empresa](features/CAIXA_EMPRESA.md)
+- [Canal de feedback do portal](features/FEEDBACK_PORTAL.md)
+- [Materiais e composição da OS](features/MATERIAIS_COMPOSICAO_OS.md)
+- [Telemetria aberta](features/OPEN_TELEMETRY.md)
+- [Correção financeira da OS](features/OS_FINANCIAL_CORRECTION_UI.md)
+- [Interface experimental unslop](features/UNSLOP_UI.md)
+
+## Operação
+
+- [Separação banco de produção × teste](operations/BANCO_TESTE_PRODUCAO.md)
+- [Túnel fixo Cloudflare](operations/TUNEL_FIXO.md)
+- [Preparação da Gmail API](operations/GMAIL_API.md)
+- [Meu Auto Financeiro](operations/MEU_AUTO_FINANCEIRO.md)
+- [Padrões YAML](operations/PADROES_YAML.md)
+
+## Feedback e backlog
+
+- [Backlog DEV](feedback/PENDENCIAS_DEV.md)
+- [Conhecimento para respostas de feedback](feedback/CONHECIMENTO.md)
+
+## Histórico
+
+- [Arquivo histórico](archive/README.md) — readmes, revisões e planos
+  substituídos. Não é documentação vigente.

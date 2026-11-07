@@ -40,7 +40,7 @@ O script `build_appimage.sh` usa o `python3` do ambiente ativo. Se o
 Saída esperada:
 
 ```
-build/appimage/AUTOSEG-9.6.0-dev.4-x86_64.AppImage
+build/appimage/AUTOSEG-<versão>-x86_64.AppImage
 ```
 
 ## Teste antes de distribuir
