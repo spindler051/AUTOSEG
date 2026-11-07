@@ -15,6 +15,10 @@ O modo híbrido (local + sync) é uma fase posterior.
 
 ## 1. Tela de entrada
 
+> Implementação parcial em `9.6.0-dev.47`: o GTK já tem a página **Conexão**
+> com modo local, URL do servidor, teste de `/api/v1/health` e salvamento em
+> `connection.json`. Login/senha e troca real de modo ainda não.
+
 > A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
 > descoberta de servidores e solicitação sem login está em
 > `docs/APP_MODES_ROLES_AND_SERVERS.md`.

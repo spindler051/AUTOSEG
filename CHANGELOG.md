@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.47 — tela de conexão no GTK — 2026-11-07 — develop
+
+- **Nova página Conexão:** segue GTK4/libadwaita com `Adw.PreferencesPage`, `Adw.PreferencesGroup`, `Adw.EntryRow` e `Adw.ActionRow`.
+- **Modo local:** explica que o banco é local e o site é iniciado separadamente.
+- **Modo servidor:** campo de URL, teste de `/api/v1/health` e status com versão/modo.
+- **Salvar endereço:** grava `connection.json` sem alterar o banco; o modo remoto de dados continua em preparação.
+- **Sem login ainda:** a tela não finge autenticação; login/senha entram na fase N3/N4.
+- **Testes:** smoke GTK local-only OK; página construída sem erro.
+
 ## 9.6.0-dev.46 — servidor headless e GTK local-only por padrão — 2026-11-07 — develop
 
 - **Servidor no terminal:** `servidor_backend.py --api` sobe somente `/api/v1`, sem HTML, sem GTK e sem Cloudflare. `--web` sobe Officina Web + API.

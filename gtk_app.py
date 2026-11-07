@@ -30,7 +30,14 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import composicao
-from application.connection import build_service, load_settings
+from application.connection import (
+    ConnectionMode,
+    ConnectionSettings,
+    build_service,
+    load_settings,
+    save_settings,
+)
+from application.http_service import HttpService
 from application.local_service import LocalService
 from web_access import WebAccessManager
 
@@ -161,6 +168,7 @@ class Janela(Adw.ApplicationWindow):
         self.lista_navegacao.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.nav_itens = [
             ("inicio", "Início", "go-home-symbolic"),
+            ("conexao", "Conexão", "network-wired-symbolic"),
             ("clientes", "Clientes", "system-users-symbolic"),
             ("os", "Ordens de serviço", "document-edit-symbolic"),
             ("historico", "Histórico e relatórios", "document-open-recent-symbolic"),
@@ -217,6 +225,7 @@ class Janela(Adw.ApplicationWindow):
 
         self.stack = Adw.ViewStack()
         self.stack.add_titled(self._pagina_inicio(), "inicio", "Início")
+        self.stack.add_titled(self._pagina_conexao(), "conexao", "Conexão")
         self.stack.add_titled(self._pagina_clientes(), "clientes", "Clientes")
         self.stack.add_titled(self._pagina_os(), "os", "Ordens de serviço")
         self.stack.add_titled(self._pagina_historico(), "historico", "Histórico")
@@ -272,6 +281,7 @@ class Janela(Adw.ApplicationWindow):
         try:
             {
                 "inicio": self._atualizar_inicio,
+                "conexao": self.carregar_conexao,
                 "clientes": self.carregar_clientes,
                 "os": self.carregar_os,
                 "historico": self.carregar_historico,
@@ -1198,6 +1208,127 @@ class Janela(Adw.ApplicationWindow):
                           self.web.provider_error or "Servidor do prestador indisponível (porta 8766).")
             return
         ui.abrir_uri(self.web.provider_url, self)
+
+    # ------------------------------------------------------------------
+    # Conexão
+    # ------------------------------------------------------------------
+
+    def _pagina_conexao(self):
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(
+            title="Modo de conexão",
+            description="O app pode usar o banco local ou, no futuro, os dados de um servidor.")
+        pagina.add(grupo)
+
+        local = Adw.ActionRow(
+            title="Modo local",
+            subtitle="Banco SQLite neste computador. O site é iniciado separadamente.",
+            icon_name="computer-symbolic")
+        grupo.add(local)
+        remoto = Adw.ActionRow(
+            title="Modo servidor",
+            subtitle="Em preparação: a API de dados será habilitada na próxima fase.",
+            icon_name="network-server-symbolic")
+        grupo.add(remoto)
+
+        grupo_servidor = Adw.PreferencesGroup(
+            title="Servidor",
+            description="Usado para testar a API e, no futuro, conectar os dados.")
+        pagina.add(grupo_servidor)
+        self.conexao_url = Adw.EntryRow(title="URL do servidor")
+        self.conexao_url.set_text(self._url_servidor_salva())
+        self.conexao_url.set_show_apply_button(False)
+        grupo_servidor.add(self.conexao_url)
+
+        self.conexao_status = Adw.ActionRow(
+            title="Status",
+            subtitle="Ainda não testado",
+            icon_name="dialog-information-symbolic")
+        grupo_servidor.add(self.conexao_status)
+
+        linha_testar = Adw.ActionRow(
+            title="Testar conexão",
+            subtitle="Consulta /api/v1/health; não envia dados.")
+        self.botao_testar_conexao = Gtk.Button(label="Testar")
+        self.botao_testar_conexao.add_css_class("suggested-action")
+        self.botao_testar_conexao.connect(
+            "clicked", lambda *_args: self._testar_conexao())
+        linha_testar.add_suffix(self.botao_testar_conexao)
+        grupo_servidor.add(linha_testar)
+
+        linha_salvar = Adw.ActionRow(
+            title="Salvar endereço",
+            subtitle="Grava em connection.json; não altera o banco.")
+        botao_salvar = Gtk.Button(label="Salvar")
+        botao_salvar.connect("clicked", lambda *_args: self._salvar_conexao())
+        linha_salvar.add_suffix(botao_salvar)
+        grupo_servidor.add(linha_salvar)
+        return pagina
+
+    @staticmethod
+    def _url_servidor_salva():
+        url = load_settings().server_url.strip()
+        return url or "http://127.0.0.1:8766"
+
+    def carregar_conexao(self):
+        if hasattr(self, "conexao_url"):
+            self.conexao_url.set_text(self._url_servidor_salva())
+            if hasattr(self, "conexao_status"):
+                self.conexao_status.set_subtitle("Ainda não testado")
+
+    def _testar_conexao(self):
+        url = self.conexao_url.get_text().strip().rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            ui.aviso_erro(self, "Endereço inválido",
+                          "Use uma URL começando com http:// ou https://.")
+            return
+        self.botao_testar_conexao.set_sensitive(False)
+        self.conexao_status.set_subtitle("Testando…")
+
+        def worker():
+            try:
+                info = HttpService(url, timeout=5).health()
+                if info.status == "ok":
+                    texto = f"OK • versão {info.version} • modo {info.mode}"
+                elif info.status == "unavailable":
+                    texto = f"Indisponível: {info.detail or 'sem resposta'}"
+                else:
+                    texto = f"Resposta: {info.status} • {info.detail or ''}".strip()
+            except Exception as erro:
+                texto = f"Falha: {erro}"
+            GLib.idle_add(self._fim_teste_conexao, texto)
+            return False
+
+        threading.Thread(target=worker, daemon=True,
+                         name="AUTOSEG-Conexao").start()
+
+    def _fim_teste_conexao(self, texto):
+        if hasattr(self, "conexao_status"):
+            self.conexao_status.set_subtitle(texto)
+        if hasattr(self, "botao_testar_conexao"):
+            self.botao_testar_conexao.set_sensitive(True)
+        return False
+
+    def _salvar_conexao(self):
+        url = self.conexao_url.get_text().strip().rstrip("/")
+        if url and not url.startswith(("http://", "https://")):
+            ui.aviso_erro(self, "Endereço inválido",
+                          "Use uma URL começando com http:// ou https://.")
+            return
+        atual = load_settings()
+        novo = ConnectionSettings(
+            mode=ConnectionMode.LOCAL,
+            server_url=url,
+            web_access=atual.web_access,
+            tunnel=atual.tunnel,
+            last_user=atual.last_user,
+        )
+        try:
+            save_settings(novo)
+        except OSError as erro:
+            ui.aviso_erro(self, "Conexão", str(erro))
+            return
+        ui.toast(self, "Endereço do servidor salvo.")
 
     # ------------------------------------------------------------------
     # Portal do cliente

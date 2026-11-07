@@ -65,6 +65,13 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Tela de conexão no GTK
+
+- Nova página **Conexão** em libadwaita: modo local, URL do servidor, teste de
+  `/api/v1/health` e salvamento em `connection.json`.
+- Ainda não troca para o modo remoto nem pede login; isso é a próxima fase
+  N3/N4.
+
 ### Servidor headless e GTK local-only
 
 - `servidor_backend.py --api` sobe só `/api/v1`, sem HTML, sem GTK e sem
