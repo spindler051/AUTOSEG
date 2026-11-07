@@ -184,6 +184,7 @@ A UI não é fronteira de segurança. O serviço é.
 ## 9. Relação com os outros documentos
 
 - `docs/APP_MODES_ROLES_AND_SERVERS.md` — modos, papéis e fases.
+- `docs/PERMISSIONS_AND_APPROVALS.md` — RBAC configurável e change requests.
 - `docs/AUTH_AND_CONNECTION_UX.md` — login local/remoto.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — N3/N4.
 - `docs/CONDO_SHARING_AND_TENANCY.md` — organizações e grants.

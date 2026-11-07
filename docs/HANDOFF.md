@@ -65,6 +65,15 @@ plano de big-bang.
   responsável e aviso de dados incompletos.
 - SQL direto em UI/HTTP caiu de 126 para 117 linhas.
 
+### Permissões configuráveis e aprovações
+
+- `docs/PERMISSIONS_AND_APPROVALS.md` define grupos, papéis, flags, escopos e
+  change requests no estilo Git.
+- Admin do tenant é root; employee vê só o próprio/involvido e não vê
+  financeiro completo nem lista de funcionários; customer vê só o próprio.
+- Implementação fica em fases: política pura, enforcement, change requests,
+  UI, login e revisão.
+
 ### Matriz de permissões P0
 
 - `docs/PERMISSIONS_P0.md` define atores, ações, regra de OS, isolamento por
