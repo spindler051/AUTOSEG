@@ -53,6 +53,10 @@ generic, modular, open-source platform. Read this file before changing code.
    before refactoring. Run the relevant suites and report exactly what was run.
 10. **Small commits.** Separate behavior changes from structural migrations.
     A commit message must say which slice or contract changed.
+11. **Comments are not prompts.** Never paste user requests, specs, AI tool
+    names, revision history or shortcut notes into code comments. Comments
+    explain *why*, invariants and non-obvious constraints; behaviour belongs in
+    tests and docs. Run `python3 scripts/audit_comments.py --strict` before a PR.
 
 ## Workaholic fit check
 

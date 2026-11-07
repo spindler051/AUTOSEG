@@ -206,7 +206,7 @@ def registrar_legado_sem_baixa(banco):
     raise RuntimeError('Não é permitida importação retroativa automática de saldos.')
 
 
-# REV08: lote transacional, sem inserções parciais e sem movimentar estoque.
+# Lote transacional: sem inserções parciais e sem movimentar estoque.
 def importar_lote(banco, materiais):
     '''Valida todos os materiais e cadastra em uma única transação com rollback.'''
     if not isinstance(materiais, list) or not 1 <= len(materiais) <= 100:

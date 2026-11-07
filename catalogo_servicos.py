@@ -109,7 +109,7 @@ def salvar(banco,d,identificador=None):
     composicao.instalar_banco(banco)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        # REV08: materiais de serviços entram no catálogo central, nunca no saldo.
+        # Materiais de serviço pertencem ao catálogo central e não alteram saldo de estoque.
         from estoque_materiais import instalar_conexao, _chave
         instalar_conexao(c)
         for material in materiais:

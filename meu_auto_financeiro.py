@@ -911,7 +911,7 @@ def POST(handler,path,prestador,banco,d):
                 comprovante=documento_upload(d.get('comprovante'),'comprovante')
                 c.execute('UPDATE contas SET fornecedor_pago_em=?,comprovante_fornecedor=? WHERE id=?',
                     (agora(),comprovante,cid))
-                # Sempre debitar do responsável financeiro, nunca de quem administra a família.
+                # O débito é do responsável financeiro, independentemente de quem administra a família.
                 movimento(c,conta['responsavel_id'],-conta['total_centavos'],
                     f'Conta {conta["descricao"]} · fornecedor','conta_fornecedor',f'conta:{cid}:fornecedor')
                 auditoria(c,uid,'Pagamento ao fornecedor',str(cid))

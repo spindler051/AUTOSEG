@@ -316,7 +316,7 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
     if sum(parcelas.values())>bruto:
         raise ValueError('As parcelas dos técnicos superam o valor cobrado pela OS.')
     # Esta função só roda na primeira conclusão. Mudanças posteriores exigem
-    # fluxo formal de revisão com auditoria, nunca substituição silenciosa.
+    # Fluxo formal de revisão com auditoria; substituições são registradas.
     if c.execute('SELECT 1 FROM produtividade_rateios WHERE os_id=?',(os_id,)).fetchone():
         raise ValueError('Esta OS já possui rateio registrado; não é possível sobrescrever.')
     for ident,cents in parcelas.items():

@@ -58,7 +58,7 @@ def quadro_html():
         '<small>Os links são obtidos dos processos Cloudflare ativos. Em DEV, use somente dados fictícios; o login do AUTOSEG continua necessário.</small></section>')
 
 # URLs de túneis iniciados em outros Terminais podem ser informadas manualmente.
-# Só são exibidas como atuais após verificação HTTP recente, nunca por mera leitura de texto.
+# Só são exibidas como atuais após verificação HTTP recente; leitura de texto não basta.
 import time
 import threading
 import urllib.request

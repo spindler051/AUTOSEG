@@ -165,7 +165,7 @@ def cadastrar_organizacao_responsavel(banco,uid,d):
     papel='Síndico' if tipo=='Condomínio' else 'Administrador'
     existente=cad.organizacao_por_cnpj(banco,cnpj)
     if existente:
-        # Nunca duplica a organização; apenas registra pedido de vínculo pendente.
+        # A organização existente é reutilizada; o vínculo fica pendente.
         cad.solicitar_vinculo(banco,uid,existente['id'],papel,'',funcao)
         return existente['id'],True
     org_id=cad.criar_organizacao(banco,uid,nome,tipo,cnpj,cidade,bairro,papel,endereco,'',funcao)

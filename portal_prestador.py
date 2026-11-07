@@ -3211,7 +3211,7 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                 raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
-                        # Anexar a NF não deve apagar os campos já preenchidos no formulário.
+                        # Preserva os campos já preenchidos ao anexar a NF.
                         dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
                         if dados_rasc:
                             try:
@@ -3318,7 +3318,7 @@ class PortalPrestador:
                                         +botao('Abrir OS e republicar PDF',f'/os/{oid}')),s,503)
                                 if destinatarios:
                                     # Disparo automático do e-mail em segundo plano:
-                                    # nunca bloqueia a resposta da conclusão da OS.
+                                    # Não bloqueia a resposta da conclusão da OS.
                                     try:
                                         import gmail_service
                                         gmail_service.enviar_relatorio_os_concluida(banco, oid, destinatarios)

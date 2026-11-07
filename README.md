@@ -94,6 +94,7 @@ Local-only GTK (no web server and no tunnel):
 - [Fundamental structural problems](docs/FUNDAMENTAL_STRUCTURAL_PROBLEMS.md)
 - [GTK and server decoupling](docs/GTK_SERVER_DECOUPLING.md)
 - [Multi-platform GUI guideline](docs/MULTI_PLATFORM_GUI_GUIDELINE.md)
+- [Code comment policy](docs/CODE_COMMENT_POLICY.md)
 
 ## Repository layout
 

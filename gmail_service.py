@@ -237,9 +237,9 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         nota = ext.ultima_nota_fiscal(banco, os_id)
         caminho_nf = None
         if nota:
-            # Se há nota fiscal associada à OS, ela DEVE ser anexada. Falha ao
-            # ler o arquivo é um erro real: nunca enviar "silenciosamente" sem
-            # o anexo nem marcar a nota como entregue por causa do relatório.
+            # Se há nota fiscal associada à OS, ela precisa ser anexada. Falha ao
+            # ler o arquivo é erro real: não enviar sem o anexo nem marcar a nota
+            # como entregue por causa do relatório.
             _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
         if situacao == 'Pendente':
             assunto = f"Ordem de Serviço {numero} — atendimento pendente - AUTOSEG"

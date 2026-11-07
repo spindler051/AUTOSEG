@@ -233,14 +233,14 @@ def relatorio(nome, conteudo, numero_os=None):
     Somente os campos presentes no YAML são preenchidos no formulário.
     """
     d=carregar(nome,conteudo)
-    # Modelo oficial REV12: instrucoes + modelo.os + exemplo.
-    # A saída preenchida deve trazer apenas versao e os.
+    # Modelo oficial: instruções + modelo.os + exemplo.
+    # A saída preenchida contém apenas `versao` e `os`.
     if 'modelo' in d and 'os' not in d:
         if set(d)-{'versao','instrucoes','modelo','exemplo'}:
             raise ValueError('O modelo oficial contém seções desconhecidas.')
         if not isinstance(d.get('modelo'), Mapping) or not isinstance(d['modelo'].get('os'), Mapping):
             raise ValueError('O modelo oficial deve conter modelo.os.')
-        # Modelo em branco: nada a importar até o técnico/IA preencher a seção os.
+        # Modelo em branco: nada a importar até a pessoa preencher a seção os.
         return {}
     if set(d)-{'versao','os'} or not isinstance(d.get('os'), Mapping):
         raise ValueError('Utilize a seção os do modelo oficial. A saída não deve conter instruções nem exemplo.')
@@ -384,7 +384,7 @@ def orcamento(nome, conteudo, banco):
         modelo = d.get('modelo')
         if not isinstance(modelo, Mapping) or not isinstance(modelo.get('orcamento'), Mapping):
             raise ValueError('O modelo oficial deve conter modelo.orcamento.')
-        # Modelo em branco: nada a importar até a pessoa/IA gerar a saída limpa
+        # Modelo em branco: nada a importar até a pessoa gerar a saída limpa
         # com versao + orcamento, como no modelo de relatório técnico.
         return {}
     else:

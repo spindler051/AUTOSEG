@@ -120,11 +120,11 @@ def instalar(banco):
             atualizado_em TEXT NOT NULL,
             FOREIGN KEY(prestador_id) REFERENCES prestadores(id));
         ''')
-        # REV05: dados bancários/cadastrais em bloco livre por prestador.
+        # Dados bancários/cadastrais em bloco livre por prestador.
         col_conf={r[1] for r in c.execute('PRAGMA table_info(prestadores_config)').fetchall()}
         if 'dados_bancarios_texto' not in col_conf:
             c.execute("ALTER TABLE prestadores_config ADD COLUMN dados_bancarios_texto TEXT NOT NULL DEFAULT ''")
-        # REV12: custo real dos materiais é interno e não entra no valor cobrado.
+        # Custo real dos materiais é interno e não entra no valor cobrado.
         if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ordens_servico'").fetchone():
             colunas_os={r[1] for r in c.execute('PRAGMA table_info(ordens_servico)').fetchall()}
             if 'custo_materiais' not in colunas_os:
@@ -141,11 +141,11 @@ def instalar(banco):
                 c.execute("ALTER TABLE ordens_servico ADD COLUMN arquivada INTEGER NOT NULL DEFAULT 0")
             if 'comprimir_fotos_pdf' not in colunas_os:
                 c.execute("ALTER TABLE ordens_servico ADD COLUMN comprimir_fotos_pdf INTEGER NOT NULL DEFAULT 1")
-        # REV05: exclusão lógica com preservação dos vínculos históricos.
+        # Exclusão lógica com preservação dos vínculos históricos.
         colunas={r[1] for r in c.execute('PRAGMA table_info(prestadores)').fetchall()}
         if 'excluido' not in colunas:
             c.execute('ALTER TABLE prestadores ADD COLUMN excluido INTEGER NOT NULL DEFAULT 0')
-        # REV10: chave estável e hash para não duplicar fotos ao salvar rascunho.
+        # Chave estável e hash para não duplicar fotos ao salvar rascunho.
         col_anexos={r[1] for r in c.execute('PRAGMA table_info(os_anexos)').fetchall()}
         if 'chave' not in col_anexos:
             c.execute('ALTER TABLE os_anexos ADD COLUMN chave TEXT')
@@ -754,7 +754,7 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     nota=ultima_nota_fiscal(banco,os_id)
     caminho_nf=None
     if nota:
-        # Nota fiscal associada deve ser anexada; falha de leitura é erro real.
+        # Nota fiscal associada é anexada; falha de leitura é erro real.
         _,caminho_nf=obter_nota_fiscal(banco,os_id,nota['id'])
         corpo+='\n\nA nota fiscal segue anexa a esta mensagem.'
     else:

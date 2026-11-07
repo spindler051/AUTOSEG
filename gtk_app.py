@@ -937,7 +937,7 @@ class Janela(Adw.ApplicationWindow):
             try:
                 caminho = fluxo.publicar_relatorio(BANCO, os_id)
                 if enviar_email:
-                    # Envio automático em segundo plano; nunca trava a interface.
+                    # Envio em segundo plano para não bloquear a interface.
                     try:
                         import gmail_service
                         gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)

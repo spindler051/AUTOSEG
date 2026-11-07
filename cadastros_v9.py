@@ -318,7 +318,7 @@ def responsavel_ativo(c, uid, org):
 
 def vinculo_aprovado(banco,uid,org,papel=None):
     with ext.db(banco) as c:
-        # Síndico / Gestor / Administrador nunca vêm de declaração do próprio usuário,
+        # Papéis administrativos não são derivados da declaração do próprio usuário;
         # aprovação genérica de vínculo ou cadastros históricos: só nomeação explícita.
         if papel and any(x in papel for x in ('Síndico','Administrador','Gestor')):
             if responsavel_ativo(c,uid,org):
@@ -356,7 +356,7 @@ def atribuir_responsavel(banco, organizacao_id, usuario_id, autor):
                 ON CONFLICT(organizacao_id,usuario_id) DO UPDATE SET papel=excluded.papel,
                     situacao='Aprovado',aprovado_em=excluded.aprovado_em''',
                 (organizacao_id,usuario_id,papel,ext.agora(),ext.agora()))
-        # Nomeação e contato WhatsApp são campos distintos: nunca substituir
+        # Nomeação e contato WhatsApp são campos independentes: atualizar um não altera
         # automaticamente um telefone verificado por dados autodeclarados no perfil PF.
         c.execute('''INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em)
             VALUES(NULL,?,?,?,?,?)''',(organizacao_id,'Responsável nomeado',
