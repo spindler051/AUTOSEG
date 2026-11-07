@@ -1,0 +1,38 @@
+# Política de permissões da organização.
+# O código não decide sozinho quem vê o quê: ele lê este arquivo.
+# Escopos de campo: none | own | involved | all.
+versao: 1
+
+roles:
+  admin:
+    permissions: ["*"]
+  employee:
+    permissions:
+      - work_item.view.own
+      - work_item.view.involved
+      - work_item.create
+      - work_item.edit.own
+      - work_item.edit.involved
+      - work_item.close.own
+      - report.publish.own
+      - finance.view.own
+      - stock.view
+      - customer.view.involved
+      - customer.pii.view.involved
+      - customer.contact.view.involved
+  customer:
+    permissions:
+      - work_item.create.request
+      - work_item.view.own
+      - report.view.own
+      - document.view.own
+      - customer.view.own
+      - customer.pii.view.own
+      - customer.contact.view.own
+
+campos:
+  customer.nome: {admin: all, employee: involved, customer: own}
+  customer.telefone: {admin: all, employee: involved, customer: own}
+  customer.endereco: {admin: all, employee: involved, customer: own}
+  customer.email: {admin: all, employee: involved, customer: own}
+  customer.documento: {admin: all, employee: involved, customer: own}

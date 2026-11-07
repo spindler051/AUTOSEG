@@ -267,6 +267,31 @@ Regras:
 Isso é minimização de dados (LGPD) e “need to know”, não apenas estética de
 tela.
 
+### 5.1 Política em runtime
+
+A regra de campo não fica hardcoded na UI nem no serviço. Ela vive em
+`policy.yaml`:
+
+```yaml
+campos:
+  customer.telefone: {admin: all, employee: involved, customer: own}
+  customer.documento: {admin: all, employee: involved, customer: own}
+```
+
+- `application/policy.py` carrega o arquivo e valida os escopos.
+- `PolicyStore.reload()` troca a política ativa de forma atômica.
+- Se o novo arquivo for inválido, a política anterior continua valendo.
+- O teste `test_policy.py` demonstra a troca de `employee: involved` para
+  `employee: none` em runtime, sem reiniciar e sem alterar código.
+- O admin poderá editar a política pela UI no futuro; a UI chama o mesmo
+  `reload()`.
+- Em vários processos/servidores, a invalidação precisa de versão no banco ou
+  notificação; isso é fase posterior.
+- A política é declarativa; não permite executar código arbitrário.
+
+O código de autorização ainda não está ligado a essa política. Esta é a
+fundação da Fase 0.
+
 ## 6. Fluxo de aprovação tipo Git
 
 ### 5.1 Criar OS como employee

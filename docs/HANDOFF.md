@@ -75,6 +75,9 @@ plano de big-bang.
   não lista a base inteira, não busca por documento e não exporta clientes.
 - Implementação fica em fases: política pura, enforcement, change requests,
   UI, login e revisão.
+- `policy.yaml` + `application/policy.py` já permitem mudar escopo de campo
+  (por exemplo, telefone `involved` → `none`) com `PolicyStore.reload()`, sem
+  alterar código. Ainda não está ligado à autenticação/UI.
 
 ### Matriz de permissões P0
 

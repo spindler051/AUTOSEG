@@ -148,8 +148,11 @@ A UI não é fronteira de segurança. O serviço é.
 
 ### Fase 1 — política pura
 
+- catálogo declarativo em `policy.yaml`;
+- `application/policy.py` com `PolicyStore.reload()` atômico;
 - funções sem banco: `can_edit_os`, `can_view_finance`, `can_manage_users`;
 - testes unitários com atores/OS fictícios;
+- teste de mudança de política em runtime;
 - nenhuma tela ainda.
 
 ### Fase 2 — serviço

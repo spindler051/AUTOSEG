@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.45 — política de permissões em runtime — 2026-11-07 — develop
+
+- **Política declarativa:** `policy.yaml` define papéis, permissões e escopo de campos (nome, telefone, endereço, e-mail, documento).
+- **Runtime:** `application/policy.py` expõe `PolicyStore.reload()`, que troca a política ativa atomicamente sem reiniciar; política inválida mantém a anterior.
+- **Field-level:** `employee` vê PII somente de cliente `involved`; mudar para `none` ou `own` é edição de YAML, não de código.
+- **Testes:** `test_policy.py` cobre papéis, wildcard, escopo, reload em runtime e falha segura.
+- **Ainda não ligado:** autenticação, UI de administração e enforcement no `AppService` continuam pendentes; a política é a fundação da Fase 0.
+
 ## 9.6.0-dev.44 — diálogo de OS sem SQL direto — 2026-11-07 — develop
 
 - **GTK sem SQL:** `gtk_dialogos.py` deixou de executar SQL direto. Carregamento de OS, materiais, atendimento, encerramento, atribuição, responsáveis e formulários rápidos usam `AppService`/`LocalService`.
