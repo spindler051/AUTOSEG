@@ -8,7 +8,6 @@ import os
 import shutil
 import sys
 import threading
-from datetime import datetime
 from pathlib import Path
 
 import gi
@@ -30,7 +29,6 @@ import catalogo_servicos as catalogo
 import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
-import completude
 import composicao
 from application.connection import build_service
 from application.local_service import LocalService
@@ -791,46 +789,14 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_os(self):
-        conexao = conectar_banco()
-        try:
-            registros = conexao.execute(
-                """SELECT os.id,os.numero_os,os.cliente_id,c.nome cliente,os.data_abertura,os.valor_total,
-                          os.descricao,os.observacoes,os.forma_pagamento,os.urgencia,os.origem,
-                          (SELECT GROUP_CONCAT(p.nome, ', ') FROM os_prestadores op
-                             JOIN prestadores p ON p.id=op.prestador_id
-                             WHERE op.os_id=os.id AND op.ativo=1) prestadores,
-                          resp.nome responsavel_atual,os.tecnico tecnico_legado,os.status,
-                          os.dados_incompletos
-                   FROM ordens_servico os
-                   JOIN clientes c ON c.id=os.cliente_id
-                   LEFT JOIN os_responsaveis r ON r.os_id=os.id
-                   LEFT JOIN prestadores resp ON resp.id=r.prestador_id
-                   WHERE os.status IN ('Aberta','Iniciada','Pendente') ORDER BY os.id DESC""").fetchall()
-        finally:
-            conexao.close()
-        termo = self.busca_os.get_text().casefold().strip() if hasattr(self, "busca_os") else ""
-        linhas = []
-        for r in registros:
-            texto = " ".join(str(r[k] or "") for k in (
-                "numero_os", "cliente", "prestadores", "responsavel_atual", "status",
-                "forma_pagamento", "tecnico_legado")).casefold()
-            if termo and termo not in texto:
-                continue
-            responsavel = (r["responsavel_atual"] + " (atual)" if r["responsavel_atual"]
-                           else "Não atribuído")
-            if r["prestadores"]:
-                responsavel += " | Equipe: " + r["prestadores"]
-            elif r["tecnico_legado"]:
-                responsavel += " | Técnico: " + r["tecnico_legado"]
-            dados = dict(r)
-            dados["tecnico"] = r["tecnico_legado"]
-            linhas.append((
-                r["id"], r["numero_os"], r["cliente"], r["data_abertura"],
-                ui.brl(r["valor_total"]), r["forma_pagamento"],
-                "Portal" if (r["origem"] or "App") == "Portal" else "App",
-                responsavel, r["status"],
-                "Incompletos" if completude.os_faltantes(dados) else "OK"))
-        self.tabela_os.definir_linhas(linhas)
+        termo = self.busca_os.get_text().strip() if hasattr(self, "busca_os") else ""
+        registros = self.service.listar_os_ativas(termo)
+        self.tabela_os.definir_linhas([
+            (r.id, r.numero_os, r.cliente, r.data_abertura, ui.brl(r.valor_total),
+             r.forma_pagamento, r.origem, r.responsavel, r.status,
+             "Incompletos" if r.incompleto else "OK")
+            for r in registros
+        ])
 
     def _os_selecionada(self):
         valores = self.tabela_os.selecionado()
@@ -1115,50 +1081,28 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def carregar_financeiro(self):
-        conexao = conectar_banco()
-        try:
-            resumo = conexao.execute(
-                """SELECT COALESCE(SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END),0) pendente,
-                          COALESCE(SUM(CASE WHEN status='Recebido' THEN valor ELSE 0 END),0) recebido
-                   FROM financeiro""").fetchone()
-            registros = conexao.execute(
-                """SELECT f.id,os.numero_os,c.nome cliente,f.valor,f.forma_pagamento,
-                          f.status,f.vencimento
-                   FROM financeiro f JOIN ordens_servico os ON os.id=f.os_id
-                   JOIN clientes c ON c.id=f.cliente_id ORDER BY f.id DESC""").fetchall()
-        finally:
-            conexao.close()
-        self.cards_fin["receber"].set_text(ui.brl(resumo["pendente"]))
-        self.cards_fin["recebido"].set_text(ui.brl(resumo["recebido"]))
-        termo = self.busca_financeiro.get_text().casefold().strip() if hasattr(
+        resumo = self.service.resumo_financeiro()
+        termo = self.busca_financeiro.get_text().strip() if hasattr(
             self, "busca_financeiro") else ""
-        linhas = []
-        for r in registros:
-            texto = " ".join(str(r[k] or "") for k in (
-                "numero_os", "cliente", "forma_pagamento", "status", "vencimento")).casefold()
-            if termo and termo not in texto:
-                continue
-            linhas.append((r["id"], r["numero_os"], r["cliente"], ui.brl(r["valor"]),
-                           r["forma_pagamento"], r["status"], r["vencimento"] or ""))
-        self.tabela_financeiro.definir_linhas(linhas)
+        registros = self.service.listar_financeiro(termo)
+        self.cards_fin["receber"].set_text(ui.brl(resumo.a_receber))
+        self.cards_fin["recebido"].set_text(ui.brl(resumo.recebido))
+        self.tabela_financeiro.definir_linhas([
+            (r.id, r.numero_os, r.cliente, ui.brl(r.valor),
+             r.forma_pagamento, r.status, r.vencimento)
+            for r in registros
+        ])
 
     def _marcar_recebido(self):
         valores = self.tabela_financeiro.selecionado()
         if valores is None:
             ui.aviso_erro(self, "Seleção", "Selecione um lançamento financeiro.")
             return
-        conexao = conectar_banco()
         try:
-            conexao.execute(
-                "UPDATE financeiro SET status='Recebido',data_pagamento=? WHERE id=?",
-                (datetime.now().strftime("%d/%m/%Y"), valores[0]))
-            conexao.commit()
+            self.service.marcar_recebido(valores[0])
         except Exception as erro:
-            conexao.rollback()
             ui.aviso_erro(self, "Financeiro", str(erro))
             return
-        finally:
-            conexao.close()
         self.carregar_financeiro()
         self._atualizar_inicio()
         ui.toast(self, "Lançamento marcado como recebido.")

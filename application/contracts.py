@@ -47,6 +47,43 @@ class Cliente:
 
 
 @dataclass(frozen=True)
+class OSResumo:
+    """Active service-order row used by the desktop list."""
+
+    id: int
+    numero_os: str
+    cliente: str
+    data_abertura: str
+    valor_total: float
+    forma_pagamento: str
+    origem: str
+    responsavel: str
+    status: str
+    incompleto: bool
+
+
+@dataclass(frozen=True)
+class ResumoFinanceiro:
+    """Totals for the finance cards."""
+
+    a_receber: float
+    recebido: float
+
+
+@dataclass(frozen=True)
+class LancamentoFinanceiro:
+    """One finance row used by the desktop table."""
+
+    id: int
+    numero_os: str
+    cliente: str
+    valor: float
+    forma_pagamento: str
+    status: str
+    vencimento: str
+
+
+@dataclass(frozen=True)
 class ResumoPortal:
     """Counts for requests created by the client portal."""
 
@@ -125,6 +162,20 @@ class AppService(Protocol):
     def listar_solicitacoes_portal(
         self, limite: int = 50
     ) -> list[SolicitacaoPortal]:
+        ...
+
+    def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
+        ...
+
+    def resumo_financeiro(self) -> ResumoFinanceiro:
+        ...
+
+    def listar_financeiro(
+        self, termo: str = ''
+    ) -> list[LancamentoFinanceiro]:
+        ...
+
+    def marcar_recebido(self, lancamento_id: int) -> None:
         ...
 
     def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:

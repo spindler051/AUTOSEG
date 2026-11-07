@@ -103,6 +103,47 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(resumo.financeiro_a_receber, 100.0)
 
 
+    def test_active_os_list_uses_contract_dto(self):
+        self.criar(nome='Alfa')
+        with sqlite3.connect(self.db) as conexao:
+            conexao.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
+                "descricao,forma_pagamento,urgencia,origem,arquivada) "
+                "VALUES('OS-A1',1,'Aberta',150,'Reparo','PIX','Normal','App',0)")
+            conexao.execute(
+                "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
+                "descricao,forma_pagamento,urgencia,origem,arquivada) "
+                "VALUES('OS-A2',1,'Concluída',250,'Encerrada','PIX','Normal','App',0)")
+        linhas = self.service.listar_os_ativas()
+        self.assertEqual([item.numero_os for item in linhas], ['OS-A1'])
+        self.assertEqual(linhas[0].cliente, 'Alfa')
+        self.assertEqual(linhas[0].responsavel, 'Não atribuído')
+        self.assertFalse(linhas[0].incompleto)
+        self.assertEqual(
+            [item.numero_os for item in self.service.listar_os_ativas('A1')],
+            ['OS-A1'])
+
+    def test_finance_slice_uses_contract_dtos(self):
+        self.criar(nome='Alfa')
+        with sqlite3.connect(self.db) as conexao:
+            for numero, status, valor in (('OS-F1', 'Aguardando pagamento', 100),
+                                          ('OS-F2', 'Recebido', 200)):
+                os_id = conexao.execute(
+                    "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
+                    "data_abertura,origem,arquivada) VALUES(?,1,'Concluída',?, '2026-11-06','App',0)",
+                    (numero, valor)).lastrowid
+                conexao.execute(
+                    "INSERT INTO financeiro(os_id,cliente_id,valor,status,forma_pagamento) "
+                    "VALUES(?,1,?,?,'PIX')", (os_id, valor, status))
+        resumo = self.service.resumo_financeiro()
+        self.assertEqual(resumo.a_receber, 100.0)
+        self.assertEqual(resumo.recebido, 200.0)
+        linhas = self.service.listar_financeiro('F1')
+        self.assertEqual([item.numero_os for item in linhas], ['OS-F1'])
+        self.service.marcar_recebido(linhas[0].id)
+        self.assertEqual(self.service.resumo_financeiro().a_receber, 0.0)
+        self.assertEqual(self.service.resumo_financeiro().recebido, 300.0)
+
     def test_portal_summary_and_rows_use_contract_dtos(self):
         self.criar(nome='Alfa')
         with sqlite3.connect(self.db) as conexao:
