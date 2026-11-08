@@ -2209,6 +2209,7 @@ class PortalPrestador:
                              for chave,valor in bases_comp.items()]
                 corpo+=select('Base dos percentuais','base_percentuais',opcoes_base,base_atual)
                 corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
+                corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
                 if oid and d['status'] in ext.ATIVAS and contatos_os:
                     selecionados_d = d.get('destinatario_sel[]') or []
