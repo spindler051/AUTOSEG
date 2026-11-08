@@ -34,6 +34,7 @@ from application.contracts import (
     OSResultado,
     OSResumo,
     PrestadorResumo,
+    RelatorioOS,
     ResumoFinanceiro,
     ResumoHistorico,
     ResumoInicio,
@@ -273,6 +274,11 @@ class HttpService(AppService):
             nome=str(dados.get('nome') or ''),
             telefone=str(dados.get('telefone') or ''),
         )
+
+    def listar_relatorios(self, termo: str = '') -> list[RelatorioOS]:
+        dados = self._ler('/api/v1/desktop/relatorios', [],
+                          params={'termo': termo})
+        return [RelatorioOS(**item) for item in dados]
 
     def listar_historico(self, termo: str = '') -> list[HistoricoOS]:
         dados = self._ler('/api/v1/desktop/historico', [],
@@ -667,6 +673,7 @@ class HttpService(AppService):
                 'prestadores.criar', 'prestadores.senha',
                 'prestadores.config', 'prestadores.documento',
                 'os.pdf.publicar', 'os.pdf.abrir', 'os.email.preparar', 'os.nota.preparar',
+                'relatorios.listar',
                 'estoque.materiais', 'prestadores.admin',
                 'pj.whatsapp', 'pj.analisar', 'pj.confirmar', 'pj.gerar_os',
                 'pj.validar', 'pj.sindico', 'pj.mesclar', 'pj.vinculo',

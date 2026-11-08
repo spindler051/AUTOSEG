@@ -35,7 +35,7 @@ def enviar_yaml(opener,url,csrf,filename,conteudo):
 
 
 class Rev04Http(unittest.TestCase):
-    def test_servico_yaml_catalogo_e_estoque_sem_endpoint_web(self):
+    def test_servico_yaml_catalogo_e_estoque_admin_sem_permissao(self):
         with tempfile.TemporaryDirectory(prefix='rev04_http_') as tmp:
             db=str(Path(tmp)/'app.db');criar_banco(db);ext.instalar(db)
             ext.cadastrar(db,'Prestador REV04','prestador@example.invalid','SenhaSegura123456')
@@ -61,9 +61,9 @@ class Rev04Http(unittest.TestCase):
                     'preco_servico':'25','material_nome[]':['Sensor demo'],'material_qtd[]':['1'],'material_valor[]':['12,50'],
                     'relatorio_padrao':'Inspecionar e testar.'})
                 self.assertIn('Serviço fictício YAML',salvo)
-                # Segurança: rota inexistente, não há CRUD de estoque no portal.
+                # Segurança: estoque existe, mas exige admin.
                 with self.assertRaises(urllib.error.HTTPError) as ctx:bc.open(base+'/estoque',timeout=10)
-                self.assertEqual(ctx.exception.code,404)
+                self.assertEqual(ctx.exception.code,403)
                 os_form=fetch(bc,base+'/os/nova')
                 self.assertNotIn('Estoque disponível',os_form)
             finally:serv.parar()

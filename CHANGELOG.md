@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.60 — paridade de telas entre GTK e site — 2026-11-07 — develop
+
+- **Site ganhou telas do GTK:** Prestadores, Estoque, Caixa da empresa e Composição de valores, visíveis apenas para admin.
+- **GTK ganhou telas do site:** Notas fiscais e E-mails, com lista por OS e preparação do arquivo.
+- **Paridade de prestador:** o conjunto de funções do prestador agora está espelhado; Conexões fica como configuração do cliente desktop.
+- **Interface do site:** o desenho atual é o padrão; a documentação deixou de tratá-lo como experimental.
+- **Testes:** novos testes HTTP das telas admin e teste da lista de relatórios no AppService; 316 testes OK, 1 skip.
+
 ## 9.6.0-dev.59 — visual do login e paridade de papéis — 2026-11-07 — develop
 
 - **Logo removida do GTK:** a imagem não aparece mais no Início nem na tela de login.

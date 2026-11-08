@@ -6,6 +6,7 @@ exclusivo do desktop. Por padrão, escuta APENAS em 127.0.0.1.
 """
 import html
 import json
+import yaml
 import logging
 from logging.handlers import RotatingFileHandler
 import mimetypes
@@ -14,6 +15,7 @@ import re
 import secrets
 import threading
 import time
+from datetime import datetime
 from decimal import Decimal
 from email.parser import BytesParser
 from email.policy import default
@@ -31,6 +33,7 @@ import api_financeiro as api_fin
 import importacao_yaml as yaml_import
 import catalogo_servicos as catalogo
 import composicao
+import empresa_financeiro as empresa
 import estoque_materiais as estoque
 import portal_v9 as v9
 import links_publicos as links9
@@ -737,6 +740,28 @@ def chip_status(status):
             f'{esc(status)}</span>')
 
 
+def _grupos_navegacao(usuario):
+    grupos=[
+        ('Operação', [('/', 'Início', 'home'), ('/os', 'Ordens de serviço', 'clipboard'),
+                      ('/clientes', 'Clientes', 'users')]),
+        ('Gestão', [('/servicos', 'Serviços e valores', 'wrench'),
+                    ('/financeiro', 'Financeiro', 'wallet'),
+                    ('/notas', 'Notas fiscais', 'receipt'),
+                    ('/emails', 'E-mails', 'mail')]),
+        ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
+                       ('/pj-publicas', 'Solicitações PJ', 'building')]),
+    ]
+    if usuario.get('admin'):
+        grupos[1][1].extend([
+            ('/prestadores', 'Prestadores', 'users'),
+            ('/estoque', 'Estoque', 'wrench'),
+            ('/caixa', 'Caixa da empresa', 'wallet'),
+            ('/composicao', 'Composição de valores', 'layout'),
+        ])
+        grupos[-1][1].append(('/feedback/recebidos', 'Feedbacks', 'message'))
+    return grupos
+
+
 def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
     """Experimental interface: a quiet work-order shell around the same flow."""
     base=layout(titulo,corpo,usuario,nonce,cliente,banco)
@@ -746,18 +771,7 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
     base=base.replace('</style>',CSS_APP+'</style>',1)
     sidebar=''
     if usuario and not cliente:
-        grupos=[
-            ('Operação', [('/', 'Início', 'home'), ('/os', 'Ordens de serviço', 'clipboard'),
-                          ('/clientes', 'Clientes', 'users')]),
-            ('Gestão', [('/servicos', 'Serviços e valores', 'wrench'),
-                        ('/financeiro', 'Financeiro', 'wallet'),
-                        ('/notas', 'Notas fiscais', 'receipt'),
-                        ('/emails', 'E-mails', 'mail')]),
-            ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
-                           ('/pj-publicas', 'Solicitações PJ', 'building')]),
-        ]
-        if usuario.get('admin'):
-            grupos[-1][1].append(('/feedback/recebidos', 'Feedbacks', 'message'))
+        grupos=_grupos_navegacao(usuario)
         def ativo(url):
             return path==url or (url!='/' and path.startswith(url+'/'))
         blocos=''
@@ -798,6 +812,8 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
     menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     if usuario and usuario.get('admin') and not cliente:
+        menus.extend([('/prestadores','Prestadores'),('/estoque','Estoque'),
+                      ('/caixa','Caixa da empresa'),('/composicao','Composição de valores')])
         menus.append(('/feedback/recebidos','Feedbacks'))
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
@@ -2515,6 +2531,161 @@ class PortalPrestador:
                         f'<div class="kpi"><span>Total exibido</span><strong>{dinheiro(sum(float(x["valor_total"] or 0) for x in oses))}</strong></div></div>') if tipo=='relatorios' else ''
                 return self.pagina(title,f'<p class="muted">{esc(explanation)}</p>{resumo}'+card('Ordens disponíveis',tabela(['OS','Cliente','Status','Valor','Ação'],rows)),s)
 
+            def prestadores_admin(self,s):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem gerenciar prestadores.')
+                pessoas=ext.listar_todos(banco)
+                admins=cad9.listar_admins(banco)
+                linhas=[]
+                for p in pessoas:
+                    pid=int(p['id'])
+                    admin=pid in admins
+                    acoes=(f'<form method="post" action="/prestadores/{pid}/admin" style="display:inline">'
+                           f'{self.hidden(s)}<button class="secondary">'
+                           f'{"Remover admin" if admin else "Tornar admin"}</button></form> '
+                           f'<form method="post" action="/prestadores/{pid}/alternar" style="display:inline">'
+                           f'{self.hidden(s)}<button class="secondary">'
+                           f'{"Desativar" if p["ativo"] else "Ativar"}</button></form> '
+                           f'<form method="post" action="/prestadores/{pid}/senha" style="display:inline">'
+                           f'{self.hidden(s)}<input type="password" name="senha" minlength="10" '
+                           f'placeholder="Nova senha" style="width:130px;display:inline-block">'
+                           '<button class="secondary">Trocar senha</button></form> '
+                           f'<form method="post" action="/prestadores/{pid}/arquivar" style="display:inline" '
+                           'data-confirm="Arquivar este prestador e bloquear o login?">'
+                           f'{self.hidden(s)}<button class="danger">Arquivar</button></form>')
+                    linhas.append((pid,esc(p['nome']),esc(p['email']),esc(p['especialidade'] or ''),
+                                   'Sim' if p['ativo'] else 'Não','Sim' if admin else 'Não',acoes))
+                form=(f'<form method="post" action="/prestadores/novo">{self.hidden(s)}'
+                      +campos_escuros('Nome','nome',required=True)
+                      +campos_escuros('E-mail (login)','email',kind='email',required=True)
+                      +campos_escuros('Telefone','telefone')
+                      +campos_escuros('CNPJ do prestador','documento')
+                      +campos_escuros('Especialidade','especialidade')
+                      +campos_escuros('Senha inicial','senha',kind='password',required=True)
+                      +'<button>Cadastrar prestador</button></form>')
+                return self.pagina('Prestadores',
+                    card('Novo prestador',form)
+                    +card('Prestadores',tabela(
+                        ['ID','Nome','E-mail','Especialidade','Ativo','Admin','Ações'],linhas)),s)
+
+            def estoque_admin(self,s):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem gerenciar o estoque.')
+                itens=estoque.listar(banco)
+                linhas=[]
+                for item in itens:
+                    linhas.append((item['id'],esc(item['nome']),esc(item['sku'] or ''),
+                                   esc(item['unidade'] or ''),item['saldo'],item['minimo'],
+                                   dinheiro(item['venda_centavos']/100),
+                                   botao('Abrir',f'/estoque/{item["id"]}','secondary')))
+                return self.pagina('Estoque',
+                    card('Novo material',botao('Cadastrar material','/estoque/novo',''))
+                    +card('Materiais',tabela(
+                        ['ID','Material','Código','Unidade','Saldo','Mínimo','Venda','Ação'],
+                        linhas)),s)
+
+            def estoque_item(self,s,produto_id=None):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem gerenciar o estoque.')
+                item=None
+                if produto_id is not None:
+                    item=next((x for x in estoque.listar(banco)
+                               if int(x['id'])==int(produto_id)),None)
+                    if item is None:
+                        raise ValueError('Material não encontrado.')
+                dados=item or {'nome':'','sku':'','unidade':'un','custo_centavos':0,
+                               'venda_centavos':0,'minimo':0}
+                form=(f'<form method="post" action="/estoque/salvar">{self.hidden(s)}'
+                      +(f'<input type="hidden" name="id" value="{int(produto_id)}">'
+                        if produto_id is not None else '')
+                      +campos_escuros('Nome','nome',dados['nome'],required=True)
+                      +campos_escuros('Código / SKU','sku',dados['sku'] or '')
+                      +campos_escuros('Unidade','unidade',dados['unidade'] or 'un')
+                      +campos_escuros('Custo (R$)','custo',
+                                      dinheiro((dados['custo_centavos'] or 0)/100))
+                      +campos_escuros('Venda (R$)','venda',
+                                      dinheiro((dados['venda_centavos'] or 0)/100))
+                      +campos_escuros('Estoque mínimo','minimo',
+                                      str(dados['minimo'] or 0))
+                      +'<button>Salvar material</button></form>')
+                extra=''
+                if produto_id is not None:
+                    ajuste=(f'<form method="post" action="/estoque/{int(produto_id)}/ajuste">'
+                            f'{self.hidden(s)}'
+                            +campos_escuros('Quantidade com sinal','delta','+1',required=True)
+                            +campos_escuros('Motivo','motivo',required=True)
+                            +'<button>Registrar ajuste</button></form>')
+                    movs=estoque.movimentos(banco,int(produto_id),200)
+                    linhas=[(m['criado_em'],m['nome'],f'{m["delta"]:+g}',m['tipo'],
+                             m['os_id'] or '—',m['motivo']) for m in movs]
+                    extra=(card('Ajustar saldo',ajuste)
+                           +card('Movimentações',tabela(
+                               ['Data','Material','Delta','Tipo','OS','Motivo'],linhas)))
+                    excluir=(f'<form method="post" action="/estoque/{int(produto_id)}/excluir" '
+                             'data-confirm="Excluir ou arquivar este material?">'
+                             f'{self.hidden(s)}<button class="danger">Excluir material</button></form>')
+                    extra+=card('Excluir',excluir)
+                return self.pagina('Material de estoque',
+                    card('Material',form)+extra
+                    +botao('Voltar ao estoque','/estoque','secondary'),s)
+
+            def caixa_admin(self,s):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem acessar o caixa da empresa.')
+                resumo=empresa.resumo(banco)
+                movimentos=empresa.listar(banco)
+                prestadores=ext.listar_todos(banco)
+                oses=ordens_repo.listar_relatorios(banco,limite=300)
+                linhas=[]
+                for item in movimentos:
+                    pessoa=' · '.join(str(x) for x in
+                                      (item.get('prestador_nome'),item.get('numero_os')) if x)
+                    linhas.append((item['id'],item['data'],
+                                   empresa.TIPOS.get(item['tipo'],item['tipo']),
+                                   esc(pessoa or '—'),esc(item['descricao']),
+                                   dinheiro(item['valor_centavos']/100),
+                                   f'<form method="post" action="/caixa/movimentos/{item["id"]}/arquivar" '
+                                   'data-confirm="Arquivar este lançamento?">'
+                                   f'{self.hidden(s)}<button class="danger">Arquivar</button></form>'))
+                tipos=[(codigo,rotulo) for codigo,rotulo in empresa.TIPOS.items()]
+                form=(f'<form method="post" action="/caixa/movimentos">{self.hidden(s)}'
+                      +select('Tipo','tipo',tipos)
+                      +campos_escuros('Data','data',datetime.now().strftime('%d/%m/%Y'))
+                      +campos_escuros('Descrição','descricao',required=True)
+                      +campos_escuros('Valor (R$)','valor',required=True)
+                      +select('Investidor / pago por','prestador_id',
+                              [('','Nenhum')]+[(str(p['id']),p['nome']) for p in prestadores])
+                      +select('OS vinculada (opcional)','os_id',
+                              [('','Nenhuma')]+[(str(o['id']),o['numero_os']) for o in oses])
+                      +campos_escuros('Categoria','categoria')
+                      +campos_escuros('Finalidade do aporte','finalidade')
+                      +textarea('Observação','observacao','',3)
+                      +'<button>Registrar lançamento</button></form>')
+                resumo_card=card('Resumo',f'<p>Capital: <b>{dinheiro(resumo["aportes_centavos"]/100)}</b> · '
+                                 f'Despesas: <b>{dinheiro(resumo["despesas_centavos"]/100)}</b> · '
+                                 f'Saldo do controle: <b>{dinheiro(resumo["saldo_centavos"]/100)}</b></p>')
+                return self.pagina('Caixa da empresa',
+                    resumo_card+card('Novo lançamento',form)
+                    +card('Lançamentos',tabela(
+                        ['ID','Data','Tipo','Pessoa / OS','Descrição','Valor','Ação'],
+                        linhas)),s)
+
+            def composicao_admin(self,s):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem editar a composição.')
+                try:
+                    config=composicao.carregar()
+                except (ValueError, OSError):
+                    config={'versao':1,'componentes':[]}
+                texto=yaml.safe_dump(config,allow_unicode=True,sort_keys=False)
+                form=(f'<form method="post" action="/composicao/salvar">{self.hidden(s)}'
+                      +textarea('composicao.yaml','yaml',texto,28,True)
+                      +'<button>Salvar composição</button></form>')
+                recalc=(f'<form method="post" action="/composicao/recalcular">{self.hidden(s)}'
+                        '<button class="secondary">Recalcular serviços e OS abertas</button></form>')
+                return self.pagina('Composição de valores',
+                    card('composicao.yaml',form)+card('Recalcular',recalc),s)
+
             def portal_cliente(self,s):
                 porta_cliente=runtime_config.client_port(8765)
                 url_cliente=f'http://127.0.0.1:{porta_cliente}/'
@@ -2643,8 +2814,6 @@ class PortalPrestador:
                         if arquivo and arquivo.is_file():
                             return self.send_bytes(arquivo.read_bytes(),'image/png')
                         return self.erro('Imagem não encontrada.',404,self.sessao())
-                    if path=='/prestadores' or path.startswith('/prestadores/'):
-                        return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop.',403,self.sessao())
                     if path in ('/cliente','/pj') or path.startswith('/cliente/') or path.startswith('/pj/'):
                         return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
@@ -2748,11 +2917,18 @@ class PortalPrestador:
                         return self.orcamento_form(s,cliente_id=cliente_orcamento)
                     if path=='/clientes/novo':return self.cliente_form(s)
                     if path=='/financeiro':return self.financeiro(s)
+                    if path=='/prestadores':return self.prestadores_admin(s)
+                    if path=='/estoque':return self.estoque_admin(s)
+                    if path=='/estoque/novo':return self.estoque_item(s)
+                    if path=='/caixa':return self.caixa_admin(s)
+                    if path=='/composicao':return self.composicao_admin(s)
                     if path=='/relatorios':return self.redir('/historico')
                     if path=='/emails':return self.relatorios(s,'emails')
                     if path=='/notas':return self.relatorios(s,'notas')
                     if path=='/portal-cliente':return self.portal_cliente(s)
                     partes=path.strip('/').split('/')
+                    if len(partes)==2 and partes[0]=='estoque' and partes[1].isdigit():
+                        return self.estoque_item(s,int(partes[1]))
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='editar':
                         return self.servico_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='clientes' and partes[1].isdigit():
@@ -2811,9 +2987,6 @@ class PortalPrestador:
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
                     d=self.form()
-                    if path=='/prestadores' or path.startswith('/prestadores/'):
-                        return self.erro('O cadastro de prestadores é feito somente no aplicativo desktop. '
-                                         'O portal web não aceita cadastro de prestadores.',403,self.sessao())
                     if path=='/login':
                         ip=self.client_address[0]
                         agora=time.time()
@@ -2838,6 +3011,95 @@ class PortalPrestador:
                         if 'autosseg_session' in cookie:SESSOES.pop(cookie['autosseg_session'].value,None)
                         return self.redir('/',self.cookie('',True))
                     pid=s['pid']
+                    if path=='/prestadores/novo' or path.startswith('/prestadores/'):
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem gerenciar prestadores.')
+                        if path=='/prestadores/novo':
+                            senha=str(d.get('senha',''))
+                            if len(senha)<10:
+                                raise ValueError('A senha inicial deve ter pelo menos 10 caracteres.')
+                            ext.cadastrar(banco,nome=str(d.get('nome','')),
+                                          email=str(d.get('email','')),senha=senha,
+                                          telefone=str(d.get('telefone','')),
+                                          documento=str(d.get('documento','')),
+                                          especialidade=str(d.get('especialidade','')))
+                            return self.redir('/prestadores')
+                        partes=path.strip('/').split('/')
+                        if len(partes)==3 and partes[1].isdigit():
+                            alvo=int(partes[1])
+                            if partes[2]=='alternar':
+                                ext.alternar_ativo(banco,alvo)
+                            elif partes[2]=='arquivar':
+                                ext.arquivar_prestador(banco,alvo)
+                            elif partes[2]=='senha':
+                                ext.redefinir_senha_prestador_desktop(
+                                    banco,alvo,str(d.get('senha','')))
+                            elif partes[2]=='admin':
+                                cad9.definir_admin(banco,alvo,
+                                                   not cad9.prestador_admin(banco,alvo))
+                            else:
+                                raise ValueError('Ação de prestador inválida.')
+                            return self.redir('/prestadores')
+                        raise ValueError('Prestador inválido.')
+                    if path=='/estoque/salvar' or path.startswith('/estoque/'):
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem gerenciar o estoque.')
+                        partes=path.strip('/').split('/')
+                        if path=='/estoque/salvar':
+                            identificador=d.get('id')
+                            identificador=int(identificador) if str(identificador or '').strip() else None
+                            estoque.cadastrar(
+                                banco,nome=str(d.get('nome','')),
+                                sku=str(d.get('sku','')),
+                                unidade=str(d.get('unidade','un')),
+                                custo=str(d.get('custo','0')),
+                                venda=str(d.get('venda','0')),
+                                minimo=str(d.get('minimo','0')),
+                                identificador=identificador)
+                            return self.redir('/estoque')
+                        if len(partes)==3 and partes[1].isdigit():
+                            alvo=int(partes[1])
+                            if partes[2]=='ajuste':
+                                estoque.ajuste(banco,alvo,str(d.get('delta','')),
+                                               str(d.get('motivo','')),ator=s['nome'])
+                            elif partes[2]=='excluir':
+                                estoque.excluir(banco,alvo)
+                            else:
+                                raise ValueError('Ação de estoque inválida.')
+                            return self.redir(f'/estoque/{alvo}')
+                        raise ValueError('Material inválido.')
+                    if path=='/caixa/movimentos' or path.startswith('/caixa/movimentos/'):
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem acessar o caixa da empresa.')
+                        partes=path.strip('/').split('/')
+                        if path=='/caixa/movimentos':
+                            empresa.registrar(
+                                banco,tipo=str(d.get('tipo','')),
+                                descricao=str(d.get('descricao','')),
+                                valor=str(d.get('valor','0')),
+                                data=str(d.get('data','')),
+                                prestador_id=str(d.get('prestador_id','')).strip() or None,
+                                os_id=str(d.get('os_id','')).strip() or None,
+                                categoria=str(d.get('categoria','')),
+                                finalidade=str(d.get('finalidade','')),
+                                observacao=str(d.get('observacao','')),
+                                criado_por=s['nome'])
+                            return self.redir('/caixa')
+                        if len(partes)==4 and partes[3]=='arquivar' and partes[2].isdigit():
+                            empresa.arquivar(banco,int(partes[2]),ator=s['nome'])
+                            return self.redir('/caixa')
+                        raise ValueError('Lançamento inválido.')
+                    if path in ('/composicao/salvar','/composicao/recalcular'):
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem editar a composição.')
+                        if path=='/composicao/salvar':
+                            try:
+                                config=yaml.safe_load(str(d.get('yaml','')))
+                            except yaml.YAMLError as erro:
+                                raise ValueError(f'YAML inválido: {erro}') from erro
+                            composicao.salvar(config)
+                        composicao.recalcular_tudo(banco)
+                        return self.redir('/composicao')
                     def _meta_feedback():
                         meta=feedback.contexto(
                             banco,s,

@@ -25,13 +25,15 @@ em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
 - login de prestador (admin ou funcionário);
 - clientes, OS, histórico, financeiro, PJ;
 - prestadores, catálogo, composição, estoque, caixa da empresa;
+- notas fiscais e e-mails (lista e preparação);
 - conexão/servidor e controles dos portais locais.
 
 **Portal do Prestador**
 
 - login de prestador;
 - clientes, OS, catálogo, financeiro, PJ, notas fiscais, e-mails e histórico;
-- sem telas de prestadores, estoque, composição, caixa da empresa ou conexão.
+- prestadores, estoque, caixa da empresa e composição de valores (admin);
+- sem conexão/servidor, que é configuração do cliente desktop.
 
 **Portal do Cliente**
 
@@ -41,11 +43,12 @@ em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
 
 ## Resposta curta
 
-O site **não** faz tudo que o GTK faz. Faltam no site, hoje: gestão de
-prestadores, estoque, composição de valores, caixa da empresa e conexão.
+Com as telas de admin adicionadas ao site e as listas de notas/e-mails
+adicionadas ao GTK, o conjunto de funções do prestador está praticamente
+espelhado. A exceção é **Conexões**, que é configuração do cliente desktop, não
+uma função de negócio do servidor.
 
-O GTK também **não** faz tudo que o site faz: não tem login de cliente nem todas
-as listas de notas/e-mails do Portal do Prestador.
+O GTK continua sem login de cliente; o Portal do Cliente segue separado.
 
 ## Lacunas atuais
 
@@ -53,8 +56,8 @@ as listas de notas/e-mails do Portal do Prestador.
 - A API desktop identifica o prestador, mas ainda não aplica todas as regras
   admin × funcionário em cada ação. Isso é a próxima fatia de permissões.
 - Esconder um botão na UI não é autorização; a regra precisa viver no serviço.
-- As telas exclusivas do GTK são lacuna de paridade web, não privilégio extra
-  por usar GTK.
+- As telas de admin existem nos dois lados; a autorização ainda precisa ser
+  aplicada no serviço para admin × funcionário.
 
 ## Próximo passo
 

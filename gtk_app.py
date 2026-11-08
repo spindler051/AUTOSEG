@@ -176,6 +176,8 @@ class Janela(Adw.ApplicationWindow):
             ("os", "Ordens de serviço", "document-edit-symbolic"),
             ("historico", "Histórico e relatórios", "document-open-recent-symbolic"),
             ("financeiro", "Financeiro", "accessories-calculator-symbolic"),
+            ("notas", "Notas fiscais", "x-office-document-symbolic"),
+            ("emails", "E-mails", "mail-send-symbolic"),
             ("prestadores", "Prestadores", "avatar-default-symbolic"),
         ]
         if self.web.enabled:
@@ -263,6 +265,8 @@ class Janela(Adw.ApplicationWindow):
         self.stack.add_titled(self._pagina_os(), "os", "Ordens de serviço")
         self.stack.add_titled(self._pagina_historico(), "historico", "Histórico")
         self.stack.add_titled(self._pagina_financeiro(), "financeiro", "Financeiro")
+        self.stack.add_titled(self._pagina_notas(), "notas", "Notas fiscais")
+        self.stack.add_titled(self._pagina_emails(), "emails", "E-mails")
         self.stack.add_titled(self._pagina_prestadores(), "prestadores", "Prestadores")
         self.stack.add_titled(self._pagina_portal(), "portal", "Portal do cliente")
         self.stack.add_titled(self._pagina_pj(), "pj", "Condomínios e chamados")
@@ -333,6 +337,8 @@ class Janela(Adw.ApplicationWindow):
                 "os": self.carregar_os,
                 "historico": self.carregar_historico,
                 "financeiro": self.carregar_financeiro,
+                "notas": self.carregar_notas,
+                "emails": self.carregar_emails,
                 "prestadores": self.carregar_prestadores,
                 "portal": self.carregar_portal,
                 "pj": self.carregar_pj,
@@ -347,8 +353,9 @@ class Janela(Adw.ApplicationWindow):
         if self.remote_mode and hasattr(self.service, "reset_offline"):
             self.service.reset_offline()
         disponiveis = {chave for chave, _titulo, _icone in self.nav_itens}
-        for nome in ("clientes", "os", "historico", "financeiro", "prestadores",
-                     "portal", "pj", "catalogo", "composicao", "estoque"):
+        for nome in ("clientes", "os", "historico", "financeiro", "notas",
+                     "emails", "prestadores", "portal", "pj", "catalogo",
+                     "composicao", "estoque"):
             if nome not in disponiveis:
                 continue
             if nome == "portal" and not self.web.enabled:
@@ -1178,6 +1185,94 @@ class Janela(Adw.ApplicationWindow):
         self.carregar_financeiro()
         self._atualizar_inicio()
         ui.toast(self, "Lançamento marcado como recebido.")
+
+    # ------------------------------------------------------------------
+    # Notas fiscais e e-mails
+    # ------------------------------------------------------------------
+
+    def _pagina_documentos(self, tipo):
+        pagina = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        busca = Gtk.SearchEntry(placeholder_text="Pesquisar OS, cliente ou situação")
+        busca.set_hexpand(True)
+        busca.connect("search-changed",
+                      lambda *_args: self._carregar_documentos(tipo))
+        pagina.append(ui.barra(busca))
+        tabela = ui.Tabela([
+            ("ID", 65, False, 0.5),
+            ("OS", 90, False, 0.5),
+            ("Cliente", 0, True, 0.0),
+            ("Situação", 120, False, 0.5),
+            ("Valor", 110, False, 1.0),
+        ], ao_ativar=lambda: self._abrir_os_documento(tipo))
+        pagina.append(tabela.widget)
+        rotulo = "nota fiscal" if tipo == "notas" else "e-mail"
+        pagina.append(ui.barra(
+            ui.botao("Abrir OS", lambda: self._abrir_os_documento(tipo)),
+            ui.botao(f"Preparar {rotulo}", lambda: self._preparar_documento(tipo),
+                     css="suggested-action")))
+        setattr(self, f"busca_{tipo}", busca)
+        setattr(self, f"tabela_{tipo}", tabela)
+        return pagina
+
+    def _pagina_notas(self):
+        return self._pagina_documentos("notas")
+
+    def _pagina_emails(self):
+        return self._pagina_documentos("emails")
+
+    def _carregar_documentos(self, tipo):
+        busca = getattr(self, f"busca_{tipo}", None)
+        termo = busca.get_text().strip() if busca is not None else ""
+        tabela = getattr(self, f"tabela_{tipo}", None)
+        if tabela is None:
+            return
+        registros = self.service.listar_relatorios(termo)
+        tabela.definir_linhas([
+            (r.id, r.numero_os, r.cliente, r.status, ui.brl(r.valor_total))
+            for r in registros
+        ])
+
+    def carregar_notas(self):
+        self._carregar_documentos("notas")
+
+    def carregar_emails(self):
+        self._carregar_documentos("emails")
+
+    def _documento_selecionado(self, tipo):
+        tabela = getattr(self, f"tabela_{tipo}", None)
+        valores = tabela.selecionado() if tabela is not None else None
+        if valores is None:
+            ui.aviso_erro(self, "Seleção", "Selecione uma OS.")
+            return None
+        return valores
+
+    def _abrir_os_documento(self, tipo):
+        valores = self._documento_selecionado(tipo)
+        if valores:
+            self.abrir_os_id(valores[0])
+
+    def _preparar_documento(self, tipo):
+        valores = self._documento_selecionado(tipo)
+        if not valores:
+            return
+        os_id = valores[0]
+        if valores[3] not in fluxo.FIM:
+            ui.info(self, "Documento",
+                    "O documento fica disponível após o encerramento da OS.")
+            return
+        try:
+            if tipo == "notas":
+                caminho = self.service.preparar_nota(os_id)
+                texto = ("Dados preparados em:\n" + caminho +
+                         "\n\nNENHUMA NOTA FISCAL FOI EMITIDA.")
+            else:
+                caminho = self.service.preparar_email(os_id)
+                texto = ("Rascunho .eml com PDF:\n" + caminho +
+                         "\n\nNenhum e-mail foi enviado.")
+            ui.info(self, "Nota fiscal" if tipo == "notas" else "E-mail", texto)
+            ui.abrir_caminho(caminho, self)
+        except (AppError, OSError, ValueError) as erro:
+            ui.aviso_erro(self, "Documento", str(erro))
 
     # ------------------------------------------------------------------
     # Prestadores

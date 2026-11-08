@@ -734,6 +734,12 @@ def aprovar_anexo(banco,anexo_id,visivel,legenda,ator):
         ext.evento(c,a['os_id'],'Evidência para o cliente',('Aprovada' if visivel else 'Ocultada')+' por '+ator)
 
 
+def listar_admins(banco):
+    with ext.db(banco) as c:
+        return {int(r['prestador_id']) for r in c.execute(
+            'SELECT prestador_id FROM v9_admin_prestadores')}
+
+
 def prestador_admin(banco,pid):
     with ext.db(banco) as c:
         return bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())

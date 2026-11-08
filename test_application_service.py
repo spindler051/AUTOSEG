@@ -380,6 +380,23 @@ class DesktopApiTest(unittest.TestCase):
                          10000)
         self.assertIn('componentes', self.service.composicao_config())
 
+    def test_relatorios_screen_lists_os(self):
+        cliente = self.service.salvar_cliente(
+            None, {'tipo_pessoa': 'Jurídica', 'documento': '',
+                   'nome': 'Condomínio Relatórios', 'status': 'Ativo'})
+        from application.contracts import OSInput
+        self.service.salvar_os(OSInput(
+            os_id=None, cliente_id=cliente.id, tecnico='',
+            descricao='OS para notas', valor_mao_obra=0, valor_materiais=0,
+            custo_materiais=0, valor_total=0, forma_pagamento='PIX',
+            urgencia='Normal', observacoes='', texto_adicional='',
+            dados_incompletos=0, tempo_horas=0, composicao_json='',
+            base_percentuais='total', materiais=(), acao='', relato='',
+            motivo='', imagens=()))
+        registros = self.service.listar_relatorios()
+        self.assertEqual(len(registros), 1)
+        self.assertEqual(registros[0].cliente, 'Condomínio Relatórios')
+
     def test_provider_and_os_actions_roundtrip(self):
         prestador = self.service.criar_prestador({
             'nome': 'Técnico API', 'email': 'tecnico-api@example.invalid',

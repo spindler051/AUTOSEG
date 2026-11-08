@@ -42,6 +42,7 @@ from application.contracts import (
     OSResultado,
     OSResumo,
     PrestadorResumo,
+    RelatorioOS,
     ResumoFinanceiro,
     ResumoHistorico,
     ResumoInicio,
@@ -211,6 +212,23 @@ class LocalService:
             nome=str(linha['sindico_nome'] or ''),
             telefone=str(linha['sindico_telefone'] or ''),
         )
+
+    def listar_relatorios(self, termo: str = '') -> list[RelatorioOS]:
+        busca = str(termo or '').casefold().strip()
+        resultado = []
+        for linha in ordens_repo.listar_relatorios(self.banco):
+            texto = ' '.join(str(linha[chave] or '') for chave in (
+                'numero_os', 'cliente', 'status')).casefold()
+            if busca and busca not in texto:
+                continue
+            resultado.append(RelatorioOS(
+                id=int(linha['id']),
+                numero_os=str(linha['numero_os'] or ''),
+                cliente=str(linha['cliente'] or ''),
+                status=str(linha['status'] or ''),
+                valor_total=float(linha['valor_total'] or 0),
+            ))
+        return resultado
 
     def listar_historico(self, termo: str = '') -> list[HistoricoOS]:
         busca = str(termo or '').strip()
@@ -702,6 +720,7 @@ class LocalService:
                 'prestadores.criar', 'prestadores.senha',
                 'prestadores.config', 'prestadores.documento',
                 'os.pdf.publicar', 'os.pdf.abrir', 'os.email.preparar', 'os.nota.preparar',
+                'relatorios.listar',
                 'estoque.materiais', 'prestadores.admin',
                 'pj.whatsapp', 'pj.analisar', 'pj.confirmar', 'pj.gerar_os',
                 'pj.validar', 'pj.sindico', 'pj.mesclar', 'pj.vinculo',

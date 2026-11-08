@@ -112,10 +112,10 @@ class Operacoes(unittest.TestCase):
             self.assertEqual(est.listar(b)[0]['saldo'],0)
             self.assertEqual(len(est.movimentos(b)),0)
 
-    def test_estoque_nao_possui_endpoint_administrativo_web(self):
+    def test_estoque_possui_endpoint_administrativo_web(self):
         src=Path(__file__).with_name('portal_prestador.py').read_text()
-        self.assertNotIn("if path=='/estoque'",src)
-        self.assertNotIn("'/estoque','Materiais'",src)
+        self.assertIn("if path=='/estoque':return self.estoque_admin(s)",src)
+        self.assertIn("Somente administradores podem gerenciar o estoque.",src)
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -181,6 +181,11 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str):
         return _rota_prestadores(handler, partes, servico, metodo)
     if recurso == 'organizacoes':
         return _rota_organizacoes(handler, partes, servico, metodo)
+    if recurso == 'relatorios':
+        if metodo == 'GET' and partes == ['relatorios']:
+            return _enviar(handler, 200, servico.listar_relatorios(
+                str(query.get('termo', [''])[0])))
+        raise NaoEncontradoError('Rota não encontrada.')
     if recurso == 'historico':
         return _rota_historico(handler, partes, query, servico, metodo)
     if recurso == 'pj':

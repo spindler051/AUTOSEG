@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-07
-**Versão:** `9.6.0-dev.59`
+**Versão:** `9.6.0-dev.60`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -21,6 +21,8 @@ Este é o ponto de retomada. O índice completo fica em
 - DEV abre em modo servidor por padrão; se o usuário escolher Local no login, usa o banco local.
 - Login obrigatório de prestador, local ou servidor, com identidade e logout.
 - Sessão de servidor com token revogável; local não persiste senha.
+- Paridade de prestador: GTK tem notas/e-mails; site tem prestadores,
+  estoque, caixa e composição para admin.
 - Sem servidor, as listas ficam vazias e a janela mostra aviso de indisponível.
 - O app verifica o servidor a cada 5 s e avisa quando ele cai ou volta.
 - Workaholic integrado apenas na fatia de clientes; o restante continua no
@@ -36,7 +38,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **313 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **316 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.

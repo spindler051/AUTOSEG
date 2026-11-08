@@ -147,6 +147,17 @@ class HistoricoOS:
 
 
 @dataclass(frozen=True)
+class RelatorioOS:
+    """OS row used by the invoices/e-mails screens."""
+
+    id: int
+    numero_os: str
+    cliente: str
+    status: str
+    valor_total: float
+
+
+@dataclass(frozen=True)
 class ResumoHistorico:
     total: int
     abertas: int

@@ -216,6 +216,29 @@ def definir_documento_prestador(banco, prestador_id, documento):
     return doc
 
 
+def listar_todos(banco):
+    with db(banco) as c:
+        return [dict(x) for x in c.execute(
+            'SELECT id,nome,email,telefone,documento,especialidade,ativo '
+            'FROM prestadores WHERE excluido=0 ORDER BY nome')]
+
+
+def alternar_ativo(banco, prestador_id):
+    with db(banco) as c:
+        cur = c.execute('UPDATE prestadores SET ativo=1-ativo WHERE id=? AND excluido=0',
+                        (int(prestador_id),))
+        if cur.rowcount != 1:
+            raise ValueError('Prestador não encontrado.')
+
+
+def arquivar_prestador(banco, prestador_id):
+    with db(banco) as c:
+        cur = c.execute('UPDATE prestadores SET ativo=0,excluido=1 WHERE id=?',
+                        (int(prestador_id),))
+        if cur.rowcount != 1:
+            raise ValueError('Prestador não encontrado.')
+
+
 def redefinir_senha_prestador_desktop(banco,prestador_id,nova_senha):
     """Somente uma ação administrativa local do desktop deve chamar esta função."""
     if len(nova_senha)<10:raise ValueError('A nova senha deve ter pelo menos dez caracteres.')

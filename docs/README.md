@@ -56,7 +56,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Materiais e composição da OS](features/MATERIAIS_COMPOSICAO_OS.md)
 - [Telemetria aberta](features/OPEN_TELEMETRY.md)
 - [Correção financeira da OS](features/OS_FINANCIAL_CORRECTION_UI.md)
-- [Interface experimental unslop](features/UNSLOP_UI.md)
+- [Interface do Portal do Prestador](features/PROVIDER_PORTAL_UI.md)
 
 ## Operação
 
