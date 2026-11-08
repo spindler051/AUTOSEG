@@ -10,11 +10,11 @@
 - **Responsável:** quem cria a OS já fica responsável; admin pode transferir para outro prestador sem assumir.
 - **Fotos e legendas:** salvam automaticamente ao digitar ou selecionar arquivos; o botão “Salvar fotos e legendas” foi removido.
 - **Abas da OS:** Identificação, Situação e relatório, Materiais, Fotos e legendas; ícones alinhados.
-- **Materiais:** seletor de estoque recolhido em “Adicionar do estoque”.
+- **Materiais:** o campo Material pesquisa e autocompleta o estoque; ao escolher um item, quantidade, unidade e valor são preenchidos.
 - **Tema:** modo automático pelo tema do host, claro/escuro e sete cores de acento.
 - **Composição de valores:** editor estruturado por componente no lugar do YAML seco; YAML permanece em opção avançada.
 - **Início do GTK:** ordens recentes com abertura direta, alinhado ao site.
-- **Testes:** 323 testes OK, 1 skip; scripts de aceitação passando.
+- **Testes:** 324 testes OK, 1 skip; scripts de aceitação passando.
 
 ## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
 

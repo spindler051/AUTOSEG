@@ -478,10 +478,11 @@
         return;
       }
       const executado = form.querySelector('[name="v9_execucao"]');
-      if (relato && !relato.value.trim() && !(executado && executado.value.trim())) {
+      if (status.value === 'Concluída' && !(executado && executado.value.trim())
+          && !(relato && relato.value.trim())) {
         e.preventDefault();e.stopImmediatePropagation();
-        irParaCampo(relato);
-        mostrarAvisoGlobal('Preencha o relatório técnico antes de confirmar.');
+        irParaCampo(executado);
+        mostrarAvisoGlobal('Preencha Serviço executado antes de concluir.');
         return;
       }
       if (status.value === 'Cancelada' && motivo && !motivo.value.trim()) {
@@ -517,28 +518,40 @@
       });
     }
   }
-  // Adiciona material cadastrado na OS sem revelar saldos ou custo do estoque.
-  const botaoEstoque=document.getElementById('adicionar-do-estoque');
-  if (form && botaoEstoque) {
-    botaoEstoque.addEventListener('click',()=>{
-      try {
-        const dados=JSON.parse(document.getElementById('produtos-estoque-os').textContent);
-        const indice=Number(document.getElementById('material-estoque-selecionar').value);
-        const produto=dados[indice];
-        const lista=document.getElementById('lista-materiais');
-        const modelo=document.getElementById('modelo-material');
-        if (!produto || !lista || !modelo)return;
-        if (lista.querySelectorAll('.material-row').length>=100)return window.alert('Máximo de 100 materiais por OS.');
-        const linha=modelo.content.firstElementChild.cloneNode(true);
-        linha.querySelector('[name="material_item[]"]').value=produto.nome;
-        linha.querySelector('[name="material_qtd[]"]').value='1';
-        const unidade = linha.querySelector('[name="material_unidade[]"]');
-        if (unidade) unidade.value='un';
-        linha.querySelector('[name="material_unit[]"]').value=Number(produto.valor).toFixed(2).replace('.',',');
-        lista.appendChild(linha);
-        form.querySelector('[name="valor_mao_obra"]').dispatchEvent(new Event('input',{bubbles:true}));
-      } catch (_erro) { window.alert('Não foi possível selecionar este produto.'); }
-    });
+  // Autocomplete de material: o campo da linha pesquisa o estoque e
+  // preenche valor e unidade quando o nome coincide exatamente.
+  const produtosEstoque = document.getElementById('produtos-estoque-os');
+  if (form && produtosEstoque) {
+    let produtos = [];
+    try { produtos = JSON.parse(produtosEstoque.textContent || '[]'); }
+    catch (_erro) { produtos = []; }
+    const normalizar = texto => String(texto || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLowerCase();
+    const porNome = new Map(produtos.map(produto => [normalizar(produto.nome), produto]));
+    const completar = input => {
+      const produto = porNome.get(normalizar(input.value));
+      if (!produto) return;
+      const linha = input.closest('.material-row');
+      if (!linha) return;
+      const quantidade = linha.querySelector('[name="material_qtd[]"]');
+      const unidade = linha.querySelector('[name="material_unidade[]"]');
+      const valor = linha.querySelector('[name="material_unit[]"]');
+      if (quantidade && !quantidade.value.trim()) quantidade.value = '1';
+      if (unidade && !unidade.value.trim()) unidade.value = produto.unidade || 'un';
+      if (valor) {
+        valor.value = Number(produto.valor || 0).toFixed(2).replace('.', ',');
+        valor.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+    };
+    const aoEditarMaterial = evento => {
+      const alvo = evento.target;
+      if (alvo && alvo.matches && alvo.matches('[name="material_item[]"]')) {
+        completar(alvo);
+      }
+    };
+    form.addEventListener('input', aoEditarMaterial);
+    form.addEventListener('change', aoEditarMaterial);
   }
   // Busca em todas as tabelas exibidas no Portal do Prestador.
   // Não promete pesquisar registros além da página carregada.
@@ -1786,15 +1799,6 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
   if (/^\/os\/\d+/.test(location.pathname)) {
     document.querySelectorAll('.os-service-model').forEach(el => el.remove());
   }
-  const estoqueSelect = document.getElementById('material-estoque-selecionar');
-  if (estoqueSelect && podeCriarElemento) {
-    const placeholder = document.createElement('option');
-    placeholder.value = '-1';
-    placeholder.textContent = 'Selecione um material do estoque';
-    estoqueSelect.prepend(placeholder);
-    estoqueSelect.value = '-1';
-  }
-
   // Lista de OS: valor, urgência e ordenação por urgência (carregados ao vivo).
   if (location.pathname === '/os' && podeCriarElemento && typeof DOMParser !== 'undefined') {
     const tabela = document.querySelector('.table-scroll table');

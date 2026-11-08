@@ -59,7 +59,7 @@ Abas do editor:
 |---|---|
 | Identificação | modelo, cliente, pagamento, valores, descrição e notas |
 | Situação e relatório | diagnóstico, execução, testes, relato interno, situação, destinatários, rateio e fechamento |
-| Materiais | linhas de material, seletor de estoque recolhido e total previsto |
+| Materiais | linhas de material, autocomplete do estoque e total previsto |
 | Fotos e legendas | fotos existentes, novas fotos e legendas com salvamento automático |
 
 O fechamento (NF ou “não precisa de nota fiscal”) fica em Situação, junto da

@@ -230,10 +230,6 @@ body.ui-app legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0
 body.ui-app .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 body.ui-app .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
 body.ui-app .material-add{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-body.ui-app .material-add-estoque{margin:0;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);padding:0 12px 12px}
-body.ui-app .material-add-estoque summary{padding:11px 0;color:var(--u-text-2);font:500 13px/1.2 var(--u-font);cursor:pointer}
-body.ui-app .material-add-linha{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
-body.ui-app .material-add-linha select{margin:0}
 body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
 body.ui-app .material-row label{margin:0 0 4px}
 body.ui-app .material-row input{min-height:36px}
@@ -2137,6 +2133,23 @@ class PortalPrestador:
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total é calculado por mão de obra + materiais; o total negociado, quando informado, prevalece. Materiais detalhados prevalecem sobre o campo de materiais sem itens.</p>'
                 corpo+=datalist_unidades_material()
+                produtos=estoque.listar(banco,ativos=True)
+                attr_estoque=' list="materiais-estoque-lista"' if produtos else ''
+                if produtos:
+                    import json as _jm
+                    opcoes_estoque=''.join(
+                        f'<option value="{esc(x["nome"])}" label="{esc(x["nome"])} — '
+                        f'{dinheiro((x["venda_centavos"] or 0)/100)}"></option>'
+                        for x in produtos)
+                    corpo+=f'<datalist id="materiais-estoque-lista">{opcoes_estoque}</datalist>'
+                    catalogo_json=_jm.dumps([{'nome':x['nome'],
+                                              'valor':(x['venda_centavos'] or 0)/100,
+                                              'unidade':x['unidade'] or 'un'}
+                                             for x in produtos],ensure_ascii=False).replace('<','\u003c')
+                    corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
+                corpo+=('<p class="muted">Comece a digitar o material: se ele estiver no estoque, '
+                        'o valor e a unidade são preenchidos automaticamente. Você também pode '
+                        'digitar um material livre.</p>')
                 corpo+='<p class="muted">Deixe a quantidade vazia para itens sem quantidade fixa; nesse caso, o valor informado é o total do item. A unidade é livre: use uma sugestão ou digite a sua.</p>'
                 linhas=list(mat)
                 corpo+='<div id="lista-materiais">'
@@ -2146,28 +2159,14 @@ class PortalPrestador:
                     unidade=(m['unidade'] if 'unidade' in m.keys() else '') or ''
                     unit=m['valor_unitario'] if 'valor_unitario' in m.keys() else ''
                     corpo+='<div class="material-row material-row-os">'
-                    corpo+=f'<div><label>Material<input name="material_item[]" value="{esc(item)}" placeholder="Cabo, câmera, fonte..."></label></div>'
+                    corpo+=f'<div><label>Material<input name="material_item[]" value="{esc(item)}" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div>'
                     corpo+=f'<div><label>Quantidade<input name="material_qtd[]" value="{esc(qtd)}" placeholder="—" inputmode="decimal"></label></div>'
                     corpo+=f'<div><label>Unidade{input_unidade_material(unidade)}</label></div>'
                     corpo+=f'<div><label>Valor unitário / total (R$)<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
                     corpo+='<button type="button" class="secondary remover-material" title="Remover material">Remover</button></div>'
                 corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
-                corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Cabo, câmera, fonte..."></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
-                corpo+='<div class="material-add"><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
-                produtos=estoque.listar(banco,ativos=True)
-                if produtos:
-                    import json as _jm
-                    catalogo_json=_jm.dumps([{'nome':x['nome'],'valor':x['venda_centavos']/100} for x in produtos],ensure_ascii=False).replace('<','\\u003c')
-                    corpo+=('<details class="material-add-estoque"><summary>Adicionar do estoque</summary>'
-                            '<label for="material-estoque-selecionar">Material cadastrado</label>'
-                            '<div class="material-add-linha">'
-                            '<select id="material-estoque-selecionar">'
-                            +''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))
-                            +'</select>'
-                            '<button class="secondary" id="adicionar-do-estoque" type="button">Adicionar</button>'
-                            '</div></details>')
-                    corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
-                corpo+='</div>'
+                corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
+                corpo+='<div class="material-add"><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button></div>'
                 try:
                     cfg_comp=composicao.carregar()
                     bases_comp=cfg_comp.get('bases_percentuais') or {}

@@ -10,6 +10,7 @@ import requests
 from PIL import Image
 
 import cadastros_v9 as cad9
+import estoque_materiais as estoque
 import prestadores_ext as ext
 from banco import criar_banco
 from portal_prestador import PortalPrestador
@@ -216,6 +217,15 @@ class FeedbackDevTest(unittest.TestCase):
         alvo = next(c for c in config['componentes']
                     if c['id'] == 'componente_feedback')
         self.assertFalse(alvo['ativo'])
+
+    def test_material_pesquisa_estoque_no_proprio_campo(self):
+        estoque.cadastrar(self.db, nome='Cabo Feedback', sku='FB-1',
+                          unidade='m', custo='5', venda='10', minimo='1')
+        _os_id, pagina = self._criar_os()
+        self.assertIn('list="materiais-estoque-lista"', pagina)
+        self.assertIn('Cabo Feedback', pagina)
+        self.assertNotIn('Adicionar do estoque', pagina)
+        self.assertNotIn('material-estoque-selecionar', pagina)
 
     def test_admin_transfere_os_para_outro_prestador(self):
         os_id, _html = self._criar_os()
