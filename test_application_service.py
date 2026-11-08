@@ -396,6 +396,9 @@ class DesktopApiTest(unittest.TestCase):
         registros = self.service.listar_relatorios()
         self.assertEqual(len(registros), 1)
         self.assertEqual(registros[0].cliente, 'Condomínio Relatórios')
+        recentes = self.service.listar_os_recentes(6)
+        self.assertEqual(len(recentes), 1)
+        self.assertEqual(recentes[0].cliente, 'Condomínio Relatórios')
 
     def test_provider_and_os_actions_roundtrip(self):
         prestador = self.service.criar_prestador({

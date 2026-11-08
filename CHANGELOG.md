@@ -1,5 +1,21 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.62 — feedbacks abertos da DEV — 2026-11-08 — develop
+
+- **Nova OS em uma tela:** cliente é opcional e pode ser associado depois; a OS usa o cadastro provisório “Cliente a definir”.
+- **Duplicidade:** aviso para OS do mesmo cliente criada nos últimos 2 minutos, com opção explícita de criar outra e registro no histórico.
+- **Cancelamento:** botão próprio, só com motivo e número da OS; não exige relatório técnico nem os demais campos.
+- **Pendente:** não pede e-mail, não envia relatório e pode voltar de Iniciada para Pendente, encerrando o início do atendimento.
+- **Relato técnico:** deixou de ser obrigatório para confirmar situação; para concluir basta o Serviço executado.
+- **Responsável:** quem cria a OS já fica responsável; admin pode transferir para outro prestador sem assumir.
+- **Fotos e legendas:** salvam automaticamente ao digitar ou selecionar arquivos; o botão “Salvar fotos e legendas” foi removido.
+- **Abas da OS:** Identificação, Situação e relatório, Materiais, Fotos e legendas; ícones alinhados.
+- **Materiais:** seletor de estoque recolhido em “Adicionar do estoque”.
+- **Tema:** modo automático pelo tema do host, claro/escuro e sete cores de acento.
+- **Composição de valores:** editor estruturado por componente no lugar do YAML seco; YAML permanece em opção avançada.
+- **Início do GTK:** ordens recentes com abertura direta, alinhado ao site.
+- **Testes:** 323 testes OK, 1 skip; scripts de aceitação passando.
+
 ## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
 
 - **Site DEV separado:** `INICIAR_SITE_DEV.command` sobe Portal do Cliente em 8865 e Portal do Prestador em 8866.

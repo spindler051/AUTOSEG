@@ -416,6 +416,22 @@ class Janela(Adw.ApplicationWindow):
             self.cards[chave] = valor_label
         caixa.append(grade)
 
+        recentes_topo = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        titulo_recentes = Gtk.Label(label="Ordens recentes", xalign=0, hexpand=True)
+        titulo_recentes.add_css_class("title-3")
+        recentes_topo.append(titulo_recentes)
+        recentes_topo.append(ui.botao("Ver todas", lambda: self._ir_para("os")))
+        caixa.append(recentes_topo)
+        self.tabela_inicio = ui.Tabela([
+            ("OS", 100, False, 0.5),
+            ("Cliente", 0, True, 0.0),
+            ("Situação", 110, False, 0.5),
+            ("Valor", 110, False, 1.0),
+            ("Abertura", 120, False, 0.5),
+        ], ao_ativar=self._abrir_os_inicio, altura=220)
+        caixa.append(self.tabela_inicio.widget)
+        self._os_inicio = []
+
         grupo = Adw.PreferencesGroup(title="Sistema")
         caixa.append(grupo)
         if self.web.enabled:
@@ -477,6 +493,17 @@ class Janela(Adw.ApplicationWindow):
         self.cards["receber"].set_text(ui.brl(resumo.financeiro_a_receber))
         self.cards["recebido"].set_text(ui.brl(resumo.financeiro_recebido))
         self.cards["clientes"].set_text(str(resumo.clientes_ativos))
+        try:
+            recentes = self.service.listar_os_recentes(6)
+        except (AppError, OSError, ValueError):
+            recentes = []
+        self._os_inicio = list(recentes)
+        if getattr(self, "tabela_inicio", None) is not None:
+            self.tabela_inicio.definir_linhas([
+                (r.numero_os, r.cliente, r.status, ui.brl(r.valor_total),
+                 str(r.data_abertura or '')[:10])
+                for r in recentes
+            ])
         self._atualizar_banner_servidor()
 
         if self.remote_mode:
@@ -522,6 +549,12 @@ class Janela(Adw.ApplicationWindow):
         except OSError:
             self.linha_banco.set_subtitle(str(BANCO))
         self._aplicar_links(self._links_estado)
+
+    def _abrir_os_inicio(self):
+        indice = self.tabela_inicio.indice()
+        if indice is None or indice >= len(getattr(self, "_os_inicio", [])):
+            return
+        self.abrir_os_id(self._os_inicio[indice].id)
 
     def _atualizar_banner_servidor(self, info=None):
         banner = getattr(self, "banner_servidor", None)

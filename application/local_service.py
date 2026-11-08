@@ -96,21 +96,20 @@ class LocalService:
             financeiro_a_receber=financeiro['a_receber'],
         )
 
-    def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
-        with ext.db(self.banco) as conexao:
-            registros = conexao.execute(
-                """SELECT os.id,os.numero_os,os.cliente_id,c.nome cliente,os.data_abertura,os.valor_total,
-                          os.descricao,os.observacoes,os.forma_pagamento,os.urgencia,os.origem,
-                          (SELECT GROUP_CONCAT(p.nome, ', ') FROM os_prestadores op
-                             JOIN prestadores p ON p.id=op.prestador_id
-                             WHERE op.os_id=os.id AND op.ativo=1) prestadores,
-                          resp.nome responsavel_atual,os.tecnico tecnico_legado,os.status,
-                          os.dados_incompletos
-                   FROM ordens_servico os
-                   JOIN clientes c ON c.id=os.cliente_id
-                   LEFT JOIN os_responsaveis r ON r.os_id=os.id
-                   LEFT JOIN prestadores resp ON resp.id=r.prestador_id
-                   WHERE os.status IN ('Aberta','Iniciada','Pendente') ORDER BY os.id DESC""").fetchall()
+    _SQL_OS_RESUMO = """SELECT os.id,os.numero_os,os.cliente_id,c.nome cliente,
+                  os.data_abertura,os.valor_total,os.descricao,os.observacoes,
+                  os.forma_pagamento,os.urgencia,os.origem,
+                  (SELECT GROUP_CONCAT(p.nome, ', ') FROM os_prestadores op
+                     JOIN prestadores p ON p.id=op.prestador_id
+                     WHERE op.os_id=os.id AND op.ativo=1) prestadores,
+                  resp.nome responsavel_atual,os.tecnico tecnico_legado,os.status,
+                  os.dados_incompletos
+           FROM ordens_servico os
+           JOIN clientes c ON c.id=os.cliente_id
+           LEFT JOIN os_responsaveis r ON r.os_id=os.id
+           LEFT JOIN prestadores resp ON resp.id=r.prestador_id"""
+
+    def _mapear_os(self, registros, termo: str = '') -> list[OSResumo]:
         busca = str(termo or '').casefold().strip()
         resultado = []
         for linha in registros:
@@ -140,6 +139,21 @@ class LocalService:
                 incompleto=bool(completude.os_faltantes(dados)),
             ))
         return resultado
+
+    def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
+        with ext.db(self.banco) as conexao:
+            registros = conexao.execute(
+                self._SQL_OS_RESUMO
+                + " WHERE os.status IN ('Aberta','Iniciada','Pendente')"
+                  " ORDER BY os.id DESC").fetchall()
+        return self._mapear_os(registros, termo)
+
+    def listar_os_recentes(self, limite: int = 6) -> list[OSResumo]:
+        with ext.db(self.banco) as conexao:
+            registros = conexao.execute(
+                self._SQL_OS_RESUMO + " ORDER BY os.id DESC LIMIT ?",
+                (int(limite),)).fetchall()
+        return self._mapear_os(registros)
 
     def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
         with ext.db(self.banco) as conexao:

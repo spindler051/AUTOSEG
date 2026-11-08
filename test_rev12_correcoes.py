@@ -167,7 +167,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('name="q"', html)
         self.assertIn('Condomínio Alfa', html)
         self.assertIn('Empresa Beta', html)
-        self.assertIn('Abrir OS para este cliente', html)
+        self.assertIn('name="cliente_id"', html)
+        self.assertIn('Cliente a definir (associar depois)', html)
 
         status, html = req(cliente, base, '/os/rapida?q=Alfa')
         self.assertEqual(status, 200)
@@ -486,8 +487,8 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente_b = self._login(base, 'foto.b@exemplo.com.br')
         _, html = req(cliente_b, base, f'/os/{oid}')
-        self.assertIn(f'formaction="/os/{self._numero(oid)}/fotos"', html)
-        self.assertIn('Salvar fotos e legendas', html)
+        self.assertIn('Fotos e legendas salvas automaticamente', html)
+        self.assertNotIn('Salvar fotos e legendas', html)
         self.assertNotIn('Adicionar fotos e legendas sem assumir a OS', html)
         self.assertNotIn('sem assumir', html)
         self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
@@ -988,8 +989,7 @@ class CorrecoesRev12(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertGreaterEqual(doc, 1)
-            self.assertEqual(reg['status'], 'enviado')
-            self.assertIn('pendente', capt['assunto'].lower())
+            self.assertIsNone(reg)
             with ext.db(self.db) as c:
                 self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                            (oid,)).fetchone()['status'], 'Pendente')

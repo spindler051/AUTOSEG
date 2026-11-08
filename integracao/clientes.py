@@ -177,7 +177,7 @@ def contar_ativos(banco=None):
     """Quantidade de clientes com status diferente de Inativo."""
     with ext.db(banco or BANCO) as conexao:
         return int(conexao.execute(
-            "SELECT COUNT(*) FROM clientes WHERE status!='Inativo'").fetchone()[0])
+            "SELECT COUNT(*) FROM clientes WHERE status NOT IN ('Inativo','A definir')").fetchone()[0])
 
 
 def listar_paginado(termo="", limite=40, offset=0, banco=None):
@@ -187,13 +187,13 @@ def listar_paginado(termo="", limite=40, offset=0, banco=None):
     CPF/CNPJ formatado, comparando somente os dígitos.
     """
     busca = str(termo or "").strip()[:110]
-    filtro = ""
+    filtro = " WHERE status!='A definir'"
     params = []
     if busca:
-        filtro = (" WHERE nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' "
-                  "OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
-                  "OR replace(replace(replace(documento,'.',''),'/',''),'-','') "
-                  "LIKE ? ESCAPE '!' ")
+        filtro += (" AND (nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' "
+                   "OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
+                   "OR replace(replace(replace(documento,'.',''),'/',''),'-','') "
+                   "LIKE ? ESCAPE '!') ")
         termo_like = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
         documentos = cad9.digitos(busca)
         params = [termo_like] * 4 + [
@@ -212,7 +212,7 @@ def listar_para_selecao(banco=None, limite=500):
     """Clientes ativos para selects de orçamento/OS."""
     with ext.db(banco or BANCO) as conexao:
         linhas = conexao.execute(
-            "SELECT id,nome,documento FROM clientes WHERE status!='Inativo' "
+            "SELECT id,nome,documento FROM clientes WHERE status NOT IN ('Inativo','A definir') "
             "ORDER BY nome LIMIT ?", (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
 
@@ -222,7 +222,7 @@ def listar_para_os(banco=None):
     with ext.db(banco or BANCO) as conexao:
         linhas = conexao.execute(
             "SELECT id,nome,cidade,bairro,endereco,numero FROM clientes "
-            "WHERE status!='Inativo' ORDER BY nome").fetchall()
+            "WHERE status NOT IN ('Inativo','A definir') ORDER BY nome").fetchall()
     return [dict(linha) for linha in linhas]
 
 
@@ -263,7 +263,7 @@ def buscar_rapida(termo="", banco=None, limite=100):
         if termo:
             esc_like = termo.replace('!', '!!').replace('%', '!%').replace('_', '!_')
             documentos = cad9.digitos(termo)
-            filtro = ("WHERE status!='Inativo' AND (nome LIKE ? ESCAPE '!' "
+            filtro = ("WHERE status NOT IN ('Inativo','A definir') AND (nome LIKE ? ESCAPE '!' "
                       "OR documento LIKE ? ESCAPE '!' OR cidade LIKE ? ESCAPE '!' "
                       "OR email LIKE ? ESCAPE '!'")
             params = ['%' + esc_like + '%'] * 4
@@ -278,7 +278,7 @@ def buscar_rapida(termo="", banco=None, limite=100):
         else:
             linhas = conexao.execute(
                 "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
-                "FROM clientes WHERE status!='Inativo' ORDER BY nome LIMIT ?",
+                "FROM clientes WHERE status NOT IN ('Inativo','A definir') ORDER BY nome LIMIT ?",
                 (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
 

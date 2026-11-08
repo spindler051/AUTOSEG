@@ -167,8 +167,6 @@ def os_salvar(banco,d,pid,oid=None):
     acao='Cancelada' if cancelar else texto(d,'acao_status',30)
     if acao not in ('salvar','Pendente','Concluída','Cancelada'):
         raise ValueError('Operação inválida.')
-    if acao!='salvar' and not relato:
-        raise ValueError('Informe o relatório técnico para registrar a situação.')
     motivo=texto(d,'motivo_encerramento',2000)
     if acao in ('Cancelada','Não realizada') and not motivo:
         raise ValueError('O motivo é obrigatório para cancelar ou indicar não realização.')
@@ -354,6 +352,18 @@ def os_salvar(banco,d,pid,oid=None):
         if acao=='Pendente':
             if c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')",(oid,)).rowcount!=1:
                 raise ValueError('OS não está ativa.')
+            # Voltar para Pendente também encerra o início do atendimento.
+            # O histórico (evento) preserva quem havia iniciado.
+            inicio=c.execute('SELECT iniciado_em,iniciado_por,ator_inicio FROM os_atendimentos WHERE os_id=?',
+                             (oid,)).fetchone()
+            if inicio and inicio['iniciado_em']:
+                c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
+                             ator_inicio='',atualizado_em=? WHERE os_id=?''',
+                          (ext.agora(),oid))
+                ext.evento(c,oid,'Atendimento retornado para pendente',
+                          f'Início desfeito. Iniciado em {inicio["iniciado_em"]} por '
+                          f'{inicio["ator_inicio"] or inicio["iniciado_por"] or "—"}.',
+                          pid,'Prestador')
             ext.evento(c,oid,'Pendência','Atendimento pendente conforme relatório técnico.',pid,'Prestador')
         # Fotos e legendas valem tanto para rascunho quanto para encerramento.
         for indice,item in enumerate(imagens):

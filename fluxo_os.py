@@ -100,7 +100,8 @@ def aplicar_encerramento(c, os_id, status, relato, motivo='', prestador_id=None,
     if status not in FIM: raise ValueError('Situação final inválida.')
     relato=(relato or '').strip()
     motivo=(motivo or '').strip()
-    if not relato: raise ValueError('O relatório técnico é obrigatório.')
+    if status == 'Concluída' and not relato:
+        raise ValueError('O relatório técnico é obrigatório para concluir.')
     if status != 'Concluída' and not motivo:
         raise ValueError('Informe o motivo do cancelamento ou não realização.')
     if len(relato)>5000 or len(motivo)>2000:

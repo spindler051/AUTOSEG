@@ -7,12 +7,12 @@ find . -maxdepth 1 -name 'test_*.py' ! -name 'test_visual_*' \
   -exec basename {} .py \; | sort | xargs ./.venv/bin/python -m unittest
 ```
 
-Estado em 2026-11-07: **316 testes, 0 falhas, 1 skip**.
+Estado em 2026-11-08: **323 testes, 0 falhas, 1 skip**.
 
 ## Scripts de aceitação
 
 ```bash
-./.venv/bin/python -m unittest -q test_auth_session.py test_application_service.py
+./.venv/bin/python -m unittest -q test_auth_session.py test_application_service.py test_feedback_dev.py
 ./.venv/bin/python test_portal_v4.py
 ./.venv/bin/python test_fluxo_v5.py
 ./.venv/bin/python test_fluxo_v6.py

@@ -1239,11 +1239,103 @@
       } catch (_erro) {}
     });
   }
+  // Fotos e legendas: sem botão de salvar. Legendas usam debounce e
+  // arquivos novos são enviados assim que selecionados.
+  if (formAuto && formAuto.dataset.osId && formAuto.dataset.autoSave === '1') {
+    const painelFotos = Array.from(formAuto.querySelectorAll('fieldset'))
+      .find(painel => (painel.querySelector('legend')?.textContent || '')
+        .toLowerCase().includes('fotos'));
+    const statusFotos = document.getElementById('fotos-auto-status');
+    if (painelFotos) {
+      const urlFotos = '/os/' + formAuto.dataset.osId + '/fotos';
+      let timerFotos = null;
+      let enviandoFotos = false;
+      const dadosFotos = () => {
+        const dados = new FormData(formAuto);
+        ['nota_fiscal', 'imagem_encerramento'].forEach(nome => dados.delete(nome));
+        return dados;
+      };
+      const enviarFotos = async (recarregar = false) => {
+        if (enviandoFotos) return;
+        enviandoFotos = true;
+        if (statusFotos) statusFotos.textContent = 'Salvando fotos e legendas…';
+        try {
+          const resposta = await fetch(urlFotos, {
+            method: 'POST', body: dadosFotos(), credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json'
+            }
+          });
+          let corpo = {};
+          try { corpo = await resposta.json(); } catch (_erro) {}
+          if (!resposta.ok || !corpo.ok) {
+            throw new Error(corpo.error || 'Não foi possível salvar fotos e legendas.');
+          }
+          if (recarregar) {
+            window.location.reload();
+            return;
+          }
+          const hora = new Date().toLocaleTimeString('pt-BR', {
+            hour: '2-digit', minute: '2-digit'
+          });
+          if (statusFotos) {
+            statusFotos.textContent = `Fotos e legendas salvas automaticamente às ${hora}.`;
+          }
+        } catch (erro) {
+          if (statusFotos) {
+            statusFotos.textContent = erro.message || 'Não foi possível salvar fotos e legendas.';
+          }
+        } finally {
+          enviandoFotos = false;
+        }
+      };
+      painelFotos.addEventListener('input', evento => {
+        const alvo = evento.target;
+        if (!alvo || alvo.type === 'file') return;
+        if (!/^anexo_legenda|^anexo_incluir/.test(alvo.name || '')) return;
+        window.clearTimeout(timerFotos);
+        timerFotos = window.setTimeout(() => enviarFotos(false), 900);
+      });
+      painelFotos.addEventListener('change', evento => {
+        const alvo = evento.target;
+        if (alvo && alvo.id === 'fotos-relatorio') {
+          enviarFotos(true);
+          return;
+        }
+        if (alvo && /^anexo_incluir/.test(alvo.name || '')) {
+          window.clearTimeout(timerFotos);
+          timerFotos = window.setTimeout(() => enviarFotos(false), 400);
+        }
+      });
+    }
+  }
   // Interface app: transforma os fieldsets da OS em seções navegáveis.
   const formApp = document.getElementById('form-os');
   if (formApp && document.body.classList.contains('ui-app')) {
+    const ordemSecoes = ['identificação', 'situação', 'materiais', 'fotos'];
     const paineis = Array.from(formApp.children)
-      .filter(elemento => elemento.tagName === 'FIELDSET');
+      .filter(elemento => elemento.tagName === 'FIELDSET')
+      .sort((a, b) => {
+        const chave = painel => {
+          const texto = (painel.querySelector('legend')?.textContent || '').toLowerCase();
+          const posicao = ordemSecoes.findIndex(nome => texto.includes(nome));
+          return posicao < 0 ? ordemSecoes.length : posicao;
+        };
+        return chave(a) - chave(b);
+      });
+    // A ordem visual acompanha a ordem das abas, mesmo com o HTML legado.
+    // Move apenas os fieldsets, mantendo a barra de ações no lugar.
+    const primeiroPainel = Array.from(formApp.children)
+      .find(elemento => elemento.tagName === 'FIELDSET');
+    if (primeiroPainel && paineis.length) {
+      const marcador = document.createComment('ordem-das-secoes');
+      primeiroPainel.parentNode.insertBefore(marcador, primeiroPainel);
+      const bloco = document.createDocumentFragment();
+      paineis.forEach(painel => bloco.appendChild(painel));
+      marcador.parentNode.insertBefore(bloco, marcador);
+      marcador.remove();
+    }
     if (paineis.length > 1) {
       if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
       const chaveEstadoOS = 'autoseg:os-estado:' + location.pathname;
@@ -1676,8 +1768,8 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
   // Abas da OS: somente nome + ícone simbólico.
   const svgsAbas = [
     '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-    '<svg viewBox="0 0 24 24"><path d="M4 7 12 3l8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
     '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12a9 9 0 1 1-6-8.5"/></svg>',
+    '<svg viewBox="0 0 24 24"><path d="M4 7 12 3l8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
     '<svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>'
   ];
   document.querySelectorAll('.os-tabs .os-tab .tab-index').forEach((span, indice) => {
@@ -1792,6 +1884,62 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       }
     });
   });
+  // Tema e cor de acento: preferência local, sem alterar o servidor.
+  (() => {
+    const raiz = document.documentElement;
+    const botoesTema = Array.from(document.querySelectorAll('[data-tema]'));
+    const botoesAcento = Array.from(document.querySelectorAll('[data-acento]'));
+    if (!botoesTema.length && !botoesAcento.length) return;
+    const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    const ler = (chave, padrao) => {
+      try { return localStorage.getItem(chave) || padrao; } catch (_erro) { return padrao; }
+    };
+    const gravar = (chave, valor) => {
+      try { localStorage.setItem(chave, valor); } catch (_erro) {}
+    };
+    const aplicar = () => {
+      const tema = ler('autoseg:tema', 'auto');
+      const acento = ler('autoseg:acento', 'ambar');
+      const claro = tema === 'claro' || (tema === 'auto' && media && media.matches);
+      raiz.dataset.tema = claro ? 'claro' : 'escuro';
+      raiz.dataset.acento = acento;
+      botoesTema.forEach(botao => {
+        botao.classList.toggle('ativo', botao.dataset.tema === tema);
+      });
+      botoesAcento.forEach(botao => {
+        botao.classList.toggle('ativo', botao.dataset.acento === acento);
+      });
+    };
+    botoesTema.forEach(botao => botao.addEventListener('click', () => {
+      gravar('autoseg:tema', botao.dataset.tema || 'auto');
+      aplicar();
+    }));
+    botoesAcento.forEach(botao => botao.addEventListener('click', () => {
+      gravar('autoseg:acento', botao.dataset.acento || 'ambar');
+      aplicar();
+    }));
+    if (media && media.addEventListener) {
+      media.addEventListener('change', () => {
+        if (ler('autoseg:tema', 'auto') === 'auto') aplicar();
+      });
+    }
+    aplicar();
+  })();
+  const filtroClienteRapida = document.getElementById('filtro-cliente-rapida');
+  const selectClienteRapida = filtroClienteRapida
+    ? filtroClienteRapida.closest('form')?.querySelector('select[name="cliente_id"]')
+    : null;
+  if (filtroClienteRapida && selectClienteRapida) {
+    filtroClienteRapida.addEventListener('input', () => {
+      const termo = filtroClienteRapida.value.trim().toLowerCase();
+      Array.from(selectClienteRapida.options).forEach(opcao => {
+        const combina = !termo || opcao.value === '' ||
+          opcao.textContent.toLowerCase().includes(termo);
+        opcao.hidden = !combina;
+        opcao.disabled = !combina;
+      });
+    });
+  }
   document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
     document.getElementById('abrir-feedback')?.click();
   });

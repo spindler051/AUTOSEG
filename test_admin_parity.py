@@ -136,7 +136,7 @@ class AdminParityTest(unittest.TestCase):
         import yaml
         config = composicao.carregar()
         status, html = request(self.admin_browser, self.base,
-                               '/composicao/salvar', {
+                               '/composicao/yaml', {
                                    'csrf': self.admin_csrf,
                                    'yaml': yaml.safe_dump(
                                        config, allow_unicode=True,

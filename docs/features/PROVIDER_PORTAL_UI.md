@@ -58,16 +58,36 @@ Abas do editor:
 | Aba | Conteúdo |
 |---|---|
 | Identificação | modelo, cliente, pagamento, valores, descrição e notas |
-| Materiais | linhas de material, seletor de estoque e total previsto |
-| Situação e relatório | diagnóstico, execução, testes, relatório interno, situação, destinatários, rateio e fechamento |
-| Fotos e legendas | fotos existentes, novas fotos e legendas individuais |
+| Situação e relatório | diagnóstico, execução, testes, relato interno, situação, destinatários, rateio e fechamento |
+| Materiais | linhas de material, seletor de estoque recolhido e total previsto |
+| Fotos e legendas | fotos existentes, novas fotos e legendas com salvamento automático |
 
 O fechamento (NF ou “não precisa de nota fiscal”) fica em Situação, junto da
 conclusão. Para quem não é responsável, ações de salvar/concluir ficam ocultas
-e o formulário de colaboração de fotos permanece.
+e o formulário de colaboração de fotos permanece. Cancelar exige apenas o
+motivo e o número da OS; deixar pendente não exige destinatários.
 
 A barra de ações é fixa no rodapé: **Salvar rascunho** como secundária e
 **Confirmar situação da OS** como única primária.
+
+### Nova OS
+
+A abertura rápida tem uma única tela: busca de cliente, cliente opcional
+(“Cliente a definir”), descrição, pagamento, urgência e responsável. Se já
+existir uma OS do mesmo cliente nos últimos dois minutos, o portal mostra um
+aviso antes de criar outra.
+
+### Tema
+
+O rodapé da barra lateral oferece **Auto**, **Claro** e **Escuro**, com o modo
+automático seguindo o tema do sistema, e sete cores de acento. A preferência
+fica no navegador e não altera o servidor.
+
+### Composição de valores
+
+A tela lista os componentes com modo, valor, situação e ações de editar,
+ativar, mover e excluir. O YAML continua disponível em “YAML avançado”, mas não
+é mais a interface principal.
 
 ### Financeiro
 

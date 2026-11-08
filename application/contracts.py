@@ -304,6 +304,9 @@ class AppService(Protocol):
     def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
         ...
 
+    def listar_os_recentes(self, limite: int = 6) -> list[OSResumo]:
+        ...
+
     def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
         ...
 

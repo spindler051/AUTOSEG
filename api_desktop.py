@@ -271,6 +271,9 @@ def _rota_os(handler, partes, query, servico, metodo):
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, servico.listar_os_ativas(
             str(query.get('termo', [''])[0])))
+    if partes == ['os', 'recentes'] and metodo == 'GET':
+        limite = _int(query.get('limite', ['6'])[0], 6) or 6
+        return _enviar(handler, 200, servico.listar_os_recentes(limite))
     if partes == ['os', 'escolha'] and metodo == 'GET':
         limite = _int(query.get('limite', ['250'])[0], 250) or 250
         return _enviar(handler, 200, servico.listar_os_para_escolha(limite))

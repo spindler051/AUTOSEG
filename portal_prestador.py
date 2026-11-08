@@ -15,7 +15,7 @@ import re
 import secrets
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from email.parser import BytesParser
 from email.policy import default
@@ -146,7 +146,36 @@ CSS_FEEDBACK = """
 
 
 CSS_APP = """
-:root{--u-bg:#141312;--u-side:#0f0e0d;--u-card:#1a1816;--u-card-2:#201d1a;--u-raised:#27231f;--u-line:rgba(240,235,226,.08);--u-line-2:rgba(240,235,226,.15);--u-text:#f1ece3;--u-text-2:#b5aca1;--u-muted:#8b8175;--u-accent:#d8a24a;--u-accent-soft:rgba(216,162,74,.12);--u-accent-ink:#1a1308;--u-good:#7cc7a2;--u-bad:#df8585;--u-warn:#d8a24a;--u-font:"Avenir Next","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;--u-mono:"SF Mono","IBM Plex Mono","Roboto Mono",ui-monospace,monospace;--u-ease:cubic-bezier(.22,1,.36,1)}
+:root{--u-bg:#141312;--u-side:#0f0e0d;--u-card:#1a1816;--u-card-2:#201d1a;--u-raised:#27231f;--u-line:rgba(240,235,226,.08);--u-line-2:rgba(240,235,226,.15);--u-text:#f1ece3;--u-text-2:#b5aca1;--u-muted:#8b8175;--u-accent:#d8a24a;--u-accent-soft:rgba(216,162,74,.12);--u-accent-ink:#1a1308;--u-input:#11100f;--u-hover:#302b25;--u-primary-text:#17130d;--u-primary-hover:#fff;--u-good:#7cc7a2;--u-bad:#df8585;--u-warn:#d8a24a;--u-font:"Avenir Next","Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,sans-serif;--u-mono:"SF Mono","IBM Plex Mono","Roboto Mono",ui-monospace,monospace;--u-ease:cubic-bezier(.22,1,.36,1)}
+
+html[data-acento="ambar"] body.ui-app{--u-accent:#d8a24a;--u-accent-soft:rgba(216,162,74,.12);--u-accent-ink:#1a1308}
+html[data-acento="azul"] body.ui-app{--u-accent:#78aede;--u-accent-soft:rgba(120,174,222,.14);--u-accent-ink:#0b1721}
+html[data-acento="verde"] body.ui-app{--u-accent:#7cc7a2;--u-accent-soft:rgba(124,199,162,.14);--u-accent-ink:#0b1a12}
+html[data-acento="vermelho"] body.ui-app{--u-accent:#df8a8a;--u-accent-soft:rgba(223,138,138,.14);--u-accent-ink:#1e0b0b}
+html[data-acento="roxo"] body.ui-app{--u-accent:#b39bdf;--u-accent-soft:rgba(179,155,223,.14);--u-accent-ink:#160f22}
+html[data-acento="ciano"] body.ui-app{--u-accent:#6ec7c7;--u-accent-soft:rgba(110,199,199,.14);--u-accent-ink:#081a1a}
+html[data-acento="laranja"] body.ui-app{--u-accent:#e2a06a;--u-accent-soft:rgba(226,160,106,.14);--u-accent-ink:#1d1107}
+html[data-tema="claro"] body.ui-app{--u-bg:#f3efe7;--u-side:#e9e3d8;--u-card:#fbf8f2;--u-card-2:#f1ece2;--u-raised:#e6ded1;--u-line:rgba(36,31,25,.10);--u-line-2:rgba(36,31,25,.20);--u-text:#241f19;--u-text-2:#5e5549;--u-muted:#887d6f;--u-input:#fffdf9;--u-hover:#ded4c4;--u-primary-text:#fbf8f2;--u-primary-hover:#3a332a;--u-good:#247a52;--u-bad:#a33f3f;--u-warn:#8a5c16}
+html[data-tema="claro"] body.ui-app button,html[data-tema="claro"] body.ui-app .btn{background:#241f19;border-color:#241f19;color:#fbf8f2}
+html[data-tema="claro"] body.ui-app button:hover,html[data-tema="claro"] body.ui-app .btn:hover{background:#3a332a;border-color:#3a332a}
+html[data-tema="claro"] body.ui-app button.secondary,html[data-tema="claro"] body.ui-app .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+html[data-tema="claro"] body.ui-app .os-tab{background:transparent;border-color:transparent;color:var(--u-muted)}
+html[data-tema="claro"] body.ui-app .os-tab:hover{background:transparent;border-color:transparent;color:var(--u-text-2)}
+html[data-tema="claro"] body.ui-app .os-tab.active{background:transparent;border-color:transparent;color:var(--u-text)}
+html[data-tema="claro"] body.ui-app .theme-botoes button{background:transparent;border-color:var(--u-line-2);color:var(--u-text-2)}
+html[data-tema="claro"] body.ui-app .theme-botoes button.ativo{background:var(--u-raised);color:var(--u-text);border-color:var(--u-accent)}
+html[data-tema="claro"] body.ui-app .accent-botoes button{background:var(--cor);border-color:transparent}
+html[data-tema="claro"] body.ui-app .accent-botoes button.ativo{border-color:var(--u-text)}
+html[data-tema="claro"] body.ui-app .side-brand img{filter:none}
+html[data-tema="claro"] body.ui-app .os-tab.active::after{background:var(--u-accent)}
+body.ui-app .side-theme{margin:12px 0 0;padding:12px 0 0;border-top:1px solid var(--u-line)}
+body.ui-app .side-theme p{margin:0 0 8px;color:var(--u-muted);font:500 11px/1.2 var(--u-mono)}
+body.ui-app .theme-botoes{display:flex;gap:6px;margin-bottom:10px}
+body.ui-app .theme-botoes button{flex:1;min-height:30px;padding:0 8px;border:1px solid var(--u-line-2);border-radius:7px;background:transparent;color:var(--u-text-2);font:500 11px/1.2 var(--u-font)}
+body.ui-app .theme-botoes button.ativo{background:var(--u-raised);color:var(--u-text);border-color:var(--u-accent)}
+body.ui-app .accent-botoes{display:flex;flex-wrap:wrap;gap:7px}
+body.ui-app .accent-botoes button{width:20px;height:20px;min-height:0;padding:0;border:2px solid transparent;border-radius:50%;background:var(--cor);box-shadow:none}
+body.ui-app .accent-botoes button.ativo{border-color:var(--u-text);outline:2px solid var(--u-accent);outline-offset:1px}
 body.ui-app{margin:0;background:var(--u-bg);color:var(--u-text);font:400 14px/1.55 var(--u-font);-webkit-font-smoothing:antialiased}
 body.ui-app *{box-sizing:border-box}
 body.ui-app header{display:none}
@@ -166,12 +195,12 @@ body.ui-app .mono{font-family:var(--u-mono);font-variant-numeric:tabular-nums}
 body.ui-app [hidden]{display:none!important}
 
 /* controls */
-body.ui-app button,body.ui-app .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;margin:0;padding:0 16px;border:1px solid var(--u-text);border-radius:8px;background:var(--u-text);color:#17130d;font:500 14px/1.2 var(--u-font);letter-spacing:0;text-transform:none;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:none;transition:background .15s var(--u-ease),border-color .15s var(--u-ease),color .15s var(--u-ease),transform .12s var(--u-ease)}
-body.ui-app button:hover,body.ui-app .btn:hover{background:#fff;border-color:#fff;color:#17130d}
+body.ui-app button,body.ui-app .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;margin:0;padding:0 16px;border:1px solid var(--u-text);border-radius:8px;background:var(--u-text);color:var(--u-primary-text);font:500 14px/1.2 var(--u-font);letter-spacing:0;text-transform:none;text-decoration:none;white-space:nowrap;cursor:pointer;box-shadow:none;transition:background .15s var(--u-ease),border-color .15s var(--u-ease),color .15s var(--u-ease),transform .12s var(--u-ease)}
+body.ui-app button:hover,body.ui-app .btn:hover{background:var(--u-primary-hover);border-color:var(--u-primary-hover);color:var(--u-primary-text)}
 body.ui-app button:active,body.ui-app .btn:active{transform:scale(.985)}
 body.ui-app button:focus-visible,body.ui-app .btn:focus-visible,body.ui-app a:focus-visible,body.ui-app input:focus-visible,body.ui-app select:focus-visible,body.ui-app textarea:focus-visible{outline:2px solid var(--u-accent);outline-offset:2px}
 body.ui-app button.secondary,body.ui-app .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-app button.secondary:hover,body.ui-app .btn.secondary:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app button.secondary:hover,body.ui-app .btn.secondary:hover{background:var(--u-hover);border-color:var(--u-line-2);color:var(--u-text)}
 body.ui-app button.danger,body.ui-app .btn.danger{background:rgba(223,133,133,.1);border-color:rgba(223,133,133,.3);color:var(--u-bad)}
 body.ui-app button.danger:hover,body.ui-app .btn.danger:hover{background:rgba(223,133,133,.16);border-color:rgba(223,133,133,.45);color:var(--u-bad)}
 body.ui-app button.subtle,body.ui-app .btn.subtle{background:transparent;border-color:var(--u-line);color:var(--u-text-2)}
@@ -181,14 +210,14 @@ body.ui-app .btn{display:inline-flex}
 body.ui-app table button,body.ui-app table .btn{min-height:32px;padding:0 12px;border-color:var(--u-line-2);background:transparent;color:var(--u-text-2);font-size:12px}
 body.ui-app table button:hover,body.ui-app table .btn:hover{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
 body.ui-app form[method="get"] button{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-app form[method="get"] button:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app form[method="get"] button:hover{background:var(--u-hover);border-color:var(--u-line-2);color:var(--u-text)}
 body.ui-app .iniciar-atendimento{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
-body.ui-app .iniciar-atendimento:hover{background:#302b25;border-color:var(--u-line-2);color:var(--u-text)}
+body.ui-app .iniciar-atendimento:hover{background:var(--u-hover);border-color:var(--u-line-2);color:var(--u-text)}
 
 /* forms */
 body.ui-app label{display:block;margin:16px 0 8px;color:var(--u-text-2);font:500 12px/1.4 var(--u-font)}
 body.ui-app label:first-child{margin-top:0}
-body.ui-app input,body.ui-app textarea,body.ui-app select{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--u-line-2);border-radius:8px;background:#11100f;color:var(--u-text);font:400 14px/1.4 var(--u-font);box-shadow:none}
+body.ui-app input,body.ui-app textarea,body.ui-app select{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--u-line-2);border-radius:8px;background:var(--u-input);color:var(--u-text);font:400 14px/1.4 var(--u-font);box-shadow:none}
 body.ui-app input::placeholder,body.ui-app textarea::placeholder{color:#6f675e}
 body.ui-app input:focus,body.ui-app textarea:focus,body.ui-app select:focus{border-color:var(--u-accent);outline:2px solid var(--u-accent);outline-offset:1px}
 body.ui-app textarea{min-height:96px;resize:vertical}
@@ -200,6 +229,11 @@ body.ui-app fieldset{border:0;padding:0;margin:0;min-width:0}
 body.ui-app legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0}
 body.ui-app .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 body.ui-app .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
+body.ui-app .material-add{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+body.ui-app .material-add-estoque{margin:0;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);padding:0 12px 12px}
+body.ui-app .material-add-estoque summary{padding:11px 0;color:var(--u-text-2);font:500 13px/1.2 var(--u-font);cursor:pointer}
+body.ui-app .material-add-linha{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+body.ui-app .material-add-linha select{margin:0}
 body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
 body.ui-app .material-row label{margin:0 0 4px}
 body.ui-app .material-row input{min-height:36px}
@@ -357,7 +391,8 @@ body.ui-app .os-service-model .card h2{margin:0 0 8px;color:var(--u-text-2);font
 body.ui-app .os-service-model .card p{margin:0 0 8px;font-size:12px}
 body.ui-app .os-service-model .card label{margin-top:8px}
 body.ui-app .os-tabs{display:flex;gap:24px;margin:0 0 24px;padding:0;border-bottom:1px solid var(--u-line);border-radius:0;background:transparent;overflow-x:auto}
-body.ui-app .os-tab{position:relative;flex:0 0 auto;display:inline-flex;align-items:baseline;gap:8px;min-height:0;padding:0 0 12px;border:0;border-radius:0;background:transparent;color:var(--u-muted);font:500 14px/1.2 var(--u-font);white-space:nowrap}
+body.ui-app .os-tab{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;min-height:0;padding:0 0 12px;border:0;border-radius:0;background:transparent;color:var(--u-muted);font:500 14px/1.2 var(--u-font);white-space:nowrap}
+body.ui-app .os-tab .tab-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;line-height:0}
 body.ui-app .os-tab:hover{background:transparent;border-color:transparent;color:var(--u-text-2)}
 body.ui-app .os-tab.active{background:transparent;border-color:transparent;color:var(--u-text)}
 body.ui-app .os-tab.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--u-accent)}
@@ -795,6 +830,23 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
                  '<div class="side-foot">'
                  f'<div class="side-user"><strong>{esc(usuario.get("nome",""))}</strong>'
                  '<span>Prestador</span></div>'
+                 '<div class="side-theme">'
+                 '<p>Tema</p>'
+                 '<div class="theme-botoes" role="group" aria-label="Tema da interface">'
+                 '<button type="button" data-tema="auto">Auto</button>'
+                 '<button type="button" data-tema="claro">Claro</button>'
+                 '<button type="button" data-tema="escuro">Escuro</button>'
+                 '</div>'
+                 '<p>Cor de acento</p>'
+                 '<div class="accent-botoes" role="group" aria-label="Cor de acento">'
+                 '<button type="button" data-acento="ambar" title="Âmbar" aria-label="Âmbar" style="--cor:#d8a24a"></button>'
+                 '<button type="button" data-acento="azul" title="Azul" aria-label="Azul" style="--cor:#78aede"></button>'
+                 '<button type="button" data-acento="verde" title="Verde" aria-label="Verde" style="--cor:#7cc7a2"></button>'
+                 '<button type="button" data-acento="vermelho" title="Vermelho" aria-label="Vermelho" style="--cor:#df8a8a"></button>'
+                 '<button type="button" data-acento="roxo" title="Roxo" aria-label="Roxo" style="--cor:#b39bdf"></button>'
+                 '<button type="button" data-acento="ciano" title="Ciano" aria-label="Ciano" style="--cor:#6ec7c7"></button>'
+                 '<button type="button" data-acento="laranja" title="Laranja" aria-label="Laranja" style="--cor:#e2a06a"></button>'
+                 '</div></div>'
                  '<div class="side-tools">'
                  '<button type="button" class="side-tool" id="abrir-feedback-side">'
                  f'{icone("message")}<span>Enviar feedback</span></button>'
@@ -835,6 +887,7 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
               '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
               '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>try{{var t=localStorage.getItem('autoseg:tema')||'auto';var a=localStorage.getItem('autoseg:acento')||'ambar';var claro=t==='claro'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.dataset.tema=claro?'claro':'escuro';document.documentElement.dataset.acento=a;}}catch(e){{}}</script>
 <title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:#fff;font:16px -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.45}}
@@ -1645,87 +1698,118 @@ class PortalPrestador:
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
 
-            def os_rapida_form(self, s, erro='', q='', cliente_id=None):
-                """Abertura rápida com busca e cartões, no mesmo padrão do Portal do Cliente."""
+            def _cliente_a_definir(self):
+                """Cadastro provisório para OS aberta antes de escolher o cliente."""
                 with ext.db(banco) as c:
-                    if cliente_id:
-                        cliente = clientes_core.obter_resumo_ativo(cliente_id, banco=banco)
-                        if not cliente:
-                            return self.os_rapida_form(
-                                s, 'Cliente não encontrado ou inativo. Escolha outro na lista.', q=q)
-                        prestadores = c.execute(
-                            "SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome").fetchall()
-                        local = ' · '.join(x for x in (cliente['tipo_pessoa'], cliente['bairro'],
-                                                       cliente['cidade']) if x)
-                        form = (f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
-                                f'<input type="hidden" name="cliente_id" value="{int(cliente["id"])}">'
-                                f'<p class="passo">{esc(cliente["nome"])}'
-                                + (f' · {esc(local)}' if local else '') + '</p>'
-                                + textarea('Solicitação / descrição do serviço', 'descricao',
-                                           required=True)
-                                + select('Forma de pagamento', 'forma_pagamento',
-                                         [('', 'Selecione a forma de pagamento')]
-                                         + [(z, z) for z in neg.OS_FORMAS], '', required=True)
-                                + select('Urgência', 'urgencia',
-                                         [('Baixa', 'Baixa'), ('Normal', 'Normal'),
-                                          ('Alta', 'Alta')], 'Normal'))
-                        if prestadores:
-                            form += select('Atribuir prestador (opcional)', 'prestador_id',
-                                           [('', 'Não atribuir agora')]
-                                           + [(x['id'], x['nome']) for x in prestadores])
-                        else:
-                            form += ('<p class="muted">Nenhum prestador ativo cadastrado; '
-                                     'a OS ficará sem responsável.</p>')
-                        form += ('<p class="notice">A OS será criada como <b>Aberta</b>. '
-                                 'Ela só fica <b>Pendente</b> se o atendimento for iniciado e '
-                                 'encerrado com essa situação.</p>'
-                                 '<button type="submit" style="width:100%">Criar OS</button></form>')
-                        aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
-                        importar_rapida=card('Importar OS em YAML',
-                            f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{self.hidden(s)}'
-                            f'<input type="hidden" name="cliente_id" value="{int(cliente["id"])}">'
-                            '<label for="importar-os-rapida-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
-                            '<input id="importar-os-rapida-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
-                            '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
-                            '<p class="muted">Abre o formulário completo já preenchido para revisão; '
-                            'nada é salvo antes de confirmar.</p>')
-                        return self.pagina(
-                            'Nova ordem de serviço — ' + cliente['nome'],
-                            card('Solicitação para ' + cliente['nome'], aviso + form)
-                            + importar_rapida
-                            + botao('← Voltar e escolher outro cliente', '/os/rapida', 'secondary'), s)
+                    linha=c.execute("SELECT id FROM clientes WHERE status='A definir' "
+                                    "ORDER BY id LIMIT 1").fetchone()
+                    if linha:
+                        return int(linha['id'])
+                    cur=c.execute("""INSERT INTO clientes
+                        (tipo_pessoa,documento,nome,bairro,cidade,observacoes,status,criado_em)
+                        VALUES('Física','','Cliente a definir','','',
+                        'Criado automaticamente para uma OS aberta sem cliente. Associe o cliente depois.',
+                        'A definir',?)""",(ext.agora(),))
+                    return int(cur.lastrowid)
 
-                    termo = str(q or '').strip()[:120]
-                    clientes = clientes_core.buscar_rapida(
-                        termo, banco=banco, limite=100)
+            def _os_duplicada_recente(self, cliente_id):
+                """OS do mesmo cliente criada nos últimos 2 minutos."""
+                limite=(datetime.now()-timedelta(minutes=2)).strftime('%Y-%m-%d %H:%M:%S')
+                with ext.db(banco) as c:
+                    return c.execute("""SELECT id,numero_os,criado_em,descricao
+                        FROM ordens_servico WHERE cliente_id=? AND criado_em>=?
+                        ORDER BY id DESC LIMIT 1""",(int(cliente_id),limite)).fetchone()
 
-                busca = ('<form method="get" action="/os/rapida" class="busca-pj">'
-                         '<label for="q-os-rapida">Buscar condomínio, empresa ou cliente</label>'
-                         '<div class="busca-linha">'
-                         f'<input id="q-os-rapida" name="q" type="search" value="{esc(termo)}" '
-                         'placeholder="Digite o nome, CNPJ/CPF, cidade ou e-mail" autocomplete="off">'
-                         '<button type="submit">Buscar</button></div></form>')
-                cards = []
+            def os_rapida_form(self, s, erro='', q='', cliente_id=None,
+                               dados_form=None, duplicada=None):
+                """Nova OS em uma única tela, com cliente opcional.
+
+                O cliente pode ser escolhido agora ou associado depois; nesse
+                caso a OS usa o cadastro provisório "Cliente a definir".
+                """
+                dados_form=dict(dados_form or {})
+                with ext.db(banco) as c:
+                    prestadores=c.execute(
+                        "SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome").fetchall()
+                termo=str(q or '').strip()[:120]
+                clientes=clientes_core.buscar_rapida(termo,banco=banco,limite=400)
+                if not clientes:
+                    clientes=clientes_core.buscar_rapida('',banco=banco,limite=400)
+                selecionado=str(cliente_id or dados_form.get('cliente_id') or '')
+                opcoes=[('','Cliente a definir (associar depois)')]
                 for x in clientes:
-                    local = ' · '.join(y for y in (x['tipo_pessoa'], x['bairro'], x['cidade']) if y)
-                    contato = (' · ' + esc(x['email'])) if x['email'] else ''
-                    cards.append(
-                        '<article class="resultado-organizacao">'
-                        f'<h3>{esc(x["nome"])}</h3><p>{esc(local)}{contato}</p>'
-                        f'<a class="btn" href="/os/rapida?cliente={int(x["id"])}">'
-                        'Abrir OS para este cliente</a></article>')
-                lista = ''.join(cards) or (
-                    '<p class="aviso-claro">Nenhum cliente encontrado para esta busca. '
-                    'Tente outro nome ou <a href="/clientes/novo">cadastre o cliente</a>.</p>')
-                aviso = f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                    partes=[x.get('tipo_pessoa') or '',x.get('cidade') or '']
+                    detalhe=' · '.join(p for p in partes if p)
+                    opcoes.append((str(x['id']),x['nome']+(f' — {detalhe}' if detalhe else '')))
+                if selecionado and not any(str(v)==selecionado for v,_ in opcoes):
+                    atual=clientes_core.obter_linha(int(selecionado),banco=banco)
+                    if atual:
+                        opcoes.append((str(atual['id']),atual['nome']))
+                aviso=f'<p class="bad">{esc(erro)}</p>' if erro else ''
+                if duplicada:
+                    existente_id=int(duplicada['id'])
+                    confirmacao=(f'<form method="post" action="/os/rapida/salvar">'
+                                 f'{self.hidden(s)}'
+                                 f'<input type="hidden" name="cliente_id" value="{esc(str(cliente_id or ""))}">'
+                                 f'<input type="hidden" name="descricao" value="{esc(str(dados_form.get("descricao","")))}">'
+                                 f'<input type="hidden" name="forma_pagamento" value="{esc(str(dados_form.get("forma_pagamento","")))}">'
+                                 f'<input type="hidden" name="urgencia" value="{esc(str(dados_form.get("urgencia","Normal")))}">'
+                                 f'<input type="hidden" name="prestador_id" value="{esc(str(dados_form.get("prestador_id","")))}">'
+                                 '<input type="hidden" name="confirmar_duplicidade" value="1">'
+                                 '<button type="submit" class="secondary">Criar outra mesmo assim</button></form>')
+                    return self.pagina('Aviso de OS duplicada',
+                        card('Já existe uma OS recente para este cliente',
+                             f'<p class="notice">A OS <b>{esc(duplicada["numero_os"])}</b> foi criada '
+                             f'em {esc(duplicada["criado_em"])} para o mesmo cliente. '
+                             'Para evitar duplicidade, confira a OS existente antes de criar outra.</p>'
+                             f'<div class="actions">{botao("Abrir OS existente",url_os(banco, existente_id))}'
+                             f'{confirmacao}</div>'),s)
+                busca=('<form method="get" action="/os/rapida" class="busca-pj">'
+                       '<label for="q-os-rapida">Buscar cliente</label>'
+                       '<div class="busca-linha">'
+                       f'<input id="q-os-rapida" name="q" type="search" value="{esc(termo)}" '
+                       'placeholder="Nome, CNPJ/CPF, cidade ou e-mail" autocomplete="off">'
+                       '<button type="submit" class="secondary">Buscar</button></div></form>')
+                form=(f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
+                      +'<label for="filtro-cliente-rapida">Buscar cliente na lista</label>'
+                      +'<input type="search" id="filtro-cliente-rapida" '
+                       'placeholder="Digite para filtrar os clientes" autocomplete="off">'
+                      +select('Cliente (opcional)','cliente_id',opcoes,selecionado)
+                      +'<p class="muted">Pode abrir sem cliente e associar depois na própria OS.</p>'
+                      +textarea('Solicitação / descrição do serviço','descricao',
+                                str(dados_form.get('descricao','')),required=True)
+                      +select('Forma de pagamento','forma_pagamento',
+                              [('', 'Selecione a forma de pagamento')]
+                              + [(z, z) for z in neg.OS_FORMAS],
+                              str(dados_form.get('forma_pagamento','')),required=True)
+                      +select('Urgência','urgencia',
+                              [('Baixa', 'Baixa'), ('Normal', 'Normal'),
+                               ('Alta', 'Alta')],
+                              str(dados_form.get('urgencia','Normal') or 'Normal')))
+                if prestadores:
+                    form += select('Atribuir prestador (opcional)', 'prestador_id',
+                                   [('', 'Eu mesmo (padrão)')]
+                                   + [(str(x['id']), x['nome']) for x in prestadores],
+                                   str(dados_form.get('prestador_id','')))
+                form += ('<p class="notice">A OS será criada como <b>Aberta</b> e você '
+                         'fica responsável por ela. Outro administrador pode transferir '
+                         'a responsabilidade depois.</p>'
+                         '<button type="submit" style="width:100%">Criar OS</button></form>')
+                importar_rapida=''
+                if selecionado:
+                    importar_rapida=card('Importar OS em YAML',
+                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{self.hidden(s)}'
+                        f'<input type="hidden" name="cliente_id" value="{esc(selecionado)}">'
+                        '<label for="importar-os-rapida-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
+                        '<input id="importar-os-rapida-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
+                        '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
+                        '<p class="muted">Abre o formulário completo já preenchido para revisão; '
+                        'nada é salvo antes de confirmar.</p>')
                 return self.pagina(
                     'Nova ordem de serviço',
-                    card('1. Encontre o cliente',
-                         '<p>Busque pelo nome, CNPJ/CPF, cidade ou e-mail. '
-                         'Ao escolher, você informa a solicitação e cria a OS.</p>' + aviso + busca)
-                    + card('2. Escolha o cliente', '<div class="lista-organizacoes-pj">'
-                           + lista + '</div>')
-                    + botao('Voltar às OS', '/os', 'secondary'), s)
+                    card('Solicitação', aviso + busca + form)
+                    + importar_rapida
+                    + botao('← Voltar às OS', '/os', 'secondary'), s)
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
@@ -1751,6 +1835,15 @@ class PortalPrestador:
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
                 arquivada=bool(d.get('arquivada'))
+                if oid and d.get('cliente_id') and not any(
+                        int(x['id'])==int(d['cliente_id']) for x in cl):
+                    # OS criada sem cliente usa o cadastro provisório
+                    # "Cliente a definir"; ele precisa aparecer no seletor
+                    # para que a associação posterior seja possível.
+                    provisorio=clientes_core.obter_linha(int(d['cliente_id']),banco=banco)
+                    if provisorio:
+                        cl.append({chave:provisorio.get(chave,'') for chave in
+                                   ('id','nome','cidade','bairro','endereco','numero')})
                 if oid:
                     try:
                         with ext.db(banco) as c:
@@ -1936,6 +2029,16 @@ class PortalPrestador:
                     if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente' or s.get('admin')):
                         bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/assumir" formnovalidate>{rotulo_assumir}</button>')
                         bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
+                    if s.get('admin'):
+                        opcoes_transferencia=[('', 'Escolha um prestador')]+[
+                            (str(p['id']), p['nome']) for p in prestadores
+                            if int(p['id']) != int(responsavel or 0)]
+                        bloco.append('<div class="os-transfer">'
+                                     '<label for="prestador-destino">Atribuir a outro prestador</label>'
+                                     '<div class="os-transfer-linha">'
+                                     +select('Prestador','prestador_destino',opcoes_transferencia,'')
+                                     +f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/atribuir" formnovalidate>Atribuir OS</button>'
+                                     '</div><p class="muted">A transferência administrativa troca o responsável sem iniciar o atendimento.</p></div>')
                     if responsavel in (None, s['pid']) and not iniciado:
                         if em_rota:
                             bloco.append(f'<p class="notice">{aviso_rota}</p>')
@@ -1975,7 +2078,8 @@ class PortalPrestador:
                         '<p class="bad" id="cancelar-erro" hidden></p>'
                         '<div class="feedback-actions">'
                         '<button type="button" class="secondary" data-voltar-cancelar>Voltar</button>'
-                        '<button type="submit" class="danger" name="cancelar_os" value="1" formnovalidate>'
+                        f'<button type="submit" class="danger" name="cancelar_os" value="1" '
+                        f'formaction="{url_os(banco, oid)}/cancelar" formnovalidate>'
                         'Cancelar OS definitivamente</button>'
                         '</div></div></dialog>')
                 corpo+='<fieldset><legend>Identificação e serviço</legend>'
@@ -2049,15 +2153,21 @@ class PortalPrestador:
                     corpo+='<button type="button" class="secondary remover-material" title="Remover material">Remover</button></div>'
                 corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
                 corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Cabo, câmera, fonte..."></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
-                corpo+='<button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
+                corpo+='<div class="material-add"><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button>'
                 produtos=estoque.listar(banco,ativos=True)
                 if produtos:
                     import json as _jm
                     catalogo_json=_jm.dumps([{'nome':x['nome'],'valor':x['venda_centavos']/100} for x in produtos],ensure_ascii=False).replace('<','\\u003c')
-                    corpo+='<label for="material-estoque-selecionar">Usar material cadastrado no estoque</label>'
-                    corpo+='<select id="material-estoque-selecionar">'+''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))+'</select>'
-                    corpo+='<button class="secondary" id="adicionar-do-estoque" type="button">+ Adicionar do estoque</button>'
+                    corpo+=('<details class="material-add-estoque"><summary>Adicionar do estoque</summary>'
+                            '<label for="material-estoque-selecionar">Material cadastrado</label>'
+                            '<div class="material-add-linha">'
+                            '<select id="material-estoque-selecionar">'
+                            +''.join(f'<option value="{i}">{esc(x["nome"])}</option>' for i,x in enumerate(produtos))
+                            +'</select>'
+                            '<button class="secondary" id="adicionar-do-estoque" type="button">Adicionar</button>'
+                            '</div></details>')
                     corpo+=f'<script type="application/json" id="produtos-estoque-os">{catalogo_json}</script>'
+                corpo+='</div>'
                 try:
                     cfg_comp=composicao.carregar()
                     bases_comp=cfg_comp.get('bases_percentuais') or {}
@@ -2147,9 +2257,11 @@ class PortalPrestador:
                     corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
                     if pode_editar_fotos:
                         corpo+=('<p class="muted">Você pode adicionar fotos e alterar legendas. '
-                                'Selecione os arquivos, escreva a legenda e clique em '
-                                '<b>Salvar fotos e legendas</b>. A conclusão gera o PDF com '
-                                'as fotos e legendas.</p>')
+                                'Tudo é salvo automaticamente ao selecionar arquivos ou '
+                                'editar uma legenda. A conclusão gera o PDF com as fotos e '
+                                'legendas.</p>'
+                                '<p class="muted auto-save-status" id="fotos-auto-status" '
+                                'aria-live="polite">Fotos e legendas salvas automaticamente.</p>')
                     else:
                         corpo+=('<p class="muted">Somente o responsável ou administrador pode '
                                 'adicionar fotos e alterar legendas.</p>')
@@ -2181,14 +2293,13 @@ class PortalPrestador:
                         corpo+='<button class="secondary" id="adicionar-mais-fotos" type="button">+ Adicionar mais fotos</button>'
                         corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
-                        corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Use <b>Salvar fotos e legendas</b> para guardar as fotos e legendas sem finalizar.</p></div>'
+                        corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Ao salvar, as fotos e legendas ficam guardadas sem finalizar a OS.</p></div>'
                         comprimir_pdf=bool(d.get('comprimir_fotos_pdf',1))
                         corpo+='<input type="hidden" name="comprimir_fotos_pdf_presente" value="1">'
                         corpo+=(f'<label class="foto-comprimir"><input type="checkbox" name="comprimir_fotos_pdf" value="1"'
                                 f'{" checked" if comprimir_pdf else ""}> Comprimir fotos no PDF</label>')
                         corpo+='<p class="muted">As imagens do site são sempre otimizadas; o original permanece no banco. '
                         corpo+='Desmarque para usar alta qualidade no PDF.</p>'
-                        corpo+=f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/fotos" formnovalidate>Salvar fotos e legendas</button>'
                     if pode_nota:
                         nota_atual=notas_fiscais[-1] if notas_fiscais else None
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
@@ -2670,21 +2781,116 @@ class PortalPrestador:
                         ['ID','Data','Tipo','Pessoa / OS','Descrição','Valor','Ação'],
                         linhas)),s)
 
+            def _composicao_config(self):
+                try:
+                    return composicao.carregar()
+                except (ValueError,OSError):
+                    return {'versao':1,'componentes':[],
+                            'bases_percentuais':{'total':{'nome':'Total da OS'}},
+                            'base_percentuais_padrao':'total'}
+
+            def _composicao_valor_texto(self,componente):
+                modo=componente.get('modo','')
+                if modo=='percentual':
+                    return f"{float(componente.get('valor',0) or 0):g}"
+                if modo in ('fixo','hora'):
+                    return dinheiro((componente.get('valor',0) or 0)/100).replace('R$','').strip()
+                return ''
+
             def composicao_admin(self,s):
                 if not s.get('admin'):
                     raise PermissionError('Somente administradores podem editar a composição.')
-                try:
-                    config=composicao.carregar()
-                except (ValueError, OSError):
-                    config={'versao':1,'componentes':[]}
-                texto=yaml.safe_dump(config,allow_unicode=True,sort_keys=False)
-                form=(f'<form method="post" action="/composicao/salvar">{self.hidden(s)}'
-                      +textarea('composicao.yaml','yaml',texto,28,True)
-                      +'<button>Salvar composição</button></form>')
+                config=self._composicao_config()
+                componentes=sorted(config.get('componentes',[]),
+                                   key=lambda c:(c.get('ordem',0),c.get('id','')))
+                linhas=[]
+                for i,c in enumerate(componentes):
+                    cid=esc(str(c.get('id','')))
+                    acoes=(f'<a class="btn secondary" href="/composicao/{cid}/editar">Editar</a> '
+                           f'<form method="post" action="/composicao/{cid}/alternar" style="display:inline">'
+                           f'{self.hidden(s)}<button class="secondary">'
+                           f'{"Desativar" if c.get("ativo",True) else "Ativar"}</button></form> '
+                           f'<form method="post" action="/composicao/{cid}/mover" style="display:inline">'
+                           f'{self.hidden(s)}<input type="hidden" name="direcao" value="up">'
+                           '<button class="secondary" title="Subir">↑</button></form> '
+                           f'<form method="post" action="/composicao/{cid}/mover" style="display:inline">'
+                           f'{self.hidden(s)}<input type="hidden" name="direcao" value="down">'
+                           '<button class="secondary" title="Descer">↓</button></form> '
+                           f'<form method="post" action="/composicao/{cid}/excluir" style="display:inline" '
+                           'data-confirm="Excluir este componente da composição?">'
+                           f'{self.hidden(s)}<button class="danger">Excluir</button></form>')
+                    linhas.append((c.get('ordem',i+1),esc(c.get('nome','')),
+                                   composicao.MODOS.get(c.get('modo',''),c.get('modo','')),
+                                   esc(self._composicao_valor_texto(c)) or '—',
+                                   'Sim' if c.get('ativo',True) else 'Não',
+                                   'Sim' if c.get('obrigatorio') else 'Não',
+                                   esc(', '.join(c.get('aplicavel_a') or [])) or 'Todos',
+                                   acoes))
                 recalc=(f'<form method="post" action="/composicao/recalcular">{self.hidden(s)}'
                         '<button class="secondary">Recalcular serviços e OS abertas</button></form>')
+                texto=yaml.safe_dump(config,allow_unicode=True,sort_keys=False)
+                avancado=(f'<details class="composicao-avancado"><summary>YAML avançado</summary>'
+                          f'<form method="post" action="/composicao/yaml">{self.hidden(s)}'
+                          +textarea('composicao.yaml','yaml',texto,22,True)
+                          +'<button class="secondary">Salvar YAML</button></form></details>')
                 return self.pagina('Composição de valores',
-                    card('composicao.yaml',form)+card('Recalcular',recalc),s)
+                    card('Componentes',
+                         '<p class="muted">Cada componente é uma linha do valor final. '
+                         'A soma sempre fecha com o total do serviço.</p>'
+                         +f'<div class="page-actions"><a class="btn" href="/composicao/novo">Novo componente</a></div>'
+                         +tabela(['Ordem','Componente','Modo','Valor','Ativo','Obrigatório',
+                                  'Aplicável a','Ações'],linhas))
+                    +card('Manutenção',recalc+avancado),s)
+
+            def composicao_form(self,s,identificador=None):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem editar a composição.')
+                config=self._composicao_config()
+                componente=None
+                if identificador:
+                    componente=next((c for c in config.get('componentes',[])
+                                     if str(c.get('id'))==str(identificador)),None)
+                    if componente is None:
+                        raise ValueError('Componente não encontrado.')
+                dados=componente or {'id':'','nome':'','descricao':'','modo':'fixo',
+                                     'valor':0,'formula':'','horas_padrao':0.0,
+                                     'minimo_centavos':0,'aplicavel_a':[],
+                                     'ativo':True,'obrigatorio':False,'ordem':''}
+                identificador_atual=str(identificador or '')
+                modo_atual=str(dados.get('modo') or 'fixo')
+                form=(f'<form method="post" action="/composicao/salvar">{self.hidden(s)}'
+                      f'<input type="hidden" name="id_atual" value="{esc(identificador_atual)}">'
+                      +campos_escuros('Nome','nome',dados.get('nome',''),required=True)
+                      +campos_escuros('Identificador (opcional)','id_novo',dados.get('id',''),
+                                      placeholder='gerado a partir do nome')
+                      +campos_escuros('Descrição','descricao',dados.get('descricao',''))
+                      +select('Modo de cálculo','modo',
+                              [(chave,rotulo) for chave,rotulo in composicao.MODOS.items()],
+                              modo_atual,required=True)
+                      +campos_escuros('Valor (R$ ou %)','valor',
+                                      self._composicao_valor_texto(dados),
+                                      placeholder='Ex.: 10 para 10% ou 150,00 para fixo')
+                      +campos_escuros('Fórmula','formula',dados.get('formula',''),
+                                      placeholder='Ex.: hora_tecnica * 0.2')
+                      +campos_escuros('Horas padrão','horas_padrao',
+                                      str(dados.get('horas_padrao',0) or 0))
+                      +campos_escuros('Mínimo em R$ (modo hora)','minimo',
+                                      dinheiro((dados.get('minimo_centavos',0) or 0)/100).replace('R$','').strip())
+                      +campos_escuros('Aplicável a (serviços separados por vírgula)',
+                                      'aplicavel_a',', '.join(dados.get('aplicavel_a') or []))
+                      +campos_escuros('Ordem','ordem',str(dados.get('ordem','') or '')))
+                form+=('<label class="foto-incluir"><input type="checkbox" name="ativo" value="1"'
+                       +(' checked' if dados.get('ativo',True) else '')+'> Ativo</label>')
+                form+=('<label class="foto-incluir"><input type="checkbox" name="obrigatorio" value="1"'
+                       +(' checked' if dados.get('obrigatorio') else '')+'> Obrigatório</label>')
+                form+='<div class="actions"><button type="submit">Salvar componente</button>'
+                form+='<a class="btn secondary" href="/composicao">Cancelar</a></div></form>'
+                return self.pagina('Novo componente' if not identificador else 'Editar componente',
+                                   card(dados.get('nome') or 'Componente',form),s)
+
+            def _composicao_salvar(self,config):
+                composicao.salvar(config)
+                composicao.recalcular_tudo(banco)
 
             def portal_cliente(self,s):
                 porta_cliente=runtime_config.client_port(8765)
@@ -2917,11 +3123,19 @@ class PortalPrestador:
                         return self.orcamento_form(s,cliente_id=cliente_orcamento)
                     if path=='/clientes/novo':return self.cliente_form(s)
                     if path=='/financeiro':return self.financeiro(s)
+                    if path=='/prestadores/novo':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem gerenciar prestadores.')
+                        return self.redir('/prestadores')
                     if path=='/prestadores':return self.prestadores_admin(s)
                     if path=='/estoque':return self.estoque_admin(s)
                     if path=='/estoque/novo':return self.estoque_item(s)
                     if path=='/caixa':return self.caixa_admin(s)
                     if path=='/composicao':return self.composicao_admin(s)
+                    if path=='/composicao/novo':return self.composicao_form(s)
+                    partes_comp_get=path.strip('/').split('/')
+                    if len(partes_comp_get)==3 and partes_comp_get[0]=='composicao' and partes_comp_get[2]=='editar':
+                        return self.composicao_form(s,partes_comp_get[1])
                     if path=='/relatorios':return self.redir('/historico')
                     if path=='/emails':return self.relatorios(s,'emails')
                     if path=='/notas':return self.relatorios(s,'notas')
@@ -3089,17 +3303,114 @@ class PortalPrestador:
                             empresa.arquivar(banco,int(partes[2]),ator=s['nome'])
                             return self.redir('/caixa')
                         raise ValueError('Lançamento inválido.')
-                    if path in ('/composicao/salvar','/composicao/recalcular'):
+                    if path.startswith('/composicao/'):
                         if not s.get('admin'):
                             raise PermissionError('Somente administradores podem editar a composição.')
-                        if path=='/composicao/salvar':
-                            try:
-                                config=yaml.safe_load(str(d.get('yaml','')))
-                            except yaml.YAMLError as erro:
-                                raise ValueError(f'YAML inválido: {erro}') from erro
-                            composicao.salvar(config)
-                        composicao.recalcular_tudo(banco)
-                        return self.redir('/composicao')
+                        config=self._composicao_config()
+                        partes_comp=path.strip('/').split('/')
+                        try:
+                            if path=='/composicao/recalcular':
+                                composicao.recalcular_tudo(banco)
+                                return self.redir('/composicao')
+                            if path=='/composicao/yaml':
+                                try:
+                                    config=yaml.safe_load(str(d.get('yaml','')))
+                                except yaml.YAMLError as erro:
+                                    raise ValueError(f'YAML inválido: {erro}') from erro
+                                composicao.salvar(config)
+                                composicao.recalcular_tudo(banco)
+                                return self.redir('/composicao')
+                            if len(partes_comp)==3 and partes_comp[2] in ('alternar','mover','excluir'):
+                                alvo=partes_comp[2]; cid=partes_comp[1]
+                                componentes=sorted(config.get('componentes',[]),
+                                                   key=lambda c:(c.get('ordem',0),c.get('id','')))
+                                if alvo=='excluir':
+                                    if len(componentes)<=1:
+                                        raise ValueError('Mantenha pelo menos um componente.')
+                                    config['componentes']=[c for c in componentes if str(c.get('id'))!=cid]
+                                else:
+                                    atual=next((c for c in componentes if str(c.get('id'))==cid),None)
+                                    if atual is None:
+                                        raise ValueError('Componente não encontrado.')
+                                    if alvo=='alternar':
+                                        atual['ativo']=not atual.get('ativo',True)
+                                    else:
+                                        direcao=str(d.get('direcao','up'))
+                                        indice=componentes.index(atual)
+                                        destino=indice-1 if direcao=='up' else indice+1
+                                        if 0<=destino<len(componentes):
+                                            componentes[indice],componentes[destino]=componentes[destino],componentes[indice]
+                                        for posicao,item in enumerate(componentes):
+                                            item['ordem']=posicao+1
+                                        config['componentes']=componentes
+                                self._composicao_salvar(config)
+                                return self.redir('/composicao')
+                            if path=='/composicao/salvar':
+                                nome=str(d.get('nome','')).strip()
+                                if not nome:
+                                    raise ValueError('Informe o nome do componente.')
+                                modo=str(d.get('modo','')).strip()
+                                if modo not in composicao.MODOS:
+                                    raise ValueError('Escolha um modo de cálculo válido.')
+                                valor_txt=str(d.get('valor','0')).strip().replace('%','')
+                                if modo=='percentual':
+                                    try:
+                                        valor=float(valor_txt.replace(',','.') or 0)
+                                    except ValueError:
+                                        raise ValueError('Percentual inválido.') from None
+                                elif modo in ('fixo','hora'):
+                                    valor=composicao.centavos_de_reais(valor_txt or '0')
+                                else:
+                                    valor=0
+                                try:
+                                    horas=float(str(d.get('horas_padrao','0') or '0').replace(',','.'))
+                                except ValueError:
+                                    raise ValueError('Horas padrão inválidas.') from None
+                                ordem_txt=str(d.get('ordem','')).strip()
+                                try:
+                                    ordem=int(ordem_txt) if ordem_txt else 0
+                                except ValueError:
+                                    raise ValueError('Ordem inválida.') from None
+                                id_atual=str(d.get('id_atual','')).strip()
+                                id_novo=str(d.get('id_novo','')).strip()
+                                existentes=[str(c.get('id')) for c in config.get('componentes',[])]
+                                if id_atual:
+                                    cid=id_atual
+                                else:
+                                    cid=(id_novo or composicao.novo_id(nome,existentes)).strip()
+                                    base=cid; numero=2
+                                    while cid in existentes:
+                                        cid=f'{base}_{numero}'; numero+=1
+                                if not ordem:
+                                    ordem=(max([int(c.get('ordem',0) or 0)
+                                                for c in config.get('componentes',[])]+[0])+1)
+                                componente={
+                                    'id':cid,'nome':nome,
+                                    'descricao':str(d.get('descricao','')).strip(),
+                                    'modo':modo,'valor':valor,
+                                    'formula':str(d.get('formula','')).strip(),
+                                    'horas_padrao':horas,
+                                    'minimo_centavos':(composicao.centavos_de_reais(
+                                        str(d.get('minimo','0') or '0')) if modo=='hora' else 0),
+                                    'aplicavel_a':[x.strip() for x in
+                                        str(d.get('aplicavel_a','')).split(',') if x.strip()],
+                                    'ativo':str(d.get('ativo','')) in ('1','on','true','sim'),
+                                    'obrigatorio':str(d.get('obrigatorio','')) in ('1','on','true','sim'),
+                                    'ordem':ordem,
+                                }
+                                componentes=list(config.get('componentes',[]))
+                                if id_atual:
+                                    for indice,atual in enumerate(componentes):
+                                        if str(atual.get('id'))==id_atual:
+                                            componentes[indice]=componente; break
+                                else:
+                                    componentes.append(componente)
+                                config['componentes']=componentes
+                                self._composicao_salvar(config)
+                                return self.redir('/composicao')
+                        except ValueError as erro:
+                            return self.erro(str(erro),400,s)
+                        raise ValueError('Ação de composição inválida.')
                     def _meta_feedback():
                         meta=feedback.contexto(
                             banco,s,
@@ -3308,25 +3619,40 @@ class PortalPrestador:
                         neg.cliente_excluir(banco,int(partes[1]),pid)
                         return self.redir('/clientes')
                     if path=='/os/rapida/salvar':
-                        texto=(str(d.get('cliente_id','')).strip()
-                               or str(d.get('cliente_texto','')).strip())
-                        try:
-                            cliente_id=int(texto.split('—',1)[0].strip())
-                        except (ValueError,TypeError):
-                            return self.os_rapida_form(s,erro='Selecione um cliente/condomínio válido na lista.')
+                        cliente_texto=str(d.get('cliente_id','')).strip()
+                        if cliente_texto:
+                            try:
+                                cliente_id=int(cliente_texto.split('—',1)[0].strip())
+                            except (ValueError,TypeError):
+                                return self.os_rapida_form(
+                                    s,erro='Selecione um cliente válido na lista.',
+                                    dados_form=d)
+                            if not clientes_core.obter_resumo_ativo(cliente_id,banco=banco):
+                                return self.os_rapida_form(
+                                    s,erro='Cliente não encontrado ou inativo. Escolha outro.',
+                                    dados_form=d)
+                        else:
+                            cliente_id=self._cliente_a_definir()
                         descricao=str(d.get('descricao','')).strip()
                         if len(descricao)<5:
-                            return self.os_rapida_form(s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
-                                                       cliente_id=cliente_id)
+                            return self.os_rapida_form(
+                                s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
+                                dados_form=d,cliente_id=cliente_id)
                         forma=str(d.get('forma_pagamento','')).strip()
                         if forma not in neg.OS_FORMAS:
                             return self.os_rapida_form(
-                                s, erro='Escolha a forma de pagamento.',
-                                cliente_id=cliente_id)
+                                s,erro='Escolha a forma de pagamento.',
+                                dados_form=d,cliente_id=cliente_id)
                         urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
                         if urgencia not in ('Baixa','Normal','Alta'):
                             return self.os_rapida_form(
-                                s, erro='Escolha a urgência.', cliente_id=cliente_id)
+                                s,erro='Escolha a urgência.',
+                                dados_form=d,cliente_id=cliente_id)
+                        duplicada=self._os_duplicada_recente(cliente_id)
+                        if duplicada and not str(d.get('confirmar_duplicidade',''))=='1':
+                            return self.os_rapida_form(
+                                s,dados_form=d,cliente_id=cliente_id,
+                                duplicada=duplicada)
                         dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
                                'forma_pagamento':forma,'urgencia':urgencia,
                                'valor_mao_obra':'0','valor_materiais_manual':'0',
@@ -3335,12 +3661,28 @@ class PortalPrestador:
                         prestador_id=str(d.get('prestador_id','')).strip()
                         if prestador_id:
                             ext.atribuir(banco,oid,int(prestador_id),ator=f'Prestador {s["nome"]}')
+                        else:
+                            # Quem cria a OS já fica responsável; o botão
+                            # "Assumir" deixa de aparecer para essa pessoa.
+                            ext.assumir(banco,oid,pid)
+                        if str(d.get('confirmar_duplicidade',''))=='1':
+                            with ext.db(banco) as c:
+                                ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
+                                           f'OS recente do mesmo cliente: {duplicada["numero_os"]} '
+                                           f'({duplicada["criado_em"]}).',pid,f'Prestador {s["nome"]}')
                         with ext.db(banco) as c:
                             numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
                                               (oid,)).fetchone() or {'numero_os': oid})['numero_os']
+                            provisorio=(c.execute('SELECT status FROM clientes WHERE id=?',
+                                                  (cliente_id,)).fetchone() or {'status':''})['status']
+                        aviso_cliente=(''
+                            if provisorio!='A definir' else
+                            '<p class="notice">A OS está com <b>Cliente a definir</b>. '
+                            'Abra a OS e escolha o cliente quando souber.</p>')
                         return self.pagina('OS aberta com sucesso',
                             card('OS aberta com sucesso',
                                 f'<p class="good">A OS <b>{esc(numero)}</b> foi criada como <b>Aberta</b>.</p>'
+                                +aviso_cliente+
                                 '<p class="muted">Você não precisa preencher o atendimento agora. '
                                 'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
                                 +botao('Abrir OS',f'{url_os(banco, oid)}')
@@ -3365,6 +3707,7 @@ class PortalPrestador:
                         return self.os_form(s,None,preenchimento=preenchimento)
                     if path=='/os/nova/salvar':
                         oid=neg.os_salvar(banco,d,pid)
+                        ext.assumir(banco,oid,pid)
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='mover':
                         oid=int(partes[1]);aid=int(partes[3])
@@ -3416,7 +3759,7 @@ class PortalPrestador:
                         anexo_incluidos={str(x).strip() for x in _lista(d.get('anexo_incluir[]')) if str(x).strip()}
                         modo_checkbox=str(d.get('anexo_incluir_modo',''))=='1'
                         imagens=[x for x in imagens if isinstance(x,tuple) and x[1]]
-                        if not imagens and not anexo_ids:
+                        if not imagens and not anexo_ids and not d.get('comprimir_fotos_pdf_presente'):
                             raise ValueError('Selecione uma foto ou altere uma legenda.')
                         if len(imagens)>10:
                             raise ValueError('Envie no máximo 10 fotos por vez.')
@@ -3447,6 +3790,12 @@ class PortalPrestador:
                                     c,oid,anexo_id,
                                     anexo_legendas[i] if i<len(anexo_legendas) else '',
                                     visivel)
+                        if quer_json:
+                            return self.send_bytes(json.dumps({
+                                'ok': True,
+                                'fotos': len(imagens),
+                                'legendas': len(anexo_ids),
+                            }).encode(), 'application/json; charset=utf-8')
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','auto']:
                         oid=int(partes[1])
@@ -3553,6 +3902,38 @@ class PortalPrestador:
                         if acao=='rota':
                             prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
                             return self.redir(f'{url_os(banco, oid)}')
+                        if acao=='cancelar':
+                            motivo=str(d.get('motivo_encerramento','')).strip()[:2000]
+                            if not motivo:
+                                raise ValueError('Informe o motivo do cancelamento.')
+                            with ext.db(banco) as c:
+                                c.execute('BEGIN IMMEDIATE')
+                                o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',
+                                            (oid,)).fetchone()
+                                if not o or o['status'] not in ext.ATIVAS:
+                                    raise ValueError('Esta OS não está ativa.')
+                                if 'arquivada' in o.keys() and o['arquivada']:
+                                    raise ValueError('OS arquivada: edição bloqueada.')
+                                atual=ext.responsavel_atual(c,oid)
+                                admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                                                     (pid,)).fetchone())
+                                if atual not in (None,pid) and not admin:
+                                    raise PermissionError('Somente o responsável ou administrador pode cancelar.')
+                                if str(d.get('confirmar_numero_os','')).strip()!=str(o['numero_os']).strip():
+                                    raise ValueError('O número da OS digitado não confere.')
+                                fluxo.aplicar_encerramento(
+                                    c,oid,'Cancelada','',motivo,prestador_id=pid,
+                                    ator=f'Prestador {s["nome"]}')
+                                neg.audit(c,pid,'OS cancelada',oid,f'Motivo: {motivo}')
+                            try:
+                                fluxo.publicar_relatorio(banco,oid)
+                            except (ValueError,OSError) as falha:
+                                LOG.exception('OS %s cancelada, mas falhou a publicação do PDF',oid)
+                                return self.pagina('OS cancelada — PDF pendente',card('Cancelamento salvo',
+                                    '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
+                                    f'<p class="bad">{esc(str(falha)[:400])}</p>'
+                                    +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
+                            return self.redir(f'{url_os(banco, oid)}')
                         if acao=='salvar':
                             if d.get('modo_envio') in ('rascunho','salvar'):
                                 try:
@@ -3595,6 +3976,9 @@ class PortalPrestador:
                             if acao_status not in ('Pendente','Concluída','Cancelada'):
                                 raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
                             # Só o botão de encerramento aplica o status escolhido.
+                            # O relato técnico é histórico interno: não bloqueia
+                            # cancelar nem deixar pendente. Para concluir, basta
+                            # o serviço executado (ou um relato legado já preenchido).
                             if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
                                 raise ValueError('Preencha Serviço executado antes de concluir.')
                             # Exige nota fiscal (ou a opção "não precisa") para concluir a OS.
@@ -3608,7 +3992,9 @@ class PortalPrestador:
                                 if not (str(d.get('acao_status',''))=='Cancelada'
                                         and cad9.prestador_admin(banco,pid)):
                                     prod._os_ativa_responsavel(c,oid,pid)
-                            if str(d.get('acao_status','')) in ('Concluída','Pendente'):
+                            # E-mail só faz parte da conclusão. Pendente não
+                            # publica relatório nem exige destinatários.
+                            if str(d.get('acao_status',''))=='Concluída':
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),
                                     str(d.get('emails_adicionais','')))
@@ -3640,8 +4026,16 @@ class PortalPrestador:
                                         prod.registrar_envio(banco, oid, destinatarios, 'falhou', erro=str(falha))
                         elif acao=='publicar':
                             fluxo.publicar_relatorio(banco,oid)
-                        elif acao in ('atribuir','liberar'):
-                            raise PermissionError('Atribuição administrativa disponível apenas no desktop.')
+                        elif acao=='atribuir':
+                            if not s.get('admin'):
+                                raise PermissionError('Somente administradores podem atribuir a outro prestador.')
+                            try:
+                                destino=int(str(d.get('prestador_destino','')).strip())
+                            except (TypeError,ValueError):
+                                raise ValueError('Selecione o prestador de destino.') from None
+                            ext.atribuir(banco,oid,destino,ator=f'Prestador {s["nome"]}')
+                        elif acao=='liberar':
+                            raise PermissionError('Liberação administrativa disponível apenas no desktop.')
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
                         elif acao=='em-rota':

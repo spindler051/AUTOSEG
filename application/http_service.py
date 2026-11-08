@@ -239,6 +239,11 @@ class HttpService(AppService):
                           params={'termo': termo})
         return [OSResumo(**item) for item in dados]
 
+    def listar_os_recentes(self, limite: int = 6) -> list[OSResumo]:
+        dados = self._ler('/api/v1/desktop/os/recentes', [],
+                          params={'limite': limite})
+        return [OSResumo(**item) for item in dados]
+
     def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
         dados = self._ler('/api/v1/desktop/os/escolha', [],
                           params={'limite': limite})

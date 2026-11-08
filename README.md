@@ -10,13 +10,13 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.61` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.62` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
 - Two local web portals.
 - Local-first SQLite storage.
-- Suíte não visual: **316 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **323 testes, 0 falhas, 1 skip**.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a
