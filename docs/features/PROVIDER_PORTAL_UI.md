@@ -111,6 +111,9 @@ rodapé da barra lateral.
 - Diálogos devem reutilizar o padrão visual do feedback, com título, opções
   claras e ações no rodapé.
 - Ações destrutivas ficam identificadas em vermelho e pedem confirmação.
+- **Erro nunca vira página nova.** Falhas de login, validação e operação devem
+  aparecer em popup, toast ou mensagem inline; o formulário e o que foi digitado
+  permanecem na tela. Vale para todas as rotas e formulários do site.
 - Tema e acento pertencem a Configurações, não à navegação principal.
 
 ### Composição de valores
