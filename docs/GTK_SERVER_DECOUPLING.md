@@ -171,7 +171,9 @@ Token no Keychain/libsecret/Keystore.
 - Modo servidor: URL, e-mail do prestador, senha e “Lembrar este dispositivo”.
 - Modo local: conta local e criação do primeiro administrador; sessão não é
   persistida.
-- O DEV (`AUTOSEG_DEV=1`) é servidor-only e não mostra a página local.
+- O DEV (`AUTOSEG_DEV=1`) abre com o servidor selecionado por padrão, mas o
+  seletor Local/Servidor continua visível no login; o banco local só é aberto
+  quando o usuário escolhe Local.
 - A barra lateral mostra nome, e-mail e papel do prestador logado, com **Sair**.
 - `Sair` revoga o token no servidor, apaga a sessão local e volta ao login.
 - O token fica em `~/.config/autoseg/session.json` com permissão `0600` quando

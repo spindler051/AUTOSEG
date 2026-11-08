@@ -1,5 +1,13 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.58 — login oferece modo local e servidor — 2026-11-07 — develop
+
+- **Escolha de modo:** a tela de login sempre mostra as opções **Local** e **Servidor**.
+- **DEV:** abre com Servidor selecionado, mas permite escolher Local; o banco local só é criado/aberto ao escolher essa opção.
+- **Sem banco local antecipado:** entrar direto no servidor não cria SQLite local.
+- **Senha DEV:** `Prestador Alfa DEV` foi promovido a admin e teve a senha de teste redefinida; credenciais em `dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`.
+- **Testes:** modos local/servidor, primeiro admin e sessão; 313 testes OK, 1 skip.
+
 ## 9.6.0-dev.57 — corrige crash da tela de login — 2026-11-07 — develop
 
 - **Crash nativo corrigido:** `LoginWindow` usava `GtkWindow.set_child()` em um `Adw.ApplicationWindow`; libadwaita aborta na alocação de tamanho. Agora usa `set_content()`.

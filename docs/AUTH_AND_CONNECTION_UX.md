@@ -17,9 +17,9 @@ O modo híbrido (local + sync) é uma fase posterior.
 ## 1. Tela de entrada
 
 > Implementado no DEV: o GTK abre na tela de login quando não há sessão válida.
-> O modo servidor mostra URL, e-mail, senha e “Lembrar este dispositivo”. O
-> modo local mostra a conta local e permite criar o primeiro administrador.
-> O DEV (`AUTOSEG_DEV=1`) é servidor-only: a página local não aparece.
+> A tela sempre oferece **Local** e **Servidor**. O DEV abre com **Servidor**
+> selecionado por padrão, mas o usuário pode escolher Local; o banco local só é
+> aberto/criado se essa opção for usada.
 
 > A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
 > descoberta de servidores e solicitação sem login está em

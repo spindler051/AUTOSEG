@@ -10,7 +10,7 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.57` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.58` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
@@ -74,7 +74,7 @@ DEV em modo servidor (abra o servidor primeiro):
 ./INICIAR_AUTOSEG_DEV.command    # terminal 2
 ```
 
-O app DEV não abre o banco local. Ao abrir, entre com um prestador do servidor.
+O app DEV abre com servidor selecionado por padrão. A tela de login também oferece o modo Local; o banco local só é aberto se você escolher essa opção.
 No banco fictício de DEV, use as credenciais de
 `dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`. Se o servidor estiver parado, o app
 mostra a tela de login com aviso de servidor indisponível.

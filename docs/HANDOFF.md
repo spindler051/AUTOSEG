@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-07
-**Versão:** `9.6.0-dev.57`
+**Versão:** `9.6.0-dev.58`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -18,7 +18,7 @@ Este é o ponto de retomada. O índice completo fica em
   orçamento, notas fiscais e e-mails em rascunho.
 - Permissões e aprovações documentadas; `policy.yaml` carregado em runtime.
 - Numeração configurável de OS, com aliases para números antigos.
-- DEV em modo servidor: o app usa a API e não abre o banco local.
+- DEV abre em modo servidor por padrão; se o usuário escolher Local no login, usa o banco local.
 - Login obrigatório de prestador, local ou servidor, com identidade e logout.
 - Sessão de servidor com token revogável; local não persiste senha.
 - Sem servidor, as listas ficam vazias e a janela mostra aviso de indisponível.

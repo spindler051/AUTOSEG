@@ -124,12 +124,11 @@ class LoginWindow(Adw.ApplicationWindow):
         super().__init__(application=aplicativo)
         self.ao_entrar = ao_entrar
         self.settings = load_settings()
-        self.force_remote = self.settings.mode is ConnectionMode.REMOTE
+        self.prefer_remote = self.settings.mode is ConnectionMode.REMOTE
+        self._local_preparado = False
         self.set_title('Entrar — AUTOSEG')
         self.set_default_size(560, 760)
         self.set_size_request(460, 620)
-        if not self.force_remote:
-            preparar_banco_local(BANCO)
         self._construir()
 
     def _construir(self):
@@ -151,24 +150,24 @@ class LoginWindow(Adw.ApplicationWindow):
         titulo.add_css_class('title-1')
         caixa.append(titulo)
         subtitulo = Gtk.Label(
-            label='Servidor de dados do AUTOSEG' if self.force_remote
-            else 'Escolha a conta local ou um servidor',
+            label='Escolha entre a conta local e um servidor',
             xalign=0, wrap=True)
         subtitulo.add_css_class('dim-label')
         caixa.append(subtitulo)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        if not self.force_remote:
-            self.stack.add_titled(self._pagina_local(), 'local', 'Local')
+        self.stack.add_titled(self._pagina_local(), 'local', 'Local')
         self.stack.add_titled(self._pagina_servidor(), 'servidor', 'Servidor')
-        if not self.force_remote:
-            seletor = Gtk.StackSwitcher(stack=self.stack)
-            seletor.set_halign(Gtk.Align.CENTER)
-            caixa.append(seletor)
-        else:
-            self.stack.set_visible_child_name('servidor')
+        seletor = Gtk.StackSwitcher(stack=self.stack)
+        seletor.set_halign(Gtk.Align.CENTER)
+        caixa.append(seletor)
         caixa.append(self.stack)
+        self.stack.set_visible_child_name(
+            'servidor' if self.prefer_remote else 'local')
+        self.stack.connect('notify::visible-child',
+                           lambda *_args: self._modo_mudou())
+        self._modo_mudou()
 
         self.rodape = Gtk.Label(
             label='A senha nunca é salva. No servidor, o dispositivo guarda '
@@ -204,7 +203,7 @@ class LoginWindow(Adw.ApplicationWindow):
         grupo.add(entrar)
         self.local_primeiro = Gtk.Button(
             label='Criar primeiro administrador local')
-        self.local_primeiro.set_visible(self._sem_prestador_local())
+        self.local_primeiro.set_visible(False)
         self.local_primeiro.connect(
             'clicked', lambda *_args: self._criar_primeiro_admin())
         grupo.add(self.local_primeiro)
@@ -244,6 +243,24 @@ class LoginWindow(Adw.ApplicationWindow):
         grupo.add(self.entrar_servidor)
         return pagina
 
+    def _modo_mudou(self):
+        if self.stack.get_visible_child_name() != 'local':
+            return
+        self._preparar_local()
+        if hasattr(self, 'local_primeiro'):
+            self.local_primeiro.set_visible(self._sem_prestador_local())
+
+    def _preparar_local(self):
+        if self._local_preparado:
+            return True
+        try:
+            preparar_banco_local(BANCO)
+        except Exception as erro:
+            self._erro_local(f'Não foi possível abrir o banco local: {erro}')
+            return False
+        self._local_preparado = True
+        return True
+
     def _sem_prestador_local(self) -> bool:
         try:
             import prestadores_ext as ext
@@ -255,6 +272,8 @@ class LoginWindow(Adw.ApplicationWindow):
             return True
 
     def _criar_primeiro_admin(self):
+        if not self._preparar_local():
+            return
         DialogoPrimeiroAdmin(self, self._entrar_com_info_local).present(self)
 
     def _entrar_com_info_local(self, info):
@@ -264,7 +283,8 @@ class LoginWindow(Adw.ApplicationWindow):
         email = self.local_email.get_text().strip()
         senha = self.local_senha.get_text()
         try:
-            preparar_banco_local(BANCO)
+            if not self._preparar_local():
+                return
             info = prestador_auth.autenticar_local(BANCO, email, senha)
         except (ValueError, sqlite3.Error, OSError) as erro:
             self._erro_local(str(erro))
