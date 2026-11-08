@@ -56,9 +56,9 @@ Este é o ponto de retomada. O índice completo fica em
    estoque, composição e PDF já passam pelo servidor; falta sync.
 5. **Login de cliente no GTK:** adiado por ser nicho; primeiro aplicar
    permissões de admin × funcionário no serviço.
-5. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de
+6. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de
    revisão externa em dinheiro/OS/PDF.
-6. **CI:** workflows continuam modificados e não publicados por falta de token
+7. **CI:** workflows continuam modificados e não publicados por falta de token
    GitHub com escopo `workflow`.
 
 ## Bloqueios e riscos
