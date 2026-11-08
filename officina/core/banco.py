@@ -5,6 +5,7 @@ Centraliza a conexão, a criação/migração das tabelas e funções utilitári
 usadas tanto pelo aplicativo desktop quanto pelo portal web.
 """
 
+import os
 import re
 import sqlite3
 from datetime import datetime
@@ -156,6 +157,13 @@ def criar_banco(caminho=None):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_os_origem ON ordens_servico(origem)")
 
     conexao.commit()
+    # SQLite honors the process umask when it creates the file; tighten the
+    # database and WAL files explicitly because they contain personal data.
+    for sufixo in ('', '-wal', '-shm'):
+        try:
+            os.chmod(str(caminho or BANCO) + sufixo, 0o600)
+        except OSError:
+            pass
     conexao.close()
 
 

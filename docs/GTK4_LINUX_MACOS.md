@@ -26,7 +26,7 @@ Variáveis úteis:
 
 | Variável | Efeito |
 |---|---|
-| `AUTOSEG_BASE` | pasta de dados (banco, anexos, PDFs, rascunhos). Padrão: pasta do projeto |
+| `AUTOSEG_BASE` | pasta de dados (banco, anexos, PDFs, rascunhos). Modo local: `~/Library/Application Support/AUTOSEG/local` (macOS) ou `~/.local/share/autoseg/local` (Linux). Servidor: pasta do sistema |
 | `GESTAO_BANCO` | caminho explícito do SQLite; tem prioridade sobre `AUTOSEG_BASE` |
 | `CLIENTE_PORT` / `CLIENTE_BIND` | portal do cliente (padrão 8765 / 127.0.0.1). Use `CLIENTE_BIND=0.0.0.0` para a rede local |
 | `PRESTADOR_PORT` / `PRESTADOR_BIND` | portal do prestador (padrão 8766 / 127.0.0.1). Use `PRESTADOR_BIND=0.0.0.0` para a rede local |
@@ -51,7 +51,7 @@ sistema; no Linux, a fonte configurada no desktop. O `Adw.StyleManager` fica
 em `DEFAULT`, então claro/escuro segue o sistema. Os ícones são nomes
 simbólicos Adwaita resolvidos pelo tema; não há ícones KDE no código.
 
-O `INICIAR_AUTOSEG.command` delega ao GTK. Não existe mais fallback Tkinter.
+O `./autoseg app` delega ao GTK. Não existe mais fallback Tkinter.
 
 ## Trabalho em equipe Linux + macOS
 
@@ -62,8 +62,9 @@ O `INICIAR_AUTOSEG.command` delega ao GTK. Não existe mais fallback Tkinter.
   concorrente entre máquinas.
 - Para trocar massa de teste, use o gerador fictício
   `CRIAR_CADASTROS_FICTICIOS_DEV.py`; ele é bloqueado fora de `dados_teste/`.
-- O macOS usa `AUTOSEG_BASE` (padrão `~/gestaoservicos_MAIN`); o Linux pode
-  usar a pasta do projeto ou outra pasta indicada pela mesma variável.
+- Cada máquina tem sua pasta de dados local; o macOS usa
+  `~/Library/Application Support/AUTOSEG/local` e o Linux usa
+  `~/.local/share/autoseg/local`. `AUTOSEG_BASE` pode apontar para outra pasta.
 
 ## Linux
 
@@ -92,13 +93,13 @@ O `gtk_comum.py` adiciona `.vendor/usr/lib/python3/dist-packages` ao
 ### Executar direto
 
 ```bash
-./INICIAR_AUTOSEG_GTK.sh
+./autoseg app
 ```
 
 ### Executar no display da VM, sem Xvfb/Xwayland
 
 ```bash
-./ABRIR_NO_DRM.sh
+./scripts/autoseg/ABRIR_NO_DRM.sh
 ```
 
 Esse é o caminho nativo: `cage` usa DRM (`/dev/dri/card1`), o VT ativo e
@@ -127,10 +128,9 @@ AUTOSEG_SMOKE=1 python3 gtk_app.py
 Para testar com dados fictícios no modo servidor:
 
 ```bash
-AUTOSEG_DEV=1 GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db" \
-  python3 CRIAR_CADASTROS_FICTICIOS_DEV.py
-./INICIAR_SERVIDOR_DEV.command    # terminal 1
-./INICIAR_AUTOSEG_DEV.command     # terminal 2
+./autoseg server    # terminal 1
+./autoseg dev       # terminal 2
+./autoseg paths     # confira banco e dados efetivos
 ```
 
 O app DEV não abre o banco local. Sem o servidor, as listas ficam vazias e a
@@ -147,16 +147,17 @@ sudo port install gtk4 +quartz libadwaita py-gobject3 adwaita-icon-theme
 # ou Homebrew, quando disponível para a arquitetura
 brew install python3 gtk4 libadwaita pygobject3 adwaita-icon-theme
 
-./INICIAR_AUTOSEG_GTK.command
+./autoseg app
 ```
 
 O lançador encontra o Python com GTK4/PyGObject, cria `.venv-gtk`, instala
 reportlab/Pillow/PyYAML e configura `XDG_DATA_DIRS`/`GI_TYPELIB_PATH` para os
 prefixos do MacPorts/Homebrew.
 
-O lançador `.command` usa `AUTOSEG_BASE` (padrão `~/gestaoservicos_MAIN`) para
-que banco, PDFs, anexos e rascunhos fiquem fora do bundle e possam ser
-sincronizados/backupeados. O app usa `Gtk.UriLauncher` para abrir PDFs,
+O lançador `.command` usa a pasta local do usuário para que banco, PDFs,
+anexos e rascunhos fiquem fora do bundle e possam ser backupeados. O caminho
+padrão é `~/Library/Application Support/AUTOSEG/local`; confira com
+`./autoseg paths`. O app usa `Gtk.UriLauncher` para abrir PDFs,
 pastas e URLs no aplicativo padrão do macOS.
 
 Não há Cage no macOS: a janela é nativa. O frontend Tkinter foi removido.
@@ -176,7 +177,7 @@ Não há Cage no macOS: a janela é nativa. O frontend Tkinter foi removido.
   fonte `.AppleSystemUIFont 12`, tema de ícones Adwaita, modo escuro do
   sistema e todos os ícones usados presentes.
 - PDF gerado no Mac com reportlab: `%PDF-` válido, 2,8 KB.
-- Produção em `~/gestaoservicos_MAIN` rodando no GTK, portas 8765/8766,
+- Produção antiga em `~/gestaoservicos_MAIN` rodando no GTK, portas 8765/8766,
   460 clientes e 3 OS. O backend antigo (`servidor_backend.py`) foi encerrado.
 - Pendente: conferir a janela no desktop após desbloquear a tela e exercitar
   os diálogos nativos de arquivo. A validação acima foi feita por render
@@ -188,14 +189,16 @@ O código é o mesmo; o banco fica no Mac. Há dois modos seguros:
 
 ### Portais ao vivo via túnel SSH
 
-No Mac, com o repositório DEV e o banco em `gestaoservicos_MAIN`:
+No Mac, com o repositório DEV e o banco do servidor DEV:
 
 ```bash
 cd ~/GestaoServicos_DEV
-GESTAO_BANCO="$HOME/gestaoservicos_MAIN/dados.db" \
-AUTOSEG_BASE="$HOME/gestaoservicos_MAIN" \
-  "$HOME/gestaoservicos_MAIN/.venv/bin/python" servidor_backend.py
+./autoseg server
 ```
+
+Se estiver usando dados legados da MAIN, mantenha o `AUTOSEG_BASE` e o
+`GESTAO_BANCO` antigos **somente durante a janela de migração**; o padrão novo
+não lê mais `~/gestaoservicos_MAIN`.
 
 No Linux:
 

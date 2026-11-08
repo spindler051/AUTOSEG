@@ -53,7 +53,7 @@ Fluxo:
    - senha;
    - confirmação da senha.
 4. Cria a primeira conta como **administrador local**.
-5. O banco local é criado/aberto em `AUTOSEG_BASE`.
+5. O banco local é criado/aberto na pasta local do usuário: `~/Library/Application Support/AUTOSEG/local` (macOS) ou `~/.local/share/autoseg/local` (Linux); `AUTOSEG_BASE` pode sobrescrever.
 6. O app entra direto, sem servidor.
 
 Regras:

@@ -1,10 +1,13 @@
 #!/bin/zsh
 # Restaura as credenciais fictícias do ambiente DEV (nunca usar em produção).
-cd "$(dirname "$0")/../.."
-export AUTOSEG_BASE="$PWD/data"
-export GESTAO_BANCO="$PWD/data/dados_teste/autoseg_teste.db" || exit 1
-if [[ ! -x .venv/bin/python ]]; then
-    echo "Ambiente .venv ausente."
-    exit 1
+cd "$(dirname "$0")/../.." || exit 1
+export AUTOSEG_DEV=1
+PY="$PWD/.venv/bin/python"
+if [[ ! -x "$PY" ]]; then
+  echo "Ambiente .venv ausente."
+  exit 1
 fi
-exec .venv/bin/python flavors/autoseg/scripts/RESETAR_CREDENCIAIS_DEV.py
+export AUTOSEG_SERVER_DATA="$("$PY" -c 'from officina.core import runtime_config; print(runtime_config.server_data_dir())')"
+export AUTOSEG_BASE="$AUTOSEG_SERVER_DATA"
+export GESTAO_BANCO="$AUTOSEG_SERVER_DATA/dados_teste/autoseg_teste.db"
+exec "$PY" flavors/autoseg/scripts/RESETAR_CREDENCIAIS_DEV.py

@@ -4,18 +4,20 @@
 
 | Arquivo | Uso |
 |---|---|
-| `dados.db` | produção, somente clientes/OS reais |
-| `dados_teste/autoseg_teste.db` | teste, somente dados fictícios |
+| `<servidor>/dados.db` | produção, somente clientes/OS reais |
+| `<servidor DEV>/dados_teste/autoseg_teste.db` | teste, somente dados fictícios |
+| `<local>/dados.db` | modo local do GTK |
 | `dados_remoto.db` | snapshot local somente leitura do banco do Mac |
 | `AUTOSEG_BACKUPS_*` | backups e quarentena |
+
+Os caminhos completos dependem do sistema e do modo; rode `./autoseg paths`
+para vê-los. Nada disso fica dentro do repositório.
 
 ## Teste local
 
 ```bash
-AUTOSEG_DEV=1 \
-GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db" \
-CLIENTE_PORT=8865 PRESTADOR_PORT=8866 \
-python3 gtk_app.py
+./autoseg server   # terminal 1: banco de teste em dados_teste/
+./autoseg dev      # terminal 2: GTK em modo servidor
 ```
 
 O gerador `CRIAR_CADASTROS_FICTICIOS_DEV.py` cria nomes, CPFs/CNPJs e

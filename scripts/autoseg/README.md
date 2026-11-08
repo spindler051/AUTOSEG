@@ -13,7 +13,10 @@ Atalhos de operação. A raiz do repositório tem apenas o comando `autoseg`:
 ./autoseg site-prod  # site produção (8765/8766)
 ./autoseg stop       # para portais/túneis DEV
 ./autoseg check      # compila e valida o código
+./autoseg paths      # mostra onde ficam banco e dados
 ./autoseg test       # suíte completa
 ```
+
+Banco e dados ficam fora do repositório; ver `docs/operations/DATA_STORAGE.md`.
 
 Os arquivos `.command` continuam aqui para uso direto no macOS.

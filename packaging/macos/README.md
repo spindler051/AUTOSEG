@@ -23,18 +23,17 @@ brew install python3 gtk4 libadwaita pygobject3 adwaita-icon-theme
 Depois:
 
 ```bash
-./INICIAR_AUTOSEG_GTK.command
+./autoseg app
 ```
 
 O lançador:
 
 - procura `/opt/local/bin/python3.14`, `python3.13` e Homebrew;
 - define `XDG_DATA_DIRS`/`GI_TYPELIB_PATH` para ícones e typelibs do MacPorts;
-- usa `AUTOSEG_BASE` (padrão `~/gestaoservicos_MAIN`);
+- usa `~/Library/Application Support/AUTOSEG/local` por padrão;
 - cria `.venv-gtk` com `--system-site-packages` para enxergar o PyGObject do
   Homebrew;
 - instala `reportlab`, `Pillow` e `PyYAML` no venv;
-- copia `flavors/autoseg/config/completude.yaml` para a pasta de dados, se ainda não existir;
 - executa `flavors/autoseg/modules/gtk_app.py`.
 
 ## Aparência

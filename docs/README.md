@@ -61,6 +61,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 
 ## Operação
 
+- [Onde ficam banco e dados](operations/DATA_STORAGE.md)
 - [Separação banco de produção × teste](operations/BANCO_TESTE_PRODUCAO.md)
 - [Túnel fixo Cloudflare](operations/TUNEL_FIXO.md)
 - [Ações da auditoria de segurança](operations/SECURITY_AUDIT_2026-11-08.md)

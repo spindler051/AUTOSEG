@@ -36,8 +36,9 @@ guidance and the OWASP OAuth2 cheat sheet.
 Create a token for a provider:
 
 ```bash
-GESTAO_BANCO=~/gestaoservicos_MAIN/dados.db \
-  python3 api_financeiro.py token criar --prestador-id 1 --nome "Sistema financeiro"
+GESTAO_BANCO="$HOME/Library/Application Support/AUTOSEG/dados.db" \
+  .venv/bin/python flavors/autoseg/modules/api_financeiro.py token criar \
+  --prestador-id 1 --nome "Sistema financeiro"
 ```
 
 The raw token is printed **once** on stdout; the database stores only its

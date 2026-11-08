@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-08
-**Versão:** `9.6.0-dev.70`
+**Versão:** `9.6.0-dev.71`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -13,12 +13,12 @@ Este é o ponto de retomada. O índice completo fica em
 
 - App desktop GTK4/libadwaita em macOS e Linux.
 - Portal do prestador e portal do cliente em processos separados.
-- Banco SQLite local-first; API headless e GUI do site em comandos separados.
+- Banco SQLite fora do repositório; API headless e GUI do site em comandos separados.
 - Cadastros, OS, materiais, fotos, relatórios, PDF, financeiro, estoque,
   orçamento, notas fiscais e e-mails em rascunho.
 - Permissões e aprovações documentadas; `policy.yaml` carregado em runtime.
 - Numeração configurável de OS, com aliases para números antigos.
-- DEV abre em modo servidor por padrão; se o usuário escolher Local no login, usa o banco local.
+- DEV abre em modo servidor por padrão; se o usuário escolher Local no login, usa o banco local em `~/Library/Application Support/AUTOSEG/local` (macOS) ou `~/.local/share/autoseg/local` (Linux).
 - Login obrigatório de prestador, local ou servidor, com identidade e logout.
 - Sessão de servidor com token revogável; local não persiste senha.
 - Paridade de prestador: GTK tem notas/e-mails; site tem prestadores,
@@ -45,9 +45,22 @@ Este é o ponto de retomada. O índice completo fica em
   reescritos.
 - A migração da MAIN exige ensaio em cópia, backup, janela e smoke.
 
+## Onde ficam os dados
+
+- Servidor de produção: `/var/lib/autoseg` no Linux e
+  `/Library/Application Support/AUTOSEG` no macOS.
+- Servidor DEV: `<dados do usuário>/server-dev`; banco em
+  `dados_teste/autoseg_teste.db`.
+- GTK local: `<dados do usuário>/local`.
+- `./autoseg paths` imprime os caminhos efetivos, inclusive overrides.
+- Detalhes, permissões e backup em
+  [`operations/DATA_STORAGE.md`](operations/DATA_STORAGE.md).
+- A MAIN antiga em `~/gestaoservicos_MAIN` não é lida automaticamente; a
+  cópia para o modo local é uma janela separada, documentada no arquivo acima.
+
 ## Testes
 
-- Suíte não visual: **335 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **338 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `tests/test_portal_v4.py`,
   `tests/test_fluxo_v5.py`, `tests/test_fluxo_v6.py`, `tests/test_fluxo_v7.py`,
   `tests/test_fluxo_cliente_v94.py` e `tests/test_rev09_fluxo_os.py`.
@@ -92,10 +105,12 @@ Este é o ponto de retomada. O índice completo fica em
 ## Comandos úteis
 
 ```bash
-./autoseg dev     # app DEV
+./autoseg dev        # app DEV
 ./autoseg app-local  # local-only, sem portas
-./autoseg api     # servidor headless
-./autoseg site    # GUI do site
+./autoseg server     # servidor de dados DEV (8766)
+./autoseg site       # GUI do site DEV (8865/8866)
+./autoseg api        # servidor headless de produção
+./autoseg paths      # onde ficam banco e dados
 ```
 
 ```bash

@@ -32,7 +32,7 @@ MAX_AI_REPLY = 3000
 MAX_IMPROVEMENT = 1500
 MAX_ANONYMIZED_MESSAGE = 4000
 
-LOCAL_CONFIG = Path(os.environ.get('AUTOSEG_BASE') or runtime_config.base_dir()) / 'feedback_ia.local.json'
+LOCAL_CONFIG = runtime_config.user_data_dir() / 'feedback_ia.local.json'
 DEFAULT_OPENCODE_URL = 'http://127.0.0.1:49374'
 DEFAULT_OPENCODE_TIMEOUT = 60.0
 DEFAULT_DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'

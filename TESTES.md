@@ -3,15 +3,21 @@
 ## Suíte não visual
 
 ```bash
-./.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+./autoseg test
+./autoseg check   # suíte + compilação + portal.js
 ```
 
-Estado em 2026-11-08: **335 testes, 0 falhas, 1 skip**.
+Estado em 2026-11-08: **338 testes, 0 falhas, 1 skip**.
+
+O comando cria uma pasta temporária e aponta `AUTOSEG_BASE`,
+`GESTAO_BANCO`, `AUTOSEG_USER_DATA`, `AUTOSEG_SERVER_DATA` e
+`AUTOSEG_LOCAL_DATA` para ela. Assim, um teste não abre o banco local nem o
+banco de produção.
 
 ## Scripts de aceitação
 
 ```bash
-./.venv/bin/python -m unittest discover -s tests -p "test_*.py" -q
+./autoseg test
 PYTHONPATH=. ./.venv/bin/python tests/test_portal_v4.py
 PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v5.py
 PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v6.py
@@ -21,7 +27,7 @@ PYTHONPATH=. ./.venv/bin/python tests/test_rev09_fluxo_os.py
 PYTHONPATH=. ./.venv/bin/python tests/test_importacao_yaml.py
 ```
 
-Todos usam banco, arquivos e portas temporárias; não gravam em `dados.db`.
+Todos usam banco, arquivos e portas temporárias; não gravam nos bancos reais.
 
 ## Testes históricos
 

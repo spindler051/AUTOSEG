@@ -1,10 +1,11 @@
 #!/bin/zsh
 set -eu
-cd /Users/idkosx/GestaoServicos_DEV || exit 1
+cd "$(dirname "$0")/../.." || exit 1
 export AUTOSEG_DEV=1
-export GESTAO_BANCO=/Users/idkosx/GestaoServicos_DEV/dados_teste/autoseg_teste.db
-if [[ ! -x /Users/idkosx/GestaoServicos_DEV/.venv/bin/python ]]; then
+PY="$PWD/.venv/bin/python"
+if [[ ! -x "$PY" ]]; then
   echo 'Ambiente virtual .venv ausente. Inicie o AUTOSEG DEV primeiro.'
   exit 1
 fi
-/Users/idkosx/GestaoServicos_DEV/.venv/bin/python /Users/idkosx/GestaoServicos_DEV/flavors/autoseg/modules/tuneis_dev.py iniciar
+export AUTOSEG_SERVER_DATA="$("$PY" -c 'from officina.core import runtime_config; print(runtime_config.server_data_dir())')"
+exec "$PY" flavors/autoseg/modules/tuneis_dev.py iniciar

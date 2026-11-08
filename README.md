@@ -10,13 +10,13 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.70` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.71` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
 - Two local web portals.
-- Local-first SQLite storage.
-- Suíte não visual: **335 testes, 0 falhas, 1 skip**.
+- SQLite storage outside the repository, in local or server mode.
+- Suíte não visual: **338 testes, 0 falhas, 1 skip**.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a
@@ -50,8 +50,10 @@ The monorepo is transitioning from a flat prototype to clear layers:
 - `officina/application/` — generic application services.
 - `flavors/autoseg/modules/` — AUTOSEG GTK, portals, API, auth and fiscal modules.
 - `scripts/autoseg/` — launchers and automation.
-- `data/` — local DEV data (ignored by Git).
 - `tests/` — test suite.
+
+Runtime data (database, attachments, reports, logs) is kept outside the
+repository in a user or system data directory.
 
 See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md) for the target tree
 and the migration rules.
@@ -92,7 +94,8 @@ DEV em modo servidor (abra o servidor primeiro):
 
 O app DEV abre com servidor selecionado por padrão. A tela de login também oferece o modo Local; o banco local só é aberto se você escolher essa opção.
 No banco fictício de DEV, use as credenciais de
-`data/dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`. Se o servidor estiver parado, o app
+`CREDENCIAIS_FICTICIAS_DEV.txt` na pasta de dados do servidor DEV. Execute
+`./autoseg paths` para ver o caminho exato. Se o servidor estiver parado, o app
 mostra a tela de login com aviso de servidor indisponível.
 
 Local-only GTK (no web server and no tunnel):
@@ -123,6 +126,14 @@ O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
 `./autoseg app-web` somente se quiser que o próprio GTK suba os
 portais.
 
+## Onde ficam os dados
+
+Nada de banco, anexo ou log fica no repositório. O servidor usa a pasta do
+sistema (`/var/lib/autoseg` no Linux, `/Library/Application Support/AUTOSEG` no
+macOS); DEV e o modo local usam pastas do usuário. Consulte
+[`docs/operations/DATA_STORAGE.md`](docs/operations/DATA_STORAGE.md) e rode
+`./autoseg paths` para ver os caminhos efetivos.
+
 ## Documentation
 
 - [Documentation index](docs/README.md) — ponto de entrada canônico.
@@ -130,6 +141,7 @@ portais.
 - [Roadmap](docs/ROADMAP.md)
 - [Product vision](docs/PRODUCT_VISION.md)
 - [Tests](TESTES.md)
+- [Data locations](docs/operations/DATA_STORAGE.md)
 - [Agent rules](AGENTS.md)
 - [Changelog](CHANGELOG.md)
 - [Archived documentation](docs/archive/README.md) — histórico, não vigente.

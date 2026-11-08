@@ -34,8 +34,9 @@ packaging/                  empacotamento Linux/macOS
 - `flavors/autoseg/web/` — `portal.js` e site estático.
 - `flavors/autoseg/scripts/` — geração de dados fictícios e reset DEV.
 - `tests/` — suíte de testes.
-- `scripts/autoseg/` — launchers e automação do flavor.
-- `data/` — dados locais de DEV (ignorado pelo Git).
+- `scripts/autoseg/` — launchers, automação e diagnóstico do flavor.
+- Banco, anexos, relatórios, logs e demais dados de runtime ficam fora do
+  repositório; ver `docs/operations/DATA_STORAGE.md`.
 - A raiz guarda apenas README, LICENSE, docs, `autoseg`, requirements,
   versão, empacotamento e configuração do repositório.
 
@@ -46,7 +47,8 @@ packaging/                  empacotamento Linux/macOS
 3. Nada novo de AUTOSEG deve nascer na raiz.
 4. Toda movimentação de código mantém um caminho de compatibilidade e testes
    verdes.
-5. Não mover banco, anexos, logs ou dados de usuário para dentro do repositório.
+5. Não mover banco, anexos, logs ou dados de usuário para dentro do
+   repositório. Todo caminho novo vem de `officina/core/runtime_config.py`.
 
 ## Próximas fatias
 

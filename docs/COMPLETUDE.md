@@ -13,9 +13,14 @@ Ordem de procura:
 2. `completude.yaml` ao lado do código
 3. padrão interno, se nenhum existir
 
-No Linux de desenvolvimento, edite `~/autoseg/completude.yaml`.
-No Mac/instalação, edite `~/gestaoservicos_MAIN/completude.yaml` ou o caminho
-de `AUTOSEG_BASE`.
+No modo local, edite o `completude.yaml` dentro da pasta de dados do usuário:
+
+- macOS: `~/Library/Application Support/AUTOSEG/local/completude.yaml`
+- Linux: `~/.local/share/autoseg/local/completude.yaml`
+
+No servidor, use a pasta indicada por `./autoseg paths`. Se o arquivo não
+existir na pasta de dados, o padrão versionado em
+`flavors/autoseg/config/completude.yaml` é usado.
 
 Não é necessário reiniciar: cada salvamento/lista relê o arquivo. Se o YAML
 estiver inválido, o app usa o padrão e registra um aviso no terminal.

@@ -1,5 +1,6 @@
 """Characterization tests for runtime_config defaults and env precedence."""
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -7,6 +8,7 @@ from unittest import mock
 from officina.core import runtime_config
 KEYS = (
     'AUTOSEG_BASE', 'GESTAO_BANCO', 'AUTOSEG_DEV',
+    'AUTOSEG_USER_DATA', 'AUTOSEG_SERVER_DATA', 'AUTOSEG_LOCAL_DATA',
     'PRESTADOR_PORT', 'PRESTADOR_BIND', 'PRESTADOR_HTTPS',
     'CLIENTE_PORT', 'CLIENTE_BIND', 'AUTOSEG_WEB_ACCESS',
 )
@@ -29,9 +31,12 @@ class RuntimeConfigTest(unittest.TestCase):
                          ('127.0.0.1', 8766, False))
         self.assertEqual((client.host, client.port), ('127.0.0.1', 8765))
         self.assertEqual(runtime_config.client_port(), 8765)
-        self.assertEqual(runtime_config.base_dir(), Path(runtime_config.__file__).resolve().parents[2])
+        repo = Path(runtime_config.__file__).resolve().parents[2]
+        self.assertEqual(runtime_config.base_dir(), runtime_config.local_data_dir())
         self.assertEqual(runtime_config.database_path(),
-                         Path(runtime_config.__file__).resolve().parents[2] / 'dados.db')
+                         runtime_config.local_data_dir() / 'dados.db')
+        self.assertNotEqual(runtime_config.base_dir(), repo)
+        self.assertNotEqual(runtime_config.database_path().parent, repo)
 
     def test_dev_defaults_use_alt_ports(self):
         os.environ['AUTOSEG_DEV'] = '1'
@@ -77,6 +82,38 @@ class RuntimeConfigTest(unittest.TestCase):
         os.environ.pop('GESTAO_BANCO')
         self.assertEqual(runtime_config.database_path(),
                          Path('/tmp/autoseg-base/dados.db'))
+
+    def test_user_data_override_drives_local_and_dev_server_dirs(self):
+        os.environ['AUTOSEG_USER_DATA'] = '/tmp/autoseg-user'
+        os.environ['AUTOSEG_DEV'] = '1'
+        self.assertEqual(runtime_config.user_data_dir(), Path('/tmp/autoseg-user'))
+        self.assertEqual(runtime_config.local_data_dir(),
+                         Path('/tmp/autoseg-user/local'))
+        self.assertEqual(runtime_config.server_data_dir(),
+                         Path('/tmp/autoseg-user/server-dev'))
+
+    def test_configure_local_creates_and_exports_private_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ['AUTOSEG_LOCAL_DATA'] = str(Path(tmp) / 'local')
+            base = runtime_config.configure_local()
+            self.assertEqual(base, Path(tmp) / 'local')
+            self.assertTrue(base.is_dir())
+            self.assertEqual(os.environ['AUTOSEG_BASE'], str(base))
+            self.assertEqual(os.environ['GESTAO_BANCO'],
+                             str(base / 'dados.db'))
+
+    def test_configure_server_dev_uses_dados_teste_and_exports_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ['AUTOSEG_DEV'] = '1'
+            os.environ['AUTOSEG_SERVER_DATA'] = str(Path(tmp) / 'server')
+            base = runtime_config.configure_server()
+            self.assertEqual(base, Path(tmp) / 'server')
+            self.assertTrue(base.is_dir())
+            self.assertEqual(os.environ['AUTOSEG_BASE'], str(base))
+            self.assertEqual(
+                os.environ['GESTAO_BANCO'],
+                str(base / 'dados_teste' / 'autoseg_teste.db'))
+            self.assertTrue((base / 'dados_teste').is_dir())
 
 
 if __name__ == '__main__':

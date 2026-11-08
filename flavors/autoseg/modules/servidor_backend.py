@@ -27,8 +27,10 @@ import signal
 import time
 from pathlib import Path
 
-from officina.core.banco import BANCO, criar_banco
 from officina.core import runtime_config
+runtime_config.configure_server()
+
+from officina.core.banco import BANCO, criar_banco
 from officina.core import prestadores_ext as ext
 from officina.core import fluxo_os as fluxo
 from officina.core import atendimento_os as aten

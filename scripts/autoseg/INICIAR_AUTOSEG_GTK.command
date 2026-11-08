@@ -4,20 +4,12 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-export AUTOSEG_BASE="${AUTOSEG_BASE:-$HOME/gestaoservicos_MAIN}"
-mkdir -p "$AUTOSEG_BASE"
-export GESTAO_BANCO="${GESTAO_BANCO:-$AUTOSEG_BASE/dados.db}"
+# O modo local usa ~/Library/Application Support/AUTOSEG/local (macOS) ou
+# ~/.local/share/autoseg/local (Linux). Não fixe caminhos antigos aqui.
 
 # MacPorts e Homebrew instalam ícones/typelibs fora dos caminhos padrão.
 export XDG_DATA_DIRS="/opt/local/share:/usr/local/share:${XDG_DATA_DIRS:-/usr/share}"
 export GI_TYPELIB_PATH="/opt/local/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
-
-if [ ! -f "$AUTOSEG_BASE/completude.yaml" ] && [ -f completude.yaml ]; then
-    cp completude.yaml "$AUTOSEG_BASE/completude.yaml"
-fi
-if [ ! -f "$AUTOSEG_BASE/composicao.yaml" ] && [ -f composicao_padrao.yaml ]; then
-    cp composicao_padrao.yaml "$AUTOSEG_BASE/composicao.yaml"
-fi
 
 funciona_gtk() {
     "$1" -c 'import gi; gi.require_version("Gtk","4.0"); gi.require_version("Adw","1")' >/dev/null 2>&1

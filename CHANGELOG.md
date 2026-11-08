@@ -1,5 +1,16 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.71 — dados fora do repositório — 2026-11-08 — develop
+
+- **Banco fora do repositório:** servidor em produção usa `/var/lib/autoseg` (Linux) ou `/Library/Application Support/AUTOSEG` (macOS); DEV usa `<dados do usuário>/server-dev`; o GTK local usa `<dados do usuário>/local`.
+- **Sem fallback para o repositório:** `base_dir()` não aponta mais para a raiz do projeto; importar `banco` diretamente nunca cria `dados.db` no Git.
+- **DEV:** banco, anexos, PDFs, rascunhos, notas, logs, túneis e `composicao.yaml` migrados de `data/` para `~/Library/Application Support/AUTOSEG/server-dev`.
+- **Comando:** `./autoseg paths` mostra os caminhos efetivos e os overrides ativos.
+- **Permissões:** bancos e arquivos auxiliares do SQLite passam a `600`; pastas novas são criadas com `700`.
+- **Scripts DEV:** geração de cadastros e reset de credenciais resolvem o banco pelo `runtime_config` e recusam rodar sem `AUTOSEG_DEV=1`.
+- **Documentação:** novo `docs/operations/DATA_STORAGE.md` com caminhos, permissões, variáveis e backup.
+- **Testes:** 338 testes OK, 1 skip; cobertura nova para as pastas de dados e para `configure_local`/`configure_server`.
+
 ## 9.6.0-dev.70 — raiz limpa e dados separados — 2026-11-08 — develop
 
 - **Raiz:** não há mais módulos Python nem launchers soltos.

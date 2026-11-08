@@ -8,9 +8,12 @@ VENDOR = PASTA_APP / ".vendor" / "usr" / "lib" / "python3" / "dist-packages"
 if VENDOR.is_dir() and str(VENDOR) not in sys.path:
     sys.path.insert(0, str(VENDOR))
 
-BASE = Path(os.environ.get("AUTOSEG_BASE") or PASTA_APP).expanduser()
-os.environ.setdefault("AUTOSEG_BASE", str(BASE))
-os.environ.setdefault("GESTAO_BANCO", str(BASE / "dados.db"))
+from officina.core import runtime_config
+if os.environ.get('AUTOSEG_CONNECTION_MODE', '').strip().lower() != 'remote':
+    runtime_config.configure_local()
+elif not os.environ.get('AUTOSEG_BASE'):
+    os.environ['AUTOSEG_BASE'] = str(runtime_config.local_data_dir())
+BASE = Path(os.environ["AUTOSEG_BASE"]).expanduser()
 
 import gi
 

@@ -33,7 +33,8 @@ except Exception:
     traceback.print_exc()
 PY
 echo ''
-if [[ -f data/logs/portal_prestador.log ]]; then
+LOG="$(.venv/bin/python -c 'from officina.core import runtime_config; print(runtime_config.server_data_dir() / "logs" / "portal_prestador.log")' 2>/dev/null || true)"
+if [[ -n "$LOG" && -f "$LOG" ]]; then
     echo 'Últimos registros do portal (pode conter nomes de clientes, revise antes de enviar):'
-    tail -n 15 data/logs/portal_prestador.log
+    tail -n 15 "$LOG"
 fi

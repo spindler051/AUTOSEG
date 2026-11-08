@@ -61,7 +61,7 @@ cp "$RAIZ/flavors/autoseg/branding/icone.png" "$APP/usr/share/icons/hicolor/256x
 cat > "$APP/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
-export AUTOSEG_BASE="${AUTOSEG_BASE:-$HOME/.local/share/autoseg}"
+export AUTOSEG_BASE="${AUTOSEG_BASE:-$HOME/.local/share/autoseg/local}"
 mkdir -p "$AUTOSEG_BASE"
 exec "$HERE/usr/bin/AUTOSEG/AUTOSEG" "$@"
 EOF

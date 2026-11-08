@@ -1,7 +1,7 @@
 """Bootstrap do AUTOSEG.app (GTK4/libadwaita / PyInstaller).
 
 Mantém o banco, anexos, PDFs, rascunhos e logs fora do bundle, na pasta
-MAIN (~/gestaoservicos_MAIN) ou na pasta indicada por AUTOSEG_BASE.
+local do usuário (ou na pasta indicada por AUTOSEG_BASE).
 Não inicia uma segunda instância concorrente na mesma pasta.
 """
 import sys as _sys
@@ -16,7 +16,8 @@ from pathlib import Path
 
 
 def _base():
-    return Path(os.environ.get('AUTOSEG_BASE') or (Path.home() / 'gestaoservicos_MAIN')).expanduser()
+    from officina.core import runtime_config
+    return Path(os.environ.get('AUTOSEG_BASE') or runtime_config.local_data_dir()).expanduser()
 
 
 def _mostrar_erro(titulo, texto):

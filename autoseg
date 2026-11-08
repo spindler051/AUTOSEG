@@ -12,6 +12,7 @@ case "${1:-help}" in
   site-prod) exec ./scripts/autoseg/INICIAR_SITE.command "${@:2}" ;;
   stop)      exec ./scripts/autoseg/PARAR_PORTAIS_DEV.command ;;
   check)     exec ./scripts/autoseg/VERIFICAR_AUTOSEG_DEV.command ;;
-  test)      exec .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v ;;
-  *) echo "uso: ./autoseg {dev|app|server|site|site-prod|stop|check|test}"; exit 1 ;;
+  paths)     exec ./scripts/autoseg/MOSTRAR_CAMINHOS.command "${@:2}" ;;
+  test)      exec ./scripts/autoseg/RODAR_TESTES.command -v ;;
+  *) echo "uso: ./autoseg {dev|app|server|site|site-prod|stop|check|paths|test}"; exit 1 ;;
 esac

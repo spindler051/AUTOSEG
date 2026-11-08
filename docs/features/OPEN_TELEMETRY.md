@@ -239,7 +239,7 @@ never interrupt the feedback flow.
 Write events with:
 
 ```bash
-AUTOSEG_TELEMETRY=local ./INICIAR_AUTOSEG_DEV.command
+AUTOSEG_TELEMETRY=local ./autoseg dev
 ```
 
 The events are stored in `telemetria_eventos` in the same SQLite database. This

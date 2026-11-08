@@ -6,7 +6,7 @@ if [[ ! -x "$PYTHON" ]]; then
   echo 'ERRO: ambiente .venv ausente. Crie o ambiente e instale requirements.txt.'
   exit 1
 fi
-"$PYTHON" -m unittest discover -s tests -p 'test_*.py' -q || exit 1
+"$PWD/scripts/autoseg/RODAR_TESTES.command" -q || exit 1
 "$PYTHON" -m compileall -q officina flavors tests workaholic/src || exit 1
 if command -v node >/dev/null 2>&1; then
   node --check flavors/autoseg/web/portal.js || exit 1

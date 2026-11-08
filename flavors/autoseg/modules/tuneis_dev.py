@@ -22,7 +22,11 @@ import subprocess
 import time
 from pathlib import Path
 
-BASE=Path(__file__).resolve().parent
+from officina.core import runtime_config
+
+if os.environ.get('AUTOSEG_DEV') == '1':
+    runtime_config.configure_server()
+BASE=runtime_config.base_dir()
 DIR=BASE/'tuneis_dev'
 ESTADO=DIR/'estado.json'
 PORTAS=(8865,8866)
@@ -31,11 +35,13 @@ PORTAS=(8865,8866)
 def verificar_ambiente():
     if os.getenv('AUTOSEG_DEV')!='1':
         raise RuntimeError('Execute exclusivamente com AUTOSEG_DEV=1.')
-    banco=Path(os.environ.get('GESTAO_BANCO', str(BASE/'dados_teste'/'autoseg_teste.db'))).resolve()
-    esperado=(BASE/'dados_teste'/'autoseg_teste.db').resolve()
+    runtime_config.configure_server()
+    banco=Path(os.environ.get('GESTAO_BANCO') or runtime_config.database_path()).resolve()
+    esperado=runtime_config.database_path().resolve()
+    dados_teste=(runtime_config.base_dir()/'dados_teste').resolve()
     if banco!=esperado or not banco.is_file():
         raise RuntimeError('Banco DEV fictício ausente ou divergente; publicação bloqueada.')
-    if not esperado.is_relative_to((BASE/'dados_teste').resolve()):
+    if not esperado.is_relative_to(dados_teste):
         raise RuntimeError('Banco DEV está fora da pasta de testes; publicação bloqueada.')
     for porta in PORTAS:
         try:

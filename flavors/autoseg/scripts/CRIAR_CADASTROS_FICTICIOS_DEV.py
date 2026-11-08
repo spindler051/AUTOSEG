@@ -1,5 +1,5 @@
 """Gera exatamente 5 clientes PJ, 5 clientes PF e 3 prestadores FICTÍCIOS.
-Somente AUTOSEG_DEV=1 e banco dentro de ./dados_teste. Nunca altera produção.
+Somente AUTOSEG_DEV=1 e banco dentro da pasta de dados do servidor DEV.
 Idempotente: não exclui nada, nem modifica senhas de contas preexistentes.
 As senhas novas são aleatórias e mostradas somente no Terminal.
 """
@@ -12,13 +12,16 @@ import secrets
 import sys
 from pathlib import Path
 
-from officina.core import cadastros_v9 as cad
-from officina.core import atendimento_os as atendimento
-from officina.core import fluxo_os
-from officina.core import prestadores_ext as ext
-from officina.core.banco import criar_banco, proximo_numero_os
+from officina.core import runtime_config
 
-BASE = Path(__file__).resolve().parent
+if os.environ.get('AUTOSEG_DEV') == '1':
+    runtime_config.configure_server()
+
+from officina.core import cadastros_v9 as cad  # noqa: E402
+from officina.core import atendimento_os as atendimento  # noqa: E402
+from officina.core import fluxo_os  # noqa: E402
+from officina.core import prestadores_ext as ext  # noqa: E402
+from officina.core.banco import criar_banco, proximo_numero_os  # noqa: E402
 PJ = [
     ('Condomínio Horizonte Simulado', 'Condomínio', '975310420001'),
     ('Condomínio Pôr do Sol Demo', 'Condomínio', '975310420002'),
@@ -63,9 +66,12 @@ def senha_aleatoria():
 
 
 def executar():
+    if os.environ.get('AUTOSEG_DEV') != '1':
+        raise SystemExit('BLOQUEADO: este gerador só roda com AUTOSEG_DEV=1.')
+    base = runtime_config.configure_server()
     caminho = Path(os.environ.get('GESTAO_BANCO','')).expanduser().resolve()
-    esperada = BASE / 'dados_teste'
-    if os.environ.get('AUTOSEG_DEV') != '1' or esperada not in caminho.parents or caminho.suffix != '.db':
+    esperada = (base / 'dados_teste').resolve()
+    if esperada not in caminho.parents or caminho.suffix != '.db':
         raise SystemExit('BLOQUEADO: execute somente o lançador DEV, com GESTAO_BANCO dentro de dados_teste/*.db.')
     if caminho.exists() and caminho.stat().st_size > 50*1024*1024:
         raise SystemExit('BLOQUEADO: banco de testes muito grande para este gerador. Revise o caminho.')
