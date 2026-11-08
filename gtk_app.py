@@ -30,16 +30,18 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import composicao
-from application.contracts import Health
+from application.bootstrap import preparar_banco_local
+from application.contracts import AppError, Health
 from application.connection import (
     ConnectionMode,
     ConnectionSettings,
-    build_service,
     load_settings,
     save_settings,
 )
 from application.http_service import HttpService
 from application.local_service import LocalService
+from application.session import Sessao, carregar_sessao, limpar_sessao
+from gtk_login import LoginWindow
 from web_access import WebAccessManager
 
 if os.environ.get("AUTOSEG_DEV") == "1":
@@ -66,8 +68,9 @@ CSS = b"""
 
 
 class Janela(Adw.ApplicationWindow):
-    def __init__(self, aplicativo):
+    def __init__(self, aplicativo, sessao=None):
         super().__init__(application=aplicativo)
+        self.sessao = sessao
         self.set_title(ui.APP_TITLE)
         self.set_default_size(1180, 700)
         self.set_size_request(900, 560)
@@ -96,38 +99,25 @@ class Janela(Adw.ApplicationWindow):
     def _iniciar_backend(self):
         settings = load_settings()
         self.settings = settings
-        self.remote_mode = settings.mode is ConnectionMode.REMOTE
+        self.remote_mode = bool(self.sessao and self.sessao.remote)
         try:
-            self.service = build_service(BANCO, settings)
             if self.remote_mode:
+                self.service = HttpService(
+                    self.sessao.server_url, token=self.sessao.token)
                 self.web = WebAccessManager(
                     BANCO, ui.PASTA_APP, enabled=False)
                 return
+            self.service = LocalService(BANCO)
             ui.BASE.mkdir(parents=True, exist_ok=True)
-            from banco import criar_banco
-            criar_banco()
-            ext.instalar(BANCO)
-            fluxo.instalar(BANCO)
-            aten.instalar(BANCO)
-            cad9.instalar(BANCO)
-            estoque.instalar(BANCO)
-            empresa.instalar(BANCO)
-            catalogo.instalar(BANCO)
-            composicao.instalar()
-            composicao.instalar_banco(BANCO)
-            try:
-                fluxo.recuperar_relatorios_antigos(BANCO)
-            except Exception as erro:
-                print("Aviso: recuperação de PDFs anteriores:", erro)
-            web_enabled = settings.web_access
+            preparar_banco_local(BANCO)
             self.web = WebAccessManager(
-                BANCO, ui.PASTA_APP, enabled=web_enabled)
+                BANCO, ui.PASTA_APP, enabled=settings.web_access)
             self.web.start()
         except Exception as erro:
             if self.service is None:
-                from application.http_service import HttpService
                 if self.remote_mode:
-                    self.service = HttpService(settings.server_url)
+                    self.service = HttpService(
+                        self.sessao.server_url if self.sessao else settings.server_url)
                 else:
                     self.service = LocalService(BANCO)
                 print("Falha no serviço configurado:", erro)
@@ -163,6 +153,7 @@ class Janela(Adw.ApplicationWindow):
             ("sobre", self._sobre),
             ("pasta", lambda: ui.abrir_caminho(ui.BASE, self)),
             ("atualizar", self._atualizar_tudo),
+            ("sair", self._sair),
         ):
             acao = Gio.SimpleAction.new(nome, None)
             acao.connect("activate", lambda *_args, cb=retorno: cb())
@@ -212,6 +203,7 @@ class Janela(Adw.ApplicationWindow):
         rodape.set_margin_bottom(12)
         rodape.set_margin_start(14)
         rodape.set_margin_end(14)
+        self._adicionar_usuario_rodape(rodape)
         self.rotulo_armazenamento = Gtk.Label(xalign=0, wrap=True)
         self.rotulo_armazenamento.add_css_class("caption")
         self.rotulo_armazenamento.add_css_class("dim-label")
@@ -225,6 +217,22 @@ class Janela(Adw.ApplicationWindow):
         pagina.set_child(toolbar)
         return pagina
 
+    def _adicionar_usuario_rodape(self, rodape):
+        if self.sessao is None:
+            return
+        papel = "Administrador" if self.sessao.admin else "Prestador"
+        self.linha_usuario = Adw.ActionRow(
+            title=self.sessao.nome or "Prestador",
+            subtitle=f"{papel} • {self.sessao.email}",
+            icon_name="avatar-default-symbolic")
+        self.linha_usuario.add_css_class("property")
+        sair = Gtk.Button(label="Sair")
+        sair.add_css_class("flat")
+        sair.set_tooltip_text("Encerrar esta sessão e voltar ao login")
+        sair.connect("clicked", lambda *_args: self._sair())
+        self.linha_usuario.add_suffix(sair)
+        rodape.append(self.linha_usuario)
+
     def _construir_conteudo(self):
         pagina = Adw.NavigationPage(title="Início")
         toolbar = Adw.ToolbarView()
@@ -234,6 +242,7 @@ class Janela(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append("Atualizar dados", "win.atualizar")
         menu.append("Abrir pasta de dados", "win.pasta")
+        menu.append("Sair", "win.sair")
         menu.append("Sobre o AUTOSEG", "win.sobre")
         botao_menu = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
         botao_menu.set_tooltip_text("Menu principal")
@@ -269,6 +278,9 @@ class Janela(Adw.ApplicationWindow):
         self.lista_navegacao.select_row(self.lista_navegacao.get_row_at_index(0))
         GLib.idle_add(self._selecionar_inicio)
         return pagina
+
+    def _sair(self):
+        self.aplicativo.sair(self)
 
     def _sobre(self):
         sobre = Adw.AboutDialog(
@@ -535,7 +547,7 @@ class Janela(Adw.ApplicationWindow):
         def worker():
             try:
                 info = self.service.health()
-            except Exception:
+            except (AppError, OSError, ValueError):
                 info = Health(status='unavailable', version='', mode='remote',
                               detail='Falha ao consultar o servidor.')
             GLib.idle_add(self._fim_monitor_servidor, info)
@@ -2401,11 +2413,98 @@ class Aplicativo(Adw.Application):
         super().__init__(application_id="br.com.autoseg.Gestao",
                          flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.janela = None
+        self.login = None
+        self.sessao = None
 
     def do_activate(self):
-        if self.janela is None:
-            self.janela = Janela(self)
+        if self.janela is not None:
+            self.janela.present()
+            return
+        if self.login is not None:
+            self.login.present()
+            return
+        if self._retomar_sessao():
+            return
+        if os.environ.get('AUTOSEG_SMOKE') == '1':
+            settings = load_settings()
+            email = os.environ.get('AUTOSEG_SMOKE_EMAIL', '').strip()
+            senha = os.environ.get('AUTOSEG_SMOKE_SENHA', '')
+            if (settings.mode is ConnectionMode.REMOTE and email and senha):
+                try:
+                    servico = HttpService(settings.server_url, timeout=4)
+                    resultado = servico.login(email, senha)
+                    pessoa = dict(resultado.get('prestador') or {})
+                    self._entrar(Sessao(
+                        mode=settings.mode.value,
+                        prestador_id=int(pessoa.get('id') or 0),
+                        nome=str(pessoa.get('nome') or 'Smoke'),
+                        email=str(pessoa.get('email') or email),
+                        admin=bool(pessoa.get('admin')),
+                        server_url=settings.server_url,
+                        token=str(resultado.get('token') or ''),
+                        expira_em=str(resultado.get('expira_em') or '')))
+                    return
+                except (AppError, OSError, ValueError) as erro:
+                    print('Smoke: login no servidor falhou:', erro)
+            self._entrar(Sessao(
+                mode=settings.mode.value, prestador_id=0,
+                nome='Smoke', email='smoke@example.invalid', admin=False,
+                server_url=settings.server_url))
+            return
+        self._mostrar_login()
+
+    def _retomar_sessao(self):
+        sessao = carregar_sessao()
+        if sessao is None or not sessao.remote:
+            return False
+        try:
+            info = HttpService(
+                sessao.server_url, token=sessao.token, timeout=3).me()
+        except (AppError, OSError, ValueError):
+            limpar_sessao()
+            return False
+        pessoa = dict(info or {})
+        self.sessao = Sessao(
+            mode=ConnectionMode.REMOTE.value,
+            prestador_id=int(pessoa.get('id') or 0),
+            nome=str(pessoa.get('nome') or ''),
+            email=str(pessoa.get('email') or ''),
+            admin=bool(pessoa.get('admin')),
+            server_url=sessao.server_url,
+            token=sessao.token,
+            expira_em=str(pessoa.get('expira_em') or ''))
+        self._entrar(self.sessao)
+        return True
+
+    def _mostrar_login(self):
+        if self.janela is not None:
+            return
+        self.login = LoginWindow(self, self._entrar)
+        self.login.present()
+
+    def _entrar(self, sessao):
+        self.sessao = sessao
+        if self.login is not None:
+            self.login.close()
+            self.login = None
+        self.janela = Janela(self, sessao)
         self.janela.present()
+
+    def sair(self, janela):
+        sessao = self.sessao
+        if sessao is not None and sessao.remote:
+            try:
+                janela.service.logout()
+            except (AppError, OSError):
+                pass
+        limpar_sessao()
+        self.sessao = None
+        try:
+            janela.close()
+        except Exception:
+            pass
+        self.janela = None
+        self._mostrar_login()
 
 
 def main():

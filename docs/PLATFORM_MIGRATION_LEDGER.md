@@ -70,6 +70,7 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-06 | Start the application boundary with one slice: clients + dashboard. | Prove the contract without a big-bang rewrite; keep UI and behavior unchanged. |
 | 2026-11-06 | Let `WebAccessManager` own portal lifecycle. | The GTK shell must not import or start HTTP servers directly. |
 | 2026-11-07 | Run DEV in server mode with no local DB fallback. | Prove the desktop/server boundary with real API data; offline reads are empty and writes fail explicitly. |
+| 2026-11-07 | Require provider login in the GTK desktop. | Every API action needs an identified provider; local and server logins are separate accounts, with logout and revocable sessions. |
 
 ## Next recommended micro-slices
 

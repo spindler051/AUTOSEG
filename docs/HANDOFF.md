@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-07
-**Versão:** `9.6.0-dev.55`
+**Versão:** `9.6.0-dev.56`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -19,6 +19,8 @@ Este é o ponto de retomada. O índice completo fica em
 - Permissões e aprovações documentadas; `policy.yaml` carregado em runtime.
 - Numeração configurável de OS, com aliases para números antigos.
 - DEV em modo servidor: o app usa a API e não abre o banco local.
+- Login obrigatório de prestador, local ou servidor, com identidade e logout.
+- Sessão de servidor com token revogável; local não persiste senha.
 - Sem servidor, as listas ficam vazias e a janela mostra aviso de indisponível.
 - O app verifica o servidor a cada 5 s e avisa quando ele cai ou volta.
 - Workaholic integrado apenas na fatia de clientes; o restante continua no
@@ -34,7 +36,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **306 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **313 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.
@@ -45,9 +47,11 @@ Este é o ponto de retomada. O índice completo fica em
 ## Pendências principais
 
 1. **MAIN:** ensaiar e executar a migração de numeração com backup e janela.
-2. **Login/auth:** conta local × conta do servidor, token revogável e troca real
-   de modo no GTK; tudo atrás de flag até revisão externa.
-3. **Permissões:** ligar a política pura ao `AppService` e aplicar no servidor.
+2. **Login/auth:** básico implementado (local/servidor, identidade, logout e
+   token). Faltam Keychain/libsecret, inatividade, auditoria durável de login e
+   revisão humana externa.
+3. **Permissões:** ligar a política pura ao `AppService` e aplicar no servidor;
+   o login identifica o prestador, mas ainda não aplica AUT-001 a AUT-021.
 4. **API remota:** clientes, OS, prestadores, financeiro, PJ e PDF já passam
    pelo servidor; faltam catálogo, estoque, composição e sync.
 5. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de

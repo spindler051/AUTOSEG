@@ -1,8 +1,9 @@
 # Login, conta local e conexão com servidor
 
-**Status:** proposta de UX e segurança. **Não implementado.** Autenticação e
-permissões são N3/N4 em `docs/REVIEW_WITHOUT_DEVELOPER.md`; qualquer mudança
-nessa área exige revisão humana externa ou fica em DEV atrás de flag.
+**Status:** implementado no **DEV** em 2026-11-07: login local ou servidor,
+identidade do prestador, logout e token revogável. Autenticação e permissões
+continuam N3/N4 em `docs/REVIEW_WITHOUT_DEVELOPER.md`; a MAIN continua sem essa
+mudança até revisão humana externa.
 
 **Ideia:** ao abrir o app GTK, oferecer dois caminhos claros:
 
@@ -15,9 +16,10 @@ O modo híbrido (local + sync) é uma fase posterior.
 
 ## 1. Tela de entrada
 
-> Implementação parcial: o GTK já tem a página **Conexão** com modo local, URL
-> do servidor, teste de `/api/v1/health` e salvamento em `connection.json`.
-> Login/senha e troca real de modo ainda não.
+> Implementado no DEV: o GTK abre na tela de login quando não há sessão válida.
+> O modo servidor mostra URL, e-mail, senha e “Lembrar este dispositivo”. O
+> modo local mostra a conta local e permite criar o primeiro administrador.
+> O DEV (`AUTOSEG_DEV=1`) é servidor-only: a página local não aparece.
 
 > A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
 > descoberta de servidores e solicitação sem login está em
@@ -114,8 +116,20 @@ Fluxo:
 3. O app testa `GET /api/v1/health`.
 4. Mostra versão, modo e capacidades do servidor.
 5. Pede e-mail/usuário e senha.
-6. Recebe um token de sessão; guarda no Keychain/libsecret.
+6. Recebe um token de sessão revogável; guarda em arquivo privado ou apenas
+   em memória, conforme “Lembrar este dispositivo”.
 7. O app usa os dados do servidor, não o SQLite local.
+
+Endpoints do servidor:
+
+```text
+POST /api/v1/desktop/login   {email, senha, lembrar}
+GET  /api/v1/desktop/me      Authorization: Bearer <token>
+POST /api/v1/desktop/logout  Authorization: Bearer <token>
+```
+
+Todas as demais rotas `/api/v1/desktop/*` exigem o token. Health e login são as
+únicas rotas públicas.
 
 Regras:
 
@@ -189,39 +203,48 @@ O GTK local não sobe nada. O GTK remoto só consome a API. O container roda
 
 ---
 
-## 9. Segurança mínima antes de implementar
+## 9. Segurança: implementado e pendente
 
-- Hash de senha com salt e parâmetros atuais.
-- Rate limit de login.
-- Bloqueio temporário após falhas repetidas.
-- Sessão com expiração e revogação.
-- Token de dispositivo revogável.
-- CSRF no site; bearer token na API.
-- Logs sem senha, token, CPF/CNPJ ou conteúdo de formulário.
-- Backup/restore do banco local antes de migração.
-- Testes de permissão por papel.
-- Revisão humana externa antes de MAIN (N3/N4).
+Implementado no DEV:
+
+- hash de senha existente (PBKDF2 com salt);
+- rate limit em memória por origem/e-mail e bloqueio após 10 falhas;
+- sessão com expiração e revogação;
+- token de dispositivo revogável;
+- bearer token na API desktop;
+- logs sem senha ou token;
+- testes de login, token, logout e arquivo de sessão.
+
+Pendente antes da MAIN:
+
+- revisão humana externa (N3/N4);
+- migrar o token do arquivo para Keychain/libsecret;
+- política de inatividade e bloqueio de tela;
+- rate limit durável e auditoria de login no banco;
+- permissões por papel no servidor (AUT-001 a AUT-021);
+- CSRF já coberto no site, mas revisar com o novo login.
 
 ---
 
 ## 10. Fases
 
-### Fase A — documentação e protótipo local
+### Fase A — login local (DEV)
 
-- tela de escolha local/servidor;
-- primeira conta local admin;
-- login local;
-- “lembrar este dispositivo” atrás de flag;
-- usuários locais e papéis;
-- testes de hash, bloqueio, sessão e permissões.
+- [x] tela de login com modo local e servidor;
+- [x] primeira conta local admin;
+- [x] login local;
+- [x] “lembrar este dispositivo” no servidor;
+- [ ] usuários locais e papéis completos;
+- [x] testes de hash, bloqueio, sessão e logout.
 
-### Fase B — conexão remota
+### Fase B — conexão remota (DEV)
 
-- URL + health;
-- login no servidor;
-- token no Keychain;
-- `HttpService` para clientes/OS;
-- sem fallback silencioso.
+- [x] URL + health;
+- [x] login no servidor;
+- [x] token revogável em arquivo privado;
+- [x] `HttpService` para clientes/OS;
+- [x] sem fallback silencioso;
+- [ ] token no Keychain/libsecret.
 
 ### Fase C — híbrido
 

@@ -10,12 +10,13 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.55` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.56` (`develop`).
 
 - Working vertical application for security/automation.
-- GTK4 desktop application and two local web portals.
+- GTK4 desktop application with provider login (local or server), identity and logout.
+- Two local web portals.
 - Local-first SQLite storage.
-- Suíte não visual: **306 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **313 testes, 0 falhas, 1 skip**.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a
@@ -73,8 +74,10 @@ DEV em modo servidor (abra o servidor primeiro):
 ./INICIAR_AUTOSEG_DEV.command    # terminal 2
 ```
 
-O app DEV não abre o banco local. Se o servidor estiver parado, as listas ficam
-vazias e a janela mostra um aviso de servidor indisponível.
+O app DEV não abre o banco local. Ao abrir, entre com um prestador do servidor.
+No banco fictício de DEV, use as credenciais de
+`dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`. Se o servidor estiver parado, o app
+mostra a tela de login com aviso de servidor indisponível.
 
 Local-only GTK (no web server and no tunnel):
 

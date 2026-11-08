@@ -265,6 +265,10 @@ class ServicoIndisponivelError(AppError):
     codigo = 'indisponivel'
 
 
+class AutenticacaoError(AppError):
+    codigo = 'unauthorized'
+
+
 class AppService(Protocol):
     """Use cases available to every client.
 

@@ -309,9 +309,18 @@ class DesktopApiTest(unittest.TestCase):
         empresa_financeiro.instalar(self.db)
         composicao.instalar()
         composicao.instalar_banco(self.db)
+        investidor = self.service_prestador()
         self.server = api_server.start(self.db, '127.0.0.1', 0)
         self.base = f'http://127.0.0.1:{self.server.server_address[1]}'
         self.service = HttpService(self.base)
+        self.service.login(investidor['email'], investidor['senha'])
+
+    def service_prestador(self):
+        email = 'api-admin@example.invalid'
+        senha = 'senha-api-123456'
+        pid = ext.cadastrar(self.db, 'Admin API', email, senha)
+        cad9.definir_admin(self.db, pid, True)
+        return {'id': pid, 'email': email, 'senha': senha}
 
     def tearDown(self):
         self.server.shutdown()
@@ -332,6 +341,19 @@ class DesktopApiTest(unittest.TestCase):
         self.assertEqual(self.service.obter_cliente(criado.id).campos['nome'],
                          'Condomínio API')
         self.assertIsNone(self.service.obter_cliente(99999))
+
+    def test_login_is_required_and_logout_revokes_session(self):
+        sem_token = HttpService(self.base)
+        with self.assertRaises(Exception):
+            sem_token.listar_clientes()
+        self.assertEqual(self.service.me()['email'],
+                         'api-admin@example.invalid')
+        self.service.logout()
+        with self.assertRaises(Exception):
+            self.service.me()
+        self.service.login('api-admin@example.invalid', 'senha-api-123456')
+        self.assertEqual(self.service.me()['email'],
+                         'api-admin@example.invalid')
 
     def test_catalog_stock_company_and_composition_roundtrip(self):
         servico_id = self.service.catalogo_salvar({
@@ -364,8 +386,8 @@ class DesktopApiTest(unittest.TestCase):
             'senha': 'senha-ficticia-12345', 'telefone': '',
             'documento': '', 'especialidade': 'Teste'})
         self.assertGreater(prestador, 0)
-        self.assertEqual([p.nome for p in self.service.listar_prestadores()],
-                         ['Técnico API'])
+        self.assertIn('Técnico API',
+                      [p.nome for p in self.service.listar_prestadores()])
         self.service.definir_admin(prestador, True)
         self.assertTrue(self.service.prestador_admin(prestador))
         cliente = self.service.salvar_cliente(

@@ -1,8 +1,9 @@
 # Modos do app, papéis e descoberta de servidores
 
-**Status:** visão de produto e decomposição em problemas menores. **Nada aqui
-está implementado.** O foco de produção continua sendo o AUTOSEG; federação,
-diretório de servidores e sync híbrido são fases posteriores.
+**Status:** visão de produto e decomposição em problemas menores. O **login
+local/servidor** e a identidade do prestador já estão implementados no DEV;
+papéis completos, federação, diretório de servidores e sync híbrido continuam
+fases posteriores. O foco de produção continua sendo o AUTOSEG.
 
 **Relação com os outros documentos:**
 

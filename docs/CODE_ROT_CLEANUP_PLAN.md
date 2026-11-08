@@ -17,8 +17,8 @@ Baseline em 2026-11-07, após a suíte de testes e a limpeza dos scripts:
 | Indicador | Baseline | Observação |
 |---|---:|---|
 | Comentários com prompt/IA/revisão/shortcut | **0 alto, 0 baixo** | `scripts/audit_comments.py --strict` |
-| `except Exception`/bare except | **152** | nem todos são ruins; 32 são silenciosos |
-| Exceções amplas silenciosas | **32** | `pass`/`continue`/`return None` engolindo erro |
+| `except Exception`/bare except | **153** | nem todos são ruins; 33 são silenciosos |
+| Exceções amplas silenciosas | **33** | `pass`/`continue`/`return None` engolindo erro |
 | Funções com 60+ linhas | **56** | algumas são handlers aninhados; mede complexidade |
 | Classes com 400+ linhas | **6** | `PortalPrestador`, `Handler`, `Janela`, `DialogoOS`, `LocalService`, `HttpService` |
 | SQL direto em UI/HTTP | **43 linhas** | restante no site; shell GTK em zero |

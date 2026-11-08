@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from application.contracts import (
     AppError,
     AppService,
+    AutenticacaoError,
     ChamadoPJ,
     Cliente,
     ClienteOpcao,
@@ -136,6 +137,8 @@ class HttpService(AppService):
                 mensagem = str(detalhe.get('message') or mensagem)
         except (OSError, ValueError, AttributeError):
             pass
+        if erro.code == 401 or codigo == 'unauthorized':
+            raise AutenticacaoError(mensagem, 'Sessão expirada')
         if erro.code == 404 or codigo == 'not_found':
             raise NaoEncontradoError(mensagem)
         if erro.code == 409 or codigo == 'conflict':
@@ -163,6 +166,25 @@ class HttpService(AppService):
     # ------------------------------------------------------------------
     # Contract
     # ------------------------------------------------------------------
+
+    def login(self, email: str, senha: str, lembrar: bool = False) -> dict:
+        resposta = self._post('/api/v1/desktop/login', {
+            'email': email,
+            'senha': senha,
+            'lembrar': bool(lembrar),
+        })
+        self.token = str(resposta.get('token') or '')
+        self.reset_offline()
+        return resposta
+
+    def me(self) -> dict:
+        return self._get('/api/v1/desktop/me')
+
+    def logout(self) -> None:
+        try:
+            self._post('/api/v1/desktop/logout')
+        finally:
+            self.token = ''
 
     def health(self) -> Health:
         try:

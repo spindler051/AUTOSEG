@@ -1,5 +1,17 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.56 — login de prestador no GTK e sessão revogável — 2026-11-07 — develop
+
+- **Login obrigatório:** o GTK abre na tela de login quando não há sessão válida.
+- **Local ou servidor:** modo local usa conta do banco local; modo servidor usa `/api/v1/desktop/login`.
+- **DEV servidor-only:** `AUTOSEG_DEV=1` não mostra a opção de banco local.
+- **Primeiro admin local:** criação do primeiro administrador no modo local.
+- **Identidade visível:** nome, e-mail e papel do prestador aparecem na barra lateral.
+- **Logout:** revoga o token no servidor, apaga a sessão e volta ao login.
+- **Sessão:** token revogável com validade de 12 h ou 30 dias com “Lembrar este dispositivo”; arquivo `0600`, sem senha.
+- **API:** todas as rotas `/desktop` exigem Bearer token, exceto health e login.
+- **Testes:** 313 testes OK, 1 skip; autenticação, token, logout, primeiro admin e arquivo de sessão.
+
 ## 9.6.0-dev.55 — modo DEV em servidor — 2026-11-07 — develop
 
 - **API desktop:** `api_desktop.py` expõe clientes, OS, prestadores, financeiro, histórico, PJ, catálogo, estoque, caixa da empresa, composição e PDF.

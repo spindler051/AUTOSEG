@@ -13,7 +13,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import os
 import sqlite3
 from dataclasses import asdict, is_dataclass
 from http import HTTPStatus
@@ -30,6 +29,7 @@ from application.contracts import (
     ValidacaoError,
 )
 from application.local_service import LocalService
+import prestador_auth
 
 LOG = logging.getLogger('autoseg.api_desktop')
 PREFIX = '/api/v1/desktop'
@@ -71,6 +71,9 @@ def _erro(handler, status: int, codigo: str, mensagem: str):
     handler.send_header('Content-Length', str(len(corpo)))
     handler.send_header('Cache-Control', 'no-store, max-age=0')
     handler.send_header('X-Content-Type-Options', 'nosniff')
+    if int(status) == 401:
+        handler.send_header('WWW-Authenticate',
+                            'Bearer realm="AUTOSEG Desktop"')
     handler.end_headers()
     handler.wfile.write(corpo)
 
@@ -94,13 +97,12 @@ def _corpo(handler) -> dict:
     return dados
 
 
-def _autorizado(handler) -> bool:
-    token = os.environ.get('AUTOSEG_DESKTOP_TOKEN', '').strip()
-    if token:
-        recebido = str(handler.headers.get('Authorization', '')).strip()
-        return recebido == 'Bearer ' + token
-    endereco = str(handler.client_address[0] if handler.client_address else '')
-    return endereco in ('127.0.0.1', '::1', 'localhost')
+def instalar(banco) -> None:
+    prestador_auth.instalar(banco)
+
+
+def _ip(handler) -> str:
+    return str(handler.client_address[0] if handler.client_address else '')
 
 
 def _status_de_erro(erro: AppError) -> int:
@@ -641,6 +643,20 @@ def _rota_contexto(handler, partes, servico, metodo):
     raise NaoEncontradoError('Rota não encontrada.')
 
 
+def _login(handler, banco) -> bool:
+    dados = _corpo(handler)
+    resultado = prestador_auth.login(
+        banco, str(dados.get('email') or ''),
+        str(dados.get('senha') or ''),
+        bool(dados.get('lembrar')),
+        _ip(handler))
+    if not resultado:
+        _erro(handler, 401, 'unauthorized', 'E-mail ou senha incorretos.')
+    else:
+        _enviar(handler, 200, resultado)
+    return True
+
+
 def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
     """Handle desktop API requests. Returns True when the prefix matched."""
     if path != PREFIX and not path.startswith(PREFIX + '/'):
@@ -650,15 +666,32 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
         handler.send_header('Content-Length', '0')
         handler.end_headers()
         return True
-    if not _autorizado(handler):
-        _erro(handler, 403, 'forbidden',
-              'Acesso restrito ao desktop local ou a um token válido.')
-        return True
-    partes = path[len(PREFIX):].strip('/').split('/') if path != PREFIX else []
+    caminho = path.rstrip('/') or PREFIX
+    partes = caminho[len(PREFIX):].strip('/').split('/') if caminho != PREFIX else []
     partes = [parte for parte in partes if parte]
     query = parse_qs(urlparse(handler.path).query)
     try:
+        if caminho == PREFIX + '/health' and method == 'GET':
+            return _rota(handler, partes, query, banco, method)
+        if caminho == PREFIX + '/login' and method == 'POST':
+            return _login(handler, banco)
+        info = prestador_auth.validar_sessao(
+            banco, handler.headers.get('Authorization', ''))
+        if not info:
+            _erro(handler, 401, 'unauthorized',
+                  'Sessão expirada ou não autenticada.')
+            return True
+        if caminho == PREFIX + '/me' and method == 'GET':
+            _enviar(handler, 200, info)
+            return True
+        if caminho == PREFIX + '/logout' and method == 'POST':
+            prestador_auth.revogar_sessao(
+                banco, handler.headers.get('Authorization', ''))
+            _enviar(handler, 200, {'ok': True})
+            return True
         _rota(handler, partes, query, banco, method)
+    except prestador_auth.MuitasTentativasError as erro:
+        _erro(handler, 429, 'rate_limited', str(erro))
     except AppError as erro:
         _erro(handler, _status_de_erro(erro), _codigo_de_erro(erro),
               erro.mensagem)

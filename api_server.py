@@ -84,6 +84,7 @@ class _APIServer(ThreadingHTTPServer):
 
 def start(banco, host='127.0.0.1', port=8766):
     """Create and start the API server; returns the server object."""
+    api_desktop.instalar(banco)
     api_financeiro.instalar(banco)
     server = _APIServer((host, int(port)), _APIHandler, banco)
     import threading

@@ -165,6 +165,22 @@ Token no Keychain/libsecret/Keystore.
 
 ---
 
+### 4.1 Login e sessão (implementado no DEV)
+
+- O app abre em `LoginWindow` quando não há sessão válida.
+- Modo servidor: URL, e-mail do prestador, senha e “Lembrar este dispositivo”.
+- Modo local: conta local e criação do primeiro administrador; sessão não é
+  persistida.
+- O DEV (`AUTOSEG_DEV=1`) é servidor-only e não mostra a página local.
+- A barra lateral mostra nome, e-mail e papel do prestador logado, com **Sair**.
+- `Sair` revoga o token no servidor, apaga a sessão local e volta ao login.
+- O token fica em `~/.config/autoseg/session.json` com permissão `0600` quando
+  “Lembrar” está marcado; sem isso, fica apenas em memória.
+- O servidor valida o token em todas as rotas `/api/v1/desktop/*`, exceto
+  `health` e `login`.
+- Login e logout usam `prestador_auth.py`; a sessão do cliente usa
+  `application/session.py`.
+
 ## 5. API do servidor
 
 Reaproveitar o padrão de `api_financeiro.py`:
