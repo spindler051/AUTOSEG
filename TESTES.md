@@ -7,7 +7,7 @@ find . -maxdepth 1 -name 'test_*.py' ! -name 'test_visual_*' \
   -exec basename {} .py \; | sort | xargs ./.venv/bin/python -m unittest
 ```
 
-Estado em 2026-11-07: **305 testes, 0 falhas, 1 skip**.
+Estado em 2026-11-07: **306 testes, 0 falhas, 1 skip**.
 
 ## Scripts de aceitação
 

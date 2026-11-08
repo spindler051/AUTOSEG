@@ -30,6 +30,7 @@ import portal_negocios as neg
 import links_publicos as links9
 import importacao_yaml
 import composicao
+from application.contracts import Health
 from application.connection import (
     ConnectionMode,
     ConnectionSettings,
@@ -76,10 +77,13 @@ class Janela(Adw.ApplicationWindow):
         self._pagina_atual = "inicio"
         self.service = None
         self.web = None
+        self._servidor_online = None
+        self._monitorando_servidor = False
         self._iniciar_backend()
         self._construir()
         self.connect("close-request", self._ao_fechar)
         self._carregar_tudo()
+        GLib.timeout_add_seconds(5, self._monitorar_servidor)
         GLib.timeout_add_seconds(2, self._processar_eventos_portal)
         GLib.timeout_add_seconds(10, self._atualizar_links_async)
         if os.environ.get("AUTOSEG_SMOKE") == "1":
@@ -502,20 +506,58 @@ class Janela(Adw.ApplicationWindow):
             self.linha_banco.set_subtitle(str(BANCO))
         self._aplicar_links(self._links_estado)
 
-    def _atualizar_banner_servidor(self):
+    def _atualizar_banner_servidor(self, info=None):
         banner = getattr(self, "banner_servidor", None)
         if banner is None:
-            return
+            return False
         if not self.remote_mode:
+            self._servidor_online = None
             banner.set_revealed(False)
-            return
-        info = self.service.health()
-        if info.status == 'ok':
+            return True
+        info = info or self.service.health()
+        online = info.status == 'ok'
+        self._servidor_online = online
+        if online:
             banner.set_revealed(False)
-            return
+            return True
         detalhe = info.detail or "Abra o servidor antes de usar o modo DEV."
         banner.set_title("Servidor indisponível — os dados estão vazios. " + detalhe)
         banner.set_revealed(True)
+        return False
+
+    def _monitorar_servidor(self):
+        if not self.remote_mode:
+            return False
+        if self._monitorando_servidor:
+            return True
+        self._monitorando_servidor = True
+
+        def worker():
+            try:
+                info = self.service.health()
+            except Exception:
+                info = Health(status='unavailable', version='', mode='remote',
+                              detail='Falha ao consultar o servidor.')
+            GLib.idle_add(self._fim_monitor_servidor, info)
+            return False
+
+        threading.Thread(target=worker, daemon=True,
+                         name="AUTOSEG-Servidor").start()
+        return True
+
+    def _fim_monitor_servidor(self, info):
+        anterior = self._servidor_online
+        online = self._atualizar_banner_servidor(info)
+        self._monitorando_servidor = False
+        if not self._ativo:
+            return False
+        if anterior is True and not online:
+            ui.toast(self, "Servidor caiu. Os dados exibidos podem estar "
+                           "desatualizados.", timeout=8)
+        elif anterior is False and online:
+            ui.toast(self, "Servidor reconectado. Atualizando dados.")
+            self._carregar_tudo()
+        return False
 
     def _abrir_link_publico(self, porta):
         url = self._links_estado.get(str(porta), {}).get("url", "")

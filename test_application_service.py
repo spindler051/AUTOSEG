@@ -200,6 +200,7 @@ class ConnectionSettingsTest(unittest.TestCase):
             'AUTOSEG_SERVER_URL': os.environ.pop('AUTOSEG_SERVER_URL', None),
             'AUTOSEG_CONNECTION_FILE': os.environ.pop('AUTOSEG_CONNECTION_FILE', None),
             'AUTOSEG_WEB_ACCESS': os.environ.pop('AUTOSEG_WEB_ACCESS', None),
+            'AUTOSEG_DEV': os.environ.pop('AUTOSEG_DEV', None),
         }
 
     def tearDown(self):
@@ -229,6 +230,14 @@ class ConnectionSettingsTest(unittest.TestCase):
         self.assertFalse(carregado.web_access)
         servico = build_service('/tmp/nao-usado.db', carregado)
         self.assertEqual(servico.mode, 'local')
+
+    def test_dev_defaults_to_remote_server_without_local_fallback(self):
+        os.environ['AUTOSEG_DEV'] = '1'
+        carregado = load_settings(self.path)
+        self.assertEqual(carregado.mode, ConnectionMode.REMOTE)
+        self.assertEqual(carregado.server_url, 'http://127.0.0.1:8766')
+        servico = build_service('/tmp/nao-usado.db', carregado)
+        self.assertEqual(servico.mode, 'remote')
 
     def test_explicit_env_can_enable_web_access(self):
         os.environ['AUTOSEG_WEB_ACCESS'] = '1'

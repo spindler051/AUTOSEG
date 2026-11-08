@@ -20,6 +20,7 @@ Este é o ponto de retomada. O índice completo fica em
 - Numeração configurável de OS, com aliases para números antigos.
 - DEV em modo servidor: o app usa a API e não abre o banco local.
 - Sem servidor, as listas ficam vazias e a janela mostra aviso de indisponível.
+- O app verifica o servidor a cada 5 s e avisa quando ele cai ou volta.
 - Workaholic integrado apenas na fatia de clientes; o restante continua no
   código legado.
 
@@ -33,7 +34,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **305 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **306 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.

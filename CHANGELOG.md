@@ -5,10 +5,12 @@
 - **API desktop:** `api_desktop.py` expõe clientes, OS, prestadores, financeiro, histórico, PJ, catálogo, estoque, caixa da empresa, composição e PDF.
 - **Modo DEV:** `INICIAR_AUTOSEG_DEV.command` abre em modo servidor; `INICIAR_SERVIDOR_DEV.command` sobe a API com o banco de teste.
 - **Sem banco local:** o GTK em modo servidor não cria nem abre o SQLite local.
+- **DEV é servidor por padrão:** mesmo sem variável explícita, `AUTOSEG_DEV=1` usa `http://127.0.0.1:8766`.
 - **Offline:** leituras degradam para listas vazias e a janela mostra banner de servidor indisponível; escritas falham sem fallback local.
+- **Monitor:** verificação a cada 5 s avisa quando o servidor cai ou volta e recarrega os dados ao reconectar.
 - **Conexões:** a opção “Banco local” desaparece no modo servidor e o endereço da API pode ser salvo e aplicado na hora.
 - **Ações remotas:** assumir/iniciar OS, atribuir responsável, senha de cliente/prestador, PJ, PDF, catálogo, estoque e caixa passam pela API.
-- **Testes:** 305 testes OK, 1 skip; smoke GTK offline e online.
+- **Testes:** 306 testes OK, 1 skip; smoke GTK offline e online.
 
 ## 9.6.0-dev.54 — documentação enxuta e organizada — 2026-11-07 — develop
 

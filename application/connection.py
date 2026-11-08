@@ -57,8 +57,13 @@ def load_settings(path: Path | None = None) -> ConnectionSettings:
     env_mode = os.environ.get('AUTOSEG_CONNECTION_MODE', '').strip().lower()
     if env_mode in (ConnectionMode.LOCAL.value, ConnectionMode.REMOTE.value):
         mode = ConnectionMode(env_mode)
+    elif runtime_config.is_dev():
+        # DEV is server-only unless explicitly overridden.
+        mode = ConnectionMode.REMOTE
     server_url = os.environ.get('AUTOSEG_SERVER_URL', '').strip() or str(
         dados.get('server_url') or '').strip()
+    if not server_url and runtime_config.is_dev():
+        server_url = 'http://127.0.0.1:8766'
     if 'AUTOSEG_WEB_ACCESS' in os.environ:
         web_access = runtime_config.web_access_enabled()
     else:
