@@ -1,6 +1,6 @@
 # Auditoria de segurança — ações de 2026-11-08
 
-Relatório original: `/Users/idkosx/security-audit-gestaoservicos-dev.md`.
+Relatório original: `/Users/idkosx/AUTOSEG_ORGANIZADO_2026-11-08/docs/security-audit-gestaoservicos-dev.md`.
 
 ## Resolvido
 
