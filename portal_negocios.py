@@ -155,6 +155,12 @@ def os_salvar(banco,d,pid,oid=None):
     if not descricao: raise ValueError('Preencha a descrição do serviço.')
     tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
     forma=texto(d,'forma_pagamento',60)
+    if not forma and oid is not None:
+        with ext.db(banco) as conexao:
+            atual=conexao.execute('SELECT forma_pagamento FROM ordens_servico WHERE id=?',
+                                  (oid,)).fetchone()
+        if atual and not str(atual['forma_pagamento'] or '').strip():
+            d=dict(d); d['forma_pagamento_opcional']='1'
     if not forma and not str(d.get('forma_pagamento_opcional','')) in ('1','on','true','sim'):
         raise ValueError('Selecione a forma de pagamento.')
     if forma and forma not in OS_FORMAS: raise ValueError('Forma de pagamento inválida.')
@@ -295,7 +301,12 @@ def os_salvar(banco,d,pid,oid=None):
                 raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
             original=c.execute('SELECT cliente_id,descricao_original,observacoes_originais FROM os_solicitacoes WHERE os_id=?',(oid,)).fetchone()
             if original:
-                cliente_id=original['cliente_id']
+                cliente_original=c.execute('SELECT status FROM clientes WHERE id=?',
+                                           (original['cliente_id'],)).fetchone()
+                # Chamados de origem só mantêm o cliente original quando ele
+                # já está definido. OS com “Cliente a definir” pode ser associada.
+                if not cliente_original or cliente_original['status']!='A definir':
+                    cliente_id=original['cliente_id']
                 descricao=original['descricao_original']
                 if old['origem']=='Portal':
                     observacoes=old['observacoes'] or original['observacoes_originais']

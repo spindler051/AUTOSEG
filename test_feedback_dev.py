@@ -165,6 +165,28 @@ class FeedbackDevTest(unittest.TestCase):
             'csrf': self.token}, timeout=10)
         self.assertEqual(resposta.status_code, 400)
 
+    def test_os_sem_cliente_mostra_seletor_e_permite_associar(self):
+        os_id, pagina = self._criar_os(cliente=False,
+                                       descricao='OS aguardando cliente real')
+        self.assertIn('Cliente da OS', pagina)
+        self.assertIn('id="c_cliente_id"', pagina)
+        with ext.db(self.db) as c:
+            c.execute("""INSERT INTO clientes(tipo_pessoa,documento,nome,status,criado_em)
+                         VALUES('Física','','Cliente Associado','Ativo',?)""",
+                      (ext.agora(),))
+            destino = int(c.execute('SELECT MAX(id) FROM clientes').fetchone()[0])
+        resposta = self.http.post(self.base + f'/os/{os_id}/salvar', data={
+            'csrf': self.token, 'cliente_id': str(destino),
+            'descricao': 'OS aguardando cliente real', 'urgencia': 'Normal',
+            'valor_mao_obra': '0', 'valor_materiais_manual': '0',
+            'materiais_presentes': '1', 'modo_envio': 'salvar'},
+            timeout=10)
+        self.assertEqual(resposta.status_code, 200)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+        self.assertEqual(int(os_['cliente_id']), destino)
+
     def test_abrir_os_sem_cliente_e_associar_depois(self):
         os_id, pagina = self._criar_os(cliente=False,
                                        descricao='OS sem cliente definido')

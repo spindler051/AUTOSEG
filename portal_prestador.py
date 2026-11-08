@@ -2142,7 +2142,14 @@ class PortalPrestador:
                         f'{esc(solicitacao["descricao_original"])}<br>'
                         f'<span class="muted">Número da OS: {esc(d.get("numero_os") or "")}. '
                         'O chamado de origem não é o número da OS.</span></p>')
-                    corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
+                    cliente_solicitacao=clientes_core.obter_linha(
+                        int(solicitacao['cliente_id']),banco=banco)
+                    if not cliente_solicitacao or cliente_solicitacao.get('status')=='A definir' or s.get('admin'):
+                        corpo+=select('Cliente da OS','cliente_id',dados_cliente,
+                                      d.get('cliente_id',solicitacao['cliente_id']),required=True)
+                        corpo+='<p class="muted">O chamado chegou sem cliente definido. Escolha o cliente real da OS.</p>'
+                    else:
+                        corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
                 else:
                     cliente_atual_id=int(d.get('cliente_id') or (cl[0]['id'] if cl else 0))
                     contato_atual=next((x for x in contatos_clientes
@@ -4162,7 +4169,7 @@ class PortalPrestador:
                                     try:
                                         neg.os_salvar(banco,d2,pid,oid)
                                     except Exception:
-                                        pass
+                                        LOG.exception('Falha ao salvar OS %s no rascunho', oid)
                                     try:
                                         cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
                                     except Exception:

@@ -1,6 +1,12 @@
 # AUTOSEG — Changelog
 
-## 9.6.0-dev.64 — busca automática, composições e tema automático — 2026-11-08 — develop
+## 9.6.0-dev.65 — associar cliente em OS de chamado — 2026-11-08 — develop
+
+- **OS com “Cliente a definir”:** mesmo quando veio de um chamado, mostra o seletor “Cliente da OS” para associar o cliente real.
+- **Pagamento em branco:** editar uma OS criada sem forma de pagamento não obriga mais a preencher o pagamento.
+- **Testes:** 333 testes OK, 1 skip.
+
+## 9.6.0-dev.65 — busca automática, composições e tema automático — 2026-11-08 — develop
 
 - **Clientes e serviços:** uma única busca, sem botão; filtra automaticamente enquanto digita.
 - **OS:** status diferentes de Pendente e Cancelada exigem cliente definido, não “Cliente a definir”.
@@ -8,17 +14,17 @@
 - **Tema automático:** corrigido para seguir o sistema no login e no site; a detecção saiu do script inline bloqueado pela CSP.
 - **Composição dos valores:** o seletor saiu de Materiais e foi para Situação e relatório; as composições (Total da OS e Visita mínima) agora são editáveis em Composição de valores.
 - **Cliente na OS:** seletor em largura total acima de “Atendido por”, com resumo automático de e-mail, telefone e síndico.
-- **Testes:** 332 testes OK, 1 skip.
+- **Testes:** 333 testes OK, 1 skip.
 
-## 9.6.0-dev.64 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
+## 9.6.0-dev.65 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
 
 - **OS rápida:** removidos “Atribuir prestador” e “Forma de pagamento”; a OS abre sem pagamento definido e o criador fica responsável.
 - **Cliente na OS rápida:** busca automática ao digitar, sem botão “Buscar”; nome novo cria cliente com dados incompletos.
 - **Mescla de clientes:** admin pode mesclar dois cadastros duplicados; OS e financeiro passam para o destino e a origem fica inativa.
 - **Login:** segue automaticamente o tema do sistema, sem botões; a preferência manual fica em Configurações após entrar.
-- **Testes:** 332 testes OK, 1 skip.
+- **Testes:** 333 testes OK, 1 skip.
 
-## 9.6.0-dev.64 — feedbacks abertos da DEV — 2026-11-08 — develop
+## 9.6.0-dev.65 — feedbacks abertos da DEV — 2026-11-08 — develop
 
 - **Nova OS em uma tela:** cliente é opcional e pode ser associado depois; a OS usa o cadastro provisório “Cliente a definir”.
 - **Duplicidade:** aviso para OS do mesmo cliente criada nos últimos 2 minutos, com opção explícita de criar outra e registro no histórico.
@@ -42,7 +48,7 @@
 - **Tema:** modo automático pelo tema do host, claro/escuro e sete cores de acento.
 - **Composição de valores:** editor estruturado por componente no lugar do YAML seco; YAML permanece em opção avançada.
 - **Início do GTK:** ordens recentes com abertura direta, alinhado ao site.
-- **Testes:** 332 testes OK, 1 skip; scripts de aceitação passando.
+- **Testes:** 333 testes OK, 1 skip; scripts de aceitação passando.
 
 ## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
 
