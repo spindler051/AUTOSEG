@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse, quote, urlencode as urllib_parse_urlencode
 import prestadores_ext as ext
+import prestador_auth
 import portal_negocios as neg
 import fluxo_os as fluxo
 import atendimento_os as aten
@@ -155,13 +156,16 @@ html[data-acento="vermelho"] body.ui-app{--u-accent:#df8a8a;--u-accent-soft:rgba
 html[data-acento="roxo"] body.ui-app{--u-accent:#b39bdf;--u-accent-soft:rgba(179,155,223,.14);--u-accent-ink:#160f22}
 html[data-acento="ciano"] body.ui-app{--u-accent:#6ec7c7;--u-accent-soft:rgba(110,199,199,.14);--u-accent-ink:#081a1a}
 html[data-acento="laranja"] body.ui-app{--u-accent:#e2a06a;--u-accent-soft:rgba(226,160,106,.14);--u-accent-ink:#1d1107}
-html[data-tema="claro"] body.ui-app{--u-bg:#f3efe7;--u-side:#e9e3d8;--u-card:#fbf8f2;--u-card-2:#f1ece2;--u-raised:#e6ded1;--u-line:rgba(36,31,25,.10);--u-line-2:rgba(36,31,25,.20);--u-text:#241f19;--u-text-2:#5e5549;--u-muted:#887d6f;--u-input:#fffdf9;--u-hover:#ded4c4;--u-primary-text:#fbf8f2;--u-primary-hover:#3a332a;--u-good:#247a52;--u-bad:#a33f3f;--u-warn:#8a5c16}
-html[data-tema="claro"] body.ui-app button,html[data-tema="claro"] body.ui-app .btn{background:#241f19;border-color:#241f19;color:#fbf8f2}
-html[data-tema="claro"] body.ui-app button:hover,html[data-tema="claro"] body.ui-app .btn:hover{background:#3a332a;border-color:#3a332a}
+html[data-tema="claro"] body.ui-app{--u-bg:#f3f3f1;--u-side:#eaeae7;--u-card:#fff;--u-card-2:#f4f4f2;--u-raised:#e6e6e2;--u-line:rgba(24,24,24,.10);--u-line-2:rgba(24,24,24,.20);--u-text:#202020;--u-text-2:#454545;--u-muted:#6f6f6f;--u-input:#fff;--u-hover:#d9d9d4;--u-primary-text:#fff;--u-primary-hover:#74746f;--u-good:#1f6d4a;--u-bad:#9c3636;--u-warn:#7a5312}
+html[data-tema="claro"] body.ui-app button,html[data-tema="claro"] body.ui-app .btn{background:#8a8a86;border-color:#8a8a86;color:#fff}
+html[data-tema="claro"] body.ui-app button:hover,html[data-tema="claro"] body.ui-app .btn:hover{background:#74746f;border-color:#74746f}
 html[data-tema="claro"] body.ui-app button.secondary,html[data-tema="claro"] body.ui-app .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
+html[data-tema="claro"] body.ui-app button.danger,html[data-tema="claro"] body.ui-app .btn.danger{background:#a34a4a;border-color:#a34a4a;color:#fff}
+html[data-tema="claro"] body.ui-app .side-tool{background:transparent;border-color:var(--u-line);color:var(--u-text-2)}
 html[data-tema="claro"] body.ui-app .os-tab{background:transparent;border-color:transparent;color:var(--u-muted)}
 html[data-tema="claro"] body.ui-app .os-tab:hover{background:transparent;border-color:transparent;color:var(--u-text-2)}
 html[data-tema="claro"] body.ui-app .os-tab.active{background:transparent;border-color:transparent;color:var(--u-text)}
+html[data-tema="claro"] body.ui-app .os-form-app .actions{background:rgba(255,255,255,.97);box-shadow:0 12px 32px rgba(0,0,0,.10)}
 html[data-tema="claro"] body.ui-app .theme-botoes button{background:transparent;border-color:var(--u-line-2);color:var(--u-text-2)}
 html[data-tema="claro"] body.ui-app .theme-botoes button.ativo{background:var(--u-raised);color:var(--u-text);border-color:var(--u-accent)}
 html[data-tema="claro"] body.ui-app .accent-botoes button{background:var(--cor);border-color:transparent}
@@ -176,6 +180,21 @@ body.ui-app .theme-botoes button.ativo{background:var(--u-raised);color:var(--u-
 body.ui-app .accent-botoes{display:flex;flex-wrap:wrap;gap:7px}
 body.ui-app .accent-botoes button{width:20px;height:20px;min-height:0;padding:0;border:2px solid transparent;border-radius:50%;background:var(--cor);box-shadow:none}
 body.ui-app .accent-botoes button.ativo{border-color:var(--u-text);outline:2px solid var(--u-accent);outline-offset:1px}
+body.ui-app .pref-grupo{border:1px solid var(--u-line);border-radius:12px;padding:16px;margin:0 0 16px}
+body.ui-app .pref-grupo legend{color:var(--u-text);font:500 14px/1.3 var(--u-font);padding:0 6px}
+body.ui-app .pref-opcoes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+body.ui-app .pref-opcao{display:flex;align-items:flex-start;gap:10px;margin:0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);cursor:pointer}
+body.ui-app .pref-opcao:has(input:checked){border-color:var(--u-accent);background:var(--u-accent-soft)}
+body.ui-app .pref-opcao input{margin-top:2px}
+body.ui-app .pref-opcao strong{display:block;color:var(--u-text);font:500 13px/1.3 var(--u-font)}
+body.ui-app .pref-opcao small{display:block;margin-top:2px;color:var(--u-muted);font:400 11px/1.4 var(--u-font)}
+body.ui-app .pref-acentos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+body.ui-app .pref-acento{display:flex;align-items:center;gap:8px;margin:0;padding:10px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2);cursor:pointer}
+body.ui-app .pref-acento:has(input:checked){border-color:var(--u-accent);background:var(--u-accent-soft)}
+body.ui-app .pref-acento input{position:absolute;opacity:0;pointer-events:none}
+body.ui-app .pref-cor{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:var(--cor);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+body.ui-app .pref-acento em{font:500 12px/1.2 var(--u-font);font-style:normal;color:var(--u-text-2)}
+
 body.ui-app{margin:0;background:var(--u-bg);color:var(--u-text);font:400 14px/1.55 var(--u-font);-webkit-font-smoothing:antialiased}
 body.ui-app *{box-sizing:border-box}
 body.ui-app header{display:none}
@@ -303,8 +322,8 @@ body.ui-app .side-foot{display:flex;flex-direction:column;gap:16px;margin-top:au
 body.ui-app .side-user{display:flex;flex-direction:column;gap:4px;padding:0 12px}
 body.ui-app .side-user strong{color:var(--u-text);font:500 14px/1.3 var(--u-font)}
 body.ui-app .side-user span{color:var(--u-muted);font:400 12px/1.3 var(--u-mono)}
-body.ui-app .side-tools{display:flex;flex-direction:column;gap:2px}
-body.ui-app .side-tool{display:flex;align-items:center;justify-content:flex-start;gap:8px;width:100%;min-height:32px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--u-muted);font:400 12px/1.2 var(--u-font);text-align:left;text-decoration:none;cursor:pointer}
+body.ui-app .side-tools{display:flex;flex-direction:row;gap:6px}
+body.ui-app .side-tool{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;min-width:0;min-height:30px;padding:0 8px;border:1px solid var(--u-line);border-radius:8px;background:transparent;color:var(--u-muted);font:500 11px/1.2 var(--u-font);text-align:center;text-decoration:none;cursor:pointer}
 body.ui-app .side-tool svg{flex:0 0 18px;width:18px;height:18px;color:var(--u-muted);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 body.ui-app .side-tool:hover{background:var(--u-raised);color:var(--u-text)}
 body.ui-app .side-tool:hover svg{color:var(--u-text-2)}
@@ -431,6 +450,11 @@ body.ui-app .cancel-dialog .cancel-step{padding:24px}
 body.ui-app .cancel-dialog .cancel-step h2{margin:0 0 8px;color:var(--u-text);font:500 20px/1.2 var(--u-font)}
 body.ui-app .cancel-dialog .cancel-step p{margin:0 0 12px;color:var(--u-text-2);font-size:13px;line-height:1.55}
 body.ui-app .cancel-dialog .cancel-step textarea{min-height:110px}
+body.ui-app .situacao-opcoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;border:0;padding:0;margin:0 0 12px}
+body.ui-app .situacao-opcoes legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+body.ui-app .situacao-opcoes label{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border:1px solid var(--u-line);border-radius:8px;background:var(--u-card-2);color:var(--u-text);font:500 13px/1.2 var(--u-font);cursor:pointer}
+body.ui-app .situacao-opcoes label:has(input:checked){border-color:var(--u-accent);background:var(--u-accent-soft)}
+body.ui-app .situacao-opcoes input{margin:0}
 body.ui-app .os-tools{margin-top:20px;border-top:1px solid var(--u-line);padding-top:16px}
 body.ui-app .os-tools summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 body.ui-app .os-tools summary:hover{color:var(--u-text-2)}
@@ -576,6 +600,8 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .finance-grid{grid-template-columns:1fr}
   body.ui-app .finance-grid .card:nth-child(2),body.ui-app .finance-grid .card:nth-child(4){grid-column:auto}
   body.ui-app .home-toolbar{align-items:flex-start;flex-direction:column}
+  body.ui-app .pref-opcoes{grid-template-columns:1fr}
+  body.ui-app .pref-acentos{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:520px){
   body.ui-app main{padding:24px 14px 72px}
@@ -740,6 +766,7 @@ ICONES = {
     'mail': '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
     'history': '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
     'building': '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/>',
+    'settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.14.36.35.7.6 1 .3.3.7.45 1.1.45H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51.55z"/>',
     'message': '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/>',
     'logout': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
     'layout': '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
@@ -780,7 +807,8 @@ def _grupos_navegacao(usuario):
                     ('/notas', 'Notas fiscais', 'receipt'),
                     ('/emails', 'E-mails', 'mail')]),
         ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
-                       ('/pj-publicas', 'Solicitações PJ', 'building')]),
+                       ('/pj-publicas', 'Solicitações PJ', 'building'),
+                       ('/configuracoes', 'Configurações', 'settings')]),
     ]
     if usuario.get('admin'):
         grupos[1][1].extend([
@@ -796,6 +824,16 @@ def _grupos_navegacao(usuario):
 def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
     """Experimental interface: a quiet work-order shell around the same flow."""
     base=layout(titulo,corpo,usuario,nonce,cliente,banco)
+    prefs={'tema':'auto','acento':'ambar'}
+    if usuario and not cliente and banco:
+        try:
+            prefs=prestador_auth.obter_preferencias(banco,usuario['pid'])
+        except (OSError,ValueError):
+            prefs={'tema':'auto','acento':'ambar'}
+    base=base.replace('<html lang="pt-BR">',
+                      f'<html lang="pt-BR" data-tema="{esc(prefs["tema"])}" '
+                      f'data-preferencia-tema="{esc(prefs["tema"])}" '
+                      f'data-acento="{esc(prefs["acento"])}">',1)
     login=not usuario or cliente
     body_class='ui-app'+(' ui-login' if login else '')
     base=base.replace('<body>',f'<body class="{body_class}">',1)
@@ -826,26 +864,9 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
                  '<div class="side-foot">'
                  f'<div class="side-user"><strong>{esc(usuario.get("nome",""))}</strong>'
                  '<span>Prestador</span></div>'
-                 '<div class="side-theme">'
-                 '<p>Tema</p>'
-                 '<div class="theme-botoes" role="group" aria-label="Tema da interface">'
-                 '<button type="button" data-tema="auto">Auto</button>'
-                 '<button type="button" data-tema="claro">Claro</button>'
-                 '<button type="button" data-tema="escuro">Escuro</button>'
-                 '</div>'
-                 '<p>Cor de acento</p>'
-                 '<div class="accent-botoes" role="group" aria-label="Cor de acento">'
-                 '<button type="button" data-acento="ambar" title="Âmbar" aria-label="Âmbar" style="--cor:#d8a24a"></button>'
-                 '<button type="button" data-acento="azul" title="Azul" aria-label="Azul" style="--cor:#78aede"></button>'
-                 '<button type="button" data-acento="verde" title="Verde" aria-label="Verde" style="--cor:#7cc7a2"></button>'
-                 '<button type="button" data-acento="vermelho" title="Vermelho" aria-label="Vermelho" style="--cor:#df8a8a"></button>'
-                 '<button type="button" data-acento="roxo" title="Roxo" aria-label="Roxo" style="--cor:#b39bdf"></button>'
-                 '<button type="button" data-acento="ciano" title="Ciano" aria-label="Ciano" style="--cor:#6ec7c7"></button>'
-                 '<button type="button" data-acento="laranja" title="Laranja" aria-label="Laranja" style="--cor:#e2a06a"></button>'
-                 '</div></div>'
                  '<div class="side-tools">'
                  '<button type="button" class="side-tool" id="abrir-feedback-side">'
-                 f'{icone("message")}<span>Enviar feedback</span></button>'
+                 f'{icone("message")}<span>Feedback</span></button>'
                  f'<form method="post" action="/sair" class="side-tool-form">'
                  f'<input type="hidden" name="csrf" value="{csrf}">'
                  f'<button class="side-tool" type="submit">{icone("logout")}<span>Sair</span></button></form>'
@@ -883,7 +904,7 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
               '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
               '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<script>try{{var t=localStorage.getItem('autoseg:tema')||'auto';var a=localStorage.getItem('autoseg:acento')||'ambar';var claro=t==='claro'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.dataset.tema=claro?'claro':'escuro';document.documentElement.dataset.acento=a;}}catch(e){{}}</script>
+<script>try{{var raiz=document.documentElement;var t=raiz.dataset.tema||localStorage.getItem('autoseg:tema')||'auto';var a=raiz.dataset.acento||localStorage.getItem('autoseg:acento')||'ambar';var claro=t==='claro'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);raiz.dataset.tema=claro?'claro':'escuro';raiz.dataset.acento=a;}}catch(e){{}}</script>
 <title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:#fff;font:16px -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.45}}
@@ -1266,9 +1287,9 @@ class PortalPrestador:
                     f'<div class="kpi"><span>{esc(nome)}</span><strong>{int(contagens.get(nome,0))}</strong></div>'
                     for nome in feedback.STATUS_TRIAGEM)+'</div>'
                 opcoes=[('','Todos os feedbacks')]+[(x,x) for x in feedback.STATUS_TRIAGEM]
-                filtro=('<form method="get" action="/feedback/recebidos">'
+                filtro=('<form method="get" action="/feedback/recebidos" data-auto-submit="1">'
                         +select('Filtrar por situação na DEV','status',opcoes,status_dev)
-                        +'<button type="submit">Filtrar</button></form>')
+                        +'</form>')
                 linhas=[]
                 for item in itens:
                     resumo=re.sub(r'\s+',' ',item['mensagem_anonimizada']).strip()[:140]
@@ -1979,7 +2000,9 @@ class PortalPrestador:
                         '<p class="muted">A importação apenas preenche o formulário para revisão; '
                         'nada é salvo antes de confirmar a criação da OS.</p>')
                 auto_save='1' if oid and d['status'] in ext.ATIVAS and not arquivada else '0'
-                corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" data-os-id="{oid or ""}" data-auto-save="{auto_save}" enctype="multipart/form-data">{token}'
+                corpo+=f'<form method="post" action="{action}" id="form-os"{classe_form} data-ajax-preserve="1" data-os-id="{oid or ""}" data-salvar-url="{action}" data-auto-save="{auto_save}" enctype="multipart/form-data">{token}'
+                if oid:
+                    corpo+='<input type="hidden" name="acao_status" id="acao-status-os" value="">'
                 if auto_save=='1':
                     corpo+='<p class="muted auto-save-status" id="rascunho-auto-status" aria-live="polite">Salvamento automático ativo.</p>'
                 if d.get('composicao_yaml'):
@@ -2009,46 +2032,35 @@ class PortalPrestador:
                 status_bloco=''
                 cancelar_dialogo=''
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    status_atual='Pendente' if d['status']=='Pendente' else ''
                     iniciado=bool(andamento and andamento['iniciado_em'])
-                    bloco=['<div class="os-status-block">']
-                    bloco.append(
-                        f'<p class="os-status-current"><span class="tag">{esc(d["status"])}</span> · '
-                        f'Responsável: <b>{esc(nome_resp)}</b> · Participantes: '
-                        f'{esc(", ".join(p["nome"] for p in particip) or "Nenhum")}</p>')
-                    bloco.append(select('Situação do atendimento','acao_status',
-                        [('', 'Selecione a situação'),('Pendente','Pendente'),('Concluída','Concluído')],
-                        status_atual,required=True))
-                    bloco.append('<p class="muted">Pendente mantém a OS ativa. Concluído publica o PDF e encerra. '
-                                 'As ações de cancelar e arquivar ficam no fim desta aba.</p>')
-                    bloco.append('<div class="os-status-actions">')
-                    if responsavel != s['pid'] and (responsavel is None or d['status']=='Pendente' or s.get('admin')):
-                        bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/assumir" formnovalidate>{rotulo_assumir}</button>')
-                        bloco.append('<p class="muted">Assume a responsabilidade sem iniciar o atendimento.</p>')
-                    if s.get('admin'):
-                        opcoes_transferencia=[('', 'Escolha um prestador')]+[
-                            (str(p['id']), p['nome']) for p in prestadores
-                            if int(p['id']) != int(responsavel or 0)]
-                        bloco.append('<div class="os-transfer">'
-                                     '<label for="prestador-destino">Atribuir a outro prestador</label>'
-                                     '<div class="os-transfer-linha">'
-                                     +select('Prestador','prestador_destino',opcoes_transferencia,'')
-                                     +f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/atribuir" formnovalidate>Atribuir OS</button>'
-                                     '</div><p class="muted">A transferência administrativa troca o responsável sem iniciar o atendimento.</p></div>')
-                    if responsavel in (None, s['pid']) and not iniciado:
-                        if em_rota:
-                            bloco.append(f'<p class="notice">{aviso_rota}</p>')
-                            bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/cancelar-rota" formnovalidate>{rotulo_cancelar_rota}</button>')
-                        else:
-                            bloco.append(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/em-rota" formnovalidate>{rotulo_em_rota}</button>')
-                        bloco.append(f'<button type="submit" class="iniciar-atendimento" formaction="{url_os(banco, oid)}/iniciar" formnovalidate>{rotulo_iniciar}</button>')
-                        bloco.append(f'<p class="muted">{texto_iniciar}</p>')
-                    elif iniciado:
-                        bloco.append(f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}.</p>')
-                    elif responsavel is not None and responsavel != s['pid'] and not s.get('admin'):
-                        bloco.append('<p class="notice">OS atribuída a outro prestador. Todos podem visualizar; para assumir, aguarde pendência ou peça transferência.</p>')
-                    bloco.append('</div></div>')
-                    status_bloco=''.join(bloco)
+                    atual='Em rota' if em_rota else ('Iniciada' if iniciado else d['status'])
+                    opcoes_situacao=[('Aberta','Aberta')]
+                    if not iniciado:
+                        opcoes_situacao.append(('Em rota','Em rota'))
+                        opcoes_situacao.append(('Iniciada','Iniciada'))
+                    opcoes_situacao.extend([('Pendente','Pendente'),
+                                            ('Concluída','Concluída'),
+                                            ('Cancelada','Cancelada')])
+                    radios=''.join(
+                        f'<label><input type="radio" name="situacao_popup" value="{chave}"'
+                        f'{" checked" if chave==atual else ""}> {rotulo}</label>'
+                        for chave,rotulo in opcoes_situacao)
+                    status_bloco=(
+                        f'<dialog class="feedback-dialog situacao-dialog" id="dialogo-situacao-os" '
+                        f'data-os-url="{url_os(banco,oid)}">'
+                        '<div class="cancel-step">'
+                        '<h2>Confirmar situação da OS</h2>'
+                        f'<p class="muted">{esc(d["numero_os"])} · Responsável: '
+                        f'<b>{esc(nome_resp)}</b></p>'
+                        '<fieldset class="situacao-opcoes"><legend>Situação do atendimento</legend>'
+                        +radios+'</fieldset>'
+                        '<p class="muted" id="situacao-ajuda">Escolha a situação e confirme. '
+                        'Concluir exige Serviço executado e nota fiscal (ou “não precisa”).</p>'
+                        '<div class="feedback-actions">'
+                        '<button type="button" class="secondary" data-fechar-situacao>Voltar</button>'
+                        '<button type="submit" class="secondary" id="aplicar-situacao" '
+                        'formnovalidate>Aplicar situação</button>'
+                        '</div></div></dialog>')
                     cancelar_dialogo=(
                         f'<dialog class="feedback-dialog cancel-dialog" id="dialogo-cancelar-os" '
                         f'data-numero-os="{esc(d["numero_os"])}">'
@@ -2079,7 +2091,6 @@ class PortalPrestador:
                         'Cancelar OS definitivamente</button>'
                         '</div></div></dialog>')
                 corpo+='<fieldset><legend>Identificação e serviço</legend>'
-                corpo+=cancelar_dialogo
                 if bloco_modelo and not oid:
                     corpo+=bloco_modelo
                 corpo+='<div class="col2"><div>'
@@ -2095,7 +2106,19 @@ class PortalPrestador:
                     corpo+='<label for="busca-cliente-os">Buscar cliente ou condomínio</label><input type="search" id="busca-cliente-os" placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
                     corpo+=select('Cliente','cliente_id',dados_cliente,d.get('cliente_id',cl[0]['id']),required=True)
                 corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
-                corpo+='</div><div>'+select('Forma de pagamento','forma_pagamento',
+                corpo+='</div><div>'
+                if oid and app and s.get('admin') and d['status'] in ext.ATIVAS and not arquivada:
+                    opcoes_responsavel=(([('', 'Não atribuído')] if not responsavel else [])
+                                        + [(str(p['id']), p['nome']) for p in prestadores])
+                    corpo+=('<label for="prestador-destino">Responsável (admin)</label>'
+                            f'<select id="prestador-destino" name="prestador_destino" '
+                            f'data-atribuir-url="{url_os(banco,oid)}/atribuir" '
+                            f'data-atual="{esc(str(responsavel or ""))}">'
+                            +''.join(f'<option value="{esc(v)}"'
+                                     f'{" selected" if str(v)==str(responsavel or "") else ""}>'
+                                     f'{esc(nome)}</option>' for v,nome in opcoes_responsavel)
+                            +'</select>')
+                corpo+=select('Forma de pagamento','forma_pagamento',
                     [('', 'Selecione a forma de pagamento')]+[(z,z) for z in neg.OS_FORMAS],
                     d.get('forma_pagamento') or '')
                 corpo+=select('Urgência','urgencia',
@@ -2122,6 +2145,11 @@ class PortalPrestador:
                     corpo+=textarea('Observações gerais','observacoes',d.get('observacoes') or '')
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     corpo+='<div class="os-danger-actions">'
+                    corpo+=('<input type="file" id="importar-relatorio-yaml" name="yaml" '
+                            'accept=".yaml,.yml" hidden '
+                            f'data-importar-url="{url_os(banco, oid)}/yaml">'
+                            '<label class="btn secondary" for="importar-relatorio-yaml">'
+                            'Importar relatório YAML</label>')
                     corpo+=botao('Exportar relatório em YAML', f'{url_os(banco, oid)}/relatorio.yaml','secondary')
                     if s.get('admin'):
                         corpo+=(f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/arquivar" formnovalidate '
@@ -2181,10 +2209,6 @@ class PortalPrestador:
                              for chave,valor in bases_comp.items()]
                 corpo+=select('Base dos percentuais','base_percentuais',opcoes_base,base_atual)
                 corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
-                corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
-                corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
-                corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
-                corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div></fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
                 if oid and d['status'] in ext.ATIVAS and contatos_os:
                     selecionados_d = d.get('destinatario_sel[]') or []
@@ -2209,6 +2233,10 @@ class PortalPrestador:
                 corpo+=textarea(texto_os.rotulo(),'texto_adicional',d.get('texto_adicional',texto_os.padrao()) or '',rows=4)
                 if texto_os.ajuda():
                     corpo+=f'<p class="muted">{esc(texto_os.ajuda())}</p>'
+                corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
+                corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
+                corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
+                corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     if andamento and andamento['iniciado_em']:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
@@ -2248,7 +2276,6 @@ class PortalPrestador:
                         corpo+=f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/rateio" formnovalidate>Salvar rateio</button>'
                         corpo+='<p class="muted">Use 0,00 para remover a parcela. O total cobrado do cliente não muda; '
                         corpo+='o restante fica com o finalizador. Depois de enviado/confirmado, o repasse não pode ser alterado.</p></div>'
-                corpo+=status_bloco
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     pode_editar_fotos = (responsavel == s['pid']) or bool(s.get('admin'))
@@ -2281,7 +2308,8 @@ class PortalPrestador:
                                     +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
                                     +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
                                     +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="down" title="Mover para baixo">↓</button>'
-                                    +f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>')
+                                    +f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>'
+                                    +f'<button class="danger" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/remover" formnovalidate data-confirm="Remover esta foto da OS?">Remover foto</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
                             corpo+='</div></div>'
@@ -2289,7 +2317,6 @@ class PortalPrestador:
                     if pode_editar_fotos:
                         corpo+='<div id="anexo-encerramento"><label for="fotos-relatorio">Adicionar fotos novas (até 10, 8 MB por foto)</label>'
                         corpo+='<input type="file" id="fotos-relatorio" name="imagens_encerramento[]" multiple accept="image/jpeg,image/png,image/webp">'
-                        corpo+='<button class="secondary" id="adicionar-mais-fotos" type="button">+ Adicionar mais fotos</button>'
                         corpo+='<div id="lista-fotos-selecionadas" aria-live="polite"></div>'
                         corpo+='<button class="secondary" id="limpar-fotos" type="button" hidden>Limpar fotos selecionadas</button>'
                         corpo+='<p class="muted">A prévia e o campo Legenda da foto aparecem abaixo para cada arquivo. Ao salvar, as fotos e legendas ficam guardadas sem finalizar a OS.</p></div>'
@@ -2299,6 +2326,8 @@ class PortalPrestador:
                                 f'{" checked" if comprimir_pdf else ""}> Comprimir fotos no PDF</label>')
                         corpo+='<p class="muted">As imagens do site são sempre otimizadas; o original permanece no banco. '
                         corpo+='Desmarque para usar alta qualidade no PDF.</p>'
+                    corpo+=('<div class="os-close-head"><h3>Fechamento</h3>'
+                            '<p>Nota fiscal e confirmação da OS.</p></div>')
                     if pode_nota:
                         nota_atual=notas_fiscais[-1] if notas_fiscais else None
                         corpo+='<div id="nota-fiscal-upload" style="margin-top:14px;border-top:1px solid #444;padding-top:12px">'
@@ -2328,6 +2357,8 @@ class PortalPrestador:
                             corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
+                corpo+=cancelar_dialogo
+                corpo+=status_bloco
                 nota_acoes=('Preencha os dados para criar a OS.' if not oid else
                             f'{d["status"]} · {d["numero_os"]}')
                 if app:
@@ -2342,7 +2373,7 @@ class PortalPrestador:
                         corpo+='<span class="notice">OS arquivada: edição bloqueada. O histórico permanece preservado.</span>'
                     elif d['status'] in ext.ATIVAS:
                         if responsavel==s['pid'] or s.get('admin'):
-                            corpo+='<button type="submit" id="confirmar-situacao" name="modo_envio" value="encerrar" data-encerrar="1">Confirmar situação da OS</button>'
+                            corpo+='<button type="button" id="abrir-situacao-os">Confirmar situação da OS</button>'
                     else:
                         corpo+='<span class="notice">OS encerrada: edição bloqueada. Documentos publicados ficam no histórico.</span>'
                 if app:
@@ -2891,6 +2922,38 @@ class PortalPrestador:
                 composicao.salvar(config)
                 composicao.recalcular_tudo(banco)
 
+            def configuracoes(self,s):
+                prefs=prestador_auth.obter_preferencias(banco,s['pid'])
+                def opcao_tema(valor,rotulo,ajuda):
+                    marcado=' checked' if prefs['tema']==valor else ''
+                    return (f'<label class="pref-opcao"><input type="radio" name="tema" '
+                            f'value="{valor}"{marcado}><span><strong>{rotulo}</strong>'
+                            f'<small>{ajuda}</small></span></label>')
+                temas=(opcao_tema('auto','Auto','segue o tema do sistema')
+                       +opcao_tema('claro','Claro','interface clara')
+                       +opcao_tema('escuro','Escuro','interface escura'))
+                acentos=''
+                for chave,rotulo,cor in (
+                        ('ambar','Âmbar','#d8a24a'),('azul','Azul','#78aede'),
+                        ('verde','Verde','#7cc7a2'),('vermelho','Vermelho','#df8a8a'),
+                        ('roxo','Roxo','#b39bdf'),('ciano','Ciano','#6ec7c7'),
+                        ('laranja','Laranja','#e2a06a')):
+                    marcado=' checked' if prefs['acento']==chave else ''
+                    acentos+=(f'<label class="pref-acento" style="--cor:{cor}">'
+                              f'<input type="radio" name="acento" value="{chave}"{marcado}>'
+                              f'<span class="pref-cor"></span><em>{rotulo}</em></label>')
+                form=(f'<form method="post" action="/configuracoes" id="form-preferencias">'
+                      +self.hidden(s)
+                      +'<fieldset class="pref-grupo"><legend>Tema</legend>'
+                      +f'<div class="pref-opcoes">{temas}</div></fieldset>'
+                      +'<fieldset class="pref-grupo"><legend>Cor de acento</legend>'
+                      +f'<div class="pref-acentos">{acentos}</div></fieldset>'
+                      +'<p class="muted">Estas preferências ficam associadas à sua conta '
+                       'e valem somente para o site. O aplicativo GTK tem aparência própria.</p>'
+                      +'<noscript><button type="submit">Salvar preferências</button></noscript>'
+                      +'</form>')
+                return self.pagina('Configurações',card('Aparência do site',form),s)
+
             def portal_cliente(self,s):
                 porta_cliente=runtime_config.client_port(8765)
                 url_cliente=f'http://127.0.0.1:{porta_cliente}/'
@@ -3131,6 +3194,7 @@ class PortalPrestador:
                     if path=='/estoque/novo':return self.estoque_item(s)
                     if path=='/caixa':return self.caixa_admin(s)
                     if path=='/composicao':return self.composicao_admin(s)
+                    if path=='/configuracoes':return self.configuracoes(s)
                     if path=='/composicao/novo':return self.composicao_form(s)
                     partes_comp_get=path.strip('/').split('/')
                     if len(partes_comp_get)==3 and partes_comp_get[0]=='composicao' and partes_comp_get[2]=='editar':
@@ -3302,6 +3366,11 @@ class PortalPrestador:
                             empresa.arquivar(banco,int(partes[2]),ator=s['nome'])
                             return self.redir('/caixa')
                         raise ValueError('Lançamento inválido.')
+                    if path=='/configuracoes':
+                        prestador_auth.salvar_preferencias(
+                            banco,pid,str(d.get('tema','auto')),
+                            str(d.get('acento','ambar')))
+                        return self.redir('/configuracoes')
                     if path.startswith('/composicao/'):
                         if not s.get('admin'):
                             raise PermissionError('Somente administradores podem editar a composição.')
@@ -3715,6 +3784,10 @@ class PortalPrestador:
                             return self.send_bytes(json.dumps({'ok':True,'movido':bool(movido)}).encode(),
                                                    'application/json; charset=utf-8')
                         return self.redir(f'{url_os(banco, oid)}')
+                    if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='remover':
+                        oid=int(partes[1]);aid=int(partes[3])
+                        ext.remover_anexo(banco,oid,aid,pid,ator=f'Prestador {s["nome"]}')
+                        return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='girar':
                         oid=int(partes[1]);aid=int(partes[3])
                         with ext.db(banco) as c:
@@ -3894,6 +3967,28 @@ class PortalPrestador:
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
+                        if acao=='abrir':
+                            with ext.db(banco) as c:
+                                c.execute('BEGIN IMMEDIATE')
+                                o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                                            (oid,)).fetchone()
+                                if not o or o['status'] not in ext.ATIVAS:
+                                    raise ValueError('Esta OS não está ativa.')
+                                if 'arquivada' in o.keys() and o['arquivada']:
+                                    raise ValueError('OS arquivada: edição bloqueada.')
+                                atual=ext.responsavel_atual(c,oid)
+                                admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                                                     (pid,)).fetchone())
+                                if atual not in (None,pid) and not admin:
+                                    raise PermissionError('Somente o responsável ou administrador pode reabrir a OS.')
+                                c.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,atualizado_em=? WHERE id=?",
+                                          (ext.agora(),oid))
+                                c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
+                                             ator_inicio='',atualizado_em=? WHERE os_id=?''',
+                                          (ext.agora(),oid))
+                                c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(oid,))
+                                ext.evento(c,oid,'OS reaberta','Situação alterada para Aberta.',pid,'Prestador')
+                            return self.redir(f'{url_os(banco, oid)}')
                         if acao=='arquivar':
                             ext.arquivar_os(banco,oid,pid,ator=s['nome'],
                                             motivo=str(d.get('motivo_arquivamento','')))
@@ -4033,6 +4128,9 @@ class PortalPrestador:
                             except (TypeError,ValueError):
                                 raise ValueError('Selecione o prestador de destino.') from None
                             ext.atribuir(banco,oid,destino,ator=f'Prestador {s["nome"]}')
+                            if quer_json:
+                                return self.send_bytes(json.dumps({'ok':True}).encode(),
+                                                       'application/json; charset=utf-8')
                         elif acao=='liberar':
                             raise PermissionError('Liberação administrativa disponível apenas no desktop.')
                         elif acao=='assumir':

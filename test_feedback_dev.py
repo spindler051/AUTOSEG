@@ -138,6 +138,25 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertIsNone(inicio['iniciado_em'])
         self.assertEqual(envios, 0)
 
+    def test_situacao_fica_em_dialogo_e_os_pode_ser_reaberta(self):
+        os_id, pagina = self._criar_os()
+        self.assertIn('id="dialogo-situacao-os"', pagina)
+        self.assertIn('id="abrir-situacao-os"', pagina)
+        self.assertIn('name="situacao_popup"', pagina)
+        self.assertIn('id="prestador-destino"', pagina)
+        self.http.post(self.base + f'/os/{os_id}/iniciar', data={
+            'csrf': self.token}, timeout=10)
+        resposta = self.http.post(self.base + f'/os/{os_id}/abrir', data={
+            'csrf': self.token}, timeout=10)
+        self.assertEqual(resposta.status_code, 200)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+            inicio = c.execute('SELECT iniciado_em FROM os_atendimentos '
+                               'WHERE os_id=?', (os_id,)).fetchone()
+        self.assertEqual(os_['status'], 'Aberta')
+        self.assertIsNone(inicio['iniciado_em'])
+
     def test_abrir_os_sem_cliente_e_associar_depois(self):
         os_id, pagina = self._criar_os(cliente=False,
                                        descricao='OS sem cliente definido')
@@ -171,6 +190,7 @@ class FeedbackDevTest(unittest.TestCase):
         os_id, pagina = self._criar_os()
         self.assertIn('Fotos e legendas salvas automaticamente', pagina)
         self.assertNotIn('Salvar fotos e legendas', pagina)
+        self.assertNotIn('Adicionar mais fotos', pagina)
         imagem = io.BytesIO()
         Image.new('RGB', (8, 8), (200, 180, 80)).save(imagem, format='PNG')
         resposta = self.http.post(
@@ -185,9 +205,17 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertEqual(resposta.status_code, 200)
         self.assertTrue(resposta.json().get('ok'))
         with ext.db(self.db) as c:
+            foto = c.execute('SELECT id FROM os_anexos WHERE os_id=?',
+                             (os_id,)).fetchone()
+        self.assertIsNotNone(foto)
+        removida = self.http.post(
+            self.base + f'/os/{os_id}/anexo/{foto["id"]}/remover',
+            data={'csrf': self.token}, timeout=10)
+        self.assertEqual(removida.status_code, 200)
+        with ext.db(self.db) as c:
             total = c.execute('SELECT COUNT(*) FROM os_anexos WHERE os_id=?',
                               (os_id,)).fetchone()[0]
-        self.assertEqual(total, 1)
+        self.assertEqual(total, 0)
 
     def test_composicao_tem_editor_estruturado(self):
         pagina = self.http.get(self.base + '/composicao', timeout=10)
@@ -226,6 +254,43 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertIn('Cabo Feedback', pagina)
         self.assertNotIn('Adicionar do estoque', pagina)
         self.assertNotIn('material-estoque-selecionar', pagina)
+
+    def test_exportar_yaml_completo_e_importar_de_volta(self):
+        os_id, pagina = self._criar_os(descricao='Serviço para YAML completo')
+        cad9.salvar_detalhes(self.db, os_id, 'Diagnóstico exportado',
+                             'Execução exportada', 'Resultado exportado')
+        self.assertIn('Importar relatório YAML', pagina)
+        exportado = self.http.get(
+            self.base + f'/os/{os_id}/relatorio.yaml', timeout=10)
+        self.assertEqual(exportado.status_code, 200)
+        texto = exportado.text
+        self.assertIn('instrucoes:', texto)
+        self.assertIn('modelo:', texto)
+        self.assertIn('numero:', texto)
+        self.assertIn('Serviço para YAML completo', texto)
+        importado = self.http.post(
+            self.base + f'/os/{os_id}/yaml',
+            data={'csrf': self.token},
+            files={'yaml': ('relatorio_os.yaml', exportado.content,
+                            'application/x-yaml')},
+            timeout=10)
+        self.assertEqual(importado.status_code, 200)
+        self.assertIn('Prévia importada', importado.text)
+
+    def test_configuracoes_salvam_tema_e_acento_na_conta(self):
+        pagina = self.http.get(self.base + '/configuracoes', timeout=10)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn('Aparência do site', pagina.text)
+        self.assertIn('name="tema"', pagina.text)
+        self.assertIn('name="acento"', pagina.text)
+        salvo = self.http.post(self.base + '/configuracoes', data={
+            'csrf': self.token, 'tema': 'claro', 'acento': 'azul'}, timeout=10)
+        self.assertEqual(salvo.status_code, 200)
+        self.assertIn('data-preferencia-tema="claro"', salvo.text)
+        self.assertIn('data-acento="azul"', salvo.text)
+        import prestador_auth
+        prefs = prestador_auth.obter_preferencias(self.db, self.admin)
+        self.assertEqual(prefs, {'tema': 'claro', 'acento': 'azul'})
 
     def test_admin_transfere_os_para_outro_prestador(self):
         os_id, _html = self._criar_os()

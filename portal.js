@@ -413,7 +413,6 @@
         if (limparFotos) limparFotos.hidden = !fotos.length;
       };
       campoFotos.addEventListener('change', mostrarFotos);
-      document.getElementById('adicionar-mais-fotos')?.addEventListener('click', () => campoFotos.click());
       if (limparFotos) limparFotos.addEventListener('click', () => {
         campoFotos.value = ''; chavesFotos.clear(); legendasFotos.clear(); mostrarFotos();
       });
@@ -1175,6 +1174,99 @@
     }, true);
   }
 
+  // Situação da OS: o bloco de status saiu do formulário e vive neste diálogo.
+  const dialogoSituacao = document.getElementById('dialogo-situacao-os');
+  if (dialogoSituacao) {
+    const formOS = document.getElementById('form-os');
+    const urlSalvar = formOS?.dataset.salvarUrl || formOS?.action || '';
+    const urlBase = dialogoSituacao.dataset.osUrl || '';
+    const abrirSituacao = document.getElementById('abrir-situacao-os');
+    const aplicarSituacao = document.getElementById('aplicar-situacao');
+    const acaoStatus = document.getElementById('acao-status-os');
+    const mostrarSituacao = () => {
+      if (formOS) formOS.action = urlSalvar;
+      if (acaoStatus) acaoStatus.value = '';
+      if (typeof dialogoSituacao.showModal === 'function') {
+        if (!dialogoSituacao.open) dialogoSituacao.showModal();
+      } else {
+        dialogoSituacao.setAttribute('open', '');
+      }
+    };
+    const fecharSituacao = () => {
+      if (typeof dialogoSituacao.close === 'function') dialogoSituacao.close();
+      else dialogoSituacao.removeAttribute('open');
+    };
+    abrirSituacao?.addEventListener('click', mostrarSituacao);
+    dialogoSituacao.querySelector('[data-fechar-situacao]')?.addEventListener('click', fecharSituacao);
+    dialogoSituacao.addEventListener('click', evento => {
+      if (evento.target === dialogoSituacao) fecharSituacao();
+    });
+    aplicarSituacao?.addEventListener('click', evento => {
+      const escolhido = dialogoSituacao.querySelector('input[name="situacao_popup"]:checked');
+      if (!escolhido) {
+        evento.preventDefault();
+        mostrarAvisoGlobal('Escolha a situação da OS.');
+        return;
+      }
+      const situacao = escolhido.value;
+      if (situacao === 'Cancelada') {
+        evento.preventDefault();
+        fecharSituacao();
+        document.getElementById('abrir-cancelar-os')?.click();
+        return;
+      }
+      if (situacao === 'Concluída') {
+        const executado = formOS?.querySelector('[name="v9_execucao"]');
+        const relato = formOS?.querySelector('[name="relatorio_tecnico"]');
+        if (!(executado && executado.value.trim())
+            && !(relato && relato.value.trim())) {
+          evento.preventDefault();
+          mostrarAvisoGlobal('Preencha Serviço executado antes de concluir.');
+          fecharSituacao();
+          document.querySelector('.os-tab[aria-controls="os-panel-2"]')?.click();
+          executado?.focus();
+          return;
+        }
+      }
+      if (situacao === 'Pendente' || situacao === 'Concluída') {
+        if (formOS) formOS.action = urlSalvar;
+        if (acaoStatus) acaoStatus.value = situacao;
+        return;
+      }
+      if (acaoStatus) acaoStatus.value = '';
+      const caminho = {'Aberta': '/abrir', 'Em rota': '/em-rota', 'Iniciada': '/iniciar'}[situacao];
+      if (formOS && caminho) formOS.action = urlBase + caminho;
+    });
+  }
+  // Responsável (admin): trocar o select já transfere, sem botão separado.
+  const selectResponsavel = document.getElementById('prestador-destino');
+  if (selectResponsavel) {
+    selectResponsavel.addEventListener('change', async () => {
+      if (!selectResponsavel.value || selectResponsavel.value === selectResponsavel.dataset.atual) return;
+      const csrf = document.querySelector('#form-os input[name="csrf"]')?.value || '';
+      const dados = new URLSearchParams({
+        csrf,
+        prestador_destino: selectResponsavel.value
+      });
+      const anterior = selectResponsavel.dataset.atual;
+      selectResponsavel.disabled = true;
+      try {
+        const resposta = await fetch(selectResponsavel.dataset.atribuirUrl, {
+          method: 'POST', body: dados, credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        });
+        if (!resposta.ok) throw new Error('Não foi possível transferir a OS.');
+        window.location.reload();
+      } catch (erro) {
+        selectResponsavel.disabled = false;
+        selectResponsavel.value = anterior || '';
+        mostrarAvisoGlobal(erro.message || 'Não foi possível transferir a OS.');
+      }
+    });
+  }
   // Rascunho automático: cada alteração é preservada sem botão de salvar.
   const formAuto = document.getElementById('form-os');
   const statusAuto = document.getElementById('rascunho-auto-status');
@@ -1383,7 +1475,7 @@
           ['identificação', 'Identificação'],
           ['materiais', 'Materiais'],
           ['situação', 'Situação e relatório'],
-          ['fotos', 'Fotos e legendas'],
+          ['fotos', 'Mídias'],
         ];
         const nome = (nomesCurtos.find(([chave]) =>
           nomeCompleto.toLowerCase().includes(chave)) || [null, nomeCompleto])[1];
@@ -1450,21 +1542,6 @@
         else if (!paineis[0].contains(modelo)) paineis[0].prepend(modelo);
       }
 
-      // O fechamento pertence à aba de situação, não à de fotos.
-      const painelSituacao = paineis.find(painel =>
-        (painel.querySelector('legend')?.textContent || '').toLowerCase().includes('situação'));
-      const notaFiscal = document.getElementById('nota-fiscal-upload');
-      if (painelSituacao && notaFiscal) {
-        const titulo = document.createElement('div');
-        titulo.className = 'os-close-head';
-        const h3 = document.createElement('h3');
-        h3.textContent = 'Fechamento';
-        const texto = document.createElement('p');
-        texto.textContent = 'Nota fiscal e confirmação da OS.';
-        titulo.append(h3, texto);
-        painelSituacao.append(titulo, notaFiscal);
-      }
-
       formApp.addEventListener('submit', evento => {
         const botao = evento.submitter;
         if (botao && botao.hasAttribute('formnovalidate')) return;
@@ -1494,6 +1571,15 @@
   if (ordenarOS) {
     ordenarOS.addEventListener('change', () => ordenarOS.form?.submit());
   }
+  document.querySelectorAll('input[data-importar-url]').forEach(campoYaml => {
+    campoYaml.addEventListener('change', () => {
+      const arquivo = campoYaml.files && campoYaml.files[0];
+      const form = campoYaml.closest('form');
+      if (!arquivo || !form) return;
+      form.action = campoYaml.dataset.importarUrl;
+      form.submit();
+    });
+  });
   document.querySelectorAll('input[data-auto-upload-nf]').forEach(campoNf => {
     campoNf.addEventListener('change', async () => {
       const arquivo = campoNf.files && campoNf.files[0];
@@ -1888,47 +1974,40 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       }
     });
   });
-  // Tema e cor de acento: preferência local, sem alterar o servidor.
+  // Preferências de aparência: salvas na conta, aplicadas no servidor.
   (() => {
+    const form = document.getElementById('form-preferencias');
+    if (!form) return;
     const raiz = document.documentElement;
-    const botoesTema = Array.from(document.querySelectorAll('[data-tema]'));
-    const botoesAcento = Array.from(document.querySelectorAll('[data-acento]'));
-    if (!botoesTema.length && !botoesAcento.length) return;
     const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-    const ler = (chave, padrao) => {
-      try { return localStorage.getItem(chave) || padrao; } catch (_erro) { return padrao; }
-    };
-    const gravar = (chave, valor) => {
-      try { localStorage.setItem(chave, valor); } catch (_erro) {}
-    };
     const aplicar = () => {
-      const tema = ler('autoseg:tema', 'auto');
-      const acento = ler('autoseg:acento', 'ambar');
+      const tema = form.querySelector('input[name="tema"]:checked')?.value || 'auto';
+      const acento = form.querySelector('input[name="acento"]:checked')?.value || 'ambar';
       const claro = tema === 'claro' || (tema === 'auto' && media && media.matches);
       raiz.dataset.tema = claro ? 'claro' : 'escuro';
+      raiz.dataset.preferenciaTema = tema;
       raiz.dataset.acento = acento;
-      botoesTema.forEach(botao => {
-        botao.classList.toggle('ativo', botao.dataset.tema === tema);
-      });
-      botoesAcento.forEach(botao => {
-        botao.classList.toggle('ativo', botao.dataset.acento === acento);
+      form.querySelectorAll('.accent-botoes label').forEach(label => {
+        label.classList.toggle('ativo',
+          label.querySelector('input')?.value === acento);
       });
     };
-    botoesTema.forEach(botao => botao.addEventListener('click', () => {
-      gravar('autoseg:tema', botao.dataset.tema || 'auto');
+    form.addEventListener('change', evento => {
+      if (!evento.target.matches('input[name="tema"],input[name="acento"]')) return;
       aplicar();
-    }));
-    botoesAcento.forEach(botao => botao.addEventListener('click', () => {
-      gravar('autoseg:acento', botao.dataset.acento || 'ambar');
-      aplicar();
-    }));
-    if (media && media.addEventListener) {
-      media.addEventListener('change', () => {
-        if (ler('autoseg:tema', 'auto') === 'auto') aplicar();
-      });
-    }
+      form.submit();
+    });
     aplicar();
   })();
+  // Filtros aplicam ao mudar; nunca exigem um botão "Filtrar".
+  document.querySelectorAll('form[data-auto-submit]').forEach(form => {
+    form.querySelectorAll('select,input[type="search"]').forEach(campo => {
+      campo.addEventListener('change', () => {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.submit();
+      });
+    });
+  });
   const filtroClienteRapida = document.getElementById('filtro-cliente-rapida');
   const selectClienteRapida = filtroClienteRapida
     ? filtroClienteRapida.closest('form')?.querySelector('select[name="cliente_id"]')

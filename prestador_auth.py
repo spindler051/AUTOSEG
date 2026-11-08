@@ -43,6 +43,50 @@ def instalar(banco) -> None:
         ''')
 
 
+TEMAS = ('auto', 'claro', 'escuro')
+ACENTOS = ('ambar', 'azul', 'verde', 'vermelho', 'roxo', 'ciano', 'laranja')
+
+
+def _instalar_preferencias(banco) -> None:
+    with ext.db(banco) as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS portal_preferencias(
+            prestador_id INTEGER PRIMARY KEY,
+            tema TEXT NOT NULL DEFAULT 'auto',
+            acento TEXT NOT NULL DEFAULT 'ambar',
+            atualizado_em TEXT NOT NULL
+        )""")
+
+
+def obter_preferencias(banco, prestador_id) -> dict:
+    _instalar_preferencias(banco)
+    with ext.db(banco) as c:
+        linha = c.execute(
+            'SELECT tema,acento FROM portal_preferencias WHERE prestador_id=?',
+            (int(prestador_id),)).fetchone()
+    if not linha:
+        return {'tema': 'auto', 'acento': 'ambar'}
+    return {
+        'tema': linha['tema'] if linha['tema'] in TEMAS else 'auto',
+        'acento': linha['acento'] if linha['acento'] in ACENTOS else 'ambar',
+    }
+
+
+def salvar_preferencias(banco, prestador_id, tema, acento) -> dict:
+    tema = str(tema or 'auto').strip()
+    acento = str(acento or 'ambar').strip()
+    if tema not in TEMAS:
+        tema = 'auto'
+    if acento not in ACENTOS:
+        acento = 'ambar'
+    _instalar_preferencias(banco)
+    with ext.db(banco) as c:
+        c.execute("""INSERT INTO portal_preferencias(prestador_id,tema,acento,atualizado_em)
+            VALUES(?,?,?,?) ON CONFLICT(prestador_id) DO UPDATE SET
+            tema=excluded.tema,acento=excluded.acento,atualizado_em=excluded.atualizado_em""",
+            (int(prestador_id), tema, acento, ext.agora()))
+    return {'tema': tema, 'acento': acento}
+
+
 def _agora() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

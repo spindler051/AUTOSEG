@@ -32,7 +32,10 @@ Este é o ponto de retomada. O índice completo fica em
   e-mail, retorno de Iniciada para Pendente, fotos com salvamento automático,
   ordem das abas, tema claro/escuro com sete acentos, composição estruturada e
   ordens recentes no Início do GTK. O campo Material pesquisa e autocompleta o
-  estoque, sem o segundo botão “Adicionar do estoque”.
+  estoque, sem o segundo botão “Adicionar do estoque”. A situação da OS agora
+  é escolhida em popup, e o responsável é transferido pelo select de admin na
+  Identificação. A aba Mídias concentra fotos, Fechamento, nota fiscal e
+  confirmação; tema e acento ficam em Configurações, salvos na conta.
 
 ## Estado da numeração
 
@@ -44,7 +47,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **324 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **327 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.

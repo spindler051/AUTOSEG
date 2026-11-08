@@ -28,7 +28,7 @@ def main():
             assert st==200
             csrf=token(html)
             st,html,_=navegar(opener,base,'/os/1')
-            assert st==200 and b'Iniciar OS' in html and b'Solicita' in html
+            assert st==200 and b'Confirmar situa' in html and b'Solicita' in html
             # Iniciar já assume automaticamente, sem etapa de assunção separada.
             st,_,_=navegar(opener,base,'/os/1/iniciar',{'csrf':csrf})
             assert st==200

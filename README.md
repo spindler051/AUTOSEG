@@ -16,7 +16,7 @@ Versão de desenvolvimento: `9.6.0-dev.62` (`develop`).
 - GTK4 desktop application with provider login (local or server), identity and logout.
 - Two local web portals.
 - Local-first SQLite storage.
-- Suíte não visual: **324 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **327 testes, 0 falhas, 1 skip**.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a

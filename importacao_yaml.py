@@ -4,6 +4,7 @@ Nunca grava no SQLite: a tela normal exige revisão e confirmação humana.
 """
 import re
 from collections.abc import Mapping
+from pathlib import Path
 
 import cadastros_v9 as cad
 import prestadores_ext as ext
@@ -229,23 +230,26 @@ def _composicao_os(blocos, nivel='Componente'):
 def relatorio(nome, conteudo, numero_os=None):
     """Modelo reutilizável: nunca identifica nem muda a OS aberta.
 
-    'numero' é legado e ignorado, para compatibilidade com modelos antigos.
-    Somente os campos presentes no YAML são preenchidos no formulário.
+    Aceita tanto a saída limpa (``versao`` + ``os``) quanto o modelo oficial
+    completo com instruções, exemplo e a seção ``modelo.os`` preenchida.
     """
     d=carregar(nome,conteudo)
-    # Modelo oficial: instruções + modelo.os + exemplo.
-    # A saída preenchida contém apenas `versao` e `os`.
     if 'modelo' in d and 'os' not in d:
         if set(d)-{'versao','instrucoes','modelo','exemplo'}:
             raise ValueError('O modelo oficial contém seções desconhecidas.')
         if not isinstance(d.get('modelo'), Mapping) or not isinstance(d['modelo'].get('os'), Mapping):
             raise ValueError('O modelo oficial deve conter modelo.os.')
-        # Modelo em branco: nada a importar até a pessoa preencher a seção os.
+        entrada=d['modelo'].get('os') or {}
+    else:
+        if set(d)-{'versao','os'} or not isinstance(d.get('os'), Mapping):
+            raise ValueError('Utilize a seção os do modelo oficial. A saída não deve conter instruções nem exemplo.')
+        entrada=d['os']
+    if not entrada:
         return {}
-    if set(d)-{'versao','os'} or not isinstance(d.get('os'), Mapping):
-        raise ValueError('Utilize a seção os do modelo oficial. A saída não deve conter instruções nem exemplo.')
-    entrada=d['os']
-    if set(entrada)-{'numero','diagnostico','execucao','resultado','relatorio_tecnico','materiais','composicao'}:
+    if not any(str(entrada.get(k, '')).strip() for k in CAMPOS_RELATORIO) \
+            and not entrada.get('materiais'):
+        return {}
+    if set(entrada)-{'numero','cliente','cliente_id','descricao','tecnico','forma_pagamento','urgencia','valor_mao_obra','valor_materiais','valor_materiais_manual','valor_total','valor_total_override','observacoes','diagnostico','execucao','resultado','relatorio_tecnico','materiais','composicao'}:
         raise ValueError('Campo de OS desconhecido no YAML.')
     resultado={}
     for k in CAMPOS_RELATORIO:
@@ -266,10 +270,15 @@ def relatorio(nome, conteudo, numero_os=None):
 
 
 def relatorio_os_yaml(banco, os_id):
-    """Exporta o relatório de uma OS no formato aceito por ``relatorio``."""
+    """Exporta o modelo completo, com instruções e dados atuais da OS."""
     import yaml
     with ext.db(banco) as c:
-        o=c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        o=c.execute('''SELECT o.numero_os,o.cliente_id,o.descricao,o.tecnico,
+                             o.forma_pagamento,o.urgencia,o.valor_mao_obra,
+                             o.valor_materiais,o.valor_total,o.observacoes,
+                             c.nome cliente
+                      FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id
+                      WHERE o.id=?''',(os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
         detalhes=None
@@ -286,15 +295,23 @@ def relatorio_os_yaml(banco, os_id):
                                    (os_id,)).fetchone()
         materiais=c.execute('SELECT item,quantidade,unidade,valor_unitario FROM materiais_os '
                             'WHERE os_id=? ORDER BY id',(os_id,)).fetchall()
-    dados={'versao':1,'os':{}}
+    dados={'numero':str(o['numero_os'] or ''),
+           'cliente_id':int(o['cliente_id']),
+           'cliente':str(o['cliente'] or ''),
+           'descricao':str(o['descricao'] or ''),
+           'tecnico':str(o['tecnico'] or ''),
+           'forma_pagamento':str(o['forma_pagamento'] or ''),
+           'urgencia':str(o['urgencia'] or ''),
+           'valor_mao_obra':float(o['valor_mao_obra'] or 0),
+           'valor_materiais':float(o['valor_materiais'] or 0),
+           'valor_total':float(o['valor_total'] or 0),
+           'observacoes':str(o['observacoes'] or '')}
     for chave,coluna in (('diagnostico','diagnostico'),('execucao','execucao'),('resultado','resultado')):
         valor=(detalhes[coluna] if detalhes else '') or ''
-        if str(valor).strip():
-            dados['os'][chave]=str(valor).strip()
+        dados[chave]=str(valor).strip()
     relato=((encerramento['relatorio'] if encerramento else '') or
             (andamento['rascunho'] if andamento else '') or '')
-    if str(relato).strip():
-        dados['os']['relatorio_tecnico']=str(relato).strip()
+    dados['relatorio_tecnico']=str(relato).strip()
     itens=[]
     for m in materiais:
         if m['quantidade'] is None:
@@ -304,9 +321,12 @@ def relatorio_os_yaml(banco, os_id):
         if str(m['unidade'] or '').strip():
             item['unidade']=str(m['unidade']).strip()
         itens.append(item)
-    if itens:
-        dados['os']['materiais']=itens
-    return yaml.safe_dump(dados,allow_unicode=True,sort_keys=False)
+    dados['materiais']=itens
+    modelo_path=Path(__file__).with_name('modelo_relatorio_os.yaml')
+    config=yaml.safe_load(modelo_path.read_text(encoding='utf-8'))
+    config.setdefault('modelo',{})
+    config['modelo']['os']=dados
+    return yaml.safe_dump(config,allow_unicode=True,sort_keys=False)
 
 
 def _texto_orcamento(entrada, chave, limite):

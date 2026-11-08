@@ -492,8 +492,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertNotIn('Adicionar fotos e legendas sem assumir a OS', html)
         self.assertNotIn('sem assumir', html)
         self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
-        self.assertIn('name="modo_envio" value="encerrar"', html)
-        self.assertIn('Assumir OS', html)
+        self.assertIn('id="abrir-situacao-os"', html)
+        self.assertIn('Responsável (admin)', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         buffer = io.BytesIO()
         Image.new('RGB', (4, 4), 'red').save(buffer, 'PNG')
@@ -1010,8 +1010,9 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente, base, f'/os/{oid}')
         self.assertRegex(html, r'<select id="c_forma_pagamento" name="forma_pagamento"[^>]*>\s*'
                                r'<option value=""[^>]*>Selecione a forma de pagamento</option>')
-        self.assertRegex(html, r'<select id="c_acao_status" name="acao_status"[^>]*>\s*'
-                               r'<option value=""[^>]*>Selecione a situação</option>')
+        self.assertIn('id="acao-status-os"', html)
+        self.assertIn('name="situacao_popup"', html)
+        self.assertIn('Confirmar situação da OS', html)
         self.assertIn('name="custo_materiais"', html)
         self.assertIn('Custo real dos materiais', html)
         vazio = dict(dados, forma_pagamento='', acao_status='salvar')
@@ -1097,9 +1098,11 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente = self._login(base, 'admin.assume@exemplo.com.br')
         _, html = req(cliente, base, f'/os/{oid}')
-        self.assertIn('Assumir OS', html)
+        self.assertIn('Responsável (admin)', html)
+        self.assertIn(f'data-atribuir-url="/os/{self._numero(oid)}/atribuir"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
-        status, _ = req(cliente, base, f'/os/{oid}/assumir', {'csrf': token})
+        status, _ = req(cliente, base, f'/os/{oid}/atribuir',
+                        {'csrf': token, 'prestador_destino': str(b)})
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             self.assertEqual(ext.responsavel_atual(c, oid), b)

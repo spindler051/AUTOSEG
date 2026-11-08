@@ -60,12 +60,22 @@ Abas do editor:
 | Identificação | modelo, cliente, pagamento, valores, descrição e notas |
 | Situação e relatório | diagnóstico, execução, testes, relato interno, situação, destinatários, rateio e fechamento |
 | Materiais | linhas de material, autocomplete do estoque e total previsto |
-| Fotos e legendas | fotos existentes, novas fotos e legendas com salvamento automático |
+| Mídias | fotos existentes, novas fotos, legendas com salvamento automático, Fechamento e nota fiscal |
 
 O fechamento (NF ou “não precisa de nota fiscal”) fica em Situação, junto da
 conclusão. Para quem não é responsável, ações de salvar/concluir ficam ocultas
 e o formulário de colaboração de fotos permanece. Cancelar exige apenas o
 motivo e o número da OS; deixar pendente não exige destinatários.
+
+A situação não fica aberta no formulário: **Confirmar situação da OS** abre um
+popup com Aberta, Em rota, Iniciada, Pendente, Concluída e Cancelada. O botão
+de confirmação fica visível em todas as abas; Fechamento e nota fiscal ficam
+em Mídias. O admin tem um select de responsável na Identificação; escolher
+outro prestador já transfere a OS, sem botão “Atribuir OS”.
+
+A aba Identificação tem **Importar relatório YAML** à esquerda de **Exportar
+relatório em YAML**. A exportação devolve o modelo oficial completo, com
+instruções, exemplo e os dados atuais da OS preenchidos.
 
 A barra de ações é fixa no rodapé: **Salvar rascunho** como secundária e
 **Confirmar situação da OS** como única primária.
@@ -77,11 +87,23 @@ A abertura rápida tem uma única tela: busca de cliente, cliente opcional
 existir uma OS do mesmo cliente nos últimos dois minutos, o portal mostra um
 aviso antes de criar outra.
 
-### Tema
+### Configurações
 
-O rodapé da barra lateral oferece **Auto**, **Claro** e **Escuro**, com o modo
+A página **Configurações** guarda **Auto**, **Claro** e **Escuro**, com o modo
 automático seguindo o tema do sistema, e sete cores de acento. A preferência
-fica no navegador e não altera o servidor.
+fica associada à conta do prestador e vale somente para o site; o GTK tem
+aparência própria. Os botões Feedback e Sair ficam menores, lado a lado, no
+rodapé da barra lateral.
+
+### Regras de interface
+
+- Filtros e seletores aplicam ao mudar; não criar botão **Filtrar**.
+- Não duplicar uma ação: se o select de responsável já transfere, não criar
+  botão **Atribuir OS**.
+- Diálogos devem reutilizar o padrão visual do feedback, com título, opções
+  claras e ações no rodapé.
+- Ações destrutivas ficam identificadas em vermelho e pedem confirmação.
+- Tema e acento pertencem a Configurações, não à navegação principal.
 
 ### Composição de valores
 

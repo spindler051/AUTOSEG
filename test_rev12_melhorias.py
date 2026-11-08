@@ -427,7 +427,7 @@ class MelhoriasRev12(unittest.TestCase):
         self.assertNotIn(f'formaction="/os/{oid}/rascunho/salvar"', html)
         pos_fotos = html.find('name="imagens_encerramento[]"')
         pos_nota = html.find('name="nota_fiscal"')
-        pos_confirmar = html.find('id="confirmar-situacao"')
+        pos_confirmar = html.find('id="abrir-situacao-os"')
         self.assertGreater(pos_fotos, -1)
         self.assertGreater(pos_nota, pos_fotos)
         self.assertGreater(pos_confirmar, pos_nota)

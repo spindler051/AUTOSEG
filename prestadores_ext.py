@@ -499,6 +499,36 @@ def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
         return True
 
 
+def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+    """Remove uma foto da OS ativa, com permissão e evento de auditoria."""
+    with db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o:raise ValueError('OS não existe.')
+        if o['status'] not in ATIVAS:
+            raise ValueError('OS encerrada: não é permitido remover fotos.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone()) if pid is not None else False
+        if pid is not None and responsavel_atual(c,os_id)!=pid and not admin:
+            raise PermissionError('Somente o responsável ou administrador remove fotos.')
+        foto=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE id=? AND os_id=?',
+                       (anexo_id,os_id)).fetchone()
+        if not foto:raise ValueError('Foto não encontrada.')
+        c.execute('DELETE FROM v9_anexos_visiveis WHERE anexo_id=?',(anexo_id,))
+        c.execute('DELETE FROM os_anexos WHERE id=? AND os_id=?',(anexo_id,os_id))
+        nome_ator=ator
+        if pid is not None:
+            p=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()
+            if p:nome_ator=p['nome']
+        evento(c,os_id,'Foto removida',Path(foto['nome_original']).name[:150],pid,nome_ator)
+    try:
+        Path(foto['caminho']).unlink(missing_ok=True)
+    except OSError:
+        pass
+    return True
+
+
 def thumb_imagem(caminho):
     """Gera/retorna um JPEG pequeno para a listagem do portal."""
     from PIL import Image, ImageOps

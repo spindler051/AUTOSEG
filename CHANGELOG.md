@@ -7,14 +7,24 @@
 - **Cancelamento:** botão próprio, só com motivo e número da OS; não exige relatório técnico nem os demais campos.
 - **Pendente:** não pede e-mail, não envia relatório e pode voltar de Iniciada para Pendente, encerrando o início do atendimento.
 - **Relato técnico:** deixou de ser obrigatório para confirmar situação; para concluir basta o Serviço executado.
-- **Responsável:** quem cria a OS já fica responsável; admin pode transferir para outro prestador sem assumir.
+- **Responsável:** quem cria a OS já fica responsável; admin vê um select de responsável na Identificação e a troca já transfere, sem botão separado.
+- **Situação da OS:** o bloco fixo saiu do formulário; “Confirmar situação da OS” abre um popup com Aberta, Em rota, Iniciada, Pendente, Concluída e Cancelada.
+- **Abas da OS:** “Fotos e legendas” virou **Mídias**; Fechamento, nota fiscal e confirmação ficam nessa aba, e “Aplicar composição padrão” foi para Situação e relatório.
+- **Fotos:** removido “+ Adicionar mais fotos”; cada foto existente ganhou **Remover foto** ao lado de Girar 90°.
+- **Tema claro:** fundo neutro, botões cinza em vez de pretos e textos secundários mais legíveis.
+- **Configurações:** nova página com tema e cor de acento salvos na conta, válidos só para o site; os controles saíram da barra lateral e Feedback/Sair ficaram menores, lado a lado.
+- **Filtros:** selecionar uma opção já aplica o filtro; o botão “Filtrar” foi removido e a regra ficou registrada na documentação.
+- **Popup de situação:** alinhado ao padrão visual dos demais diálogos.
+- **YAML da OS:** botão **Importar relatório YAML** à esquerda de **Exportar relatório em YAML**; a exportação leva o modelo completo, com instruções, exemplo e os dados atuais da OS.
+- **Total previsto:** a linha e a composição do valor acompanham “Aplicar composição padrão” na aba Situação e relatório.
+- **Confirmação da OS:** o botão **Confirmar situação da OS** volta a ficar visível em todas as abas, mantendo Fechamento e nota fiscal em Mídias.
 - **Fotos e legendas:** salvam automaticamente ao digitar ou selecionar arquivos; o botão “Salvar fotos e legendas” foi removido.
 - **Abas da OS:** Identificação, Situação e relatório, Materiais, Fotos e legendas; ícones alinhados.
 - **Materiais:** o campo Material pesquisa e autocompleta o estoque; ao escolher um item, quantidade, unidade e valor são preenchidos.
 - **Tema:** modo automático pelo tema do host, claro/escuro e sete cores de acento.
 - **Composição de valores:** editor estruturado por componente no lugar do YAML seco; YAML permanece em opção avançada.
 - **Início do GTK:** ordens recentes com abertura direta, alinhado ao site.
-- **Testes:** 324 testes OK, 1 skip; scripts de aceitação passando.
+- **Testes:** 327 testes OK, 1 skip; scripts de aceitação passando.
 
 ## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
 

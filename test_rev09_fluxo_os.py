@@ -143,7 +143,7 @@ def main():
 
             # 1. Assumir sem iniciar.
             status, body = req(staff, base, f'/os/{os_id}')
-            check('botão ASSUMIR OS visível', status == 200 and 'Assumir OS' in body)
+            check('diálogo de situação visível', status == 200 and 'dialogo-situacao-os' in body)
             check('salvamento automático visível', 'Salvamento automático ativo' in body)
             check('fluxo antigo removido', 'INICIAR OS — ASSUMIR AUTOMATICAMENTE' not in body)
             status, body = req(staff, base, f'/os/{os_id}/assumir', {'csrf': token})
