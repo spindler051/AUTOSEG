@@ -1,6 +1,15 @@
 # AUTOSEG — Changelog
 
-## 9.6.0-dev.69 — separação real de pacotes — 2026-11-08 — develop
+## 9.6.0-dev.70 — raiz limpa e dados separados — 2026-11-08 — develop
+
+- **Raiz:** não há mais módulos Python nem launchers soltos.
+- **Comando único:** `./autoseg {dev|app|server|site|stop|check|test}`.
+- **Launchers:** `.command`/`.sh` movidos para `scripts/autoseg/`.
+- **Dados locais:** bancos, anexos, logs, rascunhos, notas, relatórios, túneis e configuração local movidos para `data/` (ignorado pelo Git).
+- **DEV:** servidor e site usam `data/dados_teste/autoseg_teste.db`.
+- **Testes:** 335 testes OK, 1 skip.
+
+## 9.6.0-dev.70 — separação real de pacotes — 2026-11-08 — develop
 
 - **Código organizado:** módulos genéricos foram para `officina/core`, `officina/application`, `officina/integration`, `officina/repositories` e `officina/telemetry`.
 - **AUTOSEG:** portais, GTK, API, auth, feedback, fiscal, e-mail, túneis e integrações foram para `flavors/autoseg/modules`.
@@ -10,7 +19,7 @@
 - **Raiz:** não há mais módulos Python soltos.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.69 — início da organização do monorepo — 2026-11-08 — develop
+## 9.6.0-dev.70 — início da organização do monorepo — 2026-11-08 — develop
 
 - **Novo layout:** criados `officina/` e `flavors/autoseg/` com documentação de limites.
 - **AUTOSEG:** marca, configurações padrão e modelos YAML movidos para `flavors/autoseg/`.

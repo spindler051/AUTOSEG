@@ -1,6 +1,8 @@
 #!/bin/zsh
 # Restaura as credenciais fictícias do ambiente DEV (nunca usar em produção).
-cd "$(dirname "$0")" || exit 1
+cd "$(dirname "$0")/../.."
+export AUTOSEG_BASE="$PWD/data"
+export GESTAO_BANCO="$PWD/data/dados_teste/autoseg_teste.db" || exit 1
 if [[ ! -x .venv/bin/python ]]; then
     echo "Ambiente .venv ausente."
     exit 1

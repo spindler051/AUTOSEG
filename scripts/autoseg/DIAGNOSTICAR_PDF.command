@@ -1,6 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 echo 'AUTOSEG - Diagnóstico PDF (não modifica banco nem OS)'
 echo ''
 if [[ ! -x .venv/bin/python ]]; then
@@ -33,7 +33,7 @@ except Exception:
     traceback.print_exc()
 PY
 echo ''
-if [[ -f logs/portal_prestador.log ]]; then
+if [[ -f data/logs/portal_prestador.log ]]; then
     echo 'Últimos registros do portal (pode conter nomes de clientes, revise antes de enviar):'
-    tail -n 15 logs/portal_prestador.log
+    tail -n 15 data/logs/portal_prestador.log
 fi

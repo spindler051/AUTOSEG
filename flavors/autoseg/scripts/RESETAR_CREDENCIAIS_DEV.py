@@ -16,7 +16,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parents[3]
+BASE = Path(__import__('os').environ.get('AUTOSEG_BASE') or __import__('officina.core.runtime_config', fromlist=['base_dir']).base_dir())
 ARQUIVO = BASE / 'dados_teste' / 'CREDENCIAIS_FICTICIAS_DEV.txt'
 BANCO = BASE / 'dados_teste' / 'autoseg_teste.db'
 

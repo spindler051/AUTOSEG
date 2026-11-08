@@ -1,10 +1,10 @@
 #!/bin/zsh
 # Servidor de dados do AUTOSEG DEV. Abra este terminal antes do app.
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 export AUTOSEG_DEV=1
-export AUTOSEG_BASE="$PWD"
-export GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db"
+export AUTOSEG_BASE="$PWD/data"
+export GESTAO_BANCO="$PWD/data/dados_teste/autoseg_teste.db"
 export AUTOSEG_WEB_ACCESS=0
 mkdir -p "$PWD/dados_teste"
 PY="${PYTHON:-python3}"

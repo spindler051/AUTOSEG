@@ -2,7 +2,7 @@
 # Abre a interface GTK4/libadwaita no macOS.
 # Usa o Python que tiver PyGObject/GTK4 instalado (MacPorts ou Homebrew).
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 export AUTOSEG_BASE="${AUTOSEG_BASE:-$HOME/gestaoservicos_MAIN}"
 mkdir -p "$AUTOSEG_BASE"

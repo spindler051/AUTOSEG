@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-08
-**Versão:** `9.6.0-dev.69`
+**Versão:** `9.6.0-dev.70`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -92,10 +92,10 @@ Este é o ponto de retomada. O índice completo fica em
 ## Comandos úteis
 
 ```bash
-./INICIAR_AUTOSEG_DEV.command      # app DEV
-./INICIAR_AUTOSEG_SEM_WEB.command  # local-only, sem portas
-./INICIAR_SERVIDOR_API.command     # servidor headless
-./INICIAR_SITE.command             # GUI do site
+./autoseg dev     # app DEV
+./autoseg app-local  # local-only, sem portas
+./autoseg api     # servidor headless
+./autoseg site    # GUI do site
 ```
 
 ```bash

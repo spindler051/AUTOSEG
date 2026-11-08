@@ -10,7 +10,7 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.69` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.70` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
@@ -49,6 +49,8 @@ The monorepo is transitioning from a flat prototype to clear layers:
 - `flavors/autoseg/` — AUTOSEG branding, configuration and templates.
 - `officina/application/` — generic application services.
 - `flavors/autoseg/modules/` — AUTOSEG GTK, portals, API, auth and fiscal modules.
+- `scripts/autoseg/` — launchers and automation.
+- `data/` — local DEV data (ignored by Git).
 - `tests/` — test suite.
 
 See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md) for the target tree
@@ -66,59 +68,59 @@ licenses. The Workaholic subproject has its own
 macOS desktop (local, sem servidor):
 
 ```bash
-./INICIAR_AUTOSEG.command
+./autoseg app
 ```
 
 Desktop com os portais locais ligados (comportamento antigo):
 
 ```bash
-./INICIAR_AUTOSEG_COM_WEB.command
+./autoseg app-web
 ```
 
 Linux/GTK development:
 
 ```bash
-./INICIAR_AUTOSEG_GTK.sh
+./autoseg app
 ```
 
 DEV em modo servidor (abra o servidor primeiro):
 
 ```bash
-./INICIAR_SERVIDOR_DEV.command   # terminal 1
-./INICIAR_AUTOSEG_DEV.command    # terminal 2
+./autoseg server   # terminal 1
+./autoseg dev    # terminal 2
 ```
 
 O app DEV abre com servidor selecionado por padrão. A tela de login também oferece o modo Local; o banco local só é aberto se você escolher essa opção.
 No banco fictício de DEV, use as credenciais de
-`dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`. Se o servidor estiver parado, o app
+`data/dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt`. Se o servidor estiver parado, o app
 mostra a tela de login com aviso de servidor indisponível.
 
 Local-only GTK (no web server and no tunnel):
 
 ```bash
-./INICIAR_AUTOSEG_SEM_WEB.command
+./autoseg app-local
 ```
 
 Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
 
 ```bash
-./INICIAR_SERVIDOR_API.command
+./autoseg api
 ```
 
 GUI do site no terminal:
 
 ```bash
-./INICIAR_SITE.command       # produção: 8765/8766
-./INICIAR_SITE_DEV.command   # DEV: cliente 8865, prestador 8866
+./autoseg site-prod       # produção: 8765/8766
+./autoseg site   # DEV: cliente 8865, prestador 8866
 ```
 
 Hoje a GUI do site ainda compartilha o processo com a API embutida; a separação
 completa entre servidor e site é uma fase posterior. O servidor de dados do GTK
-é o `INICIAR_SERVIDOR_DEV.command` (porta 8766). O site DEV usa o mesmo banco de
+é o `./autoseg server` (porta 8766). O site DEV usa o mesmo banco de
 teste, mas em processo e portas separados.
 
 O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
-`INICIAR_AUTOSEG_COM_WEB.command` somente se quiser que o próprio GTK suba os
+`./autoseg app-web` somente se quiser que o próprio GTK suba os
 portais.
 
 ## Documentation

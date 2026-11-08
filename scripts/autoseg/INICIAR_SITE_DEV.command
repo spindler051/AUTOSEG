@@ -2,10 +2,10 @@
 # Sobe a GUI do site em DEV: Portal do Cliente (8865) e Portal do Prestador (8866).
 # Usa o banco de teste e não conflita com a API headless do GTK em 8766.
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 export AUTOSEG_DEV=1
-export AUTOSEG_BASE="$PWD"
-export GESTAO_BANCO="$PWD/dados_teste/autoseg_teste.db"
+export AUTOSEG_BASE="$PWD/data"
+export GESTAO_BANCO="$PWD/data/dados_teste/autoseg_teste.db"
 export CLIENTE_PORT="${CLIENTE_PORT:-8865}"
 export PRESTADOR_PORT="${PRESTADOR_PORT:-8866}"
 PY="${PYTHON:-python3}"

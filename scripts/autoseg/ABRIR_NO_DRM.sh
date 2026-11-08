@@ -2,7 +2,7 @@
 # Executa o AUTOSEG no display físico/virtual do VM usando Cage + DRM.
 # O app GTK4 usa Wayland nativo; não há Xvfb nem Xwayland no caminho.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 if ! command -v cage >/dev/null 2>&1; then
     echo "Cage não encontrado. Instale o pacote 'cage'." >&2

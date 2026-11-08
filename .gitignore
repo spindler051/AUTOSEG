@@ -49,6 +49,7 @@ cert.pem
 credentials.json
 
 # Dados locais de desenvolvimento
+data/
 dados_teste/
 
 # REV05: acesso remoto privado de desenvolvimento e OAuth

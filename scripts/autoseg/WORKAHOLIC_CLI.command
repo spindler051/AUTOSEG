@@ -1,6 +1,6 @@
 #!/bin/bash
 set -Eeuo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 if [[ ! -x .venv/bin/python ]]; then
   echo 'Ambiente virtual ausente. Rode o instalador da Gestão de Serviços.'
   exit 1

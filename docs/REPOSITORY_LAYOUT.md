@@ -34,8 +34,10 @@ packaging/                  empacotamento Linux/macOS
 - `flavors/autoseg/web/` — `portal.js` e site estático.
 - `flavors/autoseg/scripts/` — geração de dados fictícios e reset DEV.
 - `tests/` — suíte de testes.
-- A raiz guarda apenas README, LICENSE, docs, scripts de inicialização,
-  empacotamento e configuração do repositório.
+- `scripts/autoseg/` — launchers e automação do flavor.
+- `data/` — dados locais de DEV (ignorado pelo Git).
+- A raiz guarda apenas README, LICENSE, docs, `autoseg`, requirements,
+  versão, empacotamento e configuração do repositório.
 
 ## Regras
 
