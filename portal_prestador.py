@@ -497,10 +497,6 @@ body.ui-app .login-brand-foot{color:var(--u-muted);font:400 12px/1.5 var(--u-mon
 body.ui-app .login-panel{display:flex;flex-direction:column;justify-content:center;padding:56px 48px;background:var(--u-bg)}
 body.ui-app .login-panel h2{margin:0 0 8px;font:500 28px/1.2 var(--u-font);letter-spacing:-.02em}
 body.ui-app .login-lede{margin:0 0 24px;color:var(--u-muted);font-size:12px}
-body.ui-app .login-theme{display:flex;align-items:center;gap:6px;margin:-8px 0 18px}
-body.ui-app .login-theme span{margin-right:4px;color:var(--u-muted);font:400 11px/1.2 var(--u-mono)}
-body.ui-app .login-theme button{min-height:28px;padding:0 10px;border:1px solid var(--u-line-2);border-radius:7px;background:transparent;color:var(--u-text-2);font:500 11px/1.2 var(--u-font)}
-body.ui-app .login-theme button.ativo{border-color:var(--u-accent);background:var(--u-accent-soft);color:var(--u-text)}
 body.ui-app .login-form button{width:100%;margin-top:20px}
 body.ui-app .login-note{margin:20px 0 0;color:var(--u-muted);font-size:12px;line-height:1.6}
 body.ui-app .login-links{margin-top:28px}
@@ -1122,10 +1118,6 @@ class PortalPrestador:
                            f'<section class="login-panel">{troca}'
                            f'<h2>Entrar</h2>'
                            f'<p class="login-lede">Use seu e-mail e senha de prestador.</p>'
-                           f'<div class="login-theme"><span>Tema</span>'
-                           f'<button type="button" data-login-tema="auto">Auto</button>'
-                           f'<button type="button" data-login-tema="claro">Claro</button>'
-                           f'<button type="button" data-login-tema="escuro">Escuro</button></div>'
                            f'<form class="login-form" method="post" action="/login">'
                            +campos_escuros('E-mail','email',kind='email',required=True)
                            +campos_escuros('Senha','senha',kind='password',required=True)

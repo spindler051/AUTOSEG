@@ -1974,31 +1974,6 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       }
     });
   });
-  // Tema na tela de login: preferência local antes de existir conta.
-  (() => {
-    const botoes = Array.from(document.querySelectorAll('[data-login-tema]'));
-    if (!botoes.length) return;
-    const raiz = document.documentElement;
-    const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-    const ler = () => {
-      try { return localStorage.getItem('autoseg:tema') || 'auto'; }
-      catch (_erro) { return 'auto'; }
-    };
-    const aplicar = preferencia => {
-      const claro = preferencia === 'claro'
-        || (preferencia === 'auto' && media && media.matches);
-      raiz.dataset.tema = claro ? 'claro' : 'escuro';
-      botoes.forEach(botao => {
-        botao.classList.toggle('ativo', botao.dataset.loginTema === preferencia);
-      });
-    };
-    botoes.forEach(botao => botao.addEventListener('click', () => {
-      const preferencia = botao.dataset.loginTema || 'auto';
-      try { localStorage.setItem('autoseg:tema', preferencia); } catch (_erro) {}
-      aplicar(preferencia);
-    }));
-    aplicar(ler());
-  })();
   // Preferências de aparência: salvas na conta, aplicadas no servidor.
   // Preferências de aparência: salvas na conta, aplicadas no servidor.
   (() => {

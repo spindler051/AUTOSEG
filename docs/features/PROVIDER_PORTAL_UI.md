@@ -36,9 +36,8 @@ foi removida.
 ### Login
 
 Duas colunas: apresentação do produto à esquerda e formulário à direita. O
-botão **Entrar** é claro, não âmbar. O login também oferece **Auto**, **Claro**
-e **Escuro**; a escolha fica no navegador até o prestador entrar e assumir a
-preferência da conta.
+botão **Entrar** é claro, não âmbar. O login segue automaticamente o tema do
+sistema, sem controles; depois de entrar, a preferência fica em Configurações.
 
 ### Visão geral
 

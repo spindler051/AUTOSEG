@@ -277,12 +277,11 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertEqual(importado.status_code, 200)
         self.assertIn('Prévia importada', importado.text)
 
-    def test_login_oferece_tema_claro_e_escuro(self):
+    def test_login_segue_tema_do_sistema_sem_botoes(self):
         pagina = requests.get(self.base + '/login', timeout=10)
         self.assertEqual(pagina.status_code, 200)
-        self.assertIn('data-login-tema="claro"', pagina.text)
-        self.assertIn('data-login-tema="escuro"', pagina.text)
-        self.assertIn('data-login-tema="auto"', pagina.text)
+        self.assertNotIn('data-login-tema', pagina.text)
+        self.assertIn('prefers-color-scheme', pagina.text)
 
     def test_os_rapida_cria_cliente_incompleto_sem_pagamento(self):
         resposta = self.http.post(self.base + '/os/rapida/salvar', data={

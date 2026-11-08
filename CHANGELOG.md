@@ -5,7 +5,7 @@
 - **OS rápida:** removidos “Atribuir prestador” e “Forma de pagamento”; a OS abre sem pagamento definido e o criador fica responsável.
 - **Cliente na OS rápida:** busca automática ao digitar, sem botão “Buscar”; nome novo cria cliente com dados incompletos.
 - **Mescla de clientes:** admin pode mesclar dois cadastros duplicados; OS e financeiro passam para o destino e a origem fica inativa.
-- **Login:** seletor de tema Auto/Claro/Escuro também na tela de login, antes de existir conta.
+- **Login:** segue automaticamente o tema do sistema, sem botões; a preferência manual fica em Configurações após entrar.
 - **Testes:** 330 testes OK, 1 skip.
 
 ## 9.6.0-dev.63 — feedbacks abertos da DEV — 2026-11-08 — develop
