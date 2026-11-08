@@ -68,7 +68,7 @@ class HttpTest(unittest.TestCase):
                 # A OS ainda não é do prestador: fotos exigem responsável ou admin.
                 self.assertIn('Somente o responsável ou administrador pode adicionar fotos',html)
                 html=pedido(bp,web_prestador,'/os/nova')
-                self.assertIn('id="busca-cliente-os"',html)
+                self.assertIn('id="c_cliente_id"',html)
                 self.assertIn('id="modelo-material"',html)
                 self.assertIn('Nenhum material é obrigatório',html)
                 html=pedido(bp,web_prestador,'/clientes/novo')

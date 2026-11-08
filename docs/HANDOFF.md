@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-08
-**Versão:** `9.6.0-dev.63`
+**Versão:** `9.6.0-dev.64`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -47,7 +47,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **330 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **332 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
   `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
   `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.

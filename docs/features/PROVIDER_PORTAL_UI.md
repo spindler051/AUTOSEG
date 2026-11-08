@@ -69,12 +69,15 @@ e o formulário de colaboração de fotos permanece. Cancelar exige apenas o
 motivo e o número da OS; deixar pendente não exige destinatários.
 
 A situação não fica aberta no formulário: **Confirmar situação da OS** abre um
-popup com Aberta, Em rota, Iniciada, Pendente, Concluída e Cancelada. O botão
+popup com Aberta, Em rota, Iniciada, Pendente e Concluída. O botão
 de confirmação fica visível em todas as abas; Fechamento e nota fiscal ficam
 em Mídias. O admin tem um select de responsável na Identificação; escolher
 outro prestador já transfere a OS, sem botão “Atribuir OS”.
 
-A aba Identificação tem **Importar relatório YAML** à esquerda de **Exportar
+A aba Identificação tem o seletor de cliente em largura total acima de
+“Atendido por”, com resumo de e-mail, telefone e síndico. Para mudar para
+qualquer situação exceto Pendente ou Cancelada, o cliente precisa estar
+definido. Também tem **Importar relatório YAML** à esquerda de **Exportar
 relatório em YAML**. A exportação devolve o modelo oficial completo, com
 instruções, exemplo e os dados atuais da OS preenchidos.
 
@@ -84,7 +87,8 @@ A barra de ações é fixa no rodapé: **Salvar rascunho** como secundária e
 ### Nova OS
 
 A abertura rápida tem uma única tela: nome do cliente com busca automática,
-descrição e urgência. Não há botão “Buscar”, forma de pagamento nem atribuição
+descrição e urgência. A busca de clientes e de serviços filtra enquanto se
+digita, sem botão “Buscar”/“Pesquisar”. Não há botão “Buscar”, forma de pagamento nem atribuição
 de prestador. Se o nome não existir, um cliente com dados incompletos é criado
 para completar depois; se o cliente for omitido, a OS fica com “Cliente a
 definir”. O cadastro do cliente permite mesclar dois cadastros duplicados. Se já

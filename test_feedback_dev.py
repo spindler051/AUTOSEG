@@ -143,6 +143,7 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertIn('id="dialogo-situacao-os"', pagina)
         self.assertIn('id="abrir-situacao-os"', pagina)
         self.assertIn('name="situacao_popup"', pagina)
+        self.assertNotIn('name="situacao_popup" value="Cancelada"', pagina)
         self.assertIn('id="prestador-destino"', pagina)
         self.http.post(self.base + f'/os/{os_id}/iniciar', data={
             'csrf': self.token}, timeout=10)
@@ -156,6 +157,13 @@ class FeedbackDevTest(unittest.TestCase):
                                'WHERE os_id=?', (os_id,)).fetchone()
         self.assertEqual(os_['status'], 'Aberta')
         self.assertIsNone(inicio['iniciado_em'])
+
+    def test_status_iniciada_exige_cliente_definido(self):
+        os_id, _pagina = self._criar_os(cliente=False,
+                                        descricao='OS sem cliente para iniciar')
+        resposta = self.http.post(self.base + f'/os/{os_id}/iniciar', data={
+            'csrf': self.token}, timeout=10)
+        self.assertEqual(resposta.status_code, 400)
 
     def test_abrir_os_sem_cliente_e_associar_depois(self):
         os_id, pagina = self._criar_os(cliente=False,
@@ -281,7 +289,7 @@ class FeedbackDevTest(unittest.TestCase):
         pagina = requests.get(self.base + '/login', timeout=10)
         self.assertEqual(pagina.status_code, 200)
         self.assertNotIn('data-login-tema', pagina.text)
-        self.assertIn('prefers-color-scheme', pagina.text)
+        self.assertIn('/static/portal.js', pagina.text)
 
     def test_os_rapida_cria_cliente_incompleto_sem_pagamento(self):
         resposta = self.http.post(self.base + '/os/rapida/salvar', data={
@@ -299,6 +307,21 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertTrue(cliente['dados_incompletos'])
         self.assertEqual(int(os_['cliente_id']), int(cliente['id']))
         self.assertEqual(os_['forma_pagamento'], '')
+
+    def test_composicoes_de_valores_sao_editaveis_no_admin(self):
+        pagina = self.http.get(self.base + '/composicao', timeout=10)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn('Composições de valores', pagina.text)
+        resposta = self.http.post(self.base + '/composicao/bases/salvar', data={
+            'csrf': self.token,
+            'base_chave[]': ['total', 'visita'],
+            'base_nome[]': ['Total da OS', 'Visita mínima'],
+            'base_cobertura[]': ['separado', 'incluido'],
+            'base_componente[]': ['', 'visita'],
+            'base_campo[]': ['', ''],
+            'base_padrao': 'total'}, timeout=15)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn('Composição de valores', resposta.text)
 
     def test_configuracoes_salvam_tema_e_acento_na_conta(self):
         pagina = self.http.get(self.base + '/configuracoes', timeout=10)

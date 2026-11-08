@@ -455,6 +455,9 @@ body.ui-app .situacao-opcoes legend{position:absolute;width:1px;height:1px;overf
 body.ui-app .situacao-opcoes label{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border:1px solid var(--u-line);border-radius:8px;background:var(--u-card-2);color:var(--u-text);font:500 13px/1.2 var(--u-font);cursor:pointer}
 body.ui-app .situacao-opcoes label:has(input:checked){border-color:var(--u-accent);background:var(--u-accent-soft)}
 body.ui-app .situacao-opcoes input{margin:0}
+body.ui-app .situacao-dialog{width:min(620px,calc(100vw - 28px))}
+body.ui-app .situacao-dialog .cancel-step{padding:24px}
+body.ui-app .situacao-dialog .feedback-actions{justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--u-line)}
 body.ui-app .os-tools{margin-top:20px;border-top:1px solid var(--u-line);padding-top:16px}
 body.ui-app .os-tools summary{cursor:pointer;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 body.ui-app .os-tools summary:hover{color:var(--u-text-2)}
@@ -904,7 +907,6 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
               '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
               '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<script>try{{var raiz=document.documentElement;var t=raiz.dataset.tema||localStorage.getItem('autoseg:tema')||'auto';var a=raiz.dataset.acento||localStorage.getItem('autoseg:acento')||'ambar';var claro=t==='claro'||(t==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches);raiz.dataset.tema=claro?'claro':'escuro';raiz.dataset.acento=a;}}catch(e){{}}</script>
 <title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:#fff;font:16px -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.45}}
@@ -1429,7 +1431,9 @@ class PortalPrestador:
                 return self.pagina('Serviços e valores',
                     '<p>Catálogo para propostas e preenchimento de relatórios. Os preços são editados somente por prestadores.</p>'
                     +botao('+ Novo serviço','/servicos/novo')
-                    +'<form method="get" action="/servicos">'+campos_escuros('Buscar serviço por nome ou descrição','q',termo)+'<button>Pesquisar</button></form>'
+                    +('<form method="get" action="/servicos" data-auto-submit="1">'
+                      +campos_escuros('Buscar serviço por nome ou descrição','q',termo,kind='search')
+                      +'</form>')
                     +card('Serviços cadastrados',tabela(['Serviço','Descrição','Preço estimado','Ação'],rows)),s)
 
             def servico_form(self,s,identificador=None,preenchimento=None,erro=None):
@@ -1495,7 +1499,9 @@ class PortalPrestador:
                 for r in rows:
                     linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(cad9.formatar_documento(r['documento'])),esc(r['cidade']),
                         esc(r['telefone']),esc(r['email']),esc(r['status'])))
-                pesquisa='<form method="get" action="/clientes">'+campos_escuros('Buscar por nome, CPF/CNPJ, cidade ou e-mail','q',busca)+'<button>Buscar cliente</button></form>'
+                pesquisa=('<form method="get" action="/clientes" data-auto-submit="1">'
+                          +campos_escuros('Buscar por nome, CPF/CNPJ, cidade ou e-mail','q',busca,kind='search')
+                          +'</form>')
                 navegacao=f'<p class="muted">{total} cliente(s) encontrado(s). Página {pagina}.</p>'
                 if pagina>1:navegacao+=botao('Anterior','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina-1}),'secondary')
                 if offset+len(rows)<total:navegacao+=botao('Próximos clientes','/clientes?'+urllib_parse_urlencode({'q':busca,'pagina':pagina+1}),'secondary')
@@ -1503,8 +1509,7 @@ class PortalPrestador:
                     +botao('+ Novo cliente','/clientes/novo')
                     +botao('Novo orçamento','/orcamento','secondary')
                     +botao('Nomear síndico / gestor','/clientes/responsaveis','secondary')+'</div>'
-                    +card('Pesquisar clientes',pesquisa)
-                    +card('Clientes cadastrados',navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
+                    +card('Clientes cadastrados',pesquisa+navegacao+tabela(['Nome','Documento','Cidade','Telefone','E-mail','Status'],linhas)),s)
 
             def orcamento_form(self, s, erro='', cliente_id=None,
                                servicos=None, materiais=None, aviso='',
@@ -1761,6 +1766,13 @@ class PortalPrestador:
                         'A definir',?)""",(ext.agora(),))
                     return int(cur.lastrowid)
 
+            def _exigir_cliente_os(self, oid, acao):
+                with ext.db(banco) as c:
+                    linha=c.execute("""SELECT c.nome,c.status FROM ordens_servico o
+                        JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?""",(oid,)).fetchone()
+                if not linha or linha['status'] in ('A definir','Inativo'):
+                    raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
+
             def _os_duplicada_recente(self, cliente_id):
                 """OS do mesmo cliente criada nos últimos 2 minutos."""
                 limite=(datetime.now()-timedelta(minutes=2)).strftime('%Y-%m-%d %H:%M:%S')
@@ -1857,6 +1869,10 @@ class PortalPrestador:
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
                     cl=clientes_core.listar_para_os(banco)
+                    contatos_clientes=c.execute(
+                        "SELECT id,nome,email,telefone,sindico_nome,sindico_email "
+                        "FROM clientes WHERE status NOT IN ('Inativo','A definir') "
+                        "ORDER BY nome").fetchall()
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
@@ -2065,8 +2081,7 @@ class PortalPrestador:
                         opcoes_situacao.append(('Em rota','Em rota'))
                         opcoes_situacao.append(('Iniciada','Iniciada'))
                     opcoes_situacao.extend([('Pendente','Pendente'),
-                                            ('Concluída','Concluída'),
-                                            ('Cancelada','Cancelada')])
+                                            ('Concluída','Concluída')])
                     radios=''.join(
                         f'<label><input type="radio" name="situacao_popup" value="{chave}"'
                         f'{" checked" if chave==atual else ""}> {rotulo}</label>'
@@ -2119,7 +2134,7 @@ class PortalPrestador:
                 corpo+='<fieldset><legend>Identificação e serviço</legend>'
                 if bloco_modelo and not oid:
                     corpo+=bloco_modelo
-                corpo+='<div class="col2"><div>'
+                corpo+='<div class="os-client-block">'
                 if solicitacao:
                     nome_cliente_solicitacao=next((x['nome'] for x in cl if x['id']==solicitacao['cliente_id']),'')
                     corpo+=('<p class="notice"><strong>Chamado de origem — somente leitura</strong><br>'
@@ -2129,8 +2144,25 @@ class PortalPrestador:
                         'O chamado de origem não é o número da OS.</span></p>')
                     corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
                 else:
-                    corpo+='<label for="busca-cliente-os">Buscar cliente ou condomínio</label><input type="search" id="busca-cliente-os" placeholder="Digite o nome ou ID para localizar" autocomplete="off">'
-                    corpo+=select('Cliente','cliente_id',dados_cliente,d.get('cliente_id',cl[0]['id']),required=True)
+                    cliente_atual_id=int(d.get('cliente_id') or (cl[0]['id'] if cl else 0))
+                    contato_atual=next((x for x in contatos_clientes
+                                        if int(x['id'])==cliente_atual_id),None)
+                    contato_texto=''
+                    if contato_atual:
+                        partes_contato=[str(contato_atual[k] or '') for k in
+                                        ('email','telefone','sindico_nome','sindico_email')]
+                        contato_texto=' · '.join(x for x in partes_contato if x)
+                    corpo+=select('Cliente','cliente_id',dados_cliente,
+                                  d.get('cliente_id',cl[0]['id'] if cl else ''),required=True)
+                    corpo+=f'<p class="muted" id="cliente-contato-os">'+(esc(contato_texto) or 'Sem e-mail ou telefone cadastrado.')+'</p>'
+                    import json as _jc
+                    contatos_json=_jc.dumps([{'id':int(x['id']),'email':x['email'] or '',
+                                              'telefone':x['telefone'] or '',
+                                              'sindico_nome':x['sindico_nome'] or '',
+                                              'sindico_email':x['sindico_email'] or ''}
+                                             for x in contatos_clientes],ensure_ascii=False).replace('<','\u003c')
+                    corpo+=f'<script type="application/json" id="clientes-contato-os">{contatos_json}</script>'
+                corpo+='</div><div class="col2"><div>'
                 corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
                 corpo+='</div><div>'
                 if oid and app and s.get('admin') and d['status'] in ext.ATIVAS and not arquivada:
@@ -2233,8 +2265,6 @@ class PortalPrestador:
                 base_atual=str(d.get('base_percentuais') or base_padrao)
                 opcoes_base=[(chave,(valor or {}).get('nome',chave))
                              for chave,valor in bases_comp.items()]
-                corpo+=select('Base dos percentuais','base_percentuais',opcoes_base,base_atual)
-                corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
                 if oid and d['status'] in ext.ATIVAS and contatos_os:
@@ -2262,6 +2292,8 @@ class PortalPrestador:
                     corpo+=f'<p class="muted">{esc(texto_os.ajuda())}</p>'
                 corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
                 corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
+                corpo+=select('Composição dos valores','base_percentuais',opcoes_base,base_atual)
+                corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
                 corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
                 corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
@@ -2883,6 +2915,26 @@ class PortalPrestador:
                                    'Sim' if c.get('obrigatorio') else 'Não',
                                    esc(', '.join(c.get('aplicavel_a') or [])) or 'Todos',
                                    acoes))
+                bases=config.get('bases_percentuais') or {}
+                linhas_bases=''
+                for chave,base in bases.items():
+                    cobertura=str(base.get('cobertura') or 'separado')
+                    linhas_bases+=(
+                        '<div class="col2">'
+                        f'<input type="hidden" name="base_chave[]" value="{esc(chave)}">'
+                        +campos_escuros('Nome','base_nome[]',base.get('nome') or chave)
+                        +select('Cobertura','base_cobertura[]',
+                                [('separado','Separado'),('incluido','Incluído')],cobertura)
+                        +campos_escuros('Componente','base_componente[]',base.get('componente') or '')
+                        +campos_escuros('Campo','base_campo[]',base.get('campo') or '')
+                        +'</div>')
+                padrao=str(config.get('base_percentuais_padrao') or 'total')
+                form_bases=(f'<form method="post" action="/composicao/bases/salvar">'
+                            +self.hidden(s)+linhas_bases
+                            +select('Composição padrão da OS','base_padrao',
+                                    [(chave,(base or {}).get('nome',chave))
+                                     for chave,base in bases.items()],padrao)
+                            +'<button class="secondary">Salvar composições</button></form>')
                 recalc=(f'<form method="post" action="/composicao/recalcular">{self.hidden(s)}'
                         '<button class="secondary">Recalcular serviços e OS abertas</button></form>')
                 texto=yaml.safe_dump(config,allow_unicode=True,sort_keys=False)
@@ -2897,6 +2949,9 @@ class PortalPrestador:
                          +f'<div class="page-actions"><a class="btn" href="/composicao/novo">Novo componente</a></div>'
                          +tabela(['Ordem','Componente','Modo','Valor','Ativo','Obrigatório',
                                   'Aplicável a','Ações'],linhas))
+                    +card('Composições de valores',
+                          '<p class="muted">Cada composição é uma forma de distribuir o total da OS. '
+                          'Ela fica disponível na aba Situação e relatório.</p>'+form_bases)
                     +card('Manutenção',recalc+avancado),s)
 
             def composicao_form(self,s,identificador=None):
@@ -3404,6 +3459,35 @@ class PortalPrestador:
                         config=self._composicao_config()
                         partes_comp=path.strip('/').split('/')
                         try:
+                            if path=='/composicao/bases/salvar':
+                                def _lista_base(valor):
+                                    if valor is None:return []
+                                    return valor if isinstance(valor,list) else [valor]
+                                chaves=_lista_base(d.get('base_chave[]'))
+                                nomes=_lista_base(d.get('base_nome[]'))
+                                coberturas=_lista_base(d.get('base_cobertura[]'))
+                                componentes_base=_lista_base(d.get('base_componente[]'))
+                                campos_base=_lista_base(d.get('base_campo[]'))
+                                bases_novas={}
+                                for indice,chave in enumerate(chaves):
+                                    chave=str(chave).strip()
+                                    if not chave:continue
+                                    bases_novas[chave]={
+                                        'nome':str(nomes[indice] if indice<len(nomes) else chave).strip() or chave,
+                                        'cobertura':str(coberturas[indice] if indice<len(coberturas) else 'separado'),
+                                        'componente':str(componentes_base[indice] if indice<len(componentes_base) else '').strip(),
+                                        'campo':str(campos_base[indice] if indice<len(campos_base) else '').strip(),
+                                    }
+                                if not bases_novas:
+                                    raise ValueError('Mantenha pelo menos uma composição de valores.')
+                                padrao=str(d.get('base_padrao','')).strip()
+                                if padrao not in bases_novas:
+                                    padrao=next(iter(bases_novas))
+                                config['bases_percentuais']=bases_novas
+                                config['base_percentuais_padrao']=padrao
+                                composicao.salvar(config)
+                                composicao.recalcular_tudo(banco)
+                                return self.redir('/composicao')
                             if path=='/composicao/recalcular':
                                 composicao.recalcular_tudo(banco)
                                 return self.redir('/composicao')
@@ -4007,6 +4091,7 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
                         if acao=='abrir':
+                            self._exigir_cliente_os(oid,'reabrir a OS')
                             with ext.db(banco) as c:
                                 c.execute('BEGIN IMMEDIATE')
                                 o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
@@ -4108,6 +4193,8 @@ class PortalPrestador:
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
                             if acao_status not in ('Pendente','Concluída','Cancelada'):
                                 raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
+                            if acao_status=='Concluída':
+                                self._exigir_cliente_os(oid,'concluir a OS')
                             # Só o botão de encerramento aplica o status escolhido.
                             # O relato técnico é histórico interno: não bloqueia
                             # cancelar nem deixar pendente. Para concluir, basta
@@ -4175,10 +4262,12 @@ class PortalPrestador:
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
                         elif acao=='em-rota':
+                            self._exigir_cliente_os(oid,'colocar em rota')
                             ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='cancelar-rota':
                             ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='iniciar':
+                            self._exigir_cliente_os(oid,'iniciar o atendimento')
                             aten.iniciar_assumindo(banco,oid,pid)
                             prod.limpar_rota_ao_iniciar(banco,oid)
                         elif acao=='reenviar-email':

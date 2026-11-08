@@ -1,6 +1,17 @@
 // AUTOSEG Portal v6: interface sem dependências externas.
 (function () {
   'use strict';
+  // Resolve o tema automático fora de script inline (CSP do portal).
+  (() => {
+    const raiz = document.documentElement;
+    if (!raiz) return;
+    const preferencia = raiz.dataset.preferenciaTema || raiz.dataset.tema || 'auto';
+    const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    const claro = preferencia === 'claro' || (preferencia === 'auto' && media && media.matches);
+    raiz.dataset.tema = claro ? 'claro' : 'escuro';
+    raiz.dataset.preferenciaTema = preferencia;
+    if (!raiz.dataset.acento) raiz.dataset.acento = 'ambar';
+  })();
 
   // Toast global para erros de formulário: nunca navega para uma página de
   // erro e preserva o que o usuário digitou/selecionou.
@@ -1209,12 +1220,6 @@
         return;
       }
       const situacao = escolhido.value;
-      if (situacao === 'Cancelada') {
-        evento.preventDefault();
-        fecharSituacao();
-        document.getElementById('abrir-cancelar-os')?.click();
-        return;
-      }
       if (situacao === 'Concluída') {
         const executado = formOS?.querySelector('[name="v9_execucao"]');
         const relato = formOS?.querySelector('[name="relatorio_tecnico"]');
@@ -2000,13 +2005,44 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
     });
     aplicar();
   })();
+  // Troca de cliente na OS atualiza o resumo de contato usado no relatório.
+  (() => {
+    const selectCliente = document.getElementById('c_cliente_id');
+    const contato = document.getElementById('cliente-contato-os');
+    const dados = document.getElementById('clientes-contato-os');
+    if (!selectCliente || !contato || !dados) return;
+    let clientes = [];
+    try { clientes = JSON.parse(dados.textContent || '[]'); } catch (_erro) { return; }
+    const atualizar = () => {
+      const cliente = clientes.find(item => String(item.id) === selectCliente.value);
+      if (!cliente) {
+        contato.textContent = 'Sem e-mail ou telefone cadastrado.';
+        return;
+      }
+      const partes = [cliente.email, cliente.telefone,
+        cliente.sindico_nome, cliente.sindico_email].filter(Boolean);
+      contato.textContent = partes.length ? partes.join(' · ')
+        : 'Sem e-mail ou telefone cadastrado.';
+    };
+    selectCliente.addEventListener('change', atualizar);
+    atualizar();
+  })();
+  // Filtros aplicam ao mudar; nunca exigem um botão "Filtrar".
   // Filtros aplicam ao mudar; nunca exigem um botão "Filtrar".
   document.querySelectorAll('form[data-auto-submit]').forEach(form => {
     form.querySelectorAll('select,input[type="search"]').forEach(campo => {
-      campo.addEventListener('change', () => {
+      const enviar = () => {
         if (typeof form.requestSubmit === 'function') form.requestSubmit();
         else form.submit();
-      });
+      };
+      let timer = null;
+      campo.addEventListener('change', enviar);
+      if (campo.matches('input[type="search"]')) {
+        campo.addEventListener('input', () => {
+          window.clearTimeout(timer);
+          timer = window.setTimeout(enviar, 450);
+        });
+      }
     });
   });
   const campoClienteRapida = document.getElementById('cliente-rapida-nome');
