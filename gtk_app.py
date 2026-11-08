@@ -14,7 +14,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 import gtk_comum as ui
 import gtk_dialogos as dialogos
@@ -221,17 +221,25 @@ class Janela(Adw.ApplicationWindow):
         if self.sessao is None:
             return
         papel = "Administrador" if self.sessao.admin else "Prestador"
-        self.linha_usuario = Adw.ActionRow(
-            title=self.sessao.nome or "Prestador",
-            subtitle=f"{papel} • {self.sessao.email}",
-            icon_name="avatar-default-symbolic")
-        self.linha_usuario.add_css_class("property")
+        bloco = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        bloco.set_tooltip_text(
+            f"{self.sessao.nome}\n{papel}\n{self.sessao.email}")
+        for texto, classe in (
+            (self.sessao.nome or "Prestador", "heading"),
+            (papel, "caption"),
+            (self.sessao.email, "caption"),
+        ):
+            label = Gtk.Label(label=texto, xalign=0)
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_max_width_chars(26)
+            label.add_css_class(classe)
+            bloco.append(label)
         sair = Gtk.Button(label="Sair")
-        sair.add_css_class("flat")
+        sair.set_halign(Gtk.Align.FILL)
         sair.set_tooltip_text("Encerrar esta sessão e voltar ao login")
         sair.connect("clicked", lambda *_args: self._sair())
-        self.linha_usuario.add_suffix(sair)
-        rodape.append(self.linha_usuario)
+        rodape.append(bloco)
+        rodape.append(sair)
 
     def _construir_conteudo(self):
         pagina = Adw.NavigationPage(title="Início")
@@ -366,16 +374,6 @@ class Janela(Adw.ApplicationWindow):
         caixa.set_margin_start(24)
         caixa.set_margin_end(24)
 
-        logo = ui.PASTA_APP / "logo.png"
-        if logo.is_file():
-            try:
-                imagem = Gtk.Picture.new_for_filename(str(logo))
-                imagem.set_content_fit(Gtk.ContentFit.CONTAIN)
-                imagem.set_size_request(-1, 78)
-                imagem.set_halign(Gtk.Align.START)
-                caixa.append(imagem)
-            except Exception:
-                pass
         subtitulo = Gtk.Label(label="Painel principal", xalign=0)
         subtitulo.add_css_class("title-2")
         caixa.append(subtitulo)

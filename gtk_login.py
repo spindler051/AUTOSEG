@@ -1,8 +1,8 @@
 """Login window for the GTK desktop.
 
-Server login is the default in DEV. Local login is offered only when the app is
-running in local mode; it creates the local database and can bootstrap the first
-local administrator.
+The login window always offers local and server modes. DEV selects server by
+default; local mode creates the local database only when chosen and can
+bootstrap the first local administrator.
 """
 from __future__ import annotations
 
@@ -31,23 +31,6 @@ from application.http_service import HttpService
 from application.session import Sessao, limpar_sessao, salvar_sessao
 from banco import BANCO
 import prestador_auth
-
-
-def _logo() -> Gtk.Widget | None:
-    from pathlib import Path
-    from gtk_comum import PASTA_APP
-    for nome in ('logo.png', 'icone.png'):
-        arquivo = Path(PASTA_APP) / nome
-        if arquivo.is_file():
-            try:
-                imagem = Gtk.Picture.new_for_filename(str(arquivo))
-                imagem.set_content_fit(Gtk.ContentFit.CONTAIN)
-                imagem.set_size_request(-1, 72)
-                imagem.set_halign(Gtk.Align.START)
-                return imagem
-            except (GLib.Error, OSError):
-                pass
-    return None
 
 
 class DialogoPrimeiroAdmin(Adw.Dialog):
@@ -143,9 +126,6 @@ class LoginWindow(Adw.ApplicationWindow):
         caixa.set_margin_bottom(28)
         caixa.set_margin_start(26)
         caixa.set_margin_end(26)
-        logo = _logo()
-        if logo is not None:
-            caixa.append(logo)
         titulo = Gtk.Label(label='Entrar', xalign=0)
         titulo.add_css_class('title-1')
         caixa.append(titulo)

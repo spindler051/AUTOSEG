@@ -1,5 +1,14 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.59 — visual do login e paridade de papéis — 2026-11-07 — develop
+
+- **Logo removida do GTK:** a imagem não aparece mais no Início nem na tela de login.
+- **Usuário logado:** nome, papel e e-mail ficam em linhas separadas com reticências; o botão Sair fica abaixo, sem cortar o texto.
+- **Paridade documentada:** novo `docs/SURFACE_PARITY.md` compara GTK, Portal do Prestador e Portal do Cliente.
+- **Regra de papel:** admin, funcionário/prestador e cliente; a permissão pertence ao papel, não à superfície.
+- **Lacuna explícita:** a API identifica o prestador, mas ainda não aplica todas as regras admin × funcionário.
+- **Testes:** 313 testes OK, 1 skip.
+
 ## 9.6.0-dev.58 — login oferece modo local e servidor — 2026-11-07 — develop
 
 - **Escolha de modo:** a tela de login sempre mostra as opções **Local** e **Servidor**.

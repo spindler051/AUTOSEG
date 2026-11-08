@@ -9,6 +9,7 @@ fases posteriores. O foco de produção continua sendo o AUTOSEG.
 
 - `docs/AUTH_AND_CONNECTION_UX.md` — login local/remoto e primeira conta admin.
 - `docs/PERMISSIONS_P0.md` — matriz de ações e testes de autorização.
+- `docs/SURFACE_PARITY.md` — o que GTK, site e cliente fazem hoje.
 - `docs/PERMISSIONS_AND_APPROVALS.md` — grupos, flags e aprovação tipo Git.
 - `docs/GTK_SERVER_DECOUPLING.md` — modos local, servidor e híbrido.
 - `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — visão multicliente.

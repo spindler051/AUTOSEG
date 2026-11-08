@@ -17,6 +17,7 @@ histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
 - [Modos do app, papéis e servidores](APP_MODES_ROLES_AND_SERVERS.md)
 - [Login, conta local e conexão](AUTH_AND_CONNECTION_UX.md)
 - [Permissões e aprovações](PERMISSIONS_AND_APPROVALS.md)
+- [Paridade entre GTK, site e papéis](SURFACE_PARITY.md)
 - [Matriz P0 de permissões](PERMISSIONS_P0.md)
 - [Numeração de OS](OS_NUMBERING_REDESIGN.md)
 - [Separação GTK × servidor](GTK_SERVER_DECOUPLING.md)

@@ -1,8 +1,9 @@
 # Permissões P0 — matriz e testes de autorização
 
-**Status:** proposta de política para a produção AUTOSEG. **Não implementado.**
-Auth e permissões são N3/N4; a implementação precisa de revisão humana externa
-ou fica em DEV atrás de flag.
+**Status:** política proposta. O **login de prestador** já existe no DEV, mas a
+aplicação de AUT-001 a AUT-021 no serviço ainda não. Auth e permissões são
+N3/N4; a implementação precisa de revisão humana externa ou fica em DEV atrás
+de flag. Ver `docs/SURFACE_PARITY.md`.
 
 **Objetivo:** definir quem pode fazer o quê antes de criar tela de login,
 sessão ou usuários. A regra precisa ser validada no serviço, não apenas na UI.
