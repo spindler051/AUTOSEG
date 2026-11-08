@@ -277,6 +277,30 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertEqual(importado.status_code, 200)
         self.assertIn('Prévia importada', importado.text)
 
+    def test_login_oferece_tema_claro_e_escuro(self):
+        pagina = requests.get(self.base + '/login', timeout=10)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn('data-login-tema="claro"', pagina.text)
+        self.assertIn('data-login-tema="escuro"', pagina.text)
+        self.assertIn('data-login-tema="auto"', pagina.text)
+
+    def test_os_rapida_cria_cliente_incompleto_sem_pagamento(self):
+        resposta = self.http.post(self.base + '/os/rapida/salvar', data={
+            'csrf': self.token,
+            'cliente_nome': 'Cliente Criado na Rápida',
+            'descricao': 'Abertura rápida sem forma de pagamento',
+            'urgencia': 'Normal'}, timeout=10)
+        self.assertEqual(resposta.status_code, 200)
+        with ext.db(self.db) as c:
+            cliente = c.execute("SELECT id,dados_incompletos FROM clientes "
+                                "WHERE nome='Cliente Criado na Rápida'").fetchone()
+            os_ = c.execute('SELECT cliente_id,forma_pagamento FROM ordens_servico '
+                            'ORDER BY id DESC LIMIT 1').fetchone()
+        self.assertIsNotNone(cliente)
+        self.assertTrue(cliente['dados_incompletos'])
+        self.assertEqual(int(os_['cliente_id']), int(cliente['id']))
+        self.assertEqual(os_['forma_pagamento'], '')
+
     def test_configuracoes_salvam_tema_e_acento_na_conta(self):
         pagina = self.http.get(self.base + '/configuracoes', timeout=10)
         self.assertEqual(pagina.status_code, 200)
@@ -291,6 +315,25 @@ class FeedbackDevTest(unittest.TestCase):
         import prestador_auth
         prefs = prestador_auth.obter_preferencias(self.db, self.admin)
         self.assertEqual(prefs, {'tema': 'claro', 'acento': 'azul'})
+
+    def test_admin_mescla_clientes_duplicados(self):
+        os_id, _pagina = self._criar_os(descricao='OS do cliente duplicado')
+        with ext.db(self.db) as c:
+            c.execute("""INSERT INTO clientes(tipo_pessoa,documento,nome,status,criado_em)
+                         VALUES('Física','','Cliente Destino','Ativo',?)""",
+                      (ext.agora(),))
+            destino = int(c.execute('SELECT MAX(id) FROM clientes').fetchone()[0])
+        resposta = self.http.post(
+            self.base + f'/clientes/{self.cliente}/mesclar',
+            data={'csrf': self.token, 'destino_id': str(destino)}, timeout=10)
+        self.assertEqual(resposta.status_code, 200)
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+            origem = c.execute('SELECT status FROM clientes WHERE id=?',
+                               (self.cliente,)).fetchone()
+        self.assertEqual(int(os_['cliente_id']), destino)
+        self.assertEqual(origem['status'], 'Inativo')
 
     def test_admin_transfere_os_para_outro_prestador(self):
         os_id, _html = self._criar_os()

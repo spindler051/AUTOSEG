@@ -706,6 +706,48 @@ def mesclar_organizacoes(banco,origem,destino,autor):
                   (b['cliente_id'],origem,'Mesclagem',f'{origem} -> {destino}',autor,ext.agora()))
         return destino
 
+def mesclar_clientes(banco, origem_id, destino_id, autor):
+    """Mescla dois cadastros de cliente, movendo OS/financeiro e inativando a origem."""
+    origem_id=int(origem_id); destino_id=int(destino_id)
+    if origem_id==destino_id:
+        raise ValueError('Escolha dois clientes diferentes.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        a=c.execute('SELECT * FROM clientes WHERE id=?',(origem_id,)).fetchone()
+        b=c.execute('SELECT * FROM clientes WHERE id=?',(destino_id,)).fetchone()
+        if not a or not b:
+            raise ValueError('Cliente não encontrado.')
+        if b['status']=='Inativo':
+            raise ValueError('O cliente de destino está inativo.')
+        campos=('documento','nome_fantasia','endereco','numero','complemento','bairro',
+                'cep','cidade','uf','telefone','email','sindico_nome','sindico_telefone',
+                'sindico_email','administradora','administradora_telefone','administradora_email')
+        atualizacoes={}
+        for campo in campos:
+            if not str(b[campo] or '').strip() and str(a[campo] or '').strip():
+                atualizacoes[campo]=a[campo]
+        if atualizacoes:
+            c.execute('UPDATE clientes SET '+','.join(f'{k}=?' for k in atualizacoes)+
+                      ',atualizado_em=? WHERE id=?',
+                      (*atualizacoes.values(),ext.agora(),destino_id))
+        c.execute('UPDATE ordens_servico SET cliente_id=? WHERE cliente_id=?',
+                  (destino_id,origem_id))
+        c.execute('UPDATE financeiro SET cliente_id=? WHERE cliente_id=?',
+                  (destino_id,origem_id))
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='os_solicitacoes'").fetchone():
+            c.execute('UPDATE os_solicitacoes SET cliente_id=? WHERE cliente_id=?',
+                      (destino_id,origem_id))
+        c.execute("""UPDATE clientes SET status='Inativo',
+                     observacoes=COALESCE(observacoes,'') || ? WHERE id=?""",
+                  (f' Mesclado no cliente {destino_id} por {autor}.',origem_id))
+        c.execute("""INSERT INTO v9_historico_clientes
+                     (cliente_id,origem_id,acao,descricao,autor,criado_em)
+                     VALUES(?,?,?,?,?,?)""",
+                  (destino_id,origem_id,'Mesclagem',
+                   f'Cliente {origem_id} mesclado no cliente {destino_id}.',autor,ext.agora()))
+        return destino_id
+
+
 def desativar_cliente(banco,cliente_id,autor):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')

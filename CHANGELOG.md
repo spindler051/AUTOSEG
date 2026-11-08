@@ -1,6 +1,14 @@
 # AUTOSEG — Changelog
 
-## 9.6.0-dev.62 — feedbacks abertos da DEV — 2026-11-08 — develop
+## 9.6.0-dev.63 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
+
+- **OS rápida:** removidos “Atribuir prestador” e “Forma de pagamento”; a OS abre sem pagamento definido e o criador fica responsável.
+- **Cliente na OS rápida:** busca automática ao digitar, sem botão “Buscar”; nome novo cria cliente com dados incompletos.
+- **Mescla de clientes:** admin pode mesclar dois cadastros duplicados; OS e financeiro passam para o destino e a origem fica inativa.
+- **Login:** seletor de tema Auto/Claro/Escuro também na tela de login, antes de existir conta.
+- **Testes:** 330 testes OK, 1 skip.
+
+## 9.6.0-dev.63 — feedbacks abertos da DEV — 2026-11-08 — develop
 
 - **Nova OS em uma tela:** cliente é opcional e pode ser associado depois; a OS usa o cadastro provisório “Cliente a definir”.
 - **Duplicidade:** aviso para OS do mesmo cliente criada nos últimos 2 minutos, com opção explícita de criar outra e registro no histórico.
@@ -24,7 +32,7 @@
 - **Tema:** modo automático pelo tema do host, claro/escuro e sete cores de acento.
 - **Composição de valores:** editor estruturado por componente no lugar do YAML seco; YAML permanece em opção avançada.
 - **Início do GTK:** ordens recentes com abertura direta, alinhado ao site.
-- **Testes:** 327 testes OK, 1 skip; scripts de aceitação passando.
+- **Testes:** 330 testes OK, 1 skip; scripts de aceitação passando.
 
 ## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
 

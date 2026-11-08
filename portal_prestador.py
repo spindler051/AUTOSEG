@@ -497,6 +497,10 @@ body.ui-app .login-brand-foot{color:var(--u-muted);font:400 12px/1.5 var(--u-mon
 body.ui-app .login-panel{display:flex;flex-direction:column;justify-content:center;padding:56px 48px;background:var(--u-bg)}
 body.ui-app .login-panel h2{margin:0 0 8px;font:500 28px/1.2 var(--u-font);letter-spacing:-.02em}
 body.ui-app .login-lede{margin:0 0 24px;color:var(--u-muted);font-size:12px}
+body.ui-app .login-theme{display:flex;align-items:center;gap:6px;margin:-8px 0 18px}
+body.ui-app .login-theme span{margin-right:4px;color:var(--u-muted);font:400 11px/1.2 var(--u-mono)}
+body.ui-app .login-theme button{min-height:28px;padding:0 10px;border:1px solid var(--u-line-2);border-radius:7px;background:transparent;color:var(--u-text-2);font:500 11px/1.2 var(--u-font)}
+body.ui-app .login-theme button.ativo{border-color:var(--u-accent);background:var(--u-accent-soft);color:var(--u-text)}
 body.ui-app .login-form button{width:100%;margin-top:20px}
 body.ui-app .login-note{margin:20px 0 0;color:var(--u-muted);font-size:12px;line-height:1.6}
 body.ui-app .login-links{margin-top:28px}
@@ -1118,6 +1122,10 @@ class PortalPrestador:
                            f'<section class="login-panel">{troca}'
                            f'<h2>Entrar</h2>'
                            f'<p class="login-lede">Use seu e-mail e senha de prestador.</p>'
+                           f'<div class="login-theme"><span>Tema</span>'
+                           f'<button type="button" data-login-tema="auto">Auto</button>'
+                           f'<button type="button" data-login-tema="claro">Claro</button>'
+                           f'<button type="button" data-login-tema="escuro">Escuro</button></div>'
                            f'<form class="login-form" method="post" action="/login">'
                            +campos_escuros('E-mail','email',kind='email',required=True)
                            +campos_escuros('Senha','senha',kind='password',required=True)
@@ -1713,7 +1721,39 @@ class PortalPrestador:
                 if cid:
                     corpo+=f'<form method="post" action="/clientes/{cid}/desativar">{self.hidden(s)}<button class="secondary">Desativar (preservar histórico)</button></form>'
                     corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
+                    if s.get('admin'):
+                        with ext.db(banco) as c:
+                            outros=c.execute(
+                                "SELECT id,nome FROM clientes WHERE id<>? AND status!='Inativo' "
+                                "ORDER BY nome",(cid,)).fetchall()
+                        if outros:
+                            corpo+=card('Mesclar cliente duplicado',
+                                f'<form method="post" action="/clientes/{cid}/mesclar" '
+                                'data-confirm="Mesclar este cliente no destino? A origem ficará inativa.">'
+                                +self.hidden(s)
+                                +select('Mesclar este cliente em','destino_id',
+                                        [(str(x['id']),x['nome']) for x in outros],'')
+                                +'<p class="muted">As OS e o financeiro da origem passam para o destino; '
+                                'a origem fica inativa e o histórico é preservado.</p>'
+                                +'<button class="danger" type="submit">Mesclar clientes</button></form>')
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
+
+            def _cliente_por_nome(self, nome):
+                nome=str(nome or '').strip()[:250]
+                if len(nome)<2:
+                    raise ValueError('Informe ao menos 2 caracteres no nome do cliente.')
+                with ext.db(banco) as c:
+                    achado=c.execute(
+                        "SELECT id FROM clientes WHERE status!='Inativo' AND lower(nome)=lower(?) "
+                        "ORDER BY id LIMIT 1",(nome,)).fetchone()
+                    if achado:
+                        return int(achado['id'])
+                    cur=c.execute("""INSERT INTO clientes
+                        (tipo_pessoa,documento,nome,status,dados_incompletos,observacoes,criado_em)
+                        VALUES('Física','',?,'Ativo',1,?,?)""",
+                        (nome,'Cadastro criado na abertura rápida da OS. Completar CPF/CNPJ, e-mail, endereço e demais dados.',
+                         ext.agora()))
+                    return int(cur.lastrowid)
 
             def _cliente_a_definir(self):
                 """Cadastro provisório para OS aberta antes de escolher o cliente."""
@@ -1768,10 +1808,9 @@ class PortalPrestador:
                     confirmacao=(f'<form method="post" action="/os/rapida/salvar">'
                                  f'{self.hidden(s)}'
                                  f'<input type="hidden" name="cliente_id" value="{esc(str(cliente_id or ""))}">'
+                                 f'<input type="hidden" name="cliente_nome" value="{esc(str(dados_form.get("cliente_nome","")))}">'
                                  f'<input type="hidden" name="descricao" value="{esc(str(dados_form.get("descricao","")))}">'
-                                 f'<input type="hidden" name="forma_pagamento" value="{esc(str(dados_form.get("forma_pagamento","")))}">'
                                  f'<input type="hidden" name="urgencia" value="{esc(str(dados_form.get("urgencia","Normal")))}">'
-                                 f'<input type="hidden" name="prestador_id" value="{esc(str(dados_form.get("prestador_id","")))}">'
                                  '<input type="hidden" name="confirmar_duplicidade" value="1">'
                                  '<button type="submit" class="secondary">Criar outra mesmo assim</button></form>')
                     return self.pagina('Aviso de OS duplicada',
@@ -1781,37 +1820,32 @@ class PortalPrestador:
                              'Para evitar duplicidade, confira a OS existente antes de criar outra.</p>'
                              f'<div class="actions">{botao("Abrir OS existente",url_os(banco, existente_id))}'
                              f'{confirmacao}</div>'),s)
-                busca=('<form method="get" action="/os/rapida" class="busca-pj">'
-                       '<label for="q-os-rapida">Buscar cliente</label>'
-                       '<div class="busca-linha">'
-                       f'<input id="q-os-rapida" name="q" type="search" value="{esc(termo)}" '
-                       'placeholder="Nome, CNPJ/CPF, cidade ou e-mail" autocomplete="off">'
-                       '<button type="submit" class="secondary">Buscar</button></div></form>')
+                nome_atual=str(dados_form.get('cliente_nome','') or '')
+                if selecionado:
+                    achado=next((x for x in clientes if str(x['id'])==str(selecionado)),None)
+                    if achado:
+                        nome_atual=str(achado['nome'] or '')
+                opcoes_clientes=''.join(
+                    f'<option value="{esc(x["nome"])}" data-id="{int(x["id"])}"></option>'
+                    for x in clientes)
                 form=(f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
-                      +'<label for="filtro-cliente-rapida">Buscar cliente na lista</label>'
-                      +'<input type="search" id="filtro-cliente-rapida" '
-                       'placeholder="Digite para filtrar os clientes" autocomplete="off">'
-                      +select('Cliente (opcional)','cliente_id',opcoes,selecionado)
-                      +'<p class="muted">Pode abrir sem cliente e associar depois na própria OS.</p>'
+                      '<label for="cliente-rapida-nome">Cliente (opcional)</label>'
+                      f'<input id="cliente-rapida-nome" name="cliente_nome" list="clientes-rapida-lista" '
+                      f'value="{esc(nome_atual)}" placeholder="Digite o nome; a busca é automática" autocomplete="off">'
+                      f'<input type="hidden" name="cliente_id" id="cliente-rapida-id" value="{esc(selecionado)}">'
+                      f'<datalist id="clientes-rapida-lista">{opcoes_clientes}</datalist>'
+                      '<p class="muted" id="cliente-rapida-status">Se o nome não existir, '
+                      'a OS cria um cliente com dados incompletos para completar depois.</p>'
                       +textarea('Solicitação / descrição do serviço','descricao',
                                 str(dados_form.get('descricao','')),required=True)
-                      +select('Forma de pagamento','forma_pagamento',
-                              [('', 'Selecione a forma de pagamento')]
-                              + [(z, z) for z in neg.OS_FORMAS],
-                              str(dados_form.get('forma_pagamento','')),required=True)
                       +select('Urgência','urgencia',
                               [('Baixa', 'Baixa'), ('Normal', 'Normal'),
                                ('Alta', 'Alta')],
-                              str(dados_form.get('urgencia','Normal') or 'Normal')))
-                if prestadores:
-                    form += select('Atribuir prestador (opcional)', 'prestador_id',
-                                   [('', 'Eu mesmo (padrão)')]
-                                   + [(str(x['id']), x['nome']) for x in prestadores],
-                                   str(dados_form.get('prestador_id','')))
-                form += ('<p class="notice">A OS será criada como <b>Aberta</b> e você '
-                         'fica responsável por ela. Outro administrador pode transferir '
-                         'a responsabilidade depois.</p>'
-                         '<button type="submit" style="width:100%">Criar OS</button></form>')
+                              str(dados_form.get('urgencia','Normal') or 'Normal'))
+                      +'<p class="notice">A OS será criada como <b>Aberta</b> e você '
+                       'fica responsável por ela. Outro administrador pode transferir '
+                       'a responsabilidade depois.</p>'
+                       '<button type="submit" style="width:100%">Criar OS</button></form>')
                 importar_rapida=''
                 if selecionado:
                     importar_rapida=card('Importar OS em YAML',
@@ -1824,7 +1858,7 @@ class PortalPrestador:
                         'nada é salvo antes de confirmar.</p>')
                 return self.pagina(
                     'Nova ordem de serviço',
-                    card('Solicitação', aviso + busca + form)
+                    card('Solicitação', aviso + form)
                     + importar_rapida
                     + botao('← Voltar às OS', '/os', 'secondary'), s)
 
@@ -3687,30 +3721,40 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='excluir':
                         neg.cliente_excluir(banco,int(partes[1]),pid)
                         return self.redir('/clientes')
+                    if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='mesclar':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem mesclar clientes.')
+                        try:
+                            destino=int(str(d.get('destino_id','')).strip())
+                        except (TypeError,ValueError):
+                            raise ValueError('Escolha o cliente de destino.') from None
+                        cad9.mesclar_clientes(banco,int(partes[1]),destino,str(s['nome']))
+                        return self.redir(f'/clientes/{destino}')
                     if path=='/os/rapida/salvar':
                         cliente_texto=str(d.get('cliente_id','')).strip()
+                        cliente_nome=str(d.get('cliente_nome','')).strip()[:250]
                         if cliente_texto:
                             try:
-                                cliente_id=int(cliente_texto.split('—',1)[0].strip())
+                                cliente_id=int(cliente_texto)
                             except (ValueError,TypeError):
                                 return self.os_rapida_form(
-                                    s,erro='Selecione um cliente válido na lista.',
+                                    s,erro='Cliente inválido. Digite o nome novamente.',
                                     dados_form=d)
                             if not clientes_core.obter_resumo_ativo(cliente_id,banco=banco):
                                 return self.os_rapida_form(
-                                    s,erro='Cliente não encontrado ou inativo. Escolha outro.',
+                                    s,erro='Cliente não encontrado ou inativo.',
                                     dados_form=d)
+                        elif cliente_nome:
+                            try:
+                                cliente_id=self._cliente_por_nome(cliente_nome)
+                            except ValueError as exc:
+                                return self.os_rapida_form(s,erro=str(exc),dados_form=d)
                         else:
                             cliente_id=self._cliente_a_definir()
                         descricao=str(d.get('descricao','')).strip()
                         if len(descricao)<5:
                             return self.os_rapida_form(
                                 s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
-                                dados_form=d,cliente_id=cliente_id)
-                        forma=str(d.get('forma_pagamento','')).strip()
-                        if forma not in neg.OS_FORMAS:
-                            return self.os_rapida_form(
-                                s,erro='Escolha a forma de pagamento.',
                                 dados_form=d,cliente_id=cliente_id)
                         urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
                         if urgencia not in ('Baixa','Normal','Alta'):
@@ -3723,17 +3767,12 @@ class PortalPrestador:
                                 s,dados_form=d,cliente_id=cliente_id,
                                 duplicada=duplicada)
                         dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
-                               'forma_pagamento':forma,'urgencia':urgencia,
+                               'forma_pagamento':'','forma_pagamento_opcional':'1',
+                               'urgencia':urgencia,
                                'valor_mao_obra':'0','valor_materiais_manual':'0',
                                'materiais_presentes':'1','acao_status':'salvar'}
                         oid=neg.os_salvar(banco,dados,pid)
-                        prestador_id=str(d.get('prestador_id','')).strip()
-                        if prestador_id:
-                            ext.atribuir(banco,oid,int(prestador_id),ator=f'Prestador {s["nome"]}')
-                        else:
-                            # Quem cria a OS já fica responsável; o botão
-                            # "Assumir" deixa de aparecer para essa pessoa.
-                            ext.assumir(banco,oid,pid)
+                        ext.assumir(banco,oid,pid)
                         if str(d.get('confirmar_duplicidade',''))=='1':
                             with ext.db(banco) as c:
                                 ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
@@ -3742,12 +3781,18 @@ class PortalPrestador:
                         with ext.db(banco) as c:
                             numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
                                               (oid,)).fetchone() or {'numero_os': oid})['numero_os']
-                            provisorio=(c.execute('SELECT status FROM clientes WHERE id=?',
-                                                  (cliente_id,)).fetchone() or {'status':''})['status']
-                        aviso_cliente=(''
-                            if provisorio!='A definir' else
-                            '<p class="notice">A OS está com <b>Cliente a definir</b>. '
-                            'Abra a OS e escolha o cliente quando souber.</p>')
+                            cliente=(c.execute('SELECT status,dados_incompletos FROM clientes WHERE id=?',
+                                               (cliente_id,)).fetchone() or {'status':'','dados_incompletos':0})
+                        aviso_cliente=''
+                        if cliente['status']=='A definir':
+                            aviso_cliente=('<p class="notice">A OS está com <b>Cliente a definir</b>. '
+                                           'Abra a OS e escolha o cliente quando souber.</p>')
+                        elif cliente['dados_incompletos']:
+                            aviso_cliente=('<p class="notice">O cliente foi criado com <b>dados incompletos</b>. '
+                                           'Complete CPF/CNPJ, e-mail e endereço quando puder.</p>')
+                        extra_cliente=(''
+                            if not cliente['dados_incompletos'] else
+                            botao('Completar cadastro do cliente',f'/clientes/{cliente_id}','secondary'))
                         return self.pagina('OS aberta com sucesso',
                             card('OS aberta com sucesso',
                                 f'<p class="good">A OS <b>{esc(numero)}</b> foi criada como <b>Aberta</b>.</p>'
@@ -3755,6 +3800,7 @@ class PortalPrestador:
                                 '<p class="muted">Você não precisa preencher o atendimento agora. '
                                 'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
                                 +botao('Abrir OS',f'{url_os(banco, oid)}')
+                                +extra_cliente
                                 +botao('Abrir outra OS','/os/rapida','secondary')
                                 +botao('Voltar às OS','/os','secondary')),s)
                     if path=='/os/yaml':

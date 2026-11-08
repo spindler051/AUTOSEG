@@ -36,7 +36,9 @@ foi removida.
 ### Login
 
 Duas colunas: apresentação do produto à esquerda e formulário à direita. O
-botão **Entrar** é claro, não âmbar.
+botão **Entrar** é claro, não âmbar. O login também oferece **Auto**, **Claro**
+e **Escuro**; a escolha fica no navegador até o prestador entrar e assumir a
+preferência da conta.
 
 ### Visão geral
 
@@ -82,8 +84,11 @@ A barra de ações é fixa no rodapé: **Salvar rascunho** como secundária e
 
 ### Nova OS
 
-A abertura rápida tem uma única tela: busca de cliente, cliente opcional
-(“Cliente a definir”), descrição, pagamento, urgência e responsável. Se já
+A abertura rápida tem uma única tela: nome do cliente com busca automática,
+descrição e urgência. Não há botão “Buscar”, forma de pagamento nem atribuição
+de prestador. Se o nome não existir, um cliente com dados incompletos é criado
+para completar depois; se o cliente for omitido, a OS fica com “Cliente a
+definir”. O cadastro do cliente permite mesclar dois cadastros duplicados. Se já
 existir uma OS do mesmo cliente nos últimos dois minutos, o portal mostra um
 aviso antes de criar outra.
 

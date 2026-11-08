@@ -164,16 +164,12 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(status, 200)
         status, html = req(cliente, base, '/os/rapida')
         self.assertEqual(status, 200)
-        self.assertIn('name="q"', html)
+        self.assertIn('id="cliente-rapida-nome"', html)
+        self.assertIn('list="clientes-rapida-lista"', html)
         self.assertIn('Condomínio Alfa', html)
         self.assertIn('Empresa Beta', html)
-        self.assertIn('name="cliente_id"', html)
-        self.assertIn('Cliente a definir (associar depois)', html)
-
-        status, html = req(cliente, base, '/os/rapida?q=Alfa')
-        self.assertEqual(status, 200)
-        self.assertIn('Condomínio Alfa', html)
-        self.assertNotIn('Empresa Beta', html)
+        self.assertNotIn('name="forma_pagamento"', html)
+        self.assertNotIn('Atribuir prestador', html)
 
         status, html = req(cliente, base, f'/os/rapida?cliente={alfa}')
         self.assertEqual(status, 200)
@@ -185,7 +181,7 @@ class CorrecoesRev12(unittest.TestCase):
         status, html = req(cliente, base, '/os/rapida/salvar',
                            {'csrf': token, 'cliente_id': str(alfa),
                             'descricao': 'Portão da garagem não abre.',
-                            'forma_pagamento': 'PIX', 'urgencia': 'Alta'})
+                            'urgencia': 'Alta'})
         self.assertEqual(status, 200)
         self.assertIn('OS aberta com sucesso', html)
         self.assertIn('Abrir OS', html)

@@ -1974,6 +1974,32 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       }
     });
   });
+  // Tema na tela de login: preferência local antes de existir conta.
+  (() => {
+    const botoes = Array.from(document.querySelectorAll('[data-login-tema]'));
+    if (!botoes.length) return;
+    const raiz = document.documentElement;
+    const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    const ler = () => {
+      try { return localStorage.getItem('autoseg:tema') || 'auto'; }
+      catch (_erro) { return 'auto'; }
+    };
+    const aplicar = preferencia => {
+      const claro = preferencia === 'claro'
+        || (preferencia === 'auto' && media && media.matches);
+      raiz.dataset.tema = claro ? 'claro' : 'escuro';
+      botoes.forEach(botao => {
+        botao.classList.toggle('ativo', botao.dataset.loginTema === preferencia);
+      });
+    };
+    botoes.forEach(botao => botao.addEventListener('click', () => {
+      const preferencia = botao.dataset.loginTema || 'auto';
+      try { localStorage.setItem('autoseg:tema', preferencia); } catch (_erro) {}
+      aplicar(preferencia);
+    }));
+    aplicar(ler());
+  })();
+  // Preferências de aparência: salvas na conta, aplicadas no servidor.
   // Preferências de aparência: salvas na conta, aplicadas no servidor.
   (() => {
     const form = document.getElementById('form-preferencias');
@@ -2008,20 +2034,30 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       });
     });
   });
-  const filtroClienteRapida = document.getElementById('filtro-cliente-rapida');
-  const selectClienteRapida = filtroClienteRapida
-    ? filtroClienteRapida.closest('form')?.querySelector('select[name="cliente_id"]')
-    : null;
-  if (filtroClienteRapida && selectClienteRapida) {
-    filtroClienteRapida.addEventListener('input', () => {
-      const termo = filtroClienteRapida.value.trim().toLowerCase();
-      Array.from(selectClienteRapida.options).forEach(opcao => {
-        const combina = !termo || opcao.value === '' ||
-          opcao.textContent.toLowerCase().includes(termo);
-        opcao.hidden = !combina;
-        opcao.disabled = !combina;
-      });
-    });
+  const campoClienteRapida = document.getElementById('cliente-rapida-nome');
+  const idClienteRapida = document.getElementById('cliente-rapida-id');
+  const statusClienteRapida = document.getElementById('cliente-rapida-status');
+  const listaClientesRapida = document.getElementById('clientes-rapida-lista');
+  if (campoClienteRapida && idClienteRapida && listaClientesRapida) {
+    const normalizar = texto => String(texto || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLowerCase();
+    const porNome = new Map(Array.from(listaClientesRapida.options).map(opcao => [
+      normalizar(opcao.value), opcao.dataset.id || ''
+    ]));
+    const atualizarClienteRapida = () => {
+      const id = porNome.get(normalizar(campoClienteRapida.value)) || '';
+      idClienteRapida.value = id;
+      if (statusClienteRapida) {
+        statusClienteRapida.textContent = !campoClienteRapida.value.trim()
+          ? 'Sem cliente agora: a OS fica como “Cliente a definir”.'
+          : (id ? 'Cliente existente selecionado.' :
+             'Nome novo: será criado um cliente com dados incompletos para completar depois.');
+      }
+    };
+    campoClienteRapida.addEventListener('input', atualizarClienteRapida);
+    campoClienteRapida.addEventListener('change', atualizarClienteRapida);
+    atualizarClienteRapida();
   }
   document.getElementById('abrir-feedback-side')?.addEventListener('click', () => {
     document.getElementById('abrir-feedback')?.click();
