@@ -37,8 +37,10 @@ def formatar_documento(valor):
 
 def caminho_imagem(nome):
     """Localiza logo.png/icone.png na pasta de dados (MAIN/DEV), no bundle ou no código."""
+    flavor = Path(__file__).resolve().parent / 'flavors' / 'autoseg' / 'branding'
     candidatos = [
         Path(ext.BASE) / nome,
+        flavor / nome,
         Path(__file__).resolve().parent / nome,
         Path.home() / 'gestaoservicos_MAIN' / nome,
         Path.home() / 'GestaoServicos_DEV' / nome,

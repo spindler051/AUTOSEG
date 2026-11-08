@@ -1,12 +1,21 @@
 # AUTOSEG — Changelog
 
-## 9.6.0-dev.67 — corrige login após validação de origem — 2026-11-08 — develop
+## 9.6.0-dev.68 — início da organização do monorepo — 2026-11-08 — develop
+
+- **Novo layout:** criados `officina/` e `flavors/autoseg/` com documentação de limites.
+- **AUTOSEG:** marca, configurações padrão e modelos YAML movidos para `flavors/autoseg/`.
+- **Caminhos:** logo/ícones, políticas, numeração, completude, composição e modelos atualizados com fallback compatível.
+- **Empacotamento:** AppImage e documentação de empacotamento apontam para os novos caminhos.
+- **Documentação:** novo `docs/REPOSITORY_LAYOUT.md`; README e índice atualizados.
+- **Testes:** 335 testes OK, 1 skip.
+
+## 9.6.0-dev.68 — corrige login após validação de origem — 2026-11-08 — develop
 
 - **Login:** navegadores que enviam `Origin: null` em formulários same-origin voltam a entrar; a checagem de origem continua bloqueando origens externas.
 - **Teste:** regressão coberta para login com `Origin: null`.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.67 — endurecimento conforme auditoria — 2026-11-08 — develop
+## 9.6.0-dev.68 — endurecimento conforme auditoria — 2026-11-08 — develop
 
 - **API desktop:** exige admin nas rotas de prestadores, estoque, empresa, composição, organizações e escritas financeiras; exige `AUTOSEG_DESKTOP_TOKEN` quando o bind não é loopback.
 - **Clientes:** redefinir senha legada, desativar, excluir e mesclar ficam restritos a admin; organizações e vínculos também.
@@ -17,13 +26,13 @@
 - **Operação:** permissões 700/600 nos diretórios operacionais, refs de backup com PII removidas e `git gc` executado.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.67 — associar cliente em OS de chamado — 2026-11-08 — develop
+## 9.6.0-dev.68 — associar cliente em OS de chamado — 2026-11-08 — develop
 
 - **OS com “Cliente a definir”:** mesmo quando veio de um chamado, mostra o seletor “Cliente da OS” para associar o cliente real.
 - **Pagamento em branco:** editar uma OS criada sem forma de pagamento não obriga mais a preencher o pagamento.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.67 — busca automática, composições e tema automático — 2026-11-08 — develop
+## 9.6.0-dev.68 — busca automática, composições e tema automático — 2026-11-08 — develop
 
 - **Clientes e serviços:** uma única busca, sem botão; filtra automaticamente enquanto digita.
 - **OS:** status diferentes de Pendente e Cancelada exigem cliente definido, não “Cliente a definir”.
@@ -33,7 +42,7 @@
 - **Cliente na OS:** seletor em largura total acima de “Atendido por”, com resumo automático de e-mail, telefone e síndico.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.67 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
+## 9.6.0-dev.68 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
 
 - **OS rápida:** removidos “Atribuir prestador” e “Forma de pagamento”; a OS abre sem pagamento definido e o criador fica responsável.
 - **Cliente na OS rápida:** busca automática ao digitar, sem botão “Buscar”; nome novo cria cliente com dados incompletos.
@@ -41,7 +50,7 @@
 - **Login:** segue automaticamente o tema do sistema, sem botões; a preferência manual fica em Configurações após entrar.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.67 — feedbacks abertos da DEV — 2026-11-08 — develop
+## 9.6.0-dev.68 — feedbacks abertos da DEV — 2026-11-08 — develop
 
 - **Nova OS em uma tela:** cliente é opcional e pode ser associado depois; a OS usa o cadastro provisório “Cliente a definir”.
 - **Duplicidade:** aviso para OS do mesmo cliente criada nos últimos 2 minutos, com opção explícita de criar outra e registro no histórico.

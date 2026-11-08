@@ -123,7 +123,7 @@ class AutoSegMelhorias(unittest.TestCase):
         self.assertEqual(por_numero, ['OS-0001', 'OS-0002', 'OS-0003'])
 
     def test_importacao_yaml_valida_sem_gravar(self):
-        texto=Path(__file__).with_name('modelo_cadastro_cliente.yaml').read_bytes()
+        texto=(Path(__file__).parent / 'flavors/autoseg/templates/modelo_cadastro_cliente.yaml').read_bytes()
         antes=[]
         with ext.db(self.db) as c:antes.append(c.execute('SELECT COUNT(*) FROM clientes').fetchone()[0])
         dados=iy.cliente('cadastro.yaml',texto)

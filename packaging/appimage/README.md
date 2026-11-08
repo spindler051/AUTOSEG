@@ -13,7 +13,7 @@ Um AppImage autônomo precisa levar:
 - GTK4, libadwaita, GdkPixbuf, Pango, Cairo, gdk-pixbuf loaders e temas de
   ícones;
 - `reportlab` (e Pillow), que hoje fica em `.vendor/` no Linux;
-- arquivos do projeto (`web/`, `portal.js`, `logo.png`, `icone.png`,
+- arquivos do projeto (`web/`, `portal.js`, `flavors/autoseg/branding/logo.png`, `flavors/autoseg/branding/icone.png`,
   `versao.json`).
 
 O PyInstaller coleta parte disso por meio dos hooks de `gi`, mas bibliotecas

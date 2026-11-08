@@ -23,6 +23,7 @@ histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
 - [Separação GTK × servidor](GTK_SERVER_DECOUPLING.md)
 - [GTK4/libadwaita no Linux e macOS](GTK4_LINUX_MACOS.md)
 - [Integração com Workaholic](WORKAHOLIC_INTEGRACAO.md)
+- [Layout do repositório](REPOSITORY_LAYOUT.md)
 - [Migração de plataforma — playbook](PLATFORM_MIGRATION_PLAYBOOK.md)
 - [Migração de plataforma — ledger](PLATFORM_MIGRATION_LEDGER.md)
 - [Nomes e contrato da CLI](NAMING_AND_CLI.md)

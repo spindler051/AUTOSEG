@@ -111,7 +111,7 @@ def _arquivo():
         candidato = Path(base).expanduser() / 'numeracao.yaml'
         if candidato.is_file():
             return candidato
-    candidato = PASTA_APP / 'numeracao.yaml'
+    candidato = PASTA_APP / 'flavors' / 'autoseg' / 'config' / 'numeracao.yaml'
     return candidato if candidato.is_file() else None
 
 

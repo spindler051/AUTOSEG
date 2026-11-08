@@ -8,7 +8,7 @@ class TestesRev05(unittest.TestCase):
     def test_tuneis_somente_dev(self):
         self.assertEqual(PORTAS,(8865,8866))
     def test_yaml_materiais_modelo(self):
-        arquivo=Path(__file__).with_name('modelo_materiais.yaml')
+        arquivo=Path(__file__).parent / 'flavors/autoseg/templates/modelo_materiais.yaml'
         lista=imp.materiais(arquivo.name,arquivo.read_bytes())
         self.assertEqual(len(lista),2)
         self.assertEqual(lista[0]['unidade'],'metro')

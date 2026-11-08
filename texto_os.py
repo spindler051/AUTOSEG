@@ -28,7 +28,7 @@ def _arquivo():
         candidato = Path(base).expanduser() / 'texto_os.yaml'
         if candidato.is_file():
             return candidato
-    candidato = PASTA_APP / 'texto_os.yaml'
+    candidato = PASTA_APP / 'flavors' / 'autoseg' / 'config' / 'texto_os.yaml'
     return candidato if candidato.is_file() else None
 
 

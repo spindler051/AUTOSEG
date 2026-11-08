@@ -322,7 +322,7 @@ def relatorio_os_yaml(banco, os_id):
             item['unidade']=str(m['unidade']).strip()
         itens.append(item)
     dados['materiais']=itens
-    modelo_path=Path(__file__).with_name('modelo_relatorio_os.yaml')
+    modelo_path=Path(__file__).resolve().parent/'flavors'/'autoseg'/'templates'/'modelo_relatorio_os.yaml'
     config=yaml.safe_load(modelo_path.read_text(encoding='utf-8'))
     config.setdefault('modelo',{})
     config['modelo']['os']=dados

@@ -3188,9 +3188,12 @@ class PortalPrestador:
                         if path == '/logo.png':
                             arquivo = ext.BASE/'logo.png'
                             if not arquivo.is_file():
+                                arquivo = Path(__file__).parent/'flavors'/'autoseg'/'branding'/'logo.png'
+                            if not arquivo.is_file():
                                 arquivo = Path(__file__).parent/'logo.png'
                         else:
                             arquivo = (ext.caminho_icone(ext.BASE)
+                                       or ext.caminho_icone(Path(__file__).parent/'flavors'/'autoseg'/'branding')
                                        or ext.caminho_icone(Path(__file__).parent))
                         if arquivo and arquivo.is_file():
                             return self.send_bytes(arquivo.read_bytes(),'image/png')
@@ -3202,7 +3205,7 @@ class PortalPrestador:
                     if not s:return self.login()
                     if path in ('/modelos/cadastro.yaml','/modelos/relatorio.yaml','/modelos/servico.yaml','/modelos/orcamento.yaml'):
                         nome={'/modelos/cadastro.yaml':'modelo_cadastro_cliente.yaml','/modelos/relatorio.yaml':'modelo_relatorio_os.yaml','/modelos/servico.yaml':'modelo_servico.yaml','/modelos/orcamento.yaml':'modelo_orcamento.yaml'}[path]
-                        arquivo=Path(__file__).parent/nome
+                        arquivo=Path(__file__).parent/'flavors'/'autoseg'/'templates'/nome
                         return self.send_bytes(arquivo.read_bytes(),'application/x-yaml; charset=utf-8',filename=nome)
                     if path=='/feedback/recebidos':
                         if not s.get('admin'):

@@ -331,7 +331,7 @@ class MelhoriasRev12(unittest.TestCase):
 
     def test_yaml_modelo_com_instrucoes_e_saida_estrita(self):
         import importacao_yaml as iy
-        modelo = (Path(__file__).with_name('modelo_relatorio_os.yaml')).read_bytes()
+        modelo = (Path(__file__).parent / 'flavors/autoseg/templates/modelo_relatorio_os.yaml').read_bytes()
         self.assertEqual(iy.relatorio('modelo_relatorio_os.yaml', modelo), {})
         saida = ('versao: 1\nos:\n  diagnostico: Diagnóstico X\n  execucao: Execução Y\n'
                  '  resultado: OK\n  relatorio_tecnico: Recomendação Z\n  materiais: []\n').encode('utf-8')

@@ -37,7 +37,7 @@ class Operacoes(unittest.TestCase):
         est.reconciliar_os_conexao(c,oid,'Prestador DEV')
 
     def test_yml_relatorio_reutilizavel_em_qualquer_os(self):
-        modelo=Path(__file__).with_name('modelo_relatorio_os.yaml').read_bytes()
+        modelo=(Path(__file__).parent / 'flavors/autoseg/templates/modelo_relatorio_os.yaml').read_bytes()
         # O modelo oficial atual é um formulário em branco; a importação não
         # inventa diagnóstico nem materiais.
         self.assertEqual(imp.relatorio('modelo.yaml',modelo),{})
@@ -51,7 +51,7 @@ class Operacoes(unittest.TestCase):
         self.assertEqual(outro,{'v9_resultado':'OK'})
 
     def test_yml_servico_valida_sem_gravar(self):
-        pre=imp.servico('modelo_servico.yaml',Path(__file__).with_name('modelo_servico.yaml').read_bytes())
+        pre=imp.servico('modelo_servico.yaml',(Path(__file__).parent / 'flavors/autoseg/templates/modelo_servico.yaml').read_bytes())
         self.assertEqual(pre['nome'],'Cadastro de controle remoto PPA — DEMO')
         self.assertEqual(len(pre['materiais_lista']),2)
         self.assertEqual(cat.listar(self.db),[])

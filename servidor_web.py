@@ -381,11 +381,14 @@ class ServidorPortal:
                     if path in ('/icone.png', '/favicon.ico', '/logo.png'):
                         if path == '/logo.png':
                             icone = pasta_app / 'logo.png'
+                            if not icone.is_file():
+                                icone = Path(__file__).resolve().parent / 'flavors' / 'autoseg' / 'branding' / 'logo.png'
                             if icone.is_file():
                                 mime = mimetypes.guess_type(icone.name)[0] or 'image/png'
                                 return self.send_bytes(icone.read_bytes(), mime)
                         else:
-                            icone = ext.caminho_icone(pasta_app)
+                            icone = (ext.caminho_icone(pasta_app)
+                                     or ext.caminho_icone(Path(__file__).resolve().parent/'flavors'/'autoseg'/'branding'))
                             if icone:
                                 mime = mimetypes.guess_type(icone.name)[0] or 'image/png'
                                 return self.send_bytes(icone.read_bytes(), mime)

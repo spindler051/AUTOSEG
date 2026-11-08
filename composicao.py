@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-PADRAO = Path(__file__).resolve().with_name("composicao_padrao.yaml")
+PADRAO = (Path(__file__).resolve().parent / "flavors" / "autoseg" / "config" / "composicao_padrao.yaml")
 MODOS = {
     "materiais": "Materiais (custo real)",
     "fixo": "Valor fixo",

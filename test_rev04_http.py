@@ -50,7 +50,7 @@ class Rev04Http(unittest.TestCase):
                 self.assertIn('id="lista-materiais-servico"',form)
                 self.assertIn('/servicos/yaml',form)
                 self.assertIn('/modelos/servico.yaml',form)
-                doc=Path(__file__).with_name('modelo_servico.yaml').read_bytes()
+                doc=(Path(__file__).parent / 'flavors/autoseg/templates/modelo_servico.yaml').read_bytes()
                 pre=enviar_yaml(bc,base+'/servicos/yaml',campo_csrf(form),'servico.yaml',doc)
                 self.assertIn('Cadastro de controle remoto PPA',pre)
                 self.assertIn('material_nome[]',pre)

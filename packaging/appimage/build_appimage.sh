@@ -36,10 +36,12 @@ ARGUMENTOS=(
     --distpath "$SAIDA/dist"
     --workpath "$SAIDA/work"
     --specpath "$SAIDA"
-    --add-data "$RAIZ/logo.png:."
-    --add-data "$RAIZ/icone.png:."
+    --add-data "$RAIZ/flavors/autoseg/branding/logo.png:flavors/autoseg/branding"
+    --add-data "$RAIZ/flavors/autoseg/branding/icone.png:flavors/autoseg/branding"
+    --add-data "$RAIZ/flavors/autoseg/branding/icone_devel.png:flavors/autoseg/branding"
+    --add-data "$RAIZ/flavors/autoseg/config:flavors/autoseg/config"
+    --add-data "$RAIZ/flavors/autoseg/templates:flavors/autoseg/templates"
     --add-data "$RAIZ/versao.json:."
-    --add-data "$RAIZ/completude.yaml:."
     --add-data "$RAIZ/web:web"
     --add-data "$RAIZ/portal.js:."
     --collect-all reportlab
@@ -53,7 +55,7 @@ python3 -m PyInstaller "${ARGUMENTOS[@]}"
 
 cp -a "$SAIDA/dist/AUTOSEG" "$APP/usr/bin/AUTOSEG"
 cp "$RAIZ/packaging/appimage/AUTOSEG.desktop" "$APP/usr/share/applications/autoseg.desktop"
-cp "$RAIZ/icone.png" "$APP/usr/share/icons/hicolor/256x256/apps/autoseg.png"
+cp "$RAIZ/flavors/autoseg/branding/icone.png" "$APP/usr/share/icons/hicolor/256x256/apps/autoseg.png"
 
 cat > "$APP/AppRun" <<'EOF'
 #!/bin/sh

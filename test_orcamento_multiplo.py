@@ -154,7 +154,7 @@ orcamento:
         ])
 
     def test_parser_yaml_exige_saida_limpa(self):
-        modelo = Path(__file__).with_name('modelo_orcamento.yaml').read_bytes()
+        modelo = (Path(__file__).parent / 'flavors/autoseg/templates/modelo_orcamento.yaml').read_bytes()
         self.assertEqual(iy.orcamento('modelo_orcamento.yaml', modelo, self.db), {})
         dados = yaml.safe_load(modelo)
         dados['modelo']['orcamento'] = {

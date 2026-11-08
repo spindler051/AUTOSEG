@@ -34,7 +34,7 @@ O lançador:
 - cria `.venv-gtk` com `--system-site-packages` para enxergar o PyGObject do
   Homebrew;
 - instala `reportlab`, `Pillow` e `PyYAML` no venv;
-- copia `completude.yaml` para a pasta de dados, se ainda não existir;
+- copia `flavors/autoseg/config/completude.yaml` para a pasta de dados, se ainda não existir;
 - executa `gtk_app.py`.
 
 ## Aparência
@@ -45,7 +45,7 @@ O lançador:
   simbólicos do libadwaita, não ícones do KDE.
 - **Claro/escuro:** o `Adw.StyleManager` fica em `DEFAULT`, seguindo a
   aparência do macOS em Tempo de execução → Aparência.
-- **Logo:** `logo.png` e `icone.png` do projeto. No ambiente de desenvolvimento
+- **Logo:** `flavors/autoseg/branding/logo.png` e `flavors/autoseg/branding/icone.png` do projeto. No ambiente de desenvolvimento
   (`AUTOSEG_DEV=1`), o ícone usado é `icone_devel.png` para diferenciar
   visualmente o DEV do MAIN (selo dos PDFs, favicon dos portais e ícone da janela).
 
@@ -60,7 +60,7 @@ validar o `.command`; depois empacotar com PyInstaller ou py2app.
 O bundle precisa incluir:
 
 - `gtk_app.py`, `gtk_comum.py`, `gtk_dialogos.py` e backend Python;
-- `completude.yaml`, `versao.json`, `logo.png`, `icone.png`;
+- `flavors/autoseg/config/completude.yaml`, `versao.json`, `logo.png`, `icone.png`;
 - `web/` e `portal.js`;
 - bibliotecas GTK4, libadwaita, GdkPixbuf, Pango, typelibs e temas de ícones;
 - `reportlab`, Pillow e PyYAML no venv do bundle.

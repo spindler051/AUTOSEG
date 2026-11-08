@@ -100,7 +100,7 @@ def _default_path() -> Path | None:
         candidato = Path(base).expanduser() / 'policy.yaml'
         if candidato.is_file():
             return candidato
-    candidato = PASTA_APP / 'policy.yaml'
+    candidato = PASTA_APP / 'flavors' / 'autoseg' / 'config' / 'policy.yaml'
     return candidato if candidato.is_file() else None
 
 

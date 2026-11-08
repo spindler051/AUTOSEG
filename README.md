@@ -10,7 +10,7 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.67` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.68` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
@@ -39,6 +39,19 @@ The project is moving toward a modular, open-source platform:
 
 The full product vision, boundaries, licensing and roadmap are documented in
 [`docs/PRODUCT_VISION.md`](docs/PRODUCT_VISION.md).
+
+## Repository layout
+
+The monorepo is transitioning from a flat prototype to clear layers:
+
+- `workaholic/` — generic engine.
+- `officina/` — generic application platform and contracts.
+- `flavors/autoseg/` — AUTOSEG branding, configuration and templates.
+- `application/`, `gtk_app.py`, portals and legacy modules — transitional
+  locations, migrated in small slices with parity tests.
+
+See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md) for the target tree
+and the migration rules.
 
 ## License
 
