@@ -11,7 +11,7 @@ Relatório original: `/Users/idkosx/security-audit-gestaoservicos-dev.md`.
 | A03 | Organizações, vínculos, síndico, mesclagem e desativação de cliente exigem admin no portal e na API. |
 | A04 | `chmod 700/600` nos diretórios operacionais; refs de backup com PII removidas; `git reflog expire` e `git gc --prune=now`; e-mails do banco de teste trocados por `.invalid`. |
 | A05 | Corpo pré-autenticação limitado a 64 KB; timeouts de socket de 15 s; uploads grandes só depois da sessão. |
-| A06 | POSTs dos portais validam `Origin`/`Referer` contra o `Host`. |
+| A06 | POSTs dos portais validam `Origin`/`Referer` contra o `Host`, aceitando `Origin: null` de formulários same-origin do navegador. |
 | A07 | Rate limit e auditoria usam `feedback_portal.ip_requisicao` (CF-Connecting-IP/X-Forwarded-For só em loopback). |
 | A09 | Sessões legadas guardam o hash da credencial e são invalidadas na troca de senha. |
 | A10 | O formulário de OS não embute mais contatos de todos os clientes; busca o contato do cliente selecionado em `/clientes/<id>/contato`. |

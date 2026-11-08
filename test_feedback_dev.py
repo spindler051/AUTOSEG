@@ -307,6 +307,16 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertEqual(importado.status_code, 200)
         self.assertIn('Prévia importada', importado.text)
 
+    def test_login_aceita_origin_null_do_navegador(self):
+        sessao = requests.Session()
+        resposta = sessao.post(
+            self.base + '/login',
+            data={'email': 'admin.feedback@example.invalid',
+                  'senha': 'senha-admin-123'},
+            headers={'Origin': 'null'}, timeout=10)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn('Visão geral', resposta.text)
+
     def test_login_segue_tema_do_sistema_sem_botoes(self):
         pagina = requests.get(self.base + '/login', timeout=10)
         self.assertEqual(pagina.status_code, 200)

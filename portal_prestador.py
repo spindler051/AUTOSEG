@@ -1078,7 +1078,7 @@ class PortalPrestador:
 
             def origem_permitida(self):
                 origem=self.headers.get('Origin') or self.headers.get('Referer') or ''
-                if not origem:
+                if not origem or str(origem).strip().lower() == 'null':
                     return True
                 try:
                     alvo=urlparse(origem)
