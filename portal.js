@@ -2009,23 +2009,26 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
   (() => {
     const selectCliente = document.getElementById('c_cliente_id');
     const contato = document.getElementById('cliente-contato-os');
-    const dados = document.getElementById('clientes-contato-os');
-    if (!selectCliente || !contato || !dados) return;
-    let clientes = [];
-    try { clientes = JSON.parse(dados.textContent || '[]'); } catch (_erro) { return; }
-    const atualizar = () => {
-      const cliente = clientes.find(item => String(item.id) === selectCliente.value);
-      if (!cliente) {
+    if (!selectCliente || !contato) return;
+    const atualizar = async () => {
+      if (!selectCliente.value) {
         contato.textContent = 'Sem e-mail ou telefone cadastrado.';
         return;
       }
-      const partes = [cliente.email, cliente.telefone,
-        cliente.sindico_nome, cliente.sindico_email].filter(Boolean);
-      contato.textContent = partes.length ? partes.join(' · ')
-        : 'Sem e-mail ou telefone cadastrado.';
+      try {
+        const resposta = await fetch('/clientes/' + selectCliente.value + '/contato',
+          {credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+        if (!resposta.ok) throw new Error('contato');
+        const cliente = await resposta.json();
+        const partes = [cliente.email, cliente.telefone,
+          cliente.sindico_nome, cliente.sindico_email].filter(Boolean);
+        contato.textContent = partes.length ? partes.join(' · ')
+          : 'Sem e-mail ou telefone cadastrado.';
+      } catch (_erro) {
+        contato.textContent = 'Não foi possível carregar o contato.';
+      }
     };
     selectCliente.addEventListener('change', atualizar);
-    atualizar();
   })();
   // Filtros aplicam ao mudar; nunca exigem um botão "Filtrar".
   // Filtros aplicam ao mudar; nunca exigem um botão "Filtrar".

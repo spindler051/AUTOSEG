@@ -11,8 +11,10 @@ a non-loopback address.
 from __future__ import annotations
 
 import base64
+import hmac
 import json
 import logging
+import os
 import sqlite3
 from dataclasses import asdict, is_dataclass
 from http import HTTPStatus
@@ -34,6 +36,7 @@ import prestador_auth
 LOG = logging.getLogger('autoseg.api_desktop')
 PREFIX = '/api/v1/desktop'
 MAX_BODY = 32 * 1024 * 1024
+PREAUTH_BODY = 64 * 1024
 
 
 def _jsonable(valor: Any) -> Any:
@@ -78,12 +81,12 @@ def _erro(handler, status: int, codigo: str, mensagem: str):
     handler.wfile.write(corpo)
 
 
-def _corpo(handler) -> dict:
+def _corpo(handler, limite: int = MAX_BODY) -> dict:
     try:
         tamanho = int(handler.headers.get('Content-Length', '0') or 0)
     except ValueError:
         raise ValidacaoError('Tamanho de requisição inválido.')
-    if tamanho > MAX_BODY:
+    if tamanho > int(limite):
         raise ValidacaoError('Requisição grande demais.')
     if tamanho <= 0:
         return {}
@@ -102,7 +105,31 @@ def instalar(banco) -> None:
 
 
 def _ip(handler) -> str:
-    return str(handler.client_address[0] if handler.client_address else '')
+    import feedback_portal
+    return feedback_portal.ip_requisicao(
+        str(handler.client_address[0] if handler.client_address else ''),
+        handler.headers)
+
+
+def _exigir_admin(info: dict) -> None:
+    if not info or not info.get('admin'):
+        raise PermissionError('Somente administradores podem executar esta ação.')
+
+
+def _portao_desktop(handler) -> bool:
+    try:
+        endereco = str(handler.server.server_address[0])
+    except (AttributeError, TypeError, IndexError):
+        endereco = ''
+    if endereco in ('127.0.0.1', '::1', 'localhost'):
+        return True
+    esperado = os.environ.get('AUTOSEG_DESKTOP_TOKEN', '')
+    recebido = handler.headers.get('X-AUTOSEG-Desktop-Token', '')
+    if esperado and recebido and hmac.compare_digest(str(esperado), str(recebido)):
+        return True
+    _erro(handler, 403, 'forbidden',
+          'A API desktop em endereço não-local exige AUTOSEG_DESKTOP_TOKEN.')
+    return False
 
 
 def _status_de_erro(erro: AppError) -> int:
@@ -154,8 +181,10 @@ def _os_input(dados: Mapping[str, Any]) -> OSInput:
         raise ValidacaoError('Dados da OS inválidos.') from erro
 
 
-def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str):
+def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
+          info: dict | None = None):
     servico = LocalService(banco)
+    admin = bool(info and info.get('admin'))
     if not partes:
         return _enviar(handler, 200, {
             'name': 'desktop',
@@ -173,13 +202,16 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str):
         })
     if recurso == 'resumo' and metodo == 'GET':
         return _enviar(handler, 200, servico.resumo_inicio())
+    if recurso in ('prestadores', 'estoque', 'empresa', 'composicao') and not admin:
+        raise PermissionError('Somente administradores podem acessar esta área.')
     if recurso == 'clientes':
-        return _rota_clientes(handler, partes, query, servico, metodo)
+        return _rota_clientes(handler, partes, query, servico, metodo, info)
     if recurso == 'os':
         return _rota_os(handler, partes, query, servico, metodo)
     if recurso == 'prestadores':
         return _rota_prestadores(handler, partes, servico, metodo)
     if recurso == 'organizacoes':
+        _exigir_admin(info)
         return _rota_organizacoes(handler, partes, servico, metodo)
     if recurso == 'relatorios':
         if metodo == 'GET' and partes == ['relatorios']:
@@ -191,6 +223,8 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str):
     if recurso == 'pj':
         return _rota_pj(handler, partes, query, servico, metodo)
     if recurso == 'financeiro':
+        if metodo != 'GET':
+            _exigir_admin(info)
         return _rota_financeiro(handler, partes, query, servico, metodo)
     if recurso == 'portal':
         return _rota_portal(handler, partes, query, servico, metodo)
@@ -207,7 +241,7 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str):
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_clientes(handler, partes, query, servico, metodo):
+def _rota_clientes(handler, partes, query, servico, metodo, info=None):
     if len(partes) == 1:
         if metodo == 'GET':
             return _enviar(handler, 200, servico.listar_clientes(
@@ -228,11 +262,11 @@ def _rota_clientes(handler, partes, query, servico, metodo):
         if cliente_id is None:
             raise NaoEncontradoError('Cliente não encontrado.')
         return _rota_cliente_id(handler, cliente_id, partes[2:],
-                                servico, metodo)
+                                servico, metodo, info)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_cliente_id(handler, cliente_id, resto, servico, metodo):
+def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None):
     if not resto and metodo == 'GET':
         registro = servico.obter_cliente(cliente_id)
         if registro is None:
@@ -251,13 +285,16 @@ def _rota_cliente_id(handler, cliente_id, resto, servico, metodo):
         return _enviar(handler, 200, {
             'total': servico.contar_os_cliente(cliente_id)})
     if resto == ['desativar'] and metodo == 'POST':
+        _exigir_admin(info)
         servico.desativar_cliente(
             cliente_id, str(_corpo(handler).get('motivo') or ''))
         return _enviar(handler, 200, {'ok': True})
     if resto == ['excluir'] and metodo == 'POST':
+        _exigir_admin(info)
         servico.excluir_cliente(cliente_id)
         return _enviar(handler, 200, {'ok': True})
     if resto == ['senha'] and metodo == 'POST':
+        _exigir_admin(info)
         servico.definir_senha_cliente(
             cliente_id, _corpo(handler).get('senha'))
         return _enviar(handler, 200, {'ok': True})
@@ -652,7 +689,7 @@ def _rota_contexto(handler, partes, servico, metodo):
 
 
 def _login(handler, banco) -> bool:
-    dados = _corpo(handler)
+    dados = _corpo(handler, PREAUTH_BODY)
     resultado = prestador_auth.login(
         banco, str(dados.get('email') or ''),
         str(dados.get('senha') or ''),
@@ -679,6 +716,8 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
     partes = [parte for parte in partes if parte]
     query = parse_qs(urlparse(handler.path).query)
     try:
+        if not _portao_desktop(handler):
+            return True
         if caminho == PREFIX + '/health' and method == 'GET':
             return _rota(handler, partes, query, banco, method)
         if caminho == PREFIX + '/login' and method == 'POST':
@@ -697,7 +736,7 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
                 banco, handler.headers.get('Authorization', ''))
             _enviar(handler, 200, {'ok': True})
             return True
-        _rota(handler, partes, query, banco, method)
+        _rota(handler, partes, query, banco, method, info)
     except prestador_auth.MuitasTentativasError as erro:
         _erro(handler, 429, 'rate_limited', str(erro))
     except AppError as erro:

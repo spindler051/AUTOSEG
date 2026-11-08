@@ -120,6 +120,16 @@ def criar_primeiro_admin(banco, nome: str, email: str, senha: str) -> dict:
     return pessoa
 
 
+def _podar_falhas() -> None:
+    agora = time.time()
+    for chave, marcas in list(_FALHAS.items()):
+        recentes = [t for t in marcas if agora - t < JANELA_FALHAS]
+        if recentes:
+            _FALHAS[chave] = recentes
+        else:
+            _FALHAS.pop(chave, None)
+
+
 def _falhas(chave: str) -> list[float]:
     agora = time.time()
     return [t for t in _FALHAS.get(chave, []) if agora - t < JANELA_FALHAS]
@@ -139,6 +149,8 @@ def login(banco, email: str, senha: str, lembrar: bool = False,
     if not pessoa:
         with _LOCK:
             _FALHAS[chave] = falhas + [time.time()]
+            if len(_FALHAS) > 2000:
+                _podar_falhas()
         return None
     with _LOCK:
         _FALHAS.pop(chave, None)

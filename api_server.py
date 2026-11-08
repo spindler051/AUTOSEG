@@ -22,6 +22,7 @@ LOG = logging.getLogger('autoseg.api_server')
 
 
 class _APIHandler(BaseHTTPRequestHandler):
+    timeout = 15
     server_version = 'Officina-API/1'
 
     def log_message(self, formato, *args):

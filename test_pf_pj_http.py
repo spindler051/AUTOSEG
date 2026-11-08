@@ -33,7 +33,8 @@ class PF_PJ_HTTP(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='autoseg_pf_pj_http_') as tmp:
             banco=str(Path(tmp)/'db.db')
             criar_banco(banco);ext.instalar(banco);cad.instalar(banco)
-            ext.cadastrar(banco,'Prestador DEV','dev-prestador@example.invalid','senha-forte-ficticia-123')
+            pid_prestador=ext.cadastrar(banco,'Prestador DEV','dev-prestador@example.invalid','senha-forte-ficticia-123')
+            cad.definir_admin(banco,pid_prestador,True)
             uid=cad.cadastrar_usuario(banco,'Pessoa Teste','%s'%cpf_ficticio('987644450'),
                                       '51999999999','senha-pf-ficticia-123')
             with ext.db(banco) as c:

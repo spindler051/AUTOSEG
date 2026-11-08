@@ -624,6 +624,21 @@ TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
 LOCK_LOGIN = threading.Lock()
 MAX_POST = 90 * 1024 * 1024
+PREAUTH_MAX = 64 * 1024
+
+
+def _podar_mapas_sessao():
+    agora=time.time()
+    with LOCK_LOGIN:
+        for chave,sessao in list(SESSOES.items()):
+            if sessao.get('exp',0)<agora:
+                SESSOES.pop(chave,None)
+        for chave,tempos in list(TENTATIVAS.items()):
+            recentes=[t for t in tempos if agora-t<600]
+            if recentes:
+                TENTATIVAS[chave]=recentes
+            else:
+                TENTATIVAS.pop(chave,None)
 
 
 def url_os(banco, token, sufixo=''):
@@ -981,8 +996,13 @@ class PortalPrestador:
         with ext.db(banco) as c: neg.criar_auditoria(c)
 
         class Handler(BaseHTTPRequestHandler):
+            timeout = 15
             def log_message(self,formato,*args):
-                LOG.info('%s %s',self.address_string(),formato%args)
+                try:
+                    ip=feedback.ip_requisicao(self.client_address[0],self.headers)
+                except (ValueError,TypeError):
+                    ip=self.address_string()
+                LOG.info('acesso %s %s',ip,formato%args)
 
             def send_bytes(self,data,mime='text/html; charset=utf-8',filename=None,status=200,
                            cookie=None,inline=False):
@@ -1037,6 +1057,8 @@ class PortalPrestador:
                     cookie=SimpleCookie();cookie.load(self.headers.get('Cookie',''))
                     tok=cookie['autosseg_session'].value
                 except (ValueError,KeyError):return None
+                if len(SESSOES)>2000:
+                    _podar_mapas_sessao()
                 s=SESSOES.get(tok)
                 if not s or s['exp']<time.time():
                     SESSOES.pop(tok,None);return None
@@ -1054,10 +1076,23 @@ class PortalPrestador:
             def hidden(self,s):
                 return f'<input type="hidden" name="csrf" value="{esc(s["csrf"])}">'
 
-            def form(self):
+            def origem_permitida(self):
+                origem=self.headers.get('Origin') or self.headers.get('Referer') or ''
+                if not origem:
+                    return True
+                try:
+                    alvo=urlparse(origem)
+                except ValueError:
+                    return False
+                host=str(self.headers.get('Host','') or '').lower()
+                if not host or not alvo.netloc:
+                    return False
+                return alvo.scheme in ('http','https') and alvo.netloc.lower()==host
+
+            def form(self, limite=MAX_POST):
                 try:t=int(self.headers.get('Content-Length','0'))
                 except ValueError: raise ValueError('Tamanho inválido.')
-                if not (0<t<=MAX_POST): raise ValueError('O envio deve ter no máximo 90 MB no total.')
+                if not (0<t<=int(limite)): raise ValueError('O envio excede o limite permitido.')
                 ct=self.headers.get('Content-Type','')
                 raw=self.rfile.read(t)
                 if ct.startswith('multipart/form-data'):
@@ -1700,9 +1735,9 @@ class PortalPrestador:
                     +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
                     +'</div></div><div class="col2">'+''.join(f'<div>{f}</div>' for f in fields)+'</div>'
                     +textarea('Observações','observacoes',d.get('observacoes') or '')
-                    +'<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Use somente quando houver necessidade de acesso legado por ID. Senhas de contas pessoais são criadas pelo próprio usuário.</p>'
-                    +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
-                    +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>'
+                    +(('<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Somente administradores podem redefinir a senha legada. A ação será auditada.</p>'
+                        +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
+                        +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if s.get('admin') else '')
                     +'<button type="submit">Salvar cliente</button></form>')
                 if not cid:
                     importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data">{self.hidden(s)}'
@@ -1716,8 +1751,9 @@ class PortalPrestador:
                     if preenchimento:
                         corpo='<p class="notice">Dados importados para revisão. Confira nome, documento, vínculos e endereço antes de salvar.</p>'+corpo
                 if cid:
-                    corpo+=f'<form method="post" action="/clientes/{cid}/desativar">{self.hidden(s)}<button class="secondary">Desativar (preservar histórico)</button></form>'
-                    corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
+                    if s.get('admin'):
+                        corpo+=f'<form method="post" action="/clientes/{cid}/desativar">{self.hidden(s)}<button class="secondary">Desativar (preservar histórico)</button></form>'
+                        corpo+=f'<form method="post" action="/clientes/{cid}/excluir" data-confirm="Confirma a exclusão deste cliente sem ordens de serviço?">{self.hidden(s)}<button class="danger" type="submit">Excluir cliente sem OS vinculadas</button></form>'
                     if s.get('admin'):
                         with ext.db(banco) as c:
                             outros=c.execute(
@@ -1869,10 +1905,6 @@ class PortalPrestador:
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
                 with ext.db(banco) as c:
                     cl=clientes_core.listar_para_os(banco)
-                    contatos_clientes=c.execute(
-                        "SELECT id,nome,email,telefone,sindico_nome,sindico_email "
-                        "FROM clientes WHERE status NOT IN ('Inativo','A definir') "
-                        "ORDER BY nome").fetchall()
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
@@ -2152,23 +2184,15 @@ class PortalPrestador:
                         corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
                 else:
                     cliente_atual_id=int(d.get('cliente_id') or (cl[0]['id'] if cl else 0))
-                    contato_atual=next((x for x in contatos_clientes
-                                        if int(x['id'])==cliente_atual_id),None)
+                    contato_atual=clientes_core.obter_linha(cliente_atual_id,banco=banco)
                     contato_texto=''
                     if contato_atual:
-                        partes_contato=[str(contato_atual[k] or '') for k in
+                        partes_contato=[str(contato_atual.get(k) or '') for k in
                                         ('email','telefone','sindico_nome','sindico_email')]
                         contato_texto=' · '.join(x for x in partes_contato if x)
                     corpo+=select('Cliente','cliente_id',dados_cliente,
                                   d.get('cliente_id',cl[0]['id'] if cl else ''),required=True)
                     corpo+=f'<p class="muted" id="cliente-contato-os">'+(esc(contato_texto) or 'Sem e-mail ou telefone cadastrado.')+'</p>'
-                    import json as _jc
-                    contatos_json=_jc.dumps([{'id':int(x['id']),'email':x['email'] or '',
-                                              'telefone':x['telefone'] or '',
-                                              'sindico_nome':x['sindico_nome'] or '',
-                                              'sindico_email':x['sindico_email'] or ''}
-                                             for x in contatos_clientes],ensure_ascii=False).replace('<','\u003c')
-                    corpo+=f'<script type="application/json" id="clientes-contato-os">{contatos_json}</script>'
                 corpo+='</div><div class="col2"><div>'
                 corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
                 corpo+='</div><div>'
@@ -3297,6 +3321,18 @@ class PortalPrestador:
                         return self.estoque_item(s,int(partes[1]))
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='editar':
                         return self.servico_form(s,int(partes[1]))
+                    if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='contato':
+                        contato=clientes_core.obter_linha(int(partes[1]),banco=banco)
+                        if not contato:
+                            return self.send_bytes(json.dumps({'error':'Cliente não encontrado.'}).encode(),
+                                                   'application/json; charset=utf-8',status=404)
+                        return self.send_bytes(json.dumps({
+                            'id':int(contato['id']),'nome':contato['nome'],
+                            'email':contato.get('email') or '',
+                            'telefone':contato.get('telefone') or '',
+                            'sindico_nome':contato.get('sindico_nome') or '',
+                            'sindico_email':contato.get('sindico_email') or '',
+                        },ensure_ascii=False).encode(),'application/json; charset=utf-8')
                     if len(partes)==2 and partes[0]=='clientes' and partes[1].isdigit():
                         return self.cliente_form(s,int(partes[1]))
                     if len(partes)==2 and partes[0]=='os' and partes[1].isdigit():
@@ -3349,12 +3385,15 @@ class PortalPrestador:
                 path = self._normalizar_os(path)
                 quer_json = ('application/json' in self.headers.get('Accept','')
                              or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
+                if not self.origem_permitida():
+                    return self.erro('Origem da requisição inválida.',403,self.sessao())
                 try:
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
-                    d=self.form()
+                    s_inicial=self.sessao()
+                    d=self.form(PREAUTH_MAX if not s_inicial else MAX_POST)
                     if path=='/login':
-                        ip=self.client_address[0]
+                        ip=feedback.ip_requisicao(self.client_address[0],self.headers)
                         agora=time.time()
                         with LOCK_LOGIN:
                             tent=[t for t in TENTATIVAS.get(ip,[]) if agora-t<600]
@@ -3673,6 +3712,8 @@ class PortalPrestador:
                                        str(d.get('nota_dev','')),s)
                         return self.redir(f'/feedback/{int(partes_feedback[1])}')
                     if path.startswith('/chamados/') or path.startswith('/organizacoes/') or path=='/organizacoes/mesclar' or (path.startswith('/clientes/') and path.endswith('/desativar')):
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem alterar organizações, vínculos ou desativar clientes.')
                         return v9.post(self,path,d,banco,s)
                     partes=path.strip('/').split('/')
                     if path=='/servicos/yaml':
@@ -3794,6 +3835,8 @@ class PortalPrestador:
                     if path=='/clientes/novo/salvar' or (len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='salvar'):
                         senha_nova=str(d.get('senha_cliente',''))
                         confirmar=str(d.get('confirmar_senha_cliente',''))
+                        if (senha_nova or confirmar) and not s.get('admin'):
+                            raise PermissionError('Somente administradores podem redefinir a senha do cliente.')
                         if senha_nova or confirmar:
                             if len(senha_nova)<10:raise ValueError('A senha do cliente deve ter pelo menos 10 caracteres.')
                             if senha_nova!=confirmar:raise ValueError('A confirmação da senha não corresponde.')
@@ -3802,6 +3845,8 @@ class PortalPrestador:
                         if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)
                         return self.redir(f'/clientes/{cid}')
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='excluir':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem excluir clientes.')
                         neg.cliente_excluir(banco,int(partes[1]),pid)
                         return self.redir('/clientes')
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='mesclar':

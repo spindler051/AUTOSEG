@@ -18,7 +18,7 @@ import empresa_financeiro
 import estoque_materiais
 import fluxo_os
 import prestadores_ext as ext
-from application.contracts import ServicoIndisponivelError, ValidacaoError
+from application.contracts import AppError, ServicoIndisponivelError, ValidacaoError
 from application.http_service import HttpService
 from application.local_service import LocalService
 from application.connection import (
@@ -310,6 +310,7 @@ class DesktopApiTest(unittest.TestCase):
         composicao.instalar()
         composicao.instalar_banco(self.db)
         investidor = self.service_prestador()
+        self.admin_id = investidor['id']
         self.server = api_server.start(self.db, '127.0.0.1', 0)
         self.base = f'http://127.0.0.1:{self.server.server_address[1]}'
         self.service = HttpService(self.base)
@@ -399,6 +400,17 @@ class DesktopApiTest(unittest.TestCase):
         recentes = self.service.listar_os_recentes(6)
         self.assertEqual(len(recentes), 1)
         self.assertEqual(recentes[0].cliente, 'Condomínio Relatórios')
+
+    def test_non_admin_cannot_manage_providers_or_orgs(self):
+        email = 'comum-api@example.invalid'
+        senha = 'senha-comum-123456'
+        ext.cadastrar(self.db, 'Prestador Comum', email, senha)
+        comum = HttpService(self.base)
+        comum.login(email, senha)
+        with self.assertRaises(AppError):
+            comum.listar_prestadores()
+        with self.assertRaises(AppError):
+            comum.definir_admin(self.admin_id, True)
 
     def test_provider_and_os_actions_roundtrip(self):
         prestador = self.service.criar_prestador({

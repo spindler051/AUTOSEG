@@ -26,6 +26,7 @@ from http.cookies import SimpleCookie  # noqa: F401  (kept for test harness pari
 from urllib.parse import parse_qs, urlparse
 
 import prestadores_ext as ext
+import feedback_portal as feedback
 import produtividade_os as prod
 from versao_app import versao_local
 
@@ -252,7 +253,7 @@ def _registrar_acesso(banco, info, handler, method, path, status):
                 VALUES(?,?,?,?,?,?,?)''',
                 (info.get('id'), info.get('prestador_id'), method,
                  str(path)[:300], int(status),
-                 str(handler.client_address[0] if handler.client_address else '')[:100],
+                 feedback.ip_requisicao(str(handler.client_address[0] if handler.client_address else ''), handler.headers)[:100],
                  _agora()))
     except sqlite3.Error:
         pass

@@ -4,6 +4,7 @@ from http.cookies import SimpleCookie
 from urllib.parse import parse_qs, urlsplit
 import prestadores_ext as ext
 import cadastros_v9 as cad
+import feedback_portal as feedback
 import links_publicos as links
 from repositorios import ordens as ordens_repo
 
@@ -336,7 +337,7 @@ def get(h,path,banco,prestador):
 
 def post(h,path,d,banco,prestador):
     if path=='/pj/entrar':
-        cpf=cad.digitos(d.get('cpf',''));ip=h.client_address[0];key='pj:'+cpf+':'+ip
+        cpf=cad.digitos(d.get('cpf',''));ip=feedback.ip_requisicao(h.client_address[0],h.headers);key='pj:'+cpf+':'+ip
         eventos=[t for t in FALHAS.get(key,[]) if time.time()-t<600]
         if len(eventos)>=10:return pagina(h,'Acesso temporariamente bloqueado','<p>Aguarde dez minutos.</p>',status=429)
         u=cad.autenticar(banco,cpf,str(d.get('senha','')))
@@ -348,7 +349,7 @@ def post(h,path,d,banco,prestador):
         SESSOES[token]={'uid':u['id'],'nome':u['nome'],'cred':u['senha_hash'],'csrf':secrets.token_urlsafe(24),'exp':time.time()+28800}
         return h.redir('/pj/painel',cookie(h,token))
     if path=='/pj/cadastrar':
-        ip=h.client_address[0];key='cadastro:'+ip
+        ip=feedback.ip_requisicao(h.client_address[0],h.headers);key='cadastro:'+ip
         tentativas=[x for x in FALHAS.get(key,[]) if time.time()-x<3600]
         if len(tentativas)>=6:return pagina(h,'Cadastro temporariamente limitado','<p>Muitos cadastros. Tente mais tarde.</p>',status=429)
         FALHAS[key]=tentativas+[time.time()]

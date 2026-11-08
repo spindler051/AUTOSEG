@@ -9,6 +9,7 @@ from http.cookies import SimpleCookie
 from urllib.parse import parse_qs, urlsplit, urlencode
 
 import cadastros_v9 as cad
+import feedback_portal as feedback
 import cliente_fluxo_v94 as fluxo_pf
 import portal_v9 as v9
 import solicitacoes_pj as pj_publico
@@ -701,7 +702,7 @@ def get(h,path,banco):
 def post(h,path,d,banco):
     if path=='/cliente/entrar-pf':
         cpf=cad.digitos(d.get('cpf',''))
-        key='cliente-login:'+cpf+':'+h.client_address[0]
+        key='cliente-login:'+cpf+':'+feedback.ip_requisicao(h.client_address[0],h.headers)
         now=time.time();events=[t for t in v9.FALHAS.get(key,[]) if now-t<600]
         if len(events)>=10:return pagina(h,'Acesso temporariamente bloqueado','<p>Aguarde dez minutos.</p>',429)
         usuario=cad.autenticar(banco,cpf,str(d.get('senha','')))
@@ -711,7 +712,7 @@ def post(h,path,d,banco):
         v9.FALHAS.pop(key,None)
         return h.redir('/cliente/painel',token_sessao(h,usuario))
     if path=='/cliente/cadastrar':
-        key='cliente-cadastro:'+h.client_address[0]
+        key='cliente-cadastro:'+feedback.ip_requisicao(h.client_address[0],h.headers)
         now=time.time();events=[t for t in v9.FALHAS.get(key,[]) if now-t<3600]
         if len(events)>=6:return pagina(h,'Muitas tentativas','<p>Tente mais tarde.</p>',429)
         v9.FALHAS[key]=events+[now]
@@ -721,7 +722,7 @@ def post(h,path,d,banco):
         usuario=fluxo_pf.obter_perfil(banco,uid)
         return h.redir('/cliente/painel',token_sessao(h,usuario))
     if path in ('/pj-rapido/enviar','/cliente/pj-rapido/enviar'):
-        key='pj-publico:'+h.client_address[0]
+        key='pj-publico:'+feedback.ip_requisicao(h.client_address[0],h.headers)
         agora=time.time(); eventos=[t for t in v9.FALHAS.get(key,[]) if agora-t<3600]
         if len(eventos)>=10:
             return pagina(h,'Muitas solicitações','<p>Aguarde uma hora antes de enviar outra solicitação.</p>',429)

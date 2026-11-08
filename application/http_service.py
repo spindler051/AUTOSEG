@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -56,6 +57,7 @@ class HttpService(AppService):
     def __init__(self, base_url: str, token: str = '', timeout: float = 2.5):
         self.base_url = str(base_url or '').rstrip('/')
         self.token = str(token or '')
+        self.desktop_token = os.environ.get('AUTOSEG_DESKTOP_TOKEN', '')
         self.timeout = float(timeout)
         self.write_timeout = max(20.0, self.timeout)
         self.last_error = ''
@@ -94,6 +96,8 @@ class HttpService(AppService):
             headers=cabecalhos)
         if self.token:
             pedido.add_header('Authorization', 'Bearer ' + self.token)
+        if self.desktop_token:
+            pedido.add_header('X-AUTOSEG-Desktop-Token', self.desktop_token)
         timeout = self.write_timeout if metodo != 'GET' else self.timeout
         try:
             with urllib.request.urlopen(pedido, timeout=timeout) as resposta:

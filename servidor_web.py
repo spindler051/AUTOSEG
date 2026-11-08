@@ -46,6 +46,7 @@ import atendimento_os as aten
 import produtividade_os as prod
 import cliente_fluxo_v94 as fluxo_pf
 import fluxo_os as fluxo
+import feedback_portal as feedback
 import portal_cliente_v94 as cliente
 import prestadores_ext as ext
 from versao_app import versao_local
@@ -55,6 +56,7 @@ VERSAO = versao_local('9.6.0')
 PORTA_PADRAO = 8765
 PASTA_WEB = os.path.join(PASTA_APP, 'web')
 MAX_POST = 10 * 1024 * 1024
+PREAUTH_MAX = 64 * 1024
 
 # Diagnóstico persistente: não registra CPF, senhas nem dados de formulários.
 LOG = logging.getLogger('autoseg.portal_cliente')
@@ -144,10 +146,15 @@ class ServidorPortal:
         cad.sincronizar_solicitacoes_pendentes(banco)
 
         class Handler(BaseHTTPRequestHandler):
+            timeout = 15
             server_version = f'AUTOSEG-PortalCliente/{VERSAO}'
 
             def log_message(self, formato, *args):
-                pass
+                try:
+                    LOG.info('acesso %s %s', feedback.ip_requisicao(
+                        self.client_address[0], self.headers), formato % args)
+                except (ValueError, TypeError):
+                    LOG.info('acesso %s', formato % args)
 
             # ---------- respostas ----------
             def send_bytes(self, data, mime='text/html; charset=utf-8', filename=None,
@@ -207,13 +214,26 @@ class ServidorPortal:
                                          + '">Voltar à página anterior</a></p>'), status)
 
             # ---------- entrada ----------
-            def form(self):
+            def origem_permitida(self):
+                origem = self.headers.get('Origin') or self.headers.get('Referer') or ''
+                if not origem:
+                    return True
+                try:
+                    alvo = urlparse(origem)
+                except ValueError:
+                    return False
+                host = str(self.headers.get('Host', '') or '').lower()
+                if not host or not alvo.netloc:
+                    return False
+                return alvo.scheme in ('http', 'https') and alvo.netloc.lower() == host
+
+            def form(self, limite=MAX_POST):
                 try:
                     tamanho = int(self.headers.get('Content-Length', '0'))
                 except ValueError:
                     raise ValueError('Tamanho inválido.')
-                if not (0 < tamanho <= MAX_POST):
-                    raise ValueError('Envio vazio ou acima de 10 MB.')
+                if not (0 < tamanho <= int(limite)):
+                    raise ValueError('Envio vazio ou acima do limite permitido.')
                 tipo = self.headers.get('Content-Type', '')
                 bruto = self.rfile.read(tamanho)
                 if tipo.startswith('multipart/form-data'):
@@ -245,6 +265,14 @@ class ServidorPortal:
                     if not s or s['exp'] < time.time():
                         SESSOES_LEGADO.pop(token, None)
                         return None
+                with ext.db(banco) as c:
+                    atual = c.execute(
+                        'SELECT senha_hash FROM cliente_acessos WHERE cliente_id=?',
+                        (s['cid'],)).fetchone()
+                if not atual or not s.get('cred') or atual['senha_hash'] != s['cred']:
+                    with LOCK_LEGADO:
+                        SESSOES_LEGADO.pop(token, None)
+                    return None
                 return s
 
             def _legado_cookie(self, token, remover=False):
@@ -395,10 +423,13 @@ class ServidorPortal:
 
             def do_POST(self):
                 path = urlparse(self.path).path.rstrip('/') or '/'
+                if not self.origem_permitida():
+                    return self.erro('Origem da requisição inválida.', 403)
                 try:
-                    d = self.form()
+                    sessao_inicial = self._legado_sessao()
+                    d = self.form(PREAUTH_MAX if not sessao_inicial else MAX_POST)
                     if path == '/legado/entrar':
-                        ip = 'legado:' + self.client_address[0]
+                        ip = 'legado:' + feedback.ip_requisicao(self.client_address[0], self.headers)
                         agora = time.time()
                         with LOCK_LEGADO:
                             falhas = [t for t in FALHAS_LEGADO.get(ip, []) if agora - t < 600]
@@ -410,9 +441,15 @@ class ServidorPortal:
                                 FALHAS_LEGADO[ip] = falhas + [agora]
                             return self._legado_login('ID ou senha incorretos.')
                         token = secrets.token_urlsafe(36)
+                        with ext.db(banco) as c:
+                            cred = c.execute(
+                                'SELECT senha_hash FROM cliente_acessos WHERE cliente_id=?',
+                                (r['id'],)).fetchone()
                         with LOCK_LEGADO:
                             FALHAS_LEGADO.pop(ip, None)
-                            SESSOES_LEGADO[token] = {'cid': r['id'], 'exp': time.time() + 28800}
+                            SESSOES_LEGADO[token] = {
+                                'cid': r['id'], 'cred': cred['senha_hash'] if cred else '',
+                                'exp': time.time() + 28800}
                         return self.redir('/legado', self._legado_cookie(token))
                     if path == '/legado/sair':
                         jar = SimpleCookie()

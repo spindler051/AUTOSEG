@@ -62,6 +62,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 
 - [Separação banco de produção × teste](operations/BANCO_TESTE_PRODUCAO.md)
 - [Túnel fixo Cloudflare](operations/TUNEL_FIXO.md)
+- [Ações da auditoria de segurança](operations/SECURITY_AUDIT_2026-11-08.md)
 - [Preparação da Gmail API](operations/GMAIL_API.md)
 - [Meu Auto Financeiro](operations/MEU_AUTO_FINANCEIRO.md)
 - [Padrões YAML](operations/PADROES_YAML.md)
