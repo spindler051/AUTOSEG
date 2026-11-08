@@ -52,8 +52,10 @@ Este é o ponto de retomada. O índice completo fica em
    revisão humana externa.
 3. **Permissões:** ligar a política pura ao `AppService` e aplicar no servidor;
    o login identifica o prestador, mas ainda não aplica AUT-001 a AUT-021.
-4. **API remota:** clientes, OS, prestadores, financeiro, PJ e PDF já passam
-   pelo servidor; faltam catálogo, estoque, composição e sync.
+4. **API remota:** clientes, OS, prestadores, financeiro, PJ, catálogo,
+   estoque, composição e PDF já passam pelo servidor; falta sync.
+5. **Login de cliente no GTK:** adiado por ser nicho; primeiro aplicar
+   permissões de admin × funcionário no serviço.
 5. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de
    revisão externa em dinheiro/OS/PDF.
 6. **CI:** workflows continuam modificados e não publicados por falta de token

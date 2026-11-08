@@ -58,5 +58,9 @@ as listas de notas/e-mails do Portal do Prestador.
 
 ## Próximo passo
 
-Ligar `policy.yaml` ao `AppService`, aplicar AUT-001 a AUT-021 no servidor e
-depois permitir login de cliente no GTK com o mesmo contrato.
+Ligar `policy.yaml` ao `AppService` e aplicar AUT-001 a AUT-021 no servidor.
+
+**Login de cliente no GTK:** adiado. É nicho para o momento e não entra no
+escopo atual. A decisão é manter `Sessao`, `AppService` e `HttpService` limpos
+para que esse login seja uma extensão pequena quando houver demanda real, sem
+reescrever a autenticação.
