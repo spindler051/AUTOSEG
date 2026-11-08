@@ -10,7 +10,7 @@ was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.60` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.61` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
@@ -91,15 +91,17 @@ Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
 ./INICIAR_SERVIDOR_API.command
 ```
 
-GUI do site (Officina Web) no terminal:
+GUI do site no terminal:
 
 ```bash
-./INICIAR_SITE.command
+./INICIAR_SITE.command       # produção: 8765/8766
+./INICIAR_SITE_DEV.command   # DEV: cliente 8865, prestador 8866
 ```
 
-Hoje a GUI do site ainda compartilha o processo com a API; a separação completa
-entre servidor e site é uma fase posterior. O servidor de dados é o
-`INICIAR_SERVIDOR_API.command`.
+Hoje a GUI do site ainda compartilha o processo com a API embutida; a separação
+completa entre servidor e site é uma fase posterior. O servidor de dados do GTK
+é o `INICIAR_SERVIDOR_DEV.command` (porta 8766). O site DEV usa o mesmo banco de
+teste, mas em processo e portas separados.
 
 O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
 `INICIAR_AUTOSEG_COM_WEB.command` somente se quiser que o próprio GTK suba os

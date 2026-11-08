@@ -1,5 +1,12 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.61 — comando do site DEV — 2026-11-07 — develop
+
+- **Site DEV separado:** `INICIAR_SITE_DEV.command` sobe Portal do Cliente em 8865 e Portal do Prestador em 8866.
+- **Mesmo banco:** usa `dados_teste/autoseg_teste.db`, sem conflitar com a API headless do GTK em 8766.
+- **Documentação:** README e HANDOFF explicam a diferença entre site, servidor e GTK.
+- **Estado:** site, servidor e app GTK podem rodar juntos em DEV.
+
 ## 9.6.0-dev.60 — paridade de telas entre GTK e site — 2026-11-07 — develop
 
 - **Site ganhou telas do GTK:** Prestadores, Estoque, Caixa da empresa e Composição de valores, visíveis apenas para admin.
