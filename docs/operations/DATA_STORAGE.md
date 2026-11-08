@@ -30,10 +30,12 @@ usuário que executa o serviço.
 | Conteúdo | Onde fica |
 | --- | --- |
 | Modelos, políticas e numeração padrão | `flavors/autoseg/config/` (Git) |
-| `composicao.yaml` efetivo | `<pasta do servidor>/composicao.yaml` (fora do Git) |
+| `composicao.yaml` efetivo | `<pasta de dados do modo>/composicao.yaml` (fora do Git) |
 | Preferência de conexão do GTK | `~/.config/autoseg/connection.json` |
+| Configuração local do feedback com IA | `<dados do usuário>/feedback_ia.local.json` |
+| Banco do Meu Auto Financeiro | `<pasta local>/meu_auto_financeiro.db` |
 | Credenciais fictícias de DEV | `<pasta do servidor DEV>/dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt` |
-| Anexos, relatórios, rascunhos, notas e logs | subpastas da pasta do servidor |
+| Anexos, relatórios, rascunhos, notas e logs | subpastas da pasta de dados do modo |
 
 ## Conferir os caminhos
 
