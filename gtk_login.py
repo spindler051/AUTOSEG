@@ -180,7 +180,8 @@ class LoginWindow(Adw.ApplicationWindow):
         clamp.set_child(caixa)
         rolagem.set_child(clamp)
         toolbar.set_content(rolagem)
-        self.set_child(toolbar)
+        # GtkWindow.set_child() aborts AdwApplicationWindow on size allocation.
+        self.set_content(toolbar)
 
     def _pagina_local(self):
         pagina = Adw.PreferencesPage()

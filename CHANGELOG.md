@@ -1,5 +1,11 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.57 — corrige crash da tela de login — 2026-11-07 — develop
+
+- **Crash nativo corrigido:** `LoginWindow` usava `GtkWindow.set_child()` em um `Adw.ApplicationWindow`; libadwaita aborta na alocação de tamanho. Agora usa `set_content()`.
+- **Diagnóstico:** relatórios de crash do macOS apontavam `adw_application_window_size_allocate`; a causa era a violação do contrato do `AdwApplicationWindow`.
+- **Testes:** smoke/login local e servidor, logout e sessão; suíte mantém 313 testes OK, 1 skip.
+
 ## 9.6.0-dev.56 — login de prestador no GTK e sessão revogável — 2026-11-07 — develop
 
 - **Login obrigatório:** o GTK abre na tela de login quando não há sessão válida.

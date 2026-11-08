@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-07
-**Versão:** `9.6.0-dev.56`
+**Versão:** `9.6.0-dev.57`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
