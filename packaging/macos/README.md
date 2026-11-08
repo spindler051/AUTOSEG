@@ -35,7 +35,7 @@ O lançador:
   Homebrew;
 - instala `reportlab`, `Pillow` e `PyYAML` no venv;
 - copia `flavors/autoseg/config/completude.yaml` para a pasta de dados, se ainda não existir;
-- executa `gtk_app.py`.
+- executa `flavors/autoseg/modules/gtk_app.py`.
 
 ## Aparência
 
@@ -59,7 +59,7 @@ validar o `.command`; depois empacotar com PyInstaller ou py2app.
 
 O bundle precisa incluir:
 
-- `gtk_app.py`, `gtk_comum.py`, `gtk_dialogos.py` e backend Python;
+- `flavors/autoseg/modules/gtk_app.py`, `gtk_comum.py`, `gtk_dialogos.py` e backend Python;
 - `flavors/autoseg/config/completude.yaml`, `versao.json`, `logo.png`, `icone.png`;
 - `web/` e `portal.js`;
 - bibliotecas GTK4, libadwaita, GdkPixbuf, Pango, typelibs e temas de ícones;

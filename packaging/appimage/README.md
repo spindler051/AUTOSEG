@@ -4,7 +4,7 @@ Este diretório prepara a distribuição Linux em AppImage. **Ainda não foi
 validado em uma máquina limpa.** Trate como ponto de partida, não como
 artefato pronto para clientes.
 
-## Por que não é só copiar `gtk_app.py`
+## Por que não é só copiar `flavors/autoseg/modules/gtk_app.py`
 
 Um AppImage autônomo precisa levar:
 

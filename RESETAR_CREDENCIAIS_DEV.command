@@ -5,4 +5,4 @@ if [[ ! -x .venv/bin/python ]]; then
     echo "Ambiente .venv ausente."
     exit 1
 fi
-exec .venv/bin/python RESETAR_CREDENCIAIS_DEV.py
+exec .venv/bin/python flavors/autoseg/scripts/RESETAR_CREDENCIAIS_DEV.py

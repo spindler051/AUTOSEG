@@ -4,13 +4,13 @@ AUTOSEG is a work-management application for security and automation
 professionals: clients, service orders, maintenance, budgets, technical reports,
 finance, stock and client/provider portals.
 
-The desktop application uses **GTK4 + libadwaita** (`gtk_app.py`). Client and
+The desktop application uses **GTK4 + libadwaita** (`flavors/autoseg/modules/gtk_app.py`). Client and
 provider portals run on the same local SQLite database. The Tkinter frontend
 was removed in `9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.68` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.69` (`develop`).
 
 - Working vertical application for security/automation.
 - GTK4 desktop application with provider login (local or server), identity and logout.
@@ -47,8 +47,9 @@ The monorepo is transitioning from a flat prototype to clear layers:
 - `workaholic/` — generic engine.
 - `officina/` — generic application platform and contracts.
 - `flavors/autoseg/` — AUTOSEG branding, configuration and templates.
-- `application/`, `gtk_app.py`, portals and legacy modules — transitional
-  locations, migrated in small slices with parity tests.
+- `officina/application/` — generic application services.
+- `flavors/autoseg/modules/` — AUTOSEG GTK, portals, API, auth and fiscal modules.
+- `tests/` — test suite.
 
 See [`docs/REPOSITORY_LAYOUT.md`](docs/REPOSITORY_LAYOUT.md) for the target tree
 and the migration rules.
@@ -134,12 +135,13 @@ portais.
 ## Repository layout
 
 ```text
-gtk_app.py, gtk_dialogos.py, gtk_comum.py   GTK desktop frontend
-portal_prestador.py, servidor_web.py        provider and client portals
-portal_negocios.py, fluxo_os.py, ...        business rules
-runtime_config.py                           runtime paths, bind and ports
+flavors/autoseg/modules/gtk_app.py           GTK desktop frontend
+flavors/autoseg/modules/portal_prestador.py  provider portal
+flavors/autoseg/modules/servidor_web.py      client portal
+officina/core/portal_negocios.py, fluxo_os.py  business rules
+officina/core/runtime_config.py               runtime paths, bind and ports
 workaholic/                                 generic engine prototype
-integracao/                                 AUTOSEG adapters to Workaholic
+officina/integration/                       adapters to Workaholic
 docs/                                       current docs; features/, operations/, planning/
 docs/archive/                               historical docs, not current
 ```

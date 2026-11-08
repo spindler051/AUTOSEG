@@ -3,8 +3,7 @@
 ## Suíte não visual
 
 ```bash
-find . -maxdepth 1 -name 'test_*.py' ! -name 'test_visual_*' \
-  -exec basename {} .py \; | sort | xargs ./.venv/bin/python -m unittest
+./.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 Estado em 2026-11-08: **335 testes, 0 falhas, 1 skip**.
@@ -12,14 +11,14 @@ Estado em 2026-11-08: **335 testes, 0 falhas, 1 skip**.
 ## Scripts de aceitação
 
 ```bash
-./.venv/bin/python -m unittest -q test_auth_session.py test_application_service.py test_feedback_dev.py
-./.venv/bin/python test_portal_v4.py
-./.venv/bin/python test_fluxo_v5.py
-./.venv/bin/python test_fluxo_v6.py
-./.venv/bin/python test_fluxo_v7.py
-./.venv/bin/python test_fluxo_cliente_v94.py
-./.venv/bin/python test_rev09_fluxo_os.py
-./.venv/bin/python test_importacao_yaml.py
+./.venv/bin/python -m unittest discover -s tests -p "test_*.py" -q
+PYTHONPATH=. ./.venv/bin/python tests/test_portal_v4.py
+PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v5.py
+PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v6.py
+PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v7.py
+PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_cliente_v94.py
+PYTHONPATH=. ./.venv/bin/python tests/test_rev09_fluxo_os.py
+PYTHONPATH=. ./.venv/bin/python tests/test_importacao_yaml.py
 ```
 
 Todos usam banco, arquivos e portas temporárias; não gravam em `dados.db`.

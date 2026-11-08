@@ -1,6 +1,16 @@
 # AUTOSEG — Changelog
 
-## 9.6.0-dev.68 — início da organização do monorepo — 2026-11-08 — develop
+## 9.6.0-dev.69 — separação real de pacotes — 2026-11-08 — develop
+
+- **Código organizado:** módulos genéricos foram para `officina/core`, `officina/application`, `officina/integration`, `officina/repositories` e `officina/telemetry`.
+- **AUTOSEG:** portais, GTK, API, auth, feedback, fiscal, e-mail, túneis e integrações foram para `flavors/autoseg/modules`.
+- **Web do flavor:** `portal.js` e o site estático foram para `flavors/autoseg/web`.
+- **Testes:** todos movidos para `tests/`, com descoberta padronizada por `unittest discover`.
+- **Launchers:** atualizados para os novos módulos; instaladores obsoletos removidos.
+- **Raiz:** não há mais módulos Python soltos.
+- **Testes:** 335 testes OK, 1 skip.
+
+## 9.6.0-dev.69 — início da organização do monorepo — 2026-11-08 — develop
 
 - **Novo layout:** criados `officina/` e `flavors/autoseg/` com documentação de limites.
 - **AUTOSEG:** marca, configurações padrão e modelos YAML movidos para `flavors/autoseg/`.
@@ -9,13 +19,13 @@
 - **Documentação:** novo `docs/REPOSITORY_LAYOUT.md`; README e índice atualizados.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — corrige login após validação de origem — 2026-11-08 — develop
+## 9.6.0-dev.67 — corrige login após validação de origem — 2026-11-08 — develop
 
 - **Login:** navegadores que enviam `Origin: null` em formulários same-origin voltam a entrar; a checagem de origem continua bloqueando origens externas.
 - **Teste:** regressão coberta para login com `Origin: null`.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — endurecimento conforme auditoria — 2026-11-08 — develop
+## 9.6.0-dev.66 — endurecimento conforme auditoria — 2026-11-08 — develop
 
 - **API desktop:** exige admin nas rotas de prestadores, estoque, empresa, composição, organizações e escritas financeiras; exige `AUTOSEG_DESKTOP_TOKEN` quando o bind não é loopback.
 - **Clientes:** redefinir senha legada, desativar, excluir e mesclar ficam restritos a admin; organizações e vínculos também.
@@ -26,13 +36,13 @@
 - **Operação:** permissões 700/600 nos diretórios operacionais, refs de backup com PII removidas e `git gc` executado.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — associar cliente em OS de chamado — 2026-11-08 — develop
+## 9.6.0-dev.65 — associar cliente em OS de chamado — 2026-11-08 — develop
 
 - **OS com “Cliente a definir”:** mesmo quando veio de um chamado, mostra o seletor “Cliente da OS” para associar o cliente real.
 - **Pagamento em branco:** editar uma OS criada sem forma de pagamento não obriga mais a preencher o pagamento.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — busca automática, composições e tema automático — 2026-11-08 — develop
+## 9.6.0-dev.64 — busca automática, composições e tema automático — 2026-11-08 — develop
 
 - **Clientes e serviços:** uma única busca, sem botão; filtra automaticamente enquanto digita.
 - **OS:** status diferentes de Pendente e Cancelada exigem cliente definido, não “Cliente a definir”.
@@ -42,7 +52,7 @@
 - **Cliente na OS:** seletor em largura total acima de “Atendido por”, com resumo automático de e-mail, telefone e síndico.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
+## 9.6.0-dev.63 — abertura rápida, tema no login e mescla de clientes — 2026-11-08 — develop
 
 - **OS rápida:** removidos “Atribuir prestador” e “Forma de pagamento”; a OS abre sem pagamento definido e o criador fica responsável.
 - **Cliente na OS rápida:** busca automática ao digitar, sem botão “Buscar”; nome novo cria cliente com dados incompletos.
@@ -50,7 +60,7 @@
 - **Login:** segue automaticamente o tema do sistema, sem botões; a preferência manual fica em Configurações após entrar.
 - **Testes:** 335 testes OK, 1 skip.
 
-## 9.6.0-dev.68 — feedbacks abertos da DEV — 2026-11-08 — develop
+## 9.6.0-dev.62 — feedbacks abertos da DEV — 2026-11-08 — develop
 
 - **Nova OS em uma tela:** cliente é opcional e pode ser associado depois; a OS usa o cadastro provisório “Cliente a definir”.
 - **Duplicidade:** aviso para OS do mesmo cliente criada nos últimos 2 minutos, com opção explícita de criar outra e registro no histórico.

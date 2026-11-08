@@ -12,17 +12,17 @@ Current session handoff: `docs/HANDOFF.md`.
 
 | Slice | Legacy source | Target | Status | Remaining work / next step |
 |---|---|---|---|---|
-| Clients | `clientes` | Workaholic `cliente` schema + `integracao/clientes.py` + `application/local_service.py` | **adapter read/write + application slice (partial)** | GTK list/dialog/dashboard now use `LocalService`; portal still calls the adapter directly. Remove remaining direct writes from portal/desktop/importers and expose clients through the remote API. Keep legacy integer IDs as origin metadata. |
-| Service catalog | `catalogo_servicos` | Generic catalog/item schema + adapter | **legacy only** | Define generic service/item fields; characterize catalog CRUD; start with reads. |
+| Clients | `clientes` | Workaholic `cliente` schema + `officina/integration/clientes.py` + `officina/application/local_service.py` | **adapter read/write + application slice (partial)** | GTK list/dialog/dashboard now use `LocalService`; portal still calls the adapter directly. Remove remaining direct writes from portal/desktop/importers and expose clients through the remote API. Keep legacy integer IDs as origin metadata. |
+| Service catalog | `officina/core/catalogo_servicos.py` | Generic catalog/item schema + adapter | **legacy only** | Define generic service/item fields; characterize catalog CRUD; start with reads. |
 | Materials / stock | `materiais_os`, `estoque_produtos`, `estoque_movimentos` | Generic materials/stock contracts + adapter | **legacy only** | Separate charged price from internal cost as generic concepts; migrate stock movement reads. |
 | Service orders | `ordens_servico`, `os_encerramentos`, `os_eventos` | Generic work-order schema + adapter | **legacy only** | Dashboard/history/report/portal read summaries now live in `repositorios/ordens.py`; characterize OS detail and active-list reads before the Workaholic adapter. Do not change status semantics. |
 | Finance | `financeiro`, `produtividade_rateios`, `produtividade_repasses` | Generic receivable/payment/commission contracts | **legacy only** | Separate generic receivable/payment from AUTOSEG commission rules; define locale payment adapter. |
 | Providers / teams | `prestadores`, `os_prestadores`, `os_responsaveis` | Generic actor/assignment contracts | **legacy only** | Define person/provider/team boundary; migrate reads first. |
-| Portals | `portal_prestador.py`, `servidor_web.py`, `portal_cliente_v94.py` | AUTOSEG flavor modules | **flavor/locale module (current)** | Keep in AUTOSEG; later extract a generic portal module only if another flavor needs it. |
+| Portals | `flavors/autoseg/modules/portal_prestador.py`, `servidor_web.py`, `portal_cliente_v94.py` | AUTOSEG flavor modules | **flavor/locale module (current)** | Keep in AUTOSEG; later extract a generic portal module only if another flavor needs it. |
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
-| Fiscal / NF-e / NFS-e | `prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
+| Fiscal / NF-e / NFS-e | `officina/core/prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
 | Email / payments | `gmail_service.py`, future payment integrations | Generic integration contracts + adapters | **legacy only** | Define provider interfaces; keep credentials outside code. |
-| GTK shell | `gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; server mode works** | The GTK shell uses `AppService` for clients, OS, providers, finance, history, PJ, catalog, stock, company cash, composition and PDF. In server mode it does not open the local SQLite. Web portals are owned by `WebAccessManager`. |
+| GTK shell | `flavors/autoseg/modules/gtk_app.py`, `gtk_dialogos.py`, `gtk_comum.py` | Generic GTK application | **AUTOSEG UI today; server mode works** | The GTK shell uses `AppService` for clients, OS, providers, finance, history, PJ, catalog, stock, company cash, composition and PDF. In server mode it does not open the local SQLite. Web portals are owned by `WebAccessManager`. |
 | CLI | `workaholic/src/workaholic/cli` | Workaholic CLI | **prototype** | Keep tests; add commands only when a real consumer exists. |
 
 ## Workaholic adoption
@@ -35,7 +35,7 @@ Current session handoff: `docs/HANDOFF.md`.
 | Generic GTK shell | Not started | Needs module/boundary decisions |
 | Module/plugin system | Not started | Decide Python entry points vs manifest |
 | ADR/architecture docs | Started | `workaholic/docs/` |
-| Production integration | Clients only | `integracao/clientes.py` |
+| Production integration | Clients only | `officina/integration/clientes.py` |
 
 ## Client and sync direction
 
@@ -71,15 +71,15 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-06 | Let `WebAccessManager` own portal lifecycle. | The GTK shell must not import or start HTTP servers directly. |
 | 2026-11-07 | Run DEV in server mode with no local DB fallback. | Prove the desktop/server boundary with real API data; offline reads are empty and writes fail explicitly. |
 | 2026-11-07 | Require provider login in the GTK desktop. | Every API action needs an identified provider; local and server logins are separate accounts, with logout and revocable sessions. |
-| 2026-11-08 | Move AUTOSEG branding/config/templates into `flavors/autoseg/`. | Establish the flavor boundary without moving legacy Python modules or changing behavior. |
+| 2026-11-08 | Move AUTOSEG branding/config/templates and all AUTOSEG Python modules into `flavors/autoseg/`. | Establish the flavor boundary; generic modules moved to `officina/` and tests to `tests/`. |
 
 ## Next recommended micro-slices
 
 1. **Catalog read adapter** — add characterization tests for
-   `catalogo_servicos`, then read through a Workaholic adapter without changing
+   `officina/core/catalogo_servicos.py`, then read through a Workaholic adapter without changing
    the UI.
 2. **Clients write cleanup** — move remaining direct client writes through
-   `integracao/clientes.py`; keep the legacy table and IDs.
+   `officina/integration/clientes.py`; keep the legacy table and IDs.
 3. **Service-order characterization** — lock status, totals, materials and PDF
    behavior before attempting an adapter.
 4. **Workaholic schema revision** — add a minimal schema/versioning mechanism

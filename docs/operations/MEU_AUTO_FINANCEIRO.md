@@ -37,7 +37,7 @@ pasta de comprovantes.
 ## Testes
 
 ```bash
-python3 -m unittest -v test_meu_auto_financeiro
+./.venv/bin/python -m unittest discover -s tests -p 'test_meu_auto_financeiro.py' -v
 ```
 
 Testes usam bancos temporários fictícios. Empacotamento macOS e publicação

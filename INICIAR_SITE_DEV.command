@@ -14,4 +14,4 @@ printf 'AUTOSEG DEV — GUI do site\n'
 printf 'Cliente:  http://127.0.0.1:%s/\n' "$CLIENTE_PORT"
 printf 'Prestador: http://127.0.0.1:%s/\n' "$PRESTADOR_PORT"
 printf 'Banco: %s\n' "$GESTAO_BANCO"
-exec "$PY" servidor_backend.py --site "$@"
+exec "$PY" flavors/autoseg/modules/servidor_backend.py --site "$@"

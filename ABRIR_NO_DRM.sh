@@ -36,4 +36,4 @@ export WLR_NO_HARDWARE_CURSORS=1
 # Não forçar GTK_USE_PORTAL=0: o libadwaita lê tema escuro/accent do
 # org.gnome.desktop.interface via xdg-desktop-portal nesta sessão dbus.
 
-exec dbus-run-session -- cage -s -- python3 gtk_app.py "$@"
+exec dbus-run-session -- cage -s -- python3 flavors/autoseg/modules/gtk_app.py "$@"

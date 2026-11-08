@@ -7,4 +7,4 @@ if [[ ! -x /Users/idkosx/GestaoServicos_DEV/.venv/bin/python ]]; then
   echo 'Ambiente virtual .venv ausente. Inicie o AUTOSEG DEV primeiro.'
   exit 1
 fi
-/Users/idkosx/GestaoServicos_DEV/.venv/bin/python /Users/idkosx/GestaoServicos_DEV/tuneis_dev.py iniciar
+/Users/idkosx/GestaoServicos_DEV/.venv/bin/python /Users/idkosx/GestaoServicos_DEV/flavors/autoseg/modules/tuneis_dev.py iniciar

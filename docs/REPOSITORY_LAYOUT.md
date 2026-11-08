@@ -23,12 +23,19 @@ packaging/                  empacotamento Linux/macOS
 ## Estado atual (transição)
 
 - `workaholic/` — motor existente.
-- `officina/` — esqueleto e destino dos contratos genéricos.
-- `flavors/autoseg/` — marca, configuração e modelos já movidos.
-- `application/` — serviço genérico ainda na raiz, será movido para
-  `officina/application/` em uma fatia própria.
-- Módulos legados na raiz — portais, GTK, API, auth, feedback e fiscal. Serão
-  movidos em fatias, com adaptadores e testes de paridade.
+- `officina/core/` — banco, OS, financeiro, catálogo, estoque, composição,
+  numeração, completude, runtime, versão e providers.
+- `officina/application/` — contratos e serviços de aplicação.
+- `officina/integration/` — adaptadores de clientes e Workaholic.
+- `officina/repositories/` — consultas de OS.
+- `officina/telemetry/` — telemetria genérica.
+- `flavors/autoseg/modules/` — portais, GTK, API, auth, feedback, fiscal,
+  e-mail, túneis e integrações brasileiras.
+- `flavors/autoseg/web/` — `portal.js` e site estático.
+- `flavors/autoseg/scripts/` — geração de dados fictícios e reset DEV.
+- `tests/` — suíte de testes.
+- A raiz guarda apenas README, LICENSE, docs, scripts de inicialização,
+  empacotamento e configuração do repositório.
 
 ## Regras
 
@@ -41,7 +48,7 @@ packaging/                  empacotamento Linux/macOS
 
 ## Próximas fatias
 
-1. Mover `application/` para `officina/application/` com shims temporários.
-2. Extrair o catálogo de serviços para um adaptador genérico.
-3. Mover portais e GTK para `flavors/autoseg/modules/` e `apps/`.
-4. Mover testes para `tests/` e padronizar a descoberta.
+1. Extrair o catálogo de serviços para um contrato genérico do Workaholic.
+2. Extrair OS e financeiro para adaptadores genéricos.
+3. Separar fiscal/NF-e em um módulo de locale brasileiro.
+4. Mover scripts de inicialização para `scripts/` com um único comando `officina`.

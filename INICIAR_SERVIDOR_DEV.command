@@ -11,4 +11,4 @@ PY="${PYTHON:-python3}"
 [ -x .venv/bin/python ] && PY=.venv/bin/python
 printf 'AUTOSEG DEV — servidor de dados\nBanco: %s\nAPI: http://127.0.0.1:8766/api/v1\n' \
   "$GESTAO_BANCO"
-exec "$PY" servidor_backend.py --api --host 127.0.0.1 --port 8766 "$@"
+exec "$PY" flavors/autoseg/modules/servidor_backend.py --api --host 127.0.0.1 --port 8766 "$@"

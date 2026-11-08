@@ -59,4 +59,4 @@ if ! "$PYTHON" -c 'import reportlab' >/dev/null 2>&1; then
     echo "Instale com: $PYTHON -m pip install 'reportlab>=4.2,<5'" >&2
 fi
 
-exec "$PYTHON" gtk_app.py "$@"
+exec "$PYTHON" flavors/autoseg/modules/gtk_app.py "$@"

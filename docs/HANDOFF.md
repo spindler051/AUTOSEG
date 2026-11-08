@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-08
-**Versão:** `9.6.0-dev.68`
+**Versão:** `9.6.0-dev.69`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -48,9 +48,9 @@ Este é o ponto de retomada. O índice completo fica em
 ## Testes
 
 - Suíte não visual: **335 testes, 0 falhas, 1 skip**.
-- Scripts de aceitação atualizados e passando: `test_portal_v4.py`,
-  `test_fluxo_v5.py`, `test_fluxo_v6.py`, `test_fluxo_v7.py`,
-  `test_fluxo_cliente_v94.py` e `test_rev09_fluxo_os.py`.
+- Scripts de aceitação atualizados e passando: `tests/test_portal_v4.py`,
+  `tests/test_fluxo_v5.py`, `tests/test_fluxo_v6.py`, `tests/test_fluxo_v7.py`,
+  `tests/test_fluxo_cliente_v94.py` e `tests/test_rev09_fluxo_os.py`.
 - Comandos e critérios em [`TESTES.md`](../TESTES.md).
 - Scripts `test_v9.py`, `test_v91.py`, `test_v92.py` e `test_v94_correcoes.py`
   são legado da arquitetura anterior e não indicam regressão.
@@ -99,6 +99,5 @@ Este é o ponto de retomada. O índice completo fica em
 ```
 
 ```bash
-find . -maxdepth 1 -name 'test_*.py' ! -name 'test_visual_*' \
-  -exec basename {} .py \; | sort | xargs ./.venv/bin/python -m unittest
+./.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
 ```

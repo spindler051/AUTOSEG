@@ -46,7 +46,8 @@ ARGUMENTOS=(
     --add-data "$RAIZ/portal.js:."
     --collect-all reportlab
     --collect-all gi
-    "$RAIZ/gtk_app.py"
+    --paths "$RAIZ"
+    "$RAIZ/flavors/autoseg/modules/gtk_app.py"
 )
 if [ -d "$RAIZ/.vendor/usr/lib/python3/dist-packages" ]; then
     ARGUMENTOS+=(--paths "$RAIZ/.vendor/usr/lib/python3/dist-packages")
