@@ -2004,6 +2004,9 @@ class PortalPrestador:
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
                 d=dict(o) if o else {}
                 arquivada=bool(d.get('arquivada'))
+                # A pending OS is not "started" even if an older start remains
+                # stored; returning it to pending resets the active start.
+                iniciado_ativo=bool(andamento and andamento['iniciado_em']) and d.get('status')!='Pendente'
                 if oid and d.get('cliente_id') and not any(
                         int(x['id'])==int(d['cliente_id']) for x in cl):
                     # OS criada sem cliente usa o cadastro provisório
@@ -2087,7 +2090,7 @@ class PortalPrestador:
                     partes_meta=[x for x in (local,f'Aberta em {data_curta(d.get("data_abertura"))}',f'{url_os(banco, oid)}') if x]
                     ticket_botoes=[]
                     if d['status'] in ext.ATIVAS and not arquivada:
-                        iniciado=bool(andamento and andamento['iniciado_em'])
+                        iniciado=iniciado_ativo
                         if responsavel is None:
                             ticket_botoes.append(
                                 f'<button type="submit" form="form-os" '
@@ -2245,7 +2248,7 @@ class PortalPrestador:
                 status_bloco=''
                 cancelar_dialogo=''
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    iniciado=bool(andamento and andamento['iniciado_em'])
+                    iniciado=iniciado_ativo
                     atual='Em rota' if em_rota else ('Iniciada' if iniciado else d['status'])
                     opcoes_situacao=[('Aberta','Aberta')]
                     if not iniciado:
@@ -2473,7 +2476,7 @@ class PortalPrestador:
                 corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
                 corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    if andamento and andamento['iniciado_em']:
+                    if iniciado_ativo:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
                     else:
                         corpo+='<p class="warn">OS ainda não iniciada. Assumir uma OS não inicia o atendimento automaticamente.</p>'

@@ -43,7 +43,7 @@ def iniciar(banco,os_id,pid=None,ator='Administrador desktop'):
                 raise PermissionError('Assuma a OS antes de iniciar atendimento.')
             ator=p['nome']
         existente=c.execute('SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone()
-        if existente and existente['iniciado_em']:
+        if existente and existente['iniciado_em'] and o['status']!='Pendente':
             # Repair only the legacy case where starting never changed "Aberta".
             c.execute("""UPDATE ordens_servico SET status='Iniciada'
                          WHERE id=? AND status='Aberta'""",(os_id,))
