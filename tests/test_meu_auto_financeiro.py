@@ -185,6 +185,32 @@ class FinanceiroTeste(unittest.TestCase):
             x=c.execute('SELECT comprovante FROM cotas WHERE conta_id=? AND usuario_id=?',(cid,mid)).fetchone()
             self.assertTrue(x['comprovante'])
 
+    def test_conta_individual_e_compartilhada_ficam_separadas(self):
+        self.acao('familia/criar',nome='Família Separação')
+        with maf.conn() as c:
+            f=c.execute('SELECT id FROM familias').fetchone()[0]
+            c.execute('INSERT INTO usuarios(nome,email,senha_hash,familia_id,criado_em) '
+                      'VALUES(?,?,?,?,?)',
+                      ('Membro Separação','separacao@example.org',
+                       maf.senha_hash('senha-segura-abc'),f,maf.agora()))
+            mid=c.execute('SELECT id FROM usuarios WHERE email=?',
+                          ('separacao@example.org',)).fetchone()[0]
+        self.acao('conta/criar',descricao='Internet individual',valor='100,00',
+                  vencimento='2026-11-30',tipo='individual')
+        self.acao('conta/criar',descricao='Energia compartilhada',valor='200,00',
+                  vencimento='2026-11-30',tipo='compartilhada',
+                  **{'participantes[]':[str(mid)],'divisao':'igual'})
+        with maf.conn() as c:
+            ind=c.execute("SELECT * FROM contas WHERE descricao='Internet individual'").fetchone()
+            comp=c.execute("SELECT * FROM contas WHERE descricao='Energia compartilhada'").fetchone()
+            self.assertIsNone(ind['familia_id'])
+            self.assertEqual(comp['familia_id'],f)
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM cotas WHERE conta_id=?',
+                                       (ind['id'],)).fetchone()[0],1)
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM cotas WHERE conta_id=?',
+                                       (comp['id'],)).fetchone()[0],2)
+            self.assertEqual(comp['total_centavos'],20000)
+
     def test_estorno_e_autorizacoes_familiares(self):
         u=self.carregar()
         self.acao('movimento',descricao='Compra fictícia',tipo='despesa',valor='45,00')

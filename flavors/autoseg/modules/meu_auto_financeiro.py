@@ -326,7 +326,7 @@ def _link(path,texto):
 
 def _pagina(titulo,conteudo,usuario=None,flash=None):
     menus = ['','extrato','contas','salarios','familia','emprestimos','bussola']
-    labels = ['Início','Extrato','Contas','Salários','Família','Empréstimos','Bússola']
+    labels = ['Início','Extrato','Contas a pagar','Salários','Família','Empréstimos','Bússola']
     nav = ' '.join(_link(k,v) for k,v in zip(menus,labels)) if usuario else ''
     sair = _link('sair','Sair da conta familiar') if usuario and usuario.get('autoseg_pid') is None else '<a class="botao" href="/">Portal do Prestador</a>' if usuario else ''
     aviso = f'<p class="aviso">{esc(flash)}</p>' if flash else ''
@@ -571,26 +571,72 @@ def GET(handler,path,prestador,banco):
                   'Solicitar saída'))
             return _render(handler,'Família · '+f['nome'],corpo,user)
         if path=='/auto-financeiro/contas':
-            contas=c.execute('''SELECT * FROM contas WHERE responsavel_id=? OR familia_id=?
-                    OR id IN (SELECT conta_id FROM cotas WHERE usuario_id=?) ORDER BY id DESC LIMIT 150''',
-                    (user['id'],user['familia_id'] or -1,user['id'])).fetchall()
-            linhas=[]
-            for conta in contas:
+            individuais=c.execute('''SELECT * FROM contas
+                    WHERE responsavel_id=? AND familia_id IS NULL
+                    ORDER BY id DESC LIMIT 150''',(user['id'],)).fetchall()
+            compartilhadas=c.execute('''SELECT * FROM contas
+                    WHERE familia_id IS NOT NULL AND (familia_id=?
+                    OR id IN (SELECT conta_id FROM cotas WHERE usuario_id=?))
+                    ORDER BY id DESC LIMIT 150''',
+                    (user['familia_id'] or -1,user['id'])).fetchall()
+
+            def _linha_conta(conta, com_contribuicoes):
                 cid=conta['id']
                 parcelas=c.execute('SELECT * FROM cotas WHERE conta_id=? ORDER BY usuario_id',(cid,)).fetchall()
-                devidos=sum(p['valor_centavos'] for p in parcelas if p['usuario_id']!=conta['responsavel_id'] and not p['confirmado_em'])
-                status='Cancelada' if conta['cancelada_em'] else 'Fornecedor pago' if conta['fornecedor_pago_em'] else 'A pagar'
-                linhas.append(_row([_link('conta/'+str(cid),conta['descricao']),reais(conta['total_centavos']),esc(conta['vencimento']),esc(status),reais(devidos)]))
-            criar=_html_campo('descricao','Descrição')+_html_campo('valor','Valor da conta (R$)')+_html_campo('vencimento','Vencimento',tipo='date',valor=date.today().isoformat())
+                devidos=sum(p['valor_centavos'] for p in parcelas
+                            if p['usuario_id']!=conta['responsavel_id'] and not p['confirmado_em'])
+                status=('Cancelada' if conta['cancelada_em'] else
+                        'Fornecedor pago' if conta['fornecedor_pago_em'] else 'A pagar')
+                dados=[_link('conta/'+str(cid),conta['descricao']),
+                       reais(conta['total_centavos']),esc(conta['vencimento']),esc(status)]
+                if com_contribuicoes:
+                    dados.append(reais(devidos))
+                return _row(dados)
+
+            linhas_ind=[_linha_conta(x,False) for x in individuais]
+            linhas_comp=[_linha_conta(x,True) for x in compartilhadas]
+            corpo=cab
+            corpo+=_card('Contas a pagar individuais',
+                _table(['Conta','Total','Vencimento','Fornecedor'],linhas_ind)
+                if linhas_ind else '<p class="muted">Nenhuma conta individual cadastrada.</p>')
+            corpo+=_card('Contas compartilhadas',
+                _table(['Conta','Total','Vencimento','Fornecedor','Contribuições pendentes'],linhas_comp)
+                if linhas_comp else '<p class="muted">Nenhuma conta compartilhada cadastrada.</p>')
+            campos=(_html_campo('descricao','Descrição')
+                    +_html_campo('valor','Valor da conta (R$)')
+                    +_html_campo('vencimento','Vencimento',tipo='date',valor=date.today().isoformat()))
+            corpo+=_card('Nova conta a pagar individual',
+                _form('conta/criar',csrf,
+                      campos+'<input type="hidden" name="tipo" value="individual">',
+                      'Cadastrar conta individual'))
             if f and len(membros)>1:
-                criar+='<p>Quem participa? (o responsável sempre está incluído)</p>'
-                criar+=''.join(f'<label><input type="checkbox" name="participantes[]" value="{m["id"]}">{esc(m["nome"])}</label>' for m in membros if m['id']!=user['id'])
-                criar+='<label>Divisão<select name="divisao"><option value="igual">Igualitária</option><option value="percentual">Percentual</option><option value="manual">Valor manual</option></select></label>'
-                criar+='<label>Para percentual/manual, informe linhas como ID=valor ou ID=percentual (inclua responsável).<textarea name="parcelas" rows="3" placeholder="1=50\n2=50"></textarea></label>'
-                criar+='<small>IDs: '+', '.join(f'{m["nome"]}={m["id"]}' for m in membros)+'</small>'
-            corpo=cab+_card('Contas cadastradas',_table(['Conta','Total','Vencimento','Fornecedor','Contribuições pendentes'],linhas))
-            corpo+=_card('Nova conta'+(' compartilhada' if f else ' pessoal'),_form('conta/criar',csrf,criar,'Cadastrar conta'))
-            return _render(handler,'Contas e despesas compartilhadas',corpo,user)
+                participantes=(''.join(
+                    f'<label><input type="checkbox" name="participantes[]" '
+                    f'value="{m["id"]}">{esc(m["nome"])}</label>'
+                    for m in membros if m['id']!=user['id']))
+                compartilhada=(campos
+                    +'<input type="hidden" name="tipo" value="compartilhada">'
+                    +'<p>Quem participa? (o responsável sempre está incluído)</p>'
+                    +participantes
+                    +'<label>Divisão<select name="divisao">'
+                    '<option value="igual">Igualitária</option>'
+                    '<option value="percentual">Percentual</option>'
+                    '<option value="manual">Valor manual</option></select></label>'
+                    +'<label>Para percentual/manual, informe linhas como ID=valor ou ID=percentual '
+                    '(inclua responsável).<textarea name="parcelas" rows="3" '
+                    'placeholder="1=50\n2=50"></textarea></label>'
+                    +'<small>IDs: '+', '.join(f'{m["nome"]}={m["id"]}' for m in membros)+'</small>')
+                corpo+=_card('Nova conta compartilhada',
+                    _form('conta/criar',csrf,compartilhada,'Cadastrar conta compartilhada'))
+            elif f:
+                corpo+=_card('Conta compartilhada',
+                    '<p class="muted">Convide pelo menos mais um integrante para criar '
+                    'contas compartilhadas.</p>'+_link('familia','Gerenciar família'))
+            else:
+                corpo+=_card('Conta compartilhada',
+                    '<p class="muted">Crie ou participe de uma família para compartilhar '
+                    'contas.</p>'+_link('familia','Gerenciar família'))
+            return _render(handler,'Contas a pagar',corpo,user)
         if path.startswith('/auto-financeiro/conta/') and path.rsplit('/',1)[-1].isdigit():
             conta=_resumo_conta(c,int(path.rsplit('/',1)[-1]))
             if not conta or not (conta['responsavel_id']==user['id'] or
@@ -616,8 +662,13 @@ def GET(handler,path,prestador,banco):
                     if conta['responsavel_id']==user['id'] and p['enviado_em'] and not p['confirmado_em']:
                         acao=_botao(f'conta/{conta["id"]}/confirmar',csrf,'Confirmar Pix recebido',f'<input type="hidden" name="uid" value="{p["usuario_id"]}">')
                 blocos.append(_row([esc(p['nome']),reais(p['valor_centavos']),esc(estado),comprovante+acao]))
-            corpo=_card(conta['descricao'],f'<p>Total: <strong>{reais(conta["total_centavos"])}</strong> · Vencimento: {esc(conta["vencimento"])}</p>'
-                        +_table(['Integrante','Parte','Situação','Comprovante/Ação'],blocos))
+            resumo=f'<p>Total: <strong>{reais(conta["total_centavos"])}</strong> · Vencimento: {esc(conta["vencimento"])}</p>'
+            if conta['familia_id'] is None:
+                corpo=_card(conta['descricao'],resumo+
+                    '<p class="muted">Conta individual — sem divisão familiar.</p>')
+            else:
+                corpo=_card(conta['descricao'],resumo+
+                    _table(['Integrante','Parte','Situação','Comprovante/Ação'],blocos))
             if user['id']==conta['responsavel_id'] and not conta['fornecedor_pago_em'] and not conta['cancelada_em']:
                 corpo+=_card('Pagamento ao fornecedor',_form(f'conta/{conta["id"]}/pagar',csrf,
                     _html_campo('comprovante','Comprovante do pagamento total ao fornecedor',tipo='file',extra='accept="image/png,image/jpeg,application/pdf"'),
@@ -889,13 +940,25 @@ def POST(handler,path,prestador,banco,d):
             selecionados=d.get('participantes[]',[])
             if isinstance(selecionados,str):selecionados=[selecionados]
             ids=[int(x) for x in selecionados]
-            if f:
+            tipo=str(d.get('tipo','') or '').strip().lower()
+            if tipo not in ('individual','compartilhada'):
+                tipo='compartilhada' if (f and ids) else 'individual'
+            if tipo=='compartilhada':
+                if not f:
+                    raise PermissionError('Crie ou participe de uma família para compartilhar contas.')
                 members={x['id'] for x in _familia_membros(c,f['id'])}
-                if any(x not in members for x in ids):raise PermissionError('Integrante não pertence à família.')
-            elif ids:raise PermissionError('Sem família compartilhada.')
+                if any(x not in members for x in ids):
+                    raise PermissionError('Integrante não pertence à família.')
+                ids=[x for x in ids if x!=uid]
+                if not ids:
+                    raise ValueError('Selecione ao menos um participante para a conta compartilhada.')
+                familia_id=f['id']
+            else:
+                ids=[]
+                familia_id=None
             parcelas=_dividir(total,ids,uid,str(d.get('divisao','igual')),d.get('parcelas',''))
             cur=c.execute('INSERT INTO contas(responsavel_id,familia_id,descricao,total_centavos,vencimento,criada_em) VALUES(?,?,?,?,?,?)',
-                (uid,f['id'] if f else None,titulo,total,vencimento,agora()))
+                (uid,familia_id,titulo,total,vencimento,agora()))
             for mid,cents in parcelas.items():
                 c.execute('INSERT INTO cotas(conta_id,usuario_id,valor_centavos) VALUES(?,?,?)',
                     (cur.lastrowid,mid,cents))
