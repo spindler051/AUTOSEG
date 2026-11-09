@@ -1,0 +1,16 @@
+# Modelo de importação do Portal do Prestador; nenhum cliente é salvo sem revisão.
+versao: 1
+cliente:
+  tipo_pessoa: Jurídica
+  nome: Condomínio Exemplo Fictício
+  documento: ""
+  endereco: Avenida Exemplo
+  numero: "100"
+  bairro: Centro
+  cidade: Porto Alegre
+  uf: RS
+  cep: ""
+  telefone: ""
+  email: ""
+  status: Prospect
+  observacoes: Cadastro de demonstração para revisão.

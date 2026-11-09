@@ -1,0 +1,86 @@
+# Bancos de dados
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db-shm
+*.db-wal
+
+# Ambientes Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Configurações e credenciais
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+feedback_ia.local.json
+
+# Arquivos de clientes e relatórios
+anexos_os/
+relatorios_pdf/
+backups/
+backup/
+*.xls
+*.xlsx
+*.csv
+
+# Arquivos temporários
+.DS_Store
+*.log
+*.tmp
+.autoseg.lock
+composicao.yaml
+
+# Logs e dados operacionais
+logs/
+tuneis/
+
+# Configuracoes locais de tunel
+cloudflared.yml
+cloudflared.yaml
+cert.pem
+credentials.json
+
+# Dados locais de desenvolvimento
+data/
+dados_teste/
+
+# REV05: acesso remoto privado de desenvolvimento e OAuth
+tuneis_dev/
+token.json
+**/client_secret_*.json
+
+# REV06: segredos e arquivos de execução
+**/*secret*.json
+**/*token*.json
+**/*oauth*.json
+*.p8
+*.pfx
+*.log.*
+
+# Rascunhos operacionais gerados pelo aplicativo (podem conter dados pessoais)
+rascunhos/
+
+# GTK4/libadwaita: dependências locais e artefatos de build
+.vendor/
+.venv-gtk/
+build/
+dist/
+*.AppImage
+*.spec
+
+# Documentação GNOME baixada localmente (reproduzir com docs/baixar_gnome_hig.sh)
+docs/gnome-hig/
+
+# Snapshot local do banco do macOS para leitura
+dados_remoto*.db
+
+# Notas fiscais enviadas (dados operacionais)
+notas_fiscais/

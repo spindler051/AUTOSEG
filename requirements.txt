@@ -1,0 +1,6 @@
+reportlab>=4.2,<5
+pillow>=10,<13
+PyYAML>=6.0,<7
+# Gmail API (credenciais OAuth somente fora do Git)
+google-api-python-client>=2.100,<3
+google-auth-oauthlib>=1.0,<2

@@ -1,0 +1,14 @@
+versao: 1
+materiais:
+  - nome: Cabo de rede CAT6
+    sku: CAB-CAT6
+    unidade: metro
+    custo: '2,50'
+    venda: '5,00'
+    minimo: 20
+  - nome: Conector RJ45
+    sku: RJ45-1
+    unidade: unidade
+    custo: '0,70'
+    venda: '2,00'
+    minimo: 10

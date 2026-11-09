@@ -1,0 +1,37 @@
+name: AUTOSEG main - testes atuais
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autoseg-main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Obter codigo
+        uses: actions/checkout@v4
+      - name: Configurar Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements-dev.txt
+      - name: Metadados de versao
+        run: python officina/core/versionador.py info
+      - name: Compilar codigo Python
+        run: python -m compileall -q officina flavors tests workaholic/src
+      - name: Suite completa
+        run: python -m unittest discover -s tests -p 'test_*.py' -q
+      - name: Validar JavaScript do portal
+        run: node --check flavors/autoseg/web/portal.js

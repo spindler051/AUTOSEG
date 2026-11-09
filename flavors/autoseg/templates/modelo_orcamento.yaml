@@ -1,0 +1,310 @@
+# =============================================================================
+# AUTOSEG — MODELO OFICIAL DE ORÇAMENTO (YAML)
+# =============================================================================
+#
+# PARA QUE SERVE
+#   Este arquivo serve para pré-preencher a tela "Novo orçamento" do Portal do
+#   Prestador. Ele NÃO cria ordem de serviço, NÃO cria cobrança financeira, NÃO
+#   movimenta estoque e NÃO envia e-mail. A importação apenas coloca cliente,
+#   serviços e materiais na tela para revisão humana antes de gerar o PDF.
+#
+# COMO USAR (passo a passo)
+#   1. Baixe este arquivo e renomeie para, por exemplo, orcamento_cliente.yaml.
+#   2. Use as seções "instrucoes", "modelo" e "exemplo" como rascunho e guia.
+#   3. Antes de enviar, apague "instrucoes", "modelo" e "exemplo". A saída deve
+#      ter SOMENTE "versao: 1" e a seção "orcamento", igual ao modelo de
+#      relatório técnico.
+#   4. No bloco "orcamento", informe exatamente UM identificador de cliente:
+#      cliente_id OU cliente_documento OU cliente_nome. Deixe os outros vazios.
+#   5. Liste os serviços em "servicos" e os materiais adicionais em "materiais".
+#      Cada item precisa de exatamente UM identificador: id OU nome.
+#   6. Não escreva preços. O sistema usa o preço ativo do catálogo/estoque.
+#   7. Envie o arquivo em "Criar orçamento por YAML", confira a prévia na tela e
+#      só depois clique em "Gerar orçamento em PDF".
+#
+# REGRA DE OURO
+#   Não invente cliente, serviço, material, quantidade ou preço. Use somente o
+#   que foi informado pelo cliente/prestador. Se não souber o ID, use o nome
+#   exato cadastrado. Se houver dúvida ou mais de um cadastro com o mesmo nome,
+#   pare e peça o ID ou o CPF/CNPJ. É melhor um orçamento curto e verdadeiro do
+#   que um orçamento bonito e inventado.
+#
+# GARANTIAS
+#   - O YAML não contém preços: o servidor sempre busca o preço ativo.
+#   - O YAML não cria OS, financeiro, nota fiscal ou movimento de estoque.
+#   - Nomes/IDs são resolvidos apenas entre registros ATIVOS.
+#   - Serviço repetido ou material repetido é rejeitado; ajuste a quantidade.
+#   - Materiais que já fazem parte do serviço do catálogo NÃO devem ser
+#     repetidos na lista de materiais adicionais.
+#   - A geração do PDF só acontece depois do clique humano de confirmação.
+#
+# LIMITES TÉCNICOS
+#   - Arquivo: até 64 KB, codificação UTF-8.
+#   - Serviços: até 20 itens.
+#   - Materiais adicionais: até 50 itens.
+#   - Quantidade de serviço: número inteiro de 1 a 20.
+#   - Quantidade de material: número maior que zero, até 1.000 (aceita decimal).
+#   - Não use âncoras (&), aliases (*), múltiplos documentos YAML (---) ou TAB.
+# =============================================================================
+
+versao: 1
+
+instrucoes:
+  o_que_e_este_arquivo: >-
+    Modelo de pré-preenchimento de orçamento do AUTOSEG. O sistema lê a seção
+    "orcamento", resolve o cliente, os serviços do catálogo e os materiais do
+    estoque, e mostra o formulário preenchido. Nada é gravado no banco e nenhum
+    PDF é gerado antes da confirmação humana.
+
+  como_preencher:
+    - passo: 1
+      acao: >-
+        Identifique o cliente. Use cliente_id quando tiver o número interno;
+        use cliente_documento quando tiver CPF/CNPJ; use cliente_nome quando
+        tiver apenas o nome exato. Preencha somente UM dos três.
+    - passo: 2
+      acao: >-
+        Liste os serviços em "servicos". Para cada serviço, informe id OU nome
+        exato do catálogo, mais a quantidade. Não informe preço.
+    - passo: 3
+      acao: >-
+        Liste materiais adicionais em "materiais" somente se eles forem
+        cobrados separadamente. Materiais já incluídos no preço de um serviço
+        do catálogo não devem ser repetidos.
+    - passo: 4
+      acao: >-
+        Se não houver material adicional, use materiais: []. Se não houver
+        serviço, use servicos: [] — mas o orçamento precisa ter pelo menos um
+        serviço ou um material.
+    - passo: 5
+      acao: >-
+        Revise o checklist. Envie o YAML, confira cliente, serviços, materiais
+        e quantidades na tela e só então gere o PDF.
+
+  formato_de_saida:
+    explicacao: >-
+      A saída é o arquivo enviado ao sistema. Ela deve conter SOMENTE "versao"
+      e "orcamento". Remova as seções "instrucoes", "modelo" e "exemplo" antes
+      de enviar. Não inclua campos inventados.
+    estrutura_minima: |
+      versao: 1
+      orcamento:
+        cliente_id:
+        cliente_documento: ""
+        cliente_nome: ""
+        servicos:
+          - id:
+            nome: ""
+            quantidade: 1
+        materiais:
+          - id:
+            nome: ""
+            quantidade: 1
+    regras:
+      - 'A chave "versao" é obrigatória e deve ser o número inteiro 1.'
+      - 'A chave "orcamento" é obrigatória e deve ser um mapa.'
+      - 'Informe exatamente um cliente: cliente_id, cliente_documento ou cliente_nome.'
+      - 'Cada serviço/material aceita id OU nome, nunca os dois.'
+      - 'quantidade é obrigatória em cada item; o padrão do modelo é 1.'
+      - 'Use listas vazias quando não houver itens daquele tipo.'
+      - 'Não escreva preço, valor, desconto, total ou garantia no YAML.'
+
+  dicionario_de_campos:
+    cliente_id:
+      significado: Número interno do cliente no AUTOSEG.
+      como_preencher: Número inteiro positivo. Deixe vazio se usar documento ou nome.
+      obrigatorio: false
+      exemplo: 123
+    cliente_documento:
+      significado: CPF ou CNPJ do cliente.
+      como_preencher: Texto com 11 ou 14 dígitos; pontuação é aceita.
+      obrigatorio: false
+      exemplo: '12.345.678/0001-95'
+    cliente_nome:
+      significado: Nome ou razão social exata do cliente.
+      como_preencher: >-
+        Use somente se não tiver ID nem documento. Precisa ser igual ao nome
+        cadastrado. Se houver mais de um cliente ativo com o mesmo nome, o
+        sistema rejeita e pede o ID ou documento.
+      obrigatorio: false
+      exemplo: Condomínio Exemplo Fictício
+    servicos:
+      significado: Lista de serviços do catálogo que farão parte do orçamento.
+      como_preencher: Lista de mapas. Use [] se o orçamento tiver só materiais.
+      obrigatorio: false
+      exemplo: |
+        servicos:
+          - nome: Revisão de portão — DEMO
+            quantidade: 1
+    materiais:
+      significado: Lista de materiais adicionais cobrados separadamente.
+      como_preencher: Lista de mapas. Use [] quando não houver material adicional.
+      obrigatorio: false
+      exemplo: |
+        materiais:
+          - nome: Cabo de rede CAT6 — DEMO
+            quantidade: 10
+    id:
+      significado: Número interno do serviço ou material.
+      como_preencher: Número inteiro positivo. Use id OU nome.
+      obrigatorio: false
+      exemplo: 45
+    nome:
+      significado: Nome exato do serviço no catálogo ou do material no estoque.
+      como_preencher: >-
+        Use id OU nome. O nome precisa ser igual ao cadastro ativo. Se houver
+        mais de um com o mesmo nome, use o id.
+      obrigatorio: false
+      exemplo: Revisão de portão — DEMO
+    quantidade:
+      significado: Quantidade do serviço ou material.
+      como_preencher: >-
+        Serviço: inteiro de 1 a 20. Material: número maior que zero, até 1.000;
+        pode usar ponto (2.5) ou vírgula (2,5).
+      obrigatorio: true
+      exemplo: 1
+
+  regras_de_identificacao:
+    - >-
+      Cliente: preencha somente cliente_id OU cliente_documento OU cliente_nome.
+    - >-
+      Serviço/material: preencha somente id OU nome em cada item.
+    - >-
+      Nomes são comparados sem diferenciar maiúsculas/minúsculas, mas precisam
+      ser exatos no restante. Acentos e espaços contam.
+    - >-
+      Apenas clientes, serviços e materiais ATIVOS entram no orçamento.
+    - >-
+      Se o nome for ambíguo, o sistema rejeita. Não tente adivinhar: peça o ID
+      ou o documento ao prestador.
+
+  regras_de_preco:
+    - >-
+      Não existe campo de preço no YAML. O preço do serviço vem do catálogo
+      ativo e já inclui os materiais cadastrados dentro desse serviço.
+    - >-
+      O material adicional usa o preço de venda ativo do estoque.
+    - >-
+      Para alterar um preço, altere o catálogo/estoque antes de gerar o
+      orçamento. O YAML nunca substitui o preço do servidor.
+    - >-
+      Materiais do catálogo do serviço não devem ser repetidos em "materiais";
+      isso duplicaria a cobrança.
+
+  regras_para_ia:
+    - 'Não invente IDs, nomes, documentos, serviços, materiais ou quantidades.'
+    - 'Use apenas dados fornecidos pelo cliente ou pelo prestador.'
+    - 'Se faltar um dado obrigatório, pare e pergunte; não preencha por suposição.'
+    - 'Não acrescente preços, descontos, totais ou campos que não estão no modelo.'
+    - 'Não repita o mesmo serviço ou material em duas linhas; some a quantidade.'
+    - 'Devolva YAML válido, em UTF-8, sem TAB, sem âncoras e sem aliases.'
+    - 'Devolva somente versao e orcamento; não devolva instrucoes, modelo ou exemplo.'
+
+  checklist_antes_de_enviar:
+    - 'A saída tem somente versao: 1 e a seção orcamento?'
+    - 'As seções instrucoes, modelo e exemplo foram removidas?'
+    - 'Foi informado exatamente um identificador de cliente?'
+    - 'Cada serviço/material tem id OU nome, nunca os dois?'
+    - 'Todas as quantidades são válidas e positivas?'
+    - 'Não há preço, desconto ou total escrito no YAML?'
+    - 'Materiais já incluídos nos serviços foram removidos da lista adicional?'
+    - 'O arquivo está em UTF-8 e tem menos de 64 KB?'
+
+  erros_comuns:
+    - erro: 'Informe exatamente um cliente'
+      por_que_falha: >-
+        O arquivo preencheu mais de um identificador de cliente ou nenhum.
+      correcao: >-
+        Deixe apenas cliente_id, ou apenas cliente_documento, ou apenas
+        cliente_nome.
+    - erro: 'informe o id OU o nome, não ambos'
+      por_que_falha: >-
+        O mesmo item tem id e nome preenchidos, o que pode apontar para
+        cadastros diferentes.
+      correcao: 'Mantenha apenas um dos dois campos.'
+    - erro: 'Serviço repetido'
+      por_que_falha: O mesmo serviço foi listado duas vezes.
+      correcao: 'Mantenha uma linha e some a quantidade.'
+    - erro: 'Material repetido'
+      por_que_falha: O mesmo material foi listado duas vezes.
+      correcao: 'Mantenha uma linha e some a quantidade.'
+    - erro: 'não encontrado ou inativo'
+      por_que_falha: >-
+        O nome/ID não existe entre os registros ativos, ou o nome foi escrito
+        de forma diferente do cadastro.
+      correcao: >-
+        Confira o cadastro ativo. Se houver dúvida, use o ID.
+    - erro: 'campo desconhecido'
+      por_que_falha: >-
+        O arquivo contém preço, desconto, total, garantia ou outro campo fora
+        do modelo.
+      correcao: 'Remova o campo. Preços e garantia não são definidos no YAML.'
+
+  exemplos:
+    exemplo_1_dois_servicos:
+      pedido: >-
+        Orçamento para o Condomínio Exemplo Fictício com revisão de portão e
+        instalação de duas câmeras.
+      saida: |
+        versao: 1
+        orcamento:
+          cliente_nome: Condomínio Exemplo Fictício
+          servicos:
+            - nome: Revisão de portão — DEMO
+              quantidade: 1
+            - nome: Instalação de câmera — DEMO
+              quantidade: 2
+          materiais: []
+    exemplo_2_servico_e_material:
+      pedido: >-
+        Orçamento com um serviço de rede e 10 metros de cabo adicional.
+      saida: |
+        versao: 1
+        orcamento:
+          cliente_documento: 12.345.678/0001-95
+          servicos:
+            - id: 10
+              quantidade: 1
+          materiais:
+            - nome: Cabo de rede CAT6 — DEMO
+              quantidade: 10
+    exemplo_3_so_materiais:
+      pedido: >-
+        Orçamento somente de materiais: 2 fontes e 3 conectores.
+      saida: |
+        versao: 1
+        orcamento:
+          cliente_id: 123
+          servicos: []
+          materiais:
+            - nome: Fonte 12V — DEMO
+              quantidade: 2
+            - nome: Conector RJ45 — DEMO
+              quantidade: 3
+
+modelo:
+  orcamento:
+    cliente_id:
+    cliente_documento: ""
+    cliente_nome: ""
+    # Para incluir serviços, use a estrutura mostrada em instrucoes.formato_de_saida:
+    # servicos:
+    #   - id:
+    #     nome: ""
+    #     quantidade: 1
+    servicos: []
+    # Para incluir materiais adicionais, use a mesma estrutura em materiais.
+    materiais: []
+
+exemplo:
+  preenchido:
+    orcamento:
+      cliente_nome: Condomínio Exemplo Fictício
+      servicos:
+        - nome: Revisão de portão — DEMO
+          quantidade: 1
+        - nome: Instalação de câmera — DEMO
+          quantidade: 2
+      materiais:
+        - nome: Cabo de rede CAT6 — DEMO
+          quantidade: 10

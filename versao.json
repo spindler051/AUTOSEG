@@ -1,0 +1,9 @@
+{
+  "produto": "AUTOSEG",
+  "versao": "9.6.0-dev.73",
+  "revisao": "REV12",
+  "canal": "dev",
+  "homologado": false,
+  "schema_banco": "aditivo (status operacional Iniciada; v9_chamados.solicitante_telefone/identificacao, os_notas_fiscais, produtividade_email, portal_feedback, portal_feedback_aberturas, portal_feedback_config, telemetria_eventos)",
+  "data": "2026-11-09"
+}

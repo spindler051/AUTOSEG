@@ -1,0 +1,488 @@
+"""Regras transacionais das telas web AUTOSEG (usa o banco SQLite do desktop).
+
+Não altera a definição das tabelas originais. Cada operação sensível gera auditoria.
+"""
+import re
+import sqlite3
+from decimal import Decimal, InvalidOperation
+from datetime import datetime
+from officina.core import prestadores_ext as ext
+from officina.core import fluxo_os as fluxo
+from officina.core import atendimento_os as aten
+from officina.core import estoque_materiais as estoque
+from officina.core import cadastros_v9 as cad
+from officina.core import composicao
+CLIENTE_CAMPOS = (
+    'tipo_pessoa documento nome nome_fantasia endereco numero complemento bairro cep '
+    'cidade uf telefone email sindico_nome sindico_telefone sindico_email '
+    'administradora administradora_email administradora_telefone observacoes status'
+).split()
+OS_FORMAS = ('PIX','Transferência','Dinheiro','Cartão','Boleto','Outro')
+
+
+def dinheiro(value):
+    v = Decimal(str(value or 0)).quantize(Decimal('.01'))
+    return 'R$ '+f'{v:,.2f}'.replace(',','@').replace('.',',').replace('@','.')
+
+
+def numero(value, nome='Valor'):
+    t=str(value if value is not None else '').strip().replace('R$','').replace(' ','')
+    if ',' in t: t=t.replace('.','').replace(',','.')
+    try: d=Decimal(t or '0').quantize(Decimal('0.01'))
+    except (ValueError, InvalidOperation): raise ValueError(f'{nome} inválido.')
+    if not d.is_finite() or d<0 or d>100000000: raise ValueError(f'{nome} fora dos limites.')
+    return float(d)
+
+
+def texto(d,chave,maximo=5000):
+    s=str(d.get(chave,'') or '').strip()
+    if len(s)>maximo: raise ValueError(f'Campo {chave} excedeu o limite de {maximo} caracteres.')
+    return s
+
+
+def lista_materiais(d):
+    itens=d.get('material_item[]',[])
+    quantidades=d.get('material_qtd[]',[])
+    unidades=d.get('material_unidade[]',[])
+    unitarios=d.get('material_unit[]',[])
+    if isinstance(itens,str): itens=[itens]
+    if isinstance(quantidades,str): quantidades=[quantidades]
+    if isinstance(unidades,str): unidades=[unidades]
+    if isinstance(unitarios,str): unitarios=[unitarios]
+    if len(itens)>100: raise ValueError('Limite de 100 materiais por OS.')
+    result=[]
+    for i, raw in enumerate(itens):
+        nome=str(raw).strip()
+        if not nome: continue
+        if len(nome)>180: raise ValueError('Nome do material muito longo.')
+        qtd_bruta=str(quantidades[i] if i<len(quantidades) else '').strip()
+        unidade=str(unidades[i] if i<len(unidades) else '').strip()[:40]
+        unit=numero(unitarios[i] if i<len(unitarios) else '0','Valor unitário')
+        if qtd_bruta=='':
+            # Item sem quantidade fixa: o valor informado é o total do item.
+            result.append({'item':nome,'quantidade':None,'unidade':unidade,
+                           'valor_unitario':unit,'valor_total':round(unit,2)})
+            continue
+        qtd=numero(qtd_bruta,'Quantidade')
+        if qtd<=0: raise ValueError(f'Quantidade do material {nome} precisa ser positiva ou ficar vazia.')
+        result.append({'item':nome,'quantidade':qtd,'unidade':unidade,
+                       'valor_unitario':unit,'valor_total':round(qtd*unit,2)})
+    return result
+
+
+def criar_auditoria(c):
+    c.execute('''CREATE TABLE IF NOT EXISTS portal_auditoria (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, prestador_id INTEGER NOT NULL,
+        acao TEXT NOT NULL, referencia TEXT NOT NULL, detalhes TEXT NOT NULL,
+        criado_em TEXT NOT NULL)''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_portal_auditoria_data ON portal_auditoria(criado_em)')
+
+
+def audit(c,pid,acao,referencia,detalhes):
+    criar_auditoria(c)
+    c.execute('INSERT INTO portal_auditoria(prestador_id,acao,referencia,detalhes,criado_em) VALUES(?,?,?,?,?)',
+        (pid,acao,str(referencia),str(detalhes)[:4000],ext.agora()))
+
+
+def cliente_salvar(banco,d,pid,cliente_id=None):
+    values={x:texto(d,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
+    if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
+    if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
+    if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        anterior=None
+        if cliente_id is not None:
+            anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+            if not anterior: raise ValueError('Cliente não encontrado.')
+        doc_novo=cad.digitos(values['documento'])
+        mudou_documento=(cliente_id is None or anterior['tipo_pessoa']!=values['tipo_pessoa']
+                         or cad.digitos(anterior['documento'])!=doc_novo)
+        if mudou_documento:
+            values['documento']=cad.validar_documento(values['tipo_pessoa'],doc_novo)
+            duplicado=cad.buscar_documento_duplicado(c,values['documento'],cliente_id)
+            if duplicado:
+                raise ValueError(f"CPF/CNPJ já cadastrado para {duplicado['nome']}.")
+        else:
+            values['documento']=doc_novo
+        if cliente_id is None:
+            cols=','.join(CLIENTE_CAMPOS)
+            p=','.join('?' for _ in CLIENTE_CAMPOS)
+            x=c.execute(f'INSERT INTO clientes({cols},criado_em) VALUES({p},?)',
+                  [values[k] for k in CLIENTE_CAMPOS]+[ext.agora()])
+            cid=x.lastrowid
+            audit(c,pid,'Cliente criado',cid,values['nome'])
+        else:
+            updates={k:f'{anterior[k]} → {values[k]}' for k in CLIENTE_CAMPOS if str(anterior[k] or '')!=values[k]}
+            if updates:
+                c.execute('UPDATE clientes SET '+','.join(f'{k}=?' for k in CLIENTE_CAMPOS)+' WHERE id=?',
+                          [values[k] for k in CLIENTE_CAMPOS]+[cliente_id])
+                audit(c,pid,'Cliente alterado',cliente_id,str(updates))
+            cid=cliente_id
+        if values['tipo_pessoa']=='Jurídica' and values['status']!='Inativo':
+            cad.sincronizar_cliente_pj(c,cid)
+    return cid
+
+
+def cliente_excluir(banco,cid,pid):
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        row=c.execute('SELECT nome FROM clientes WHERE id=?',(cid,)).fetchone()
+        if not row: raise ValueError('Cliente inexistente.')
+        if c.execute('SELECT 1 FROM ordens_servico WHERE cliente_id=?',(cid,)).fetchone():
+            raise ValueError('Cliente possui OS vinculada. Marque-o como Inativo.')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_usuarios'").fetchone():
+            if c.execute('SELECT 1 FROM v9_usuarios WHERE cliente_pf_id=?',(cid,)).fetchone():
+                raise ValueError('Cliente possui conta no portal. Desative o cadastro.')
+        if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='v9_organizacoes'").fetchone():
+            orgs=c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchall()
+            for org in orgs:
+                if (c.execute('SELECT 1 FROM v9_chamados WHERE organizacao_id=?',(org['id'],)).fetchone()
+                    or c.execute('SELECT 1 FROM v9_vinculos WHERE organizacao_id=?',(org['id'],)).fetchone()):
+                    raise ValueError('Condomínio possui chamados ou vínculos. Desative em vez de excluir.')
+            for org in orgs:
+                c.execute('DELETE FROM v9_organizacoes WHERE id=?',(org['id'],))
+        audit(c,pid,'Cliente excluído',cid,row['nome'])
+        c.execute('DELETE FROM clientes WHERE id=?',(cid,))
+
+
+def os_salvar(banco,d,pid,oid=None):
+    """Insere/edita uma OS, materiais, relatório e estado numa transação SQLite."""
+    try: cliente_id=int(d['cliente_id'])
+    except (KeyError,ValueError,TypeError): raise ValueError('Selecione o cliente.')
+    descricao=texto(d,'descricao')
+    if not descricao: raise ValueError('Preencha a descrição do serviço.')
+    tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
+    forma=texto(d,'forma_pagamento',60)
+    if not forma and oid is not None:
+        with ext.db(banco) as conexao:
+            atual=conexao.execute('SELECT forma_pagamento FROM ordens_servico WHERE id=?',
+                                  (oid,)).fetchone()
+        if atual and not str(atual['forma_pagamento'] or '').strip():
+            d=dict(d); d['forma_pagamento_opcional']='1'
+    if not forma and not str(d.get('forma_pagamento_opcional','')) in ('1','on','true','sim'):
+        raise ValueError('Selecione a forma de pagamento.')
+    if forma and forma not in OS_FORMAS: raise ValueError('Forma de pagamento inválida.')
+    urgencia=texto(d,'urgencia',20)
+    if urgencia and urgencia not in ('Baixa','Normal','Alta'):
+        raise ValueError('Urgência inválida.')
+    observacoes=texto(d,'observacoes')
+    texto_adicional=texto(d,'texto_adicional',5000)
+    relato=texto(d,'relatorio_tecnico',5000)
+    cancelar=str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
+    acao='Cancelada' if cancelar else texto(d,'acao_status',30)
+    if acao not in ('salvar','Pendente','Concluída','Cancelada'):
+        raise ValueError('Operação inválida.')
+    if acao=='Concluída' and not forma:
+        raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
+    motivo=texto(d,'motivo_encerramento',2000)
+    if acao in ('Cancelada','Não realizada') and not motivo:
+        raise ValueError('O motivo é obrigatório para cancelar ou indicar não realização.')
+    if cancelar and oid is None:
+        raise ValueError('Não é possível cancelar uma OS que ainda não foi salva.')
+    imagens=[x for x in d.get('imagens_encerramento[]',[]) if isinstance(x,tuple) and x[0]]
+    imagem=d.get('imagem_encerramento')
+    if imagem and isinstance(imagem,tuple) and imagem[0]:imagens.append(imagem)
+    if len(imagens)>10:raise ValueError('O limite é de 10 imagens por envio.')
+    chaves=list(d.get('foto_chave[]',[]) or [])
+    legendas_fotos=list(d.get('foto_legenda[]',[]) or [])
+    visiveis_fotos=list(d.get('foto_visivel[]',[]) or [])
+    anexo_ids=list(d.get('anexo_id[]',[]) or [])
+    anexo_legendas=list(d.get('anexo_legenda[]',[]) or [])
+    anexo_visiveis=list(d.get('anexo_visivel[]',[]) or [])
+    if isinstance(chaves,str):chaves=[chaves]
+    if isinstance(legendas_fotos,str):legendas_fotos=[legendas_fotos]
+    if isinstance(visiveis_fotos,str):visiveis_fotos=[visiveis_fotos]
+    if isinstance(anexo_ids,str):anexo_ids=[anexo_ids]
+    if isinstance(anexo_legendas,str):anexo_legendas=[anexo_legendas]
+    if isinstance(anexo_visiveis,str):anexo_visiveis=[anexo_visiveis]
+    for item in imagens:
+        if len(item[1])>8*1024*1024:raise ValueError('Cada imagem deve ter no máximo 8 MB.')
+        ext.validar_imagem(item[1])
+    materiais=lista_materiais(d)
+    mao_obra=numero(d.get('valor_mao_obra','0'),'Valor da mão de obra')
+    total_mat=round(sum(m['valor_total'] for m in materiais),2) if materiais else numero(
+        d.get('valor_materiais_manual','0'),'Valor de materiais')
+    custo_mat=numero(d.get('custo_materiais','0'),'Custo dos materiais')
+    soma=round(mao_obra+total_mat,2)
+    override=texto(d,'valor_total_override',30)
+    total_negociado=numero(override,'Total negociado') if override else None
+    aplicar_comp=str(d.get('aplicar_composicao','0')).lower() in ('1','on','true','sim')
+    try:
+        tempo_horas=float(str(d.get('tempo_horas','0') or '0').replace(',','.'))
+    except ValueError:
+        raise ValueError('Tempo de execução inválido.') from None
+    if tempo_horas<0:raise ValueError('Tempo de execução não pode ser negativo.')
+    base_nome=texto(d,'base_percentuais',30) or 'total'
+    try:
+        bases_config=composicao.carregar().get('bases_percentuais',{})
+    except (ValueError,OSError):
+        bases_config={}
+    if bases_config and base_nome not in bases_config:
+        raise ValueError('Base de percentuais inválida.')
+    comprimir_fotos=None
+    if str(d.get('comprimir_fotos_pdf_presente',''))=='1':
+        comprimir_fotos=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
+    campos={}
+    for chave,valor in d.items():
+        if isinstance(valor,(list,tuple,dict)) or chave in ('csrf','composicao_yaml',
+                'rateio_manual_tecnico','rateio_manual_valor'):
+            continue
+        try:
+            campos[chave]=int(round(numero(valor,'Campo')*100))
+        except (ValueError,TypeError):
+            continue
+    comp_yaml=d.get('composicao_yaml')
+    if comp_yaml:
+        import json as _json_comp
+        if isinstance(comp_yaml,str):
+            try:
+                comp_yaml=_json_comp.loads(comp_yaml)
+            except ValueError as exc:
+                raise ValueError('Composição declarativa inválida no YAML.') from exc
+        total=total_negociado if total_negociado is not None else soma
+        comp=composicao.declarativa(
+            total_centavos=int(round(total*100)),blocos=comp_yaml)
+    elif aplicar_comp:
+        comp=composicao.calcular_os(
+            total_centavos=(None if total_negociado is None
+                            else int(round(total_negociado*100))),
+            materiais_centavos=int(round(total_mat*100)),
+            mao_obra_centavos=int(round(mao_obra*100)),
+            horas=tempo_horas, base_percentuais=base_nome, campos=campos)
+        total=comp['total_centavos']/100
+        componente_hora=next((x for x in comp['componentes']
+                              if x.get('modo')=='hora'),None)
+        if componente_hora is not None:
+            mao_obra=componente_hora['valor_centavos']/100
+    else:
+        total=total_negociado if total_negociado is not None else soma
+        comp=composicao.calcular(
+            total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
+            horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
+    comp_json=composicao.para_json(comp)
+    composicao.instalar_banco(banco)
+    # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.
+    aten.instalar(banco)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        if not c.execute('SELECT 1 FROM clientes WHERE id=?',(cliente_id,)).fetchone():
+            raise ValueError('Cliente não encontrado.')
+        if oid is None:
+            # A função central do banco original é a mesma utilizada no aplicativo desktop.
+            from officina.core.banco import proximo_numero_os
+            n=proximo_numero_os(c.cursor())
+            if comprimir_fotos is None:comprimir_fotos=1
+            cur=c.execute('''INSERT INTO ordens_servico
+                (numero_os,cliente_id,data_abertura,tecnico,descricao,valor_mao_obra,
+                 valor_materiais,custo_materiais,valor_total,forma_pagamento,urgencia,status,observacoes,
+                 texto_adicional,tempo_horas,composicao_json,base_percentuais,comprimir_fotos_pdf,criado_em)
+                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+               (n,cliente_id,datetime.now().strftime('%d/%m/%Y %H:%M'),tecnico,descricao,
+                mao_obra,total_mat,custo_mat,total,forma,urgencia or 'Normal','Aberta',observacoes,
+                texto_adicional,tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora()))
+            oid=cur.lastrowid
+            aten.registrar_solicitacao(c,oid,cliente_id,descricao,observacoes,'Prestador')
+            ext.evento(c,oid,'OS criada via portal','Cadastro pelo portal web.',pid,'Prestador')
+            audit(c,pid,'OS criada',oid,f'{n} / cliente {cliente_id}')
+        else:
+            old=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+            if not old: raise ValueError('OS não existe.')
+            if cancelar:
+                confirmacao=texto(d,'confirmar_numero_os',40).strip()
+                if confirmacao != str(old['numero_os'] or '').strip():
+                    raise ValueError('O número da OS digitado não confere. '
+                                     'Digite exatamente o número mostrado para confirmar o cancelamento.')
+            versao=d.get('_versao_os')
+            if versao is not None and str(versao)!=(old['atualizado_em'] or ''):
+                raise ValueError('Esta OS foi atualizada por outra pessoa. Reabra a tela antes de salvar para evitar perda de dados.')
+            if old['status'] not in ext.ATIVAS:
+                raise ValueError('OS encerrada. Para corrigir um documento já publicado, utilize o desktop e publique nova versão.')
+            if 'arquivada' in old.keys() and old['arquivada']:
+                raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
+            original=c.execute('SELECT cliente_id,descricao_original,observacoes_originais FROM os_solicitacoes WHERE os_id=?',(oid,)).fetchone()
+            permitir_trocar=str(d.get('_permitir_trocar_cliente','')) in ('1','on','true','sim')
+            if original and old['origem']=='Portal' and not permitir_trocar:
+                cliente_original=c.execute('SELECT status FROM clientes WHERE id=?',
+                                           (original['cliente_id'],)).fetchone()
+                # Chamados de origem só mantêm o cliente original quando ele
+                # já está definido. OS com “Cliente a definir” pode ser associada.
+                if not cliente_original or cliente_original['status']!='A definir':
+                    cliente_id=original['cliente_id']
+                descricao=original['descricao_original']
+                observacoes=old['observacoes'] or original['observacoes_originais']
+            atual=ext.responsavel_atual(c,oid)
+            admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+            if atual not in (None,pid) and not admin:
+                raise PermissionError('Assuma a OS antes de salvar rascunho, fotos ou alterar a situação.')
+            if (acao in ('Pendente','Concluída','Cancelada','Não realizada')
+                    and atual not in (None,pid) and not admin):
+                raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
+            if comprimir_fotos is None:
+                comprimir_fotos=(int(old['comprimir_fotos_pdf'])
+                                 if 'comprimir_fotos_pdf' in old.keys() else 1)
+            old_dict=dict(old)
+            updated={'cliente_id':cliente_id,'tecnico':tecnico,'descricao':descricao,
+                'valor_mao_obra':mao_obra,'valor_materiais':total_mat,
+                'custo_materiais':custo_mat,'valor_total':total,
+                'forma_pagamento':forma,'observacoes':observacoes,
+                'texto_adicional':texto_adicional,'tempo_horas':tempo_horas,
+                'base_percentuais':base_nome,'comprimir_fotos_pdf':comprimir_fotos}
+            if urgencia:
+                updated['urgencia']=urgencia
+            diffs=[f'{k}: {old_dict.get(k)!r} → {v!r}' for k,v in updated.items() if str(old_dict.get(k) or '')!=str(v)]
+            c.execute('''UPDATE ordens_servico SET cliente_id=?,tecnico=?,descricao=?,valor_mao_obra=?,
+                valor_materiais=?,custo_materiais=?,valor_total=?,forma_pagamento=?,
+                urgencia=COALESCE(?,urgencia),observacoes=?,texto_adicional=?,
+                tempo_horas=?,composicao_json=?,base_percentuais=?,comprimir_fotos_pdf=?,atualizado_em=? WHERE id=?''',
+                (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,
+                 urgencia or None,observacoes,texto_adicional,
+                 tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora(),oid))
+            if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
+            if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
+        old_mat=[(r['item'], None if r['quantidade'] is None else float(r['quantidade']),
+                  r['unidade'] or '', float(r['valor_unitario'])) for r in
+                 c.execute('SELECT item,quantidade,unidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id',(oid,))]
+        if oid is not None and 'material_item[]' not in d and old_mat and not d.get('materiais_presentes'):
+            materiais=[dict(item=r[0], quantidade=r[1], unidade=r[2],
+                            valor_unitario=r[3],
+                            valor_total=round(r[3],2) if r[1] is None else round(r[1]*r[3],2))
+                       for r in old_mat]
+            new_mat=list(old_mat)
+        else:
+            new_mat=[(m['item'],m['quantidade'],m.get('unidade',''),m['valor_unitario']) for m in materiais]
+        if old_mat!=new_mat:
+            c.execute('DELETE FROM materiais_os WHERE os_id=?',(oid,))
+            for m in materiais:
+                c.execute('INSERT INTO materiais_os(os_id,item,quantidade,unidade,valor_unitario,valor_total) VALUES(?,?,?,?,?,?)',
+                    (oid,m['item'],m['quantidade'],m.get('unidade',''),m['valor_unitario'],m['valor_total']))
+            ext.evento(c,oid,'Materiais alterados','Antes: '+repr(old_mat)[:1200]+'; depois: '+repr(new_mat)[:1200],pid,'Prestador')
+        if acao=='salvar':
+            aten.salvar_rascunho(c,oid,relato,f'Prestador ID {pid}')
+        elif relato:
+            aten.salvar_rascunho(c,oid,relato,f'Prestador ID {pid}')
+            ext.evento(c,oid,'Relatório técnico',relato,pid,'Prestador')
+        if acao=='Pendente':
+            if c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=? AND status IN ('Aberta','Iniciada','Pendente')",(oid,)).rowcount!=1:
+                raise ValueError('OS não está ativa.')
+            # Voltar para Pendente também encerra o início do atendimento.
+            # O histórico (evento) preserva quem havia iniciado.
+            inicio=c.execute('SELECT iniciado_em,iniciado_por,ator_inicio FROM os_atendimentos WHERE os_id=?',
+                             (oid,)).fetchone()
+            if inicio and inicio['iniciado_em']:
+                c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
+                             ator_inicio='',atualizado_em=? WHERE os_id=?''',
+                          (ext.agora(),oid))
+                ext.evento(c,oid,'Atendimento retornado para pendente',
+                          f'Início desfeito. Iniciado em {inicio["iniciado_em"]} por '
+                          f'{inicio["ator_inicio"] or inicio["iniciado_por"] or "—"}.',
+                          pid,'Prestador')
+            ext.evento(c,oid,'Pendência','Atendimento pendente conforme relatório técnico.',pid,'Prestador')
+        # Fotos e legendas valem tanto para rascunho quanto para encerramento.
+        for indice,item in enumerate(imagens):
+            chave=chaves[indice] if indice<len(chaves) else None
+            legenda=legendas_fotos[indice] if indice<len(legendas_fotos) else ''
+            visivel=str(visiveis_fotos[indice])!='0' if indice<len(visiveis_fotos) else True
+            ext.registrar_imagem_transacao(c,oid,pid,item[0],item[1],permitir_colaboracao=True,
+                                           chave=chave,legenda=legenda,visivel=visivel)
+        for indice,anexo_id in enumerate(anexo_ids):
+            try:anexo_id=int(anexo_id)
+            except (TypeError,ValueError):continue
+            legenda=anexo_legendas[indice] if indice<len(anexo_legendas) else ''
+            visivel=str(anexo_visiveis[indice])!='0' if indice<len(anexo_visiveis) else True
+            ext.definir_legenda_anexo_c(c,oid,anexo_id,legenda,visivel)
+        if acao in fluxo.FIM:
+            fluxo.aplicar_encerramento(c,oid,acao,relato,motivo,
+                 prestador_id=pid,ator=f'Prestador ID {pid}')
+            if acao=='Concluída':
+                # Rateio validado e persistido na MESMA transação do encerramento.
+                # Se a distribuição for inválida, toda conclusão é revertida.
+                from officina.core import produtividade_os as prod
+                prod.registrar_rateios_na_transacao(c,oid,pid,total,d)
+            audit(c,pid,'OS encerrada',oid,acao+(' | Motivo: '+motivo if motivo else ''))
+        # Estoque: lançamento/estorno transacional e idempotente, sem expor administração na web.
+        estoque.reconciliar_os_conexao(c,oid,f'Prestador #{pid}')
+        # Mantém financeiro Aguardando sincronizado após edição de OS já concluída.
+        if acao=='salvar':
+            f=c.execute('SELECT id,status FROM financeiro WHERE os_id=? ORDER BY id LIMIT 1',(oid,)).fetchone()
+            if f and f['status']=='Aguardando pagamento':
+                c.execute('UPDATE financeiro SET valor=?,forma_pagamento=?,cliente_id=? WHERE id=?',(total,forma,cliente_id,f['id']))
+    return oid
+
+
+def financeiro_cancelar(banco,fid,pid,motivo=''):
+    """Cancela o recebimento sem apagar o histórico; não contabiliza mais."""
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        f=c.execute('SELECT os_id,status,valor FROM financeiro WHERE id=?',(fid,)).fetchone()
+        if not f: raise ValueError('Lançamento não encontrado.')
+        if f['status']=='Cancelado': raise ValueError('Este lançamento já está cancelado.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin else False
+        if (not final or int(final['prestador_id'])!=int(pid)) and not admin:
+            raise PermissionError('Somente o finalizador ou administrador pode cancelar o pagamento.')
+        texto=str(motivo or '').strip()[:500]
+        c.execute("""UPDATE financeiro SET status='Cancelado',data_pagamento=NULL,
+                     observacoes=CASE WHEN ?='' THEN observacoes ELSE ? END WHERE id=?""",
+                  (texto,texto,fid))
+        # Parcelas ainda não pagas deixam de existir; pagas ficam no histórico.
+        for r in c.execute('SELECT tecnico_id FROM produtividade_rateios WHERE os_id=?',(f['os_id'],)).fetchall():
+            rep=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
+                             WHERE os_id=? AND tecnico_id=?''',(f['os_id'],r['tecnico_id'])).fetchone()
+            if rep and (int(rep['pago_centavos'])>0 or int(rep['enviado_centavos'])>0):
+                continue
+            c.execute('DELETE FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
+                      (f['os_id'],r['tecnico_id']))
+            c.execute('DELETE FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                      (f['os_id'],r['tecnico_id']))
+        ext.evento(c,f['os_id'],'Pagamento cancelado',
+                   f'Lançamento {fid} cancelado. Valor {dinheiro(f["valor"])}. '+(texto or ''),
+                   pid,'Prestador')
+        audit(c,pid,'Pagamento cancelado',fid,dinheiro(f['valor']))
+        return True
+
+
+def financeiro_receber(banco,fid,pid):
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        f=c.execute('SELECT os_id,status,valor FROM financeiro WHERE id=?',(fid,)).fetchone()
+        if not f: raise ValueError('Lançamento não encontrado.')
+        if f['status']=='Recebido': raise ValueError('Este lançamento já está recebido.')
+        c.execute("UPDATE financeiro SET status='Recebido',data_pagamento=? WHERE id=?",
+            (datetime.now().strftime('%d/%m/%Y'),fid))
+        ext.evento(c,f['os_id'],'Pagamento recebido',f'Recebimento confirmado no portal: {dinheiro(f["valor"])}',pid,'Prestador')
+        audit(c,pid,'Recebimento confirmado',fid,dinheiro(f['valor']))
+
+
+def financeiro_definir_vencimento(banco,fid,pid,vencimento=''):
+    """Define ou remove o prazo de recebimento sem alterar o valor da OS."""
+    texto=str(vencimento or '').strip()
+    if texto:
+        try:
+            data=datetime.strptime(texto,'%Y-%m-%d').date()
+        except ValueError:
+            raise ValueError('Vencimento inválido. Use uma data no formato AAAA-MM-DD.')
+        if not 2000<=data.year<=2100:
+            raise ValueError('Vencimento fora do intervalo permitido.')
+        texto=data.isoformat()
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        f=c.execute('SELECT os_id,status,valor,vencimento FROM financeiro WHERE id=?',(fid,)).fetchone()
+        if not f: raise ValueError('Lançamento não encontrado.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin else False
+        if (not final or int(final['prestador_id'])!=int(pid)) and not admin:
+            raise PermissionError('Somente o finalizador ou administrador pode definir o vencimento.')
+        if f['status'] in ('Recebido','Cancelado'):
+            raise ValueError('Vencimento não pode ser alterado depois do recebimento ou cancelamento.')
+        c.execute('UPDATE financeiro SET vencimento=? WHERE id=?',(texto or None,fid))
+        ext.evento(c,f['os_id'],'Prazo de recebimento definido',
+                   f'Vencimento: {texto or "removido"}',pid,'Prestador')
+        audit(c,pid,'Vencimento do recebimento alterado',fid,texto or 'removido')
+        return texto

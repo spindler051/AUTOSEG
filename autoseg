@@ -1,0 +1,18 @@
+#!/bin/zsh
+set -e
+cd "$(dirname "$0")"
+case "${1:-help}" in
+  dev)       exec ./scripts/autoseg/INICIAR_AUTOSEG_DEV.command "${@:2}" ;;
+  app)       exec ./scripts/autoseg/INICIAR_AUTOSEG.command "${@:2}" ;;
+  app-web)   exec ./scripts/autoseg/INICIAR_AUTOSEG_COM_WEB.command "${@:2}" ;;
+  app-local) exec ./scripts/autoseg/INICIAR_AUTOSEG_SEM_WEB.command "${@:2}" ;;
+  api)       exec ./scripts/autoseg/INICIAR_SERVIDOR_API.command "${@:2}" ;;
+  server)    exec ./scripts/autoseg/INICIAR_SERVIDOR_DEV.command "${@:2}" ;;
+  site)      exec ./scripts/autoseg/INICIAR_SITE_DEV.command "${@:2}" ;;
+  site-prod) exec ./scripts/autoseg/INICIAR_SITE.command "${@:2}" ;;
+  stop)      exec ./scripts/autoseg/PARAR_PORTAIS_DEV.command ;;
+  check)     exec ./scripts/autoseg/VERIFICAR_AUTOSEG_DEV.command ;;
+  paths)     exec ./scripts/autoseg/MOSTRAR_CAMINHOS.command "${@:2}" ;;
+  test)      exec ./scripts/autoseg/RODAR_TESTES.command -v ;;
+  *) echo "uso: ./autoseg {dev|app|server|site|site-prod|stop|check|paths|test}"; exit 1 ;;
+esac

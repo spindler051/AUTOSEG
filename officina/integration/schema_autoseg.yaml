@@ -1,0 +1,30 @@
+# Configuração do AUTOSEG para o núcleo genérico Workaholic.
+# Cada entidade é migrada em uma fatia; o restante do app continua nas tabelas
+# legadas até a sua vez. Campos sem `required` preservam o cadastro incompleto.
+name: AUTOSEG
+entities:
+  cliente:
+    fields:
+      tipo_pessoa: {type: string, choices: [Jurídica, Física], default: Jurídica}
+      documento: {type: string}
+      nome: {type: string}
+      nome_fantasia: {type: string}
+      endereco: {type: string}
+      numero: {type: string}
+      complemento: {type: string}
+      bairro: {type: string}
+      cep: {type: string}
+      cidade: {type: string}
+      uf: {type: string}
+      telefone: {type: string}
+      email: {type: string}
+      sindico_nome: {type: string}
+      sindico_telefone: {type: string}
+      sindico_email: {type: string}
+      administradora: {type: string}
+      administradora_email: {type: string}
+      administradora_telefone: {type: string}
+      observacoes: {type: string}
+      status: {type: string, choices: [Ativo, Inativo, Prospect], default: Ativo}
+      dados_incompletos: {type: boolean, default: false}
+    deletion: archive

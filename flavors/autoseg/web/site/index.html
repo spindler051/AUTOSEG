@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#FFD400">
+  <meta name="description" content="Portal do cliente para cadastro e solicitação de ordens de serviço.">
+  <title>Portal do Cliente · Gestão de Serviços</title>
+  <link rel="icon" href="/icone.png" type="image/png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="page-glow" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Gestão de Serviços">
+      <img class="brand-icon" src="/icone.png" alt="" width="42" height="42">
+      <span class="brand-text">
+        <strong>GESTÃO DE SERVIÇOS</strong>
+        <small>Portal do Cliente</small>
+      </span>
+    </a>
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      Atendimento online
+    </div>
+  </header>
+
+  <main class="shell">
+    <!-- ============================ LOGIN / CADASTRO ============================ -->
+    <section id="view-auth" class="view auth-view">
+      <div class="hero">
+        <p class="eyebrow">PORTAL DO CLIENTE</p>
+        <h1>Abra sua solicitação<br><span>sem sair de casa.</span></h1>
+        <p class="hero-text">
+          Cadastre-se ou entre com seus dados para pedir uma ordem de serviço
+          e acompanhar cada etapa do atendimento.
+        </p>
+
+        <ul class="feature-list">
+          <li>
+            <span class="feature-icon">01</span>
+            <div>
+              <strong>Cadastro rápido</strong>
+              <small>Seus dados ficam salvos para as próximas solicitações.</small>
+            </div>
+          </li>
+          <li>
+            <span class="feature-icon">02</span>
+            <div>
+              <strong>Solicitação em minutos</strong>
+              <small>Descreva o serviço e escolha a melhor forma de contato.</small>
+            </div>
+          </li>
+          <li>
+            <span class="feature-icon">03</span>
+            <div>
+              <strong>Acompanhe o status</strong>
+              <small>Veja quando a OS está pendente, aberta ou concluída.</small>
+            </div>
+          </li>
+        </ul>
+
+        <div class="hero-note">
+          <span class="pulse"></span>
+          As informações ficam apenas no servidor local da empresa.
+        </div>
+      </div>
+
+      <div class="auth-card card">
+        <div class="tabs" role="tablist" aria-label="Acesso ao portal">
+          <button class="tab active" id="tab-login" type="button" role="tab" aria-selected="true" aria-controls="panel-login">
+            Já sou cliente
+          </button>
+          <button class="tab" id="tab-cadastro" type="button" role="tab" aria-selected="false" aria-controls="panel-cadastro">
+            Criar cadastro
+          </button>
+        </div>
+
+        <div id="panel-login" class="tab-panel active" role="tabpanel" aria-labelledby="tab-login">
+          <h2>Entrar no portal</h2>
+          <p class="muted">Use o CPF/CNPJ do seu cadastro e confirme com o telefone ou e-mail.</p>
+
+          <form id="form-login" novalidate>
+            <label class="field">
+              <span>CPF ou CNPJ</span>
+              <input id="login-documento" name="documento" inputmode="numeric" autocomplete="username" placeholder="000.000.000-00" required>
+            </label>
+
+            <label class="field">
+              <span>Telefone ou e-mail cadastrado</span>
+              <input id="login-acesso" name="acesso" autocomplete="current-password" placeholder="(00) 00000-0000 ou seu@exemplo.com" required>
+            </label>
+
+            <p class="form-error" id="erro-login" role="alert"></p>
+
+            <button class="btn btn-primary btn-block" type="submit" id="btn-login">
+              Entrar e ver minhas OS
+            </button>
+          </form>
+
+          <p class="hint">
+            Ainda não tem cadastro?
+            <button type="button" class="link-button" data-ir-para="cadastro">Criar agora</button>
+          </p>
+        </div>
+
+        <div id="panel-cadastro" class="tab-panel" role="tabpanel" aria-labelledby="tab-cadastro">
+          <h2>Criar meu cadastro</h2>
+          <p class="muted">Leva menos de um minuto. Depois você já pode solicitar sua OS.</p>
+
+          <form id="form-cadastro" novalidate>
+            <div class="grid-2">
+              <label class="field span-2">
+                <span>Nome completo / Razão social *</span>
+                <input id="cad-nome" name="nome" autocomplete="name" placeholder="Seu nome ou nome da empresa" required>
+              </label>
+
+              <label class="field">
+                <span>CPF ou CNPJ *</span>
+                <input id="cad-documento" name="documento" inputmode="numeric" placeholder="Somente números" required>
+              </label>
+
+              <label class="field">
+                <span>Telefone / WhatsApp *</span>
+                <input id="cad-telefone" name="telefone" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required>
+              </label>
+
+              <label class="field">
+                <span>E-mail</span>
+                <input id="cad-email" name="email" type="email" autocomplete="email" placeholder="seu@exemplo.com">
+              </label>
+
+              <label class="field">
+                <span>Cidade</span>
+                <input id="cad-cidade" name="cidade" autocomplete="address-level2" placeholder="Cidade">
+              </label>
+
+              <label class="field">
+                <span>UF</span>
+                <input id="cad-uf" name="uf" maxlength="2" autocomplete="address-level1" placeholder="RS">
+              </label>
+
+              <label class="field">
+                <span>Endereço</span>
+                <input id="cad-endereco" name="endereco" autocomplete="street-address" placeholder="Rua / avenida">
+              </label>
+
+              <label class="field">
+                <span>Número</span>
+                <input id="cad-numero" name="numero" placeholder="Nº">
+              </label>
+
+              <label class="field span-2">
+                <span>Bairro</span>
+                <input id="cad-bairro" name="bairro" placeholder="Bairro">
+              </label>
+            </div>
+
+            <p class="form-error" id="erro-cadastro" role="alert"></p>
+
+            <button class="btn btn-primary btn-block" type="submit" id="btn-cadastro">
+              Criar cadastro e continuar
+            </button>
+          </form>
+
+          <p class="hint">
+            Já possui cadastro?
+            <button type="button" class="link-button" data-ir-para="login">Entrar</button>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ ÁREA DO CLIENTE ============================ -->
+    <section id="view-dashboard" class="view hidden">
+      <div class="dash-top">
+        <div>
+          <p class="eyebrow">ÁREA DO CLIENTE</p>
+          <h1>Olá, <span id="cliente-nome">cliente</span>.</h1>
+          <p class="muted" id="cliente-info"></p>
+        </div>
+
+        <div class="dash-actions">
+          <button class="btn btn-primary" id="btn-nova-os" type="button">+ Nova solicitação</button>
+          <button class="btn btn-ghost" id="btn-sair" type="button">Sair</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat card">
+          <span>Solicitações</span>
+          <strong id="stat-total">0</strong>
+          <small>no total</small>
+        </div>
+        <div class="stat card">
+          <span>Em andamento</span>
+          <strong id="stat-andamento" class="amarelo">0</strong>
+          <small>aguardando ou em execução</small>
+        </div>
+        <div class="stat card">
+          <span>Concluídas</span>
+          <strong id="stat-concluidas" class="verde">0</strong>
+          <small>atendimentos finalizados</small>
+        </div>
+      </div>
+
+      <div class="card list-card">
+        <div class="list-head">
+          <div>
+            <h2>Minhas solicitações</h2>
+            <p class="muted">Acompanhe o status de cada ordem de serviço.</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-atualizar" type="button">Atualizar</button>
+        </div>
+
+        <div id="lista-os" class="os-list">
+          <div class="empty">Carregando solicitações...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ MODAL NOVA OS ============================ -->
+  <div id="modal-os" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="titulo-modal-os">
+    <div class="modal-card card">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">NOVA SOLICITAÇÃO</p>
+          <h2 id="titulo-modal-os">O que você precisa?</h2>
+        </div>
+        <button class="icon-button" id="btn-fechar-modal" type="button" aria-label="Fechar">×</button>
+      </div>
+
+      <form id="form-os" novalidate>
+        <label class="field">
+          <span>Descreva o serviço *</span>
+          <textarea id="os-descricao" rows="5" maxlength="2000" placeholder="Ex.: preciso de manutenção na bomba da piscina, ela está fazendo ruído..." required></textarea>
+          <small class="counter"><span id="contador-descricao">0</span>/2000</small>
+        </label>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>Urgência</span>
+            <select id="os-urgencia">
+              <option>Normal</option>
+              <option>Baixa</option>
+              <option>Alta</option>
+              <option>Urgente</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Contato preferido</span>
+            <select id="os-contato">
+              <option>WhatsApp</option>
+              <option>Telefone</option>
+              <option>E-mail</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Melhor horário para atendimento</span>
+          <input id="os-disponibilidade" maxlength="120" placeholder="Ex.: manhã, após as 14h, qualquer horário">
+        </label>
+
+        <label class="field">
+          <span>Observações</span>
+          <textarea id="os-observacoes" rows="3" maxlength="1000" placeholder="Endereço, ponto de referência, detalhes de acesso..."></textarea>
+        </label>
+
+        <p class="form-error" id="erro-os" role="alert"></p>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btn-cancelar-modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-enviar-os">Enviar solicitação</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <footer class="footer">
+    <span>Gestão de Serviços · Portal do Cliente</span>
+    <span id="footer-hora"></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

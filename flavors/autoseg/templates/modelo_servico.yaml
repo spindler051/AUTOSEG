@@ -1,0 +1,15 @@
+# Catálogo: importação exclusiva pelo Portal do Prestador; confirme antes de salvar.
+versao: 1
+servico:
+  nome: Cadastro de controle remoto PPA — DEMO
+  descricao: Programação do controle e verificação de funcionamento.
+  preco_servico: 50.00
+  relatorio_padrao: >
+    Realizado cadastro do controle remoto e testes de acionamento.
+  materiais:
+    - nome: Controle PPA Pop (fictício)
+      quantidade: 1
+      valor_unitario: 75.00
+    - nome: Bateria CR2032 (fictícia)
+      quantidade: 1
+      valor_unitario: 8.50

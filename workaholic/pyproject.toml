@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workaholic-core"
+version = "0.1.0"
+description = "Local-first configurable records engine with CLI and interchangeable YAML/SQLite storage"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "0BSD"}
+dependencies = ["PyYAML>=6.0,<7"]
+
+[project.scripts]
+workaholic-cli = "workaholic.cli.main:main"
+workaholic = "workaholic.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,7 @@
+#!/bin/zsh
+# Sobe somente a API /api/v1, sem HTML, sem GTK e sem Cloudflare.
+set -e
+cd "$(dirname "$0")/../.."
+PY="${PYTHON:-python3}"
+[ -x .venv/bin/python ] && PY=.venv/bin/python
+exec "$PY" flavors/autoseg/modules/servidor_backend.py --api "$@"

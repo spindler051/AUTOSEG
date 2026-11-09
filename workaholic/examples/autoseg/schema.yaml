@@ -1,0 +1,35 @@
+# DEMONSTRAÇÃO DECLARATIVA, NÃO É UMA IMPLEMENTAÇÃO FISCAL/OPERACIONAL VALIDADA.
+# A configuração real da integração fica em ../../../integracao/schema_autoseg.yaml.
+name: AUTOSEG_demo
+entities:
+  cliente:
+    fields:
+      nome: {type: string, required: true}
+      tipo: {type: string, choices: [PF, PJ]}
+    deletion: archive
+  chamado:
+    fields:
+      cliente_id: {type: string, required: true}
+      descricao: {type: string, required: true}
+      contato: {type: string}
+    workflow:
+      states: [recebido, em_analise, autorizado, recusado]
+      transitions:
+        recebido: [em_analise]
+        em_analise: [autorizado, recusado]
+    deletion: archive
+  ordem_servico:
+    fields:
+      chamado_id: {type: string, required: true}
+      relatorio: {type: string}
+      materiais: {type: list, default: []}
+    workflow:
+      states: [aberta, em_execucao, pendente, concluida]
+      transitions:
+        aberta: [em_execucao]
+        em_execucao: [pendente, concluida]
+        pendente: [em_execucao]
+    deletion: restrict
+relations:
+  chamado_cliente: {from: chamado, to: cliente, field: cliente_id}
+  os_chamado: {from: ordem_servico, to: chamado, field: chamado_id}

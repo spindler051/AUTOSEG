@@ -1,0 +1,13 @@
+{
+  "provider": "opencode",
+  "opencode": {
+    "base_url": "http://127.0.0.1:49374",
+    "session_id": "ses_coloque_aqui_o_id_do_chat",
+    "timeout": 60
+  },
+  "deepseek": {
+    "base_url": "https://api.deepseek.com/chat/completions",
+    "model": "deepseek-chat",
+    "timeout": 25
+  }
+}
