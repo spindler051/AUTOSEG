@@ -36,6 +36,9 @@ para depois.
 
 ## Depois
 
+- protocolo de trabalho genérico: vocabulário, fluxo configurável e requisitos
+  de conclusão por flavor; planejamento em
+  [`planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md`](planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md);
 - Workaholic como motor real, uma fatia por vez;
 - app GTK genérico e flavor AUTOSEG;
 - CLI;

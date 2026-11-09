@@ -148,6 +148,18 @@ generic core. The core should expose generic contracts such as “tax document
 provider”, “payment provider” and “identity document”, with Brazilian
 implementations living outside it.
 
+### Terminology, workflow and completion profiles
+
+The name of the work item (“ordem de serviço”, “comissão”, “trabalho”), its
+roles, its states and its completion requirements are **not** Workaholic
+concepts. They belong to an Officina work-protocol layer, supplied by each
+flavor as declarative, versioned configuration. Workaholic keeps semantic
+primitives and mechanics; clients render labels from a resolved lexicon.
+
+This boundary and the long-term migration path are documented in
+[`planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md`](planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md).
+It is planning only and does not authorize a big-bang rewrite.
+
 ## 5. Current state — honest assessment
 
 ### AUTOSEG today

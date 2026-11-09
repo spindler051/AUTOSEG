@@ -11,6 +11,15 @@
 - Extensões YAML e módulos Python serão introduzidos após estabilizar os contratos.
 - Futuro **Rust**: núcleo deve poder ser reimplementado sem alterar formato dos registros ou semântica do CLI. **Lua**: scripts interpretados como extensão controlada; design de sandbox adiado.
 
+## Fronteira de vocabulário e apresentação
+
+O núcleo usa identidades semânticas (`work_item`, `party`, `state_kind`,
+`transition`, `requirement`), não nomes de produto ou rótulos localizados.
+Terminologia, fluxo de trabalho, requisitos de conclusão e presets de permissão
+pertencem à Officina e são fornecidos por cada flavor como configuração
+versionada. A decisão está registrada no
+[ADR 0002](adr/0002-semantic-work-protocol.md).
+
 ## Limites do protótipo
 
 O código v0.1.0 implementa apenas um subconjunto do desenho. `schema.yaml` ainda não possui revisões versionadas e não existe engine de auditoria ou approval, apesar de planejados. `relation` é uma referência por campo ID e não um sistema de integridade referencial abrangente.

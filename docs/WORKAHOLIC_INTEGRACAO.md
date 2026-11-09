@@ -12,6 +12,14 @@ estados, transições, relações, CRUD, validação e versionamento. A mesma ba
 serve para eletricistas, músicos, artistas 2D ou qualquer outro negócio; o que
 muda é o schema YAML e os módulos específicos de cada aplicação.
 
+O Workaholic não deve conhecer palavras de produto, papéis localizados ou
+regras fiscais. Vocabulário, fluxo, requisitos de conclusão e presets de
+permissão pertencem ao protocolo da Officina e são fornecidos por cada flavor.
+A direção está registrada em
+[`planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md`](planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md)
+e no ADR [`workaholic/docs/adr/0002-semantic-work-protocol.md`](../workaholic/docs/adr/0002-semantic-work-protocol.md).
+Nada disso foi implementado ainda.
+
 O AUTOSEG é uma configuração desse núcleo para manutenção e serviços. As
 regras que são realmente do nosso nicho continuam no AUTOSEG:
 
