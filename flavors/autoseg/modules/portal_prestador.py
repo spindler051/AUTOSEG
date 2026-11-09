@@ -584,8 +584,9 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .os-tab{white-space:normal}
   body.ui-app .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   body.ui-app .os-ticket{grid-template-columns:1fr}
-  body.ui-app .os-ticket-stub{border-right:0;border-bottom:1px dashed var(--u-line-2)}
-  body.ui-app .os-ticket-actions{border-top:1px solid var(--u-line)}
+  body.ui-app .os-ticket-stub{order:1;border-right:0;border-bottom:1px dashed var(--u-line-2)}
+  body.ui-app .os-ticket-actions{order:2;border-top:1px solid var(--u-line)}
+  body.ui-app .os-ticket-body{order:3;border-top:1px solid var(--u-line)}
   body.ui-app .os-workflow{grid-template-columns:1fr}
   body.ui-app .os-workflow .card:first-child{grid-column:auto}
   body.ui-app .os-main{padding:20px}
