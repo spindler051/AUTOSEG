@@ -149,6 +149,27 @@ class PdfRelatorioTest(unittest.TestCase):
         self.assertIn("R$ 1.158,33", texto)
         self.assertIn("100,00%", texto)
 
+    def test_pdf_pendente_zero_omite_composicao(self):
+        vazia = {"aviso": "", "componentes": [], "total_centavos": 0, "versao": 1}
+        with sqlite3.connect(self.db) as c:
+            c.execute(
+                "UPDATE ordens_servico SET status='Pendente', valor_total=0, "
+                "valor_mao_obra=0, valor_materiais=0, data_conclusao=NULL, "
+                "composicao_json=? WHERE id=10",
+                (json.dumps(vazia),))
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertNotIn("COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("VALORES E PAGAMENTO", texto)
+        self.assertIn("04 VALORES E PAGAMENTO", texto)
+
+    def test_pdf_pendente_com_valor_mantem_composicao(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Pendente', "
+                      "data_conclusao=NULL WHERE id=10")
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("05 VALORES E PAGAMENTO", texto)
+
     def test_pdf_respeita_orientacao_exif_da_foto(self):
         imagem = Image.new("RGB", (120, 60), (200, 30, 30))
         exif = Image.Exif()

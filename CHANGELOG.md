@@ -9,6 +9,8 @@
 - **Dados de teste:** e-mails e nomes padronizados para domínios `example`/`exemplo`.
 - **CI:** workflows atualizados para o monorepo (`officina`, `flavors`, `tests`, `workaholic`) e para a suíte completa.
 - **Histórico público:** a primeira publicação usará um único commit inicial; o histórico de desenvolvimento permanece no repositório privado de arquivo.
+- **OS:** abrir, em rota e iniciar salvam o cliente escolhido no formulário antes de validar.
+- **PDF:** OS Pendente com valor R$ 0,00 não exibe mais a composição de valores; a numeração das seções acompanha os blocos exibidos.
 - **Testes:** 343 testes OK, 1 skip.
 
 ## 9.6.0-dev.72 — feedbacks da DEV: cliente, encerramento e erros inline — 2026-11-08 — develop

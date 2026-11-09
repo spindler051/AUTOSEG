@@ -68,6 +68,12 @@ def gerar(banco,os_id):
     P=lambda s:Paragraph(escape(str(s or 'Não informado')).replace('\n','<br/>'),estilo['AutosegCorpoV9'])
     PB=lambda s:Paragraph('<b>'+escape(str(s or ''))+'</b>',estilo['AutosegCorpoV9'])
     S=lambda s:Paragraph(escape(str(s)),estilo['AutosegSecaoV9'])
+    secao_num=[0]
+    def Secao(titulo):
+        # Numbering follows the sections actually rendered, so optional blocks
+        # do not leave gaps in the client report.
+        secao_num[0]+=1
+        return S(f'{secao_num[0]:02d}  {titulo}')
     # Filhos da composição declarativa: recuados e em cinza para diferenciar do pai.
     Pfilho=lambda s:Paragraph('&nbsp;&nbsp;&nbsp;&nbsp;<font color="#555555">— '+escape(str(s or ''))+'</font>',estilo['AutosegCorpoV9'])
     # CNPJ do prestador: usa o documento quando for CNPJ; senão procura um
@@ -100,8 +106,8 @@ def gerar(banco,os_id):
            [P('Cliente: '+cliente_texto),P('Prestador: '+prestador_texto)],
            [P('Abertura: '+data_br(os_['data_abertura'])),P('Encerramento: '+data_br(enc['encerrado_em'] if enc else os_['data_conclusao']))]]
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
-    linhas.extend([S('01  SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
-    linhas.append(S('02  ATENDIMENTO REALIZADO'))
+    linhas.extend([Secao('SOLICITAÇÃO ORIGINAL'),P(sol['descricao_original'] if sol else os_['descricao'])])
+    linhas.append(Secao('ATENDIMENTO REALIZADO'))
     # OS pendente: além do resumo em três campos, o e-mail/PDF leva o relatório
     # técnico completo que o prestador escreveu. OS já encerradas continuam com
     # o comportamento anterior.
@@ -120,7 +126,7 @@ def gerar(banco,os_id):
         if enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
         else:linhas.append(P('Relato técnico não informado.'))
     if enc and enc['motivo']:linhas.append(P('Motivo: '+enc['motivo']))
-    linhas.append(S('03  MATERIAIS UTILIZADOS'))
+    linhas.append(Secao('MATERIAIS UTILIZADOS'))
     cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]
     registros=[cab]
     for m in mats:
@@ -134,30 +140,35 @@ def gerar(banco,os_id):
     tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
     tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
     linhas.append(tm)
-    if comp:
-        linhas_comp=[[Paragraph('<b>Componente</b>',estilo['AutosegCorpoV9']),
-                      Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
-                      Paragraph('<b>%</b>',estilo['AutosegCorpoV9'])]]
-        for item in comp.get('componentes',[]):
-            linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
-                                P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
-            for filho in item.get('filhos',[]):
-                linhas_comp.append([Pfilho(filho.get('nome','')),P(brl(filho.get('valor_centavos',0)/100)),
-                                    P(f"{filho.get('percentual',0):.2f}%".replace('.',','))])
-        linhas_comp.append([PB('TOTAL'),PB(brl(comp.get('total_centavos',0)/100)),PB('100,00%')])
-        tc=Table(linhas_comp,colWidths=[300,100,60],repeatRows=1)
-        tc.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),
-            ('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
-            ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),('VALIGN',(0,0),(-1,-1),'TOP'),
-            ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-        # Mantém o cabeçalho da seção e a tabela (inclusive a linha TOTAL)
-        # unidos, evitando linha órfã na página seguinte.
-        linhas.append(KeepTogether([S('04  COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'), tc]))
-        if comp.get('aviso'):linhas.append(P(comp['aviso']))
-    else:
-        linhas.append(S('04  COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'))
-        linhas.append(P('Composição não disponível para esta OS.'))
-    linhas.append(S('05  VALORES E PAGAMENTO'))
+    # A pending OS with no agreed value has no meaningful composition; the
+    # zero-only table adds noise to the client report.
+    sem_composicao=(str(os_['status'])=='Pendente'
+                    and composicao.centavos_de_reais(os_['valor_total'])==0)
+    if not sem_composicao:
+        if comp:
+            linhas_comp=[[Paragraph('<b>Componente</b>',estilo['AutosegCorpoV9']),
+                          Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
+                          Paragraph('<b>%</b>',estilo['AutosegCorpoV9'])]]
+            for item in comp.get('componentes',[]):
+                linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
+                                    P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
+                for filho in item.get('filhos',[]):
+                    linhas_comp.append([Pfilho(filho.get('nome','')),P(brl(filho.get('valor_centavos',0)/100)),
+                                        P(f"{filho.get('percentual',0):.2f}%".replace('.',','))])
+            linhas_comp.append([PB('TOTAL'),PB(brl(comp.get('total_centavos',0)/100)),PB('100,00%')])
+            tc=Table(linhas_comp,colWidths=[300,100,60],repeatRows=1)
+            tc.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),
+                ('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
+                ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#FFF7D9')),('VALIGN',(0,0),(-1,-1),'TOP'),
+                ('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+            # Mantém o cabeçalho da seção e a tabela (inclusive a linha TOTAL)
+            # unidos, evitando linha órfã na página seguinte.
+            linhas.append(KeepTogether([Secao('COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'), tc]))
+            if comp.get('aviso'):linhas.append(P(comp['aviso']))
+        else:
+            linhas.append(Secao('COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'))
+            linhas.append(P('Composição não disponível para esta OS.'))
+    linhas.append(Secao('VALORES E PAGAMENTO'))
     valores=[['TOTAL',brl(os_['valor_total'])],
             ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
     tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
@@ -191,7 +202,7 @@ def gerar(banco,os_id):
                 # distorcer: a escala preserva a proporção original.
                 escala=min(480/w, 540/h)
                 foto=PdfImage(buf,width=w*escala,height=h*escala)
-                bloco=([S('06  REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
+                bloco=([Secao('REGISTRO FOTOGRÁFICO')] if primeira_foto else []) + [P(a['legenda'] or 'Registro do atendimento'),foto,Spacer(1,8)]
                 linhas.append(KeepTogether(bloco))
                 primeira_foto=False
             except Exception:continue
