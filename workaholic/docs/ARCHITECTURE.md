@@ -20,6 +20,15 @@ pertencem à Officina e são fornecidos por cada flavor como configuração
 versionada. A decisão está registrada no
 [ADR 0002](adr/0002-semantic-work-protocol.md).
 
+## Integridade criptográfica (planejada)
+
+O core fornecerá o mecanismo genérico de ledger assinado: envelope canônico,
+hash chain, assinaturas destacadas, registro de chaves públicas, avaliação de
+política M-de-N e verificador offline. Termos de produto, políticas financeiras,
+ICP-Brasil/PAdES e requisitos fiscais ficam na Officina/flavor/locale. A decisão
+está registrada no [ADR 0003](adr/0003-signed-event-ledger.md) e detalhada em
+[`docs/planning/PGP_MULTISIGNATURE_ARCHITECTURE.md`](../../docs/planning/PGP_MULTISIGNATURE_ARCHITECTURE.md).
+
 ## Limites do protótipo
 
 O código v0.1.0 implementa apenas um subconjunto do desenho. `schema.yaml` ainda não possui revisões versionadas e não existe engine de auditoria ou approval, apesar de planejados. `relation` é uma referência por campo ID e não um sistema de integridade referencial abrangente.

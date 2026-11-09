@@ -35,6 +35,9 @@ histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
 Não são compromissos nem autorização de implementação. A ordem prática está no
 [`ROADMAP.md`](ROADMAP.md).
 
+- [PGP, multiassinatura e integridade criptográfica](planning/PGP_MULTISIGNATURE_ARCHITECTURE.md)
+- [Anti-tampering financeiro com assinaturas PGP](planning/ANTI_TAMPERING_FINANCIAL_LEDGER.md)
+- [OS assinada em duas partes e versionamento](planning/SIGNED_OS_TWO_PARTY_AND_VERSIONING.md)
 - [Protocolo de trabalho: termos, fluxo e requisitos](planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md)
 - [Guideline de interface multiplataforma](planning/MULTI_PLATFORM_GUI_GUIDELINE.md)
 - [Condomínios, compartilhamento e tenancy](planning/CONDO_SHARING_AND_TENANCY.md)
