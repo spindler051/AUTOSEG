@@ -226,6 +226,7 @@ body.ui-app button.subtle,body.ui-app .btn.subtle{background:transparent;border-
 body.ui-app button.subtle:hover,body.ui-app .btn.subtle:hover{background:var(--u-raised);color:var(--u-text)}
 body.ui-app button:disabled{opacity:.5;cursor:wait}
 body.ui-app .btn{display:inline-flex}
+body.ui-app button svg,body.ui-app .btn svg{flex:0 0 16px;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 body.ui-app table button,body.ui-app table .btn{min-height:32px;padding:0 12px;border-color:var(--u-line-2);background:transparent;color:var(--u-text-2);font-size:12px}
 body.ui-app table button:hover,body.ui-app table .btn:hover{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
 body.ui-app form[method="get"] button{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
