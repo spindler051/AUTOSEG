@@ -1822,10 +1822,14 @@ class PortalPrestador:
                         'A definir',?)""",(ext.agora(),))
                     return int(cur.lastrowid)
 
-            def _exigir_cliente_os(self, oid, acao):
+            def _exigir_cliente_os(self, oid, acao, cliente_id=None):
                 with ext.db(banco) as c:
-                    linha=c.execute("""SELECT c.nome,c.status FROM ordens_servico o
-                        JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?""",(oid,)).fetchone()
+                    if cliente_id:
+                        linha=c.execute("SELECT nome,status FROM clientes WHERE id=?",
+                                        (int(cliente_id),)).fetchone()
+                    else:
+                        linha=c.execute("""SELECT c.nome,c.status FROM ordens_servico o
+                            JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?""",(oid,)).fetchone()
                 if not linha or linha['status'] in ('A definir','Inativo'):
                     raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
 
@@ -4316,8 +4320,9 @@ class PortalPrestador:
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
                             if acao_status not in ('Pendente','Concluída','Cancelada'):
                                 raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
+                            d['cliente_id'] = self._resolver_cliente_os(d, oid)
                             if acao_status=='Concluída':
-                                self._exigir_cliente_os(oid,'concluir a OS')
+                                self._exigir_cliente_os(oid,'concluir a OS', d['cliente_id'])
                             # Só o botão de encerramento aplica o status escolhido.
                             # O relato técnico é histórico interno: não bloqueia
                             # cancelar nem deixar pendente. Para concluir, basta
@@ -4335,7 +4340,6 @@ class PortalPrestador:
                                 if not (str(d.get('acao_status',''))=='Cancelada'
                                         and cad9.prestador_admin(banco,pid)):
                                     prod._os_ativa_responsavel(c,oid,pid)
-                            d['cliente_id'] = self._resolver_cliente_os(d, oid)
                             if (acao_status=='Concluída'
                                     and not str(d.get('forma_pagamento','')).strip()):
                                 raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
