@@ -270,6 +270,14 @@ def create_loan(pid, email, devedor_email, descricao, valor_centavos, vencimento
         credor = _usuario_por_pid(c, pid)
         if not credor:
             raise PermissionError('Confirme o vínculo com o Meu Auto Financeiro antes de criar empréstimos.')
+        # O usuário pode ter sido criado pelo sincronismo do AUTOSEG sem e-mail.
+        # O e-mail do prestador passa a ser a identidade da conta pendente.
+        credor_email = str(credor['email'] or email or f'prestador-{pid}@autoseg.local').strip().lower()
+        if not credor['email'] and email:
+            try:
+                c.execute('UPDATE usuarios SET email=? WHERE id=?', (credor_email, credor['id']))
+            except sqlite3.IntegrityError:
+                pass
         devedor = _usuario_ou_sombra(c, devedor_email)
         if credor['id'] == devedor['id']:
             raise ValueError('Você não pode emprestar para si mesmo.')
@@ -277,11 +285,11 @@ def create_loan(pid, email, devedor_email, descricao, valor_centavos, vencimento
             (credor_id,devedor_id,credor_email,devedor_email,descricao,
              valor_centavos,vencimento,estado,criado_em,atualizado_em)
             VALUES(?,?,?,?,?,?,?,'aguardando_aceite',?,?)''',
-            (credor['id'], devedor['id'], credor['email'], devedor['email'],
+            (credor['id'], devedor['id'], credor_email, devedor['email'],
              descricao or 'Empréstimo', int(valor_centavos), vencimento or None,
              _now(), _now()))
         _evento(c, cur.lastrowid,
-                {'id': credor['id'], 'email': credor['email']},
+                {'id': credor['id'], 'email': credor_email},
                 'Empréstimo criado', f'{_reais(valor_centavos)} para {devedor_email}')
     _enviar_async(devedor_email, 'Meu Auto Financeiro — empréstimo para aceitar',
                   f'<p>Você recebeu um empréstimo de <b>{_reais(valor_centavos)}</b> '
@@ -510,7 +518,9 @@ def render_card(pid, email, csrf):
                  '<input name="codigo" inputmode="numeric" maxlength="6" required>'
                  '<button type="submit" class="secondary">Confirmar vínculo</button></form>')
     else:
-        aviso = '<p class="good">Conta MAF vinculada.</p>'
+        aviso = ('<p class="good">Integração com o Meu Auto Financeiro ativa.</p>'
+                 '<p class="muted">O AUTOSEG usa seu e-mail como identidade. '
+                 'Você não precisa criar outra conta MAF.</p>')
     novo = ('<details><summary>Novo empréstimo</summary>'
             '<form method="post" action="/financeiro/maf-emprestimo/criar">'
             f'<input type="hidden" name="csrf" value="{_esc(csrf)}">'
