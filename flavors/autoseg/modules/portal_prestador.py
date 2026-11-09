@@ -2261,17 +2261,17 @@ class PortalPrestador:
                 status_bloco=''
                 cancelar_dialogo=''
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
-                    iniciado=iniciado_ativo
-                    atual='Em rota' if em_rota else ('Iniciada' if iniciado else d['status'])
-                    opcoes_situacao=[('Aberta','Aberta')]
-                    if not iniciado:
-                        opcoes_situacao.append(('Em rota','Em rota'))
-                        opcoes_situacao.append(('Iniciada','Iniciada'))
-                    opcoes_situacao.extend([('Pendente','Pendente'),
-                                            ('Concluída','Concluída')])
+                    atual='Em rota' if em_rota else ('Iniciada' if iniciado_ativo else d['status'])
+                    # O diálogo é o fechamento manual: Em rota e Iniciada têm
+                    # botões próprios, e a situação atual não é uma opção.
+                    opcoes_situacao=[
+                        (chave,rotulo) for chave,rotulo in (
+                            ('Aberta','Aberta'),('Pendente','Pendente'),
+                            ('Concluída','Concluída'))
+                        if chave!=atual]
                     radios=''.join(
-                        f'<label><input type="radio" name="situacao_popup" value="{chave}"'
-                        f'{" checked" if chave==atual else ""}> {rotulo}</label>'
+                        f'<label><input type="radio" name="situacao_popup" value="{chave}">'
+                        f' {rotulo}</label>'
                         for chave,rotulo in opcoes_situacao)
                     status_bloco=(
                         f'<dialog class="feedback-dialog situacao-dialog" id="dialogo-situacao-os" '
@@ -2282,7 +2282,8 @@ class PortalPrestador:
                         f'<b>{esc(nome_resp)}</b></p>'
                         '<fieldset class="situacao-opcoes"><legend>Situação do atendimento</legend>'
                         +radios+'</fieldset>'
-                        '<p class="muted" id="situacao-ajuda">Escolha a situação e confirme. '
+                        '<p class="muted" id="situacao-ajuda">Escolha a situação final e confirme. '
+                        'Em rota e Iniciada ficam nos botões da ficha. '
                         'Concluir exige Serviço executado e nota fiscal (ou “não precisa”).</p>'
                         '<div class="feedback-actions">'
                         '<button type="button" class="secondary" data-fechar-situacao>Voltar</button>'

@@ -203,6 +203,11 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertIn('Baixar preview do PDF', html)
             self.assertLess(html.find(f'formaction="{url}/em-rota"'),
                             html.find('Baixar preview do PDF'))
+            self.assertIn('name="situacao_popup" value="Aberta"', html)
+            self.assertIn('name="situacao_popup" value="Concluída"', html)
+            self.assertNotIn('name="situacao_popup" value="Pendente"', html)
+            self.assertNotIn('name="situacao_popup" value="Em rota"', html)
+            self.assertNotIn('name="situacao_popup" value="Iniciada"', html)
             self.assertEqual(html.count(f'formaction="{url}/em-rota"'), 1)
             status, _, _ = pedido(browser, base, f'{url}/em-rota', {
                 'csrf': csrf,
@@ -213,6 +218,8 @@ class NumeroPublicoTest(unittest.TestCase):
             _, _, html = pedido(browser, base, url)
             self.assertIn(f'formaction="{url}/cancelar-rota"', html)
             self.assertNotIn(f'formaction="{url}/em-rota"', html)
+            self.assertNotIn('name="situacao_popup" value="Em rota"', html)
+            self.assertNotIn('name="situacao_popup" value="Iniciada"', html)
         finally:
             servidor.parar()
 
