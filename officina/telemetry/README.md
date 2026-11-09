@@ -4,12 +4,12 @@
 enabled. Disabled by default.
 
 **Wired consumer:** the Provider Portal feedback channel (see
-[`../docs/features/FEEDBACK_PORTAL.md`](../docs/features/FEEDBACK_PORTAL.md)).
+[`../docs/features/FEEDBACK_PORTAL.md`](../../docs/features/FEEDBACK_PORTAL.md)).
 The GTK desktop app is still not wired.
 
 This package contains the contracts, privacy helpers and local sink for the
 transparent telemetry feature described in
-[`../docs/features/OPEN_TELEMETRY.md`](../docs/features/OPEN_TELEMETRY.md).
+[`../docs/features/OPEN_TELEMETRY.md`](../../docs/features/OPEN_TELEMETRY.md).
 
 It currently provides:
 

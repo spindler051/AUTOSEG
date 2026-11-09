@@ -1,7 +1,7 @@
 # AUTOSEG — Modelo de implementação da Versão de Produtividade
 
 **Data:** 2026-11-02  
-**Origem:** feedbacks da REV06, [issue #5](https://github.com/spindler051/AUTOSEG/issues/5)  
+**Origem:** feedbacks da REV06, issue #5 (arquivo privado)  
 **Estado:** proposta de implementação; funcionalidades ainda não homologadas.  
 **Base:** desenvolver sobre `develop`; não substituir a produção antes da homologação.
 

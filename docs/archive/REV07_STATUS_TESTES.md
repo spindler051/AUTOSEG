@@ -1,7 +1,7 @@
 # AUTOSEG REV07 — Branch de teste e limites de homologação
 
 **Branch:** `teste/produtividade-rev07`  
-**PR:** https://github.com/spindler051/AUTOSEG/pull/6  
+**PR:** #6 (arquivo privado)  
 **Base remota:** `develop` do GitHub (não substitui o pacote REV06_DEV local).  
 **Estado:** EXPERIMENTAL — NÃO INSTALAR EM PRODUÇÃO.
 
