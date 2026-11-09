@@ -1864,8 +1864,8 @@ class PortalPrestador:
                 elif rule=='start':
                     if responsavel not in (None,pid) and not admin:
                         raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
-                elif responsavel not in (None,pid) and not admin:
-                    raise PermissionError('Somente o responsável ou administrador pode reabrir a OS.')
+                elif not admin:
+                    raise PermissionError('Somente administradores podem reabrir a OS.')
                 cliente_id=int(self._resolver_cliente_os(d,oid))
                 with ext.db(banco) as c:
                     c.execute('BEGIN IMMEDIATE')
@@ -2264,11 +2264,10 @@ class PortalPrestador:
                     atual='Em rota' if em_rota else ('Iniciada' if iniciado_ativo else d['status'])
                     # O diálogo é o fechamento manual: Em rota e Iniciada têm
                     # botões próprios, e a situação atual não é uma opção.
-                    opcoes_situacao=[
-                        (chave,rotulo) for chave,rotulo in (
-                            ('Aberta','Aberta'),('Pendente','Pendente'),
-                            ('Concluída','Concluída'))
-                        if chave!=atual]
+                    opcoes_base=([('Aberta','Aberta')] if s.get('admin') else [])
+                    opcoes_base.extend([('Pendente','Pendente'),('Concluída','Concluída')])
+                    opcoes_situacao=[(chave,rotulo) for chave,rotulo in opcoes_base
+                                     if chave!=atual]
                     radios=''.join(
                         f'<label><input type="radio" name="situacao_popup" value="{chave}">'
                         f' {rotulo}</label>'
@@ -4363,11 +4362,10 @@ class PortalPrestador:
                                     raise ValueError('Esta OS não está ativa.')
                                 if 'arquivada' in o.keys() and o['arquivada']:
                                     raise ValueError('OS arquivada: edição bloqueada.')
-                                atual=ext.responsavel_atual(c,oid)
                                 admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
                                                      (pid,)).fetchone())
-                                if atual not in (None,pid) and not admin:
-                                    raise PermissionError('Somente o responsável ou administrador pode reabrir a OS.')
+                                if not admin:
+                                    raise PermissionError('Somente administradores podem reabrir a OS.')
                                 c.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,atualizado_em=? WHERE id=?",
                                           (ext.agora(),oid))
                                 c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
@@ -4485,13 +4483,21 @@ class PortalPrestador:
                             # Pendente e Concluída publicam relatório e podem
                             # enviar o e-mail automático aos destinatários.
                             sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
-                            if (str(d.get('acao_status','')) in ('Pendente','Concluída')
-                                    and not sem_destinatario):
+                            destinatarios=None
+                            if str(d.get('acao_status',''))=='Concluída' and not sem_destinatario:
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),
                                     str(d.get('emails_adicionais','')))
-                            else:
-                                destinatarios=None
+                            elif str(d.get('acao_status',''))=='Pendente' and not sem_destinatario:
+                                try:
+                                    destinatarios=prod.destinatarios_para_os(
+                                        banco,oid,d.get('destinatario_sel[]'),
+                                        str(d.get('emails_adicionais','')))
+                                except ValueError as erro:
+                                    if 'Selecione ao menos um destinatário' not in str(erro):
+                                        raise
+                                    # Pendência sem contato cadastrado não bloqueia.
+                                    destinatarios=None
                             neg.os_salvar(banco,d,pid,oid)
                             prod.limpar_rota_ao_iniciar(banco,oid)
                             if d.get('acao_status') in ('Pendente','Concluída'):

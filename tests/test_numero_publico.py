@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError
 from pathlib import Path
 
 from officina.core.banco import criar_banco
@@ -93,6 +94,7 @@ class NumeroPublicoTest(unittest.TestCase):
         from officina.core import produtividade_os as prod
         aten.instalar(self.db)
         prod.instalar(self.db)
+        cad9.definir_admin(self.db, self.pid, True)
         with ext.db(self.db) as c:
             provisorio = c.execute(
                 "INSERT INTO clientes(nome,status) VALUES('Cliente a definir','A definir')"
@@ -132,6 +134,35 @@ class NumeroPublicoTest(unittest.TestCase):
                         'SELECT cliente_id FROM ordens_servico WHERE id=?',
                         (oid,)).fetchone()['cliente_id']
                 self.assertEqual(salvo, escolhido, acao)
+        finally:
+            servidor.parar()
+
+    def test_non_admin_cannot_reopen_pending_os(self):
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",
+                      (self.oid,))
+        ext.assumir(self.db, self.oid, self.pid)
+        url = ordens.url_os(self.db, self.oid)
+        servidor = PortalPrestador(self.db, host='127.0.0.1', porta=0)
+        try:
+            servidor.iniciar()
+            base = f'http://127.0.0.1:{servidor.porta}'
+            browser = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            _, _, html = pedido(browser, base, '/login', {
+                'email': 'numero@exemplo.com', 'senha': 'senha-numero-2026!'})
+            self.assertIn('Visão geral', html)
+            _, _, html = pedido(browser, base, url)
+            csrf = token(html)
+            self.assertIn('name="situacao_popup" value="Concluída"', html)
+            self.assertNotIn('name="situacao_popup" value="Aberta"', html)
+            self.assertNotIn('name="situacao_popup" value="Pendente"', html)
+            with self.assertRaises(HTTPError) as erro:
+                pedido(browser, base, f'{url}/abrir', {'csrf': csrf})
+            self.assertEqual(erro.exception.code, 403)
+            with ext.db(self.db) as c:
+                self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                           (self.oid,)).fetchone()['status'], 'Pendente')
         finally:
             servidor.parar()
 
@@ -203,8 +234,8 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertIn('Baixar preview do PDF', html)
             self.assertLess(html.find(f'formaction="{url}/em-rota"'),
                             html.find('Baixar preview do PDF'))
-            self.assertIn('name="situacao_popup" value="Aberta"', html)
             self.assertIn('name="situacao_popup" value="Concluída"', html)
+            self.assertNotIn('name="situacao_popup" value="Aberta"', html)
             self.assertNotIn('name="situacao_popup" value="Pendente"', html)
             self.assertNotIn('name="situacao_popup" value="Em rota"', html)
             self.assertNotIn('name="situacao_popup" value="Iniciada"', html)
