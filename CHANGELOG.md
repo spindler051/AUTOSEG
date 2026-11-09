@@ -10,6 +10,7 @@
 - **CI:** workflows atualizados para o monorepo (`officina`, `flavors`, `tests`, `workaholic`) e para a suíte completa.
 - **Histórico público:** a primeira publicação usará um único commit inicial; o histórico de desenvolvimento permanece no repositório privado de arquivo.
 - **OS:** abrir, em rota e iniciar salvam o cliente escolhido no formulário antes de validar.
+- **OS — ações rápidas:** Em rota, Iniciar OS e Cancelar rota ficam agrupados na ficha, separados do preview do PDF; empilhados no desktop e lado a lado em telas largas.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
 - **Testes:** 343 testes OK, 1 skip.
 

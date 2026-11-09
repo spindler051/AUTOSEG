@@ -1712,17 +1712,6 @@
 }`;
     document.head.appendChild(ajustes);
   }
-  // Em rota / Iniciar OS também no topo da OS, para acesso imediato.
-  const formTopo = document.getElementById('form-os');
-  const acoesTopo = document.querySelector('.os-ticket-actions');
-  if (formTopo && acoesTopo) {
-    formTopo.querySelectorAll('.os-status-actions button[formaction$="/em-rota"],'
-      + '.os-status-actions button[formaction$="/iniciar"]').forEach(origem => {
-      const botao = origem.cloneNode(true);
-      botao.setAttribute('form', 'form-os');
-      acoesTopo.prepend(botao);
-    });
-  }
   if (podeCriarElemento) {
     const estiloGeral = document.createElement('style');
     estiloGeral.textContent = `

@@ -135,6 +135,42 @@ class NumeroPublicoTest(unittest.TestCase):
         finally:
             servidor.parar()
 
+    def test_pending_os_groups_workflow_before_preview(self):
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",
+                      (self.oid,))
+        ext.assumir(self.db, self.oid, self.pid)
+        url = ordens.url_os(self.db, self.oid)
+        servidor = PortalPrestador(self.db, host='127.0.0.1', porta=0)
+        try:
+            servidor.iniciar()
+            base = f'http://127.0.0.1:{servidor.porta}'
+            browser = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            _, _, html = pedido(browser, base, '/login', {
+                'email': 'numero@exemplo.com', 'senha': 'senha-numero-2026!'})
+            self.assertIn('Visão geral', html)
+            _, _, html = pedido(browser, base, url)
+            csrf = token(html)
+            self.assertIn('os-ticket-workflow', html)
+            self.assertIn(f'formaction="{url}/em-rota"', html)
+            self.assertIn(f'formaction="{url}/iniciar"', html)
+            self.assertIn('Baixar preview do PDF', html)
+            self.assertLess(html.find('os-ticket-workflow'),
+                            html.find('Baixar preview do PDF'))
+            self.assertEqual(html.count(f'formaction="{url}/em-rota"'), 1)
+            status, _, _ = pedido(browser, base, f'{url}/em-rota', {
+                'csrf': csrf,
+                'cliente_id': str(self.cid),
+                'cliente_busca': 'Cliente Número',
+            })
+            self.assertEqual(status, 200)
+            _, _, html = pedido(browser, base, url)
+            self.assertIn(f'formaction="{url}/cancelar-rota"', html)
+            self.assertNotIn(f'formaction="{url}/em-rota"', html)
+        finally:
+            servidor.parar()
+
     def test_draft_materials_restore_on_os_form(self):
         ext.salvar_rascunho_web(self.db, self.oid, self.pid, {
             'material_item[]': ['Material do rascunho'],
