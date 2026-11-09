@@ -1,7 +1,7 @@
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-08
-**Versão:** `9.6.0-dev.71`
+**Versão:** `9.6.0-dev.72`
 **Branch de trabalho:** `develop`
 **Produção:** MAIN intocada; servidor e túneis parados.
 
@@ -36,6 +36,9 @@ Este é o ponto de retomada. O índice completo fica em
   é escolhida em popup, e o responsável é transferido pelo select de admin na
   Identificação. A aba Mídias concentra fotos, Fechamento, nota fiscal e
   confirmação; tema e acento ficam em Configurações, salvos na conta.
+- Ciclo de feedbacks 57–60 e 62: busca/criação de cliente na OS, lista com
+  **Dados incompletos**, conclusão sem destinatário, forma de pagamento
+  obrigatória e erros de login/formulários em toast/inline sem perder campos.
 
 ## Estado da numeração
 
@@ -60,7 +63,7 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **338 testes, 0 falhas, 1 skip**.
+- Suíte não visual: **343 testes, 0 falhas, 1 skip**.
 - Scripts de aceitação atualizados e passando: `tests/test_portal_v4.py`,
   `tests/test_fluxo_v5.py`, `tests/test_fluxo_v6.py`, `tests/test_fluxo_v7.py`,
   `tests/test_fluxo_cliente_v94.py` e `tests/test_rev09_fluxo_os.py`.

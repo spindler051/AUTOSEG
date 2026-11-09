@@ -489,6 +489,23 @@ class DialogoOS(Adw.Dialog):
         grupo = Adw.PreferencesGroup(title="Identificação")
         pagina.add(grupo)
         base = self.dados or self.importado or {}
+        self.clientes_filtrados = list(self.clientes)
+        self.busca_cliente_os = Gtk.SearchEntry(
+            placeholder_text="Buscar cliente por nome ou ID")
+        self.busca_cliente_os.set_hexpand(True)
+        self.busca_cliente_os.connect(
+            "search-changed", lambda *_args: self._filtrar_clientes_os())
+        caixa_busca = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        caixa_busca.set_margin_top(8)
+        caixa_busca.set_margin_bottom(8)
+        caixa_busca.set_margin_start(10)
+        caixa_busca.set_margin_end(10)
+        caixa_busca.append(self.busca_cliente_os)
+        self.status_cliente_os = Gtk.Label(label="", xalign=0)
+        self.status_cliente_os.add_css_class("caption")
+        self.status_cliente_os.add_css_class("dim-label")
+        caixa_busca.append(self.status_cliente_os)
+        grupo.add(_linha_custom(caixa_busca))
         self.opcoes_cliente = [f"{x['id']} - {x['nome']}" for x in self.clientes]
         indice = 0
         alvo = self.dados.get("cliente_id") if self.dados else self.cliente_inicial
@@ -592,6 +609,7 @@ class DialogoOS(Adw.Dialog):
         self.status = None
         self.relatorio = None
         self.motivo = None
+        self.enviar_email = None
         self.anexos_label = None
         if self.os_id is not None:
             grupo = Adw.PreferencesGroup(title="Atendimento e encerramento")
@@ -619,6 +637,11 @@ class DialogoOS(Adw.Dialog):
                 self.relatorio = ui.campo_texto(grupo, "Relatório técnico", relato, 120)
                 self.motivo = ui.campo_texto(grupo, "Motivo — cancelamento / não realização",
                                              motivo, 60)
+                self.enviar_email = Adw.SwitchRow(
+                    title="Enviar relatório por e-mail ao concluir",
+                    subtitle="Desligue para concluir sem destinatário.")
+                self.enviar_email.set_active(True)
+                grupo.add(self.enviar_email)
                 caixa_fotos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 caixa_fotos.set_margin_top(8)
                 caixa_fotos.set_margin_bottom(8)
@@ -660,6 +683,53 @@ class DialogoOS(Adw.Dialog):
             rodape.append(ui.botao("Salvar OS", lambda: self._salvar(None), css="suggested-action"))
         toolbar.add_bottom_bar(rodape)
         self.set_child(toolbar)
+
+    def _filtrar_clientes_os(self):
+        termo = self.busca_cliente_os.get_text().strip().casefold() \
+            if hasattr(self, "busca_cliente_os") else ""
+        atual = None
+        indice = int(self.cliente.get_selected()) if hasattr(self, "cliente") else -1
+        if 0 <= indice < len(self.clientes_filtrados):
+            atual = self.clientes_filtrados[indice]["id"]
+        if termo:
+            self.clientes_filtrados = [
+                x for x in self.clientes
+                if termo in f"{x['id']} {x.get('nome', '')}".casefold()]
+        else:
+            self.clientes_filtrados = list(self.clientes)
+        self.cliente.set_model(Gtk.StringList.new([
+            f"{x['id']} - {x['nome']}" for x in self.clientes_filtrados]))
+        escolhido = 0
+        if atual is not None:
+            for indice, cliente in enumerate(self.clientes_filtrados):
+                if cliente["id"] == atual:
+                    escolhido = indice
+                    break
+        if self.clientes_filtrados:
+            self.cliente.set_selected(escolhido)
+            self.status_cliente_os.set_text(
+                "Cliente existente selecionado." if not termo else
+                "Selecione um resultado ou digite um nome novo.")
+        else:
+            self.status_cliente_os.set_text(
+                "Nome novo: será cadastrado com dados incompletos para completar depois.")
+
+    def _cliente_para_os(self):
+        indice = int(self.cliente.get_selected()) if self.clientes_filtrados else -1
+        if 0 <= indice < len(self.clientes_filtrados):
+            return int(self.clientes_filtrados[indice]["id"])
+        nome = self.busca_cliente_os.get_text().strip()
+        if len(nome) < 2:
+            raise ValueError("Selecione um cliente existente ou digite o nome de um novo cliente.")
+        existente = next(
+            (x for x in self.clientes if str(x.get("nome") or "").casefold() == nome.casefold()),
+            None)
+        if existente:
+            return int(existente["id"])
+        registro = self.janela.service.salvar_cliente(
+            None, {"nome": nome, "status": "Ativo", "provisorio": True})
+        self.clientes.append({"id": int(registro.id), "nome": registro.nome})
+        return int(registro.id)
 
     def _atualizar_materiais(self):
         linhas = []
@@ -841,14 +911,14 @@ class DialogoOS(Adw.Dialog):
             self._salvar("Cancelada")
 
     def _salvar(self, acao):
-        if not self.clientes:
-            ui.aviso_erro(self.janela, "Nenhum cliente", "Cadastre um cliente antes de criar uma OS.")
+        try:
+            cliente_id = self._cliente_para_os()
+        except ValueError as erro:
+            ui.aviso_erro(self.janela, "Cliente", str(erro))
             return
-        indice = int(self.cliente.get_selected())
-        if not 0 <= indice < len(self.clientes):
-            ui.aviso_erro(self.janela, "Cliente inválido", "Selecione um cliente válido.")
+        except Exception as erro:
+            ui.aviso_erro(self.janela, "Cliente", str(erro))
             return
-        cliente_id = self.clientes[indice]["id"]
         descricao = self.descricao.get_texto()
         tecnico = self.tecnico.get_text().strip()
         pagamento = ui.valor_combo(self.pagamento)
@@ -953,7 +1023,9 @@ class DialogoOS(Adw.Dialog):
         if resultado.encerrada:
             ui.toast(self.janela, "OS encerrada. Publicando PDF…")
             self.close()
-            self.janela.publicar_pdf(os_salvo_id, enviar_email=(acao == "Concluída"))
+            enviar_email = (acao == "Concluída"
+                            and (self.enviar_email is None or self.enviar_email.get_active()))
+            self.janela.publicar_pdf(os_salvo_id, enviar_email=enviar_email)
             self.janela.carregar_os()
             self.janela.carregar_historico()
             return

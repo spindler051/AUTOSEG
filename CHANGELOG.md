@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## 9.6.0-dev.72 — feedbacks da DEV: cliente, encerramento e erros inline — 2026-11-08 — develop
+
+- **Cliente na OS:** o formulário completo usa busca por nome com `datalist`, igual ao campo de material. Um nome novo cria cliente marcado como incompleto para completar depois.
+- **Lista de clientes:** registros com `dados_incompletos=1` aparecem como **Dados incompletos** em vez de **Ativo**.
+- **Encerramento:** a conclusão exige forma de pagamento, inclusive no núcleo usado pelo GTK e pelo site.
+- **Destinatários:** nova opção **Não precisa de destinatário** permite concluir a OS sem e-mail e sem exigir endereço válido.
+- **Erros:** login e formulários passam a enviar por `fetch`; falhas aparecem em toast/inline, preservando os campos digitados. O login ganhou mensagem inline e mantém o e-mail.
+- **Layout:** os campos de atendimento, pagamento, urgência e mão de obra foram reorganizados para eliminar a área vazia abaixo de “Atendido por”.
+- **Testes:** 343 testes OK, 1 skip; regressões novas para cliente incompleto, busca/criação, pagamento, destinatário e login.
+
 ## 9.6.0-dev.71 — dados fora do repositório — 2026-11-08 — develop
 
 - **Banco fora do repositório:** servidor em produção usa `/var/lib/autoseg` (Linux) ou `/Library/Application Support/AUTOSEG` (macOS); DEV usa `<dados do usuário>/server-dev`; o GTK local usa `<dados do usuário>/local`.

@@ -173,6 +173,8 @@ def os_salvar(banco,d,pid,oid=None):
     acao='Cancelada' if cancelar else texto(d,'acao_status',30)
     if acao not in ('salvar','Pendente','Concluída','Cancelada'):
         raise ValueError('Operação inválida.')
+    if acao=='Concluída' and not forma:
+        raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
     motivo=texto(d,'motivo_encerramento',2000)
     if acao in ('Cancelada','Não realizada') and not motivo:
         raise ValueError('O motivo é obrigatório para cancelar ou indicar não realização.')
@@ -299,7 +301,8 @@ def os_salvar(banco,d,pid,oid=None):
             if 'arquivada' in old.keys() and old['arquivada']:
                 raise ValueError('OS arquivada: edição bloqueada. O histórico permanece preservado.')
             original=c.execute('SELECT cliente_id,descricao_original,observacoes_originais FROM os_solicitacoes WHERE os_id=?',(oid,)).fetchone()
-            if original:
+            permitir_trocar=str(d.get('_permitir_trocar_cliente','')) in ('1','on','true','sim')
+            if original and old['origem']=='Portal' and not permitir_trocar:
                 cliente_original=c.execute('SELECT status FROM clientes WHERE id=?',
                                            (original['cliente_id'],)).fetchone()
                 # Chamados de origem só mantêm o cliente original quando ele
@@ -307,8 +310,7 @@ def os_salvar(banco,d,pid,oid=None):
                 if not cliente_original or cliente_original['status']!='A definir':
                     cliente_id=original['cliente_id']
                 descricao=original['descricao_original']
-                if old['origem']=='Portal':
-                    observacoes=old['observacoes'] or original['observacoes_originais']
+                observacoes=old['observacoes'] or original['observacoes_originais']
             atual=ext.responsavel_atual(c,oid)
             admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
             if atual not in (None,pid) and not admin:

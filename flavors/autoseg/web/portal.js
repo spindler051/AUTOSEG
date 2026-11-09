@@ -49,56 +49,6 @@
     } catch (_erro) {}
   };
 
-  document.querySelectorAll('form[data-ajax-preserve]').forEach(form => {
-    form.addEventListener('submit', async evento => {
-      if (evento.defaultPrevented || !window.fetch || !window.FormData) return;
-      evento.preventDefault();
-      const submitter = evento.submitter;
-      const action = submitter?.getAttribute('formaction') || form.action;
-      const method = (submitter?.getAttribute('formmethod') || form.method || 'post').toUpperCase();
-      const dados = new FormData(form);
-      if (submitter?.name && !dados.has(submitter.name)) {
-        dados.append(submitter.name, submitter.value);
-      }
-      const textoOriginal = submitter?.textContent;
-      if (submitter) {
-        submitter.disabled = true;
-        submitter.textContent = document.body.classList.contains('ui-app') ? 'Salvando…' : 'SALVANDO...';
-      }
-      try {
-        const resposta = await fetch(action, {
-          method,
-          body: dados,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-          },
-          credentials: 'same-origin'
-        });
-        if (resposta.redirected) {
-          window.location.assign(resposta.url);
-          return;
-        }
-        if (!resposta.ok) {
-          let mensagem = 'Não foi possível salvar.';
-          try {
-            const corpo = await resposta.json();
-            mensagem = corpo.error || corpo.message || mensagem;
-          } catch (_erro) {}
-          throw new Error(mensagem);
-        }
-        // Sucesso sem redirecionamento (ex.: rascunho salvo): recarrega a OS.
-        window.location.reload();
-      } catch (erro) {
-        mostrarAvisoGlobal(erro.message || 'Não foi possível salvar. Tente novamente.');
-        if (submitter) {
-          submitter.disabled = false;
-          submitter.textContent = textoOriginal || 'Salvar';
-        }
-      }
-    });
-  });
-
   const form = document.getElementById('form-os');
   if (form) {
 
@@ -659,26 +609,52 @@
     });
   }
 
-  // Busca local de cliente: funciona no formulário de OS e no orçamento.
+  // Busca local de cliente: OS usa datalist (igual ao campo material);
+  // o orçamento mantém o select filtrável por compatibilidade.
   const campoBuscaCliente = document.getElementById('busca-cliente-os');
   if (campoBuscaCliente) {
     const formCliente = campoBuscaCliente.closest('form');
     const seletorCliente = formCliente?.querySelector('select[name="cliente_id"]');
-    if (seletorCliente) {
+    const listaClientes = document.getElementById('clientes-os-lista');
+    const idCliente = document.getElementById('c_cliente_id');
+    const statusCliente = document.getElementById('cliente-os-status');
+    const normalizar = texto => String(texto || '').normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    if (listaClientes && idCliente) {
+      const porNome = new Map(Array.from(listaClientes.options).map(opcao => [
+        normalizar(opcao.value), opcao.dataset.id || ''
+      ]));
+      const atualizar = () => {
+        const id = porNome.get(normalizar(campoBuscaCliente.value)) || '';
+        if (idCliente.value !== id) {
+          idCliente.value = id;
+          idCliente.dispatchEvent(new Event('change', {bubbles:true}));
+        }
+        if (statusCliente) {
+          statusCliente.textContent = !campoBuscaCliente.value.trim()
+            ? 'Digite o nome do cliente para buscar ou cadastrar.'
+            : (id ? 'Cliente existente selecionado.'
+                  : 'Nome novo: será cadastrado com dados incompletos para completar depois.');
+        }
+      };
+      campoBuscaCliente.addEventListener('input', atualizar);
+      campoBuscaCliente.addEventListener('change', atualizar);
+      if (campoBuscaCliente.value.trim()) atualizar();
+    } else if (seletorCliente) {
       const opcoesCliente = Array.from(seletorCliente.options)
         .map(o => ({valor:o.value, nome:o.textContent}));
       campoBuscaCliente.addEventListener('input', () => {
-        const termo = campoBuscaCliente.value.normalize('NFD')
-          .replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+        const termo = normalizar(campoBuscaCliente.value);
         const selecionado = seletorCliente.value;
         seletorCliente.replaceChildren();
-        const candidatos = opcoesCliente.filter(x => x.nome.normalize('NFD')
-          .replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(termo));
+        const candidatos = opcoesCliente.filter(x => normalizar(x.nome).includes(termo));
         for (const o of candidatos) seletorCliente.add(new Option(o.nome, o.valor));
         if (candidatos.some(o => o.valor === selecionado)) seletorCliente.value = selecionado;
         else seletorCliente.selectedIndex = -1;
-        if (!candidatos.length) campoBuscaCliente.setCustomValidity('Nenhum cliente encontrado. Limpe a busca.');
-        else campoBuscaCliente.setCustomValidity('');
+      });
+      seletorCliente.addEventListener('change', () => {
+        const opcao = seletorCliente.selectedOptions?.[0];
+        if (opcao && opcao.value) campoBuscaCliente.value = opcao.textContent;
       });
     }
   }
@@ -1827,6 +1803,10 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
     const botao = form.querySelector('button[type="submit"]');
     if (botao && botao.textContent.trim() === 'Cancelar pagamento') botao.textContent = 'Cancelar';
     form.addEventListener('submit', evento => {
+      if (form.dataset.confirmado === '1') {
+        delete form.dataset.confirmado;
+        return;
+      }
       evento.preventDefault();
       evento.stopImmediatePropagation();
       if (!window.confirm('Cancelar este pagamento? Ele deixará de ser contabilizado.')) return;
@@ -1840,7 +1820,9 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
         form.append(campo);
       }
       campo.value = motivo;
-      form.submit();
+      form.dataset.confirmado = '1';
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
     }, true);
   });
 
@@ -2001,7 +1983,8 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
     form.addEventListener('change', evento => {
       if (!evento.target.matches('input[name="tema"],input[name="acento"]')) return;
       aplicar();
-      form.submit();
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.submit();
     });
     aplicar();
   })();
@@ -2083,6 +2066,86 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
     tr.addEventListener('click', evento => {
       if (evento.target.closest('a,button,input,select,label,form')) return;
       window.location.assign(link.href);
+    });
+  });
+  // Nenhum erro de formulário deve virar página nova. Os formulários com
+  // sucesso em página/arquivo declaram data-no-ajax; os demais são enviados
+  // por fetch e mostram toast/inline, preservando todos os campos digitados.
+  const mostrarErroFormulario = (form, mensagem) => {
+    const alvo = form.querySelector('.login-erro, [data-erro-form]');
+    if (alvo) {
+      alvo.textContent = mensagem;
+      alvo.hidden = false;
+      return;
+    }
+    mostrarAvisoGlobal(mensagem);
+  };
+  document.querySelectorAll('form').forEach(form => {
+    if (String(form.method || 'get').toLowerCase() !== 'post') return;
+    if (form.hasAttribute('data-no-ajax') || form.target) return;
+    form.addEventListener('submit', async evento => {
+      if (evento.defaultPrevented || !window.fetch || !window.FormData) return;
+      evento.preventDefault();
+      const submitter = evento.submitter;
+      const action = submitter?.getAttribute('formaction') || form.action;
+      const method = (submitter?.getAttribute('formmethod') || form.method || 'post').toUpperCase();
+      const dados = new FormData(form);
+      if (submitter?.name && !dados.has(submitter.name)) {
+        dados.append(submitter.name, submitter.value);
+      }
+      const textoOriginal = submitter?.textContent;
+      if (submitter) {
+        submitter.disabled = true;
+        submitter.textContent = document.body.classList.contains('ui-app') ? 'Enviando…' : 'ENVIANDO...';
+      }
+      try {
+        const resposta = await fetch(action, {
+          method,
+          body: dados,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin'
+        });
+        const tipo = resposta.headers.get('content-type') || '';
+        if (tipo.includes('application/json')) {
+          let corpo = {};
+          try { corpo = await resposta.json(); } catch (_erro) {}
+          if (!resposta.ok || corpo.ok === false || corpo.error) {
+            throw new Error(corpo.error || corpo.message || 'Não foi possível salvar.');
+          }
+          if (corpo.redirect) {
+            window.location.assign(corpo.redirect);
+            return;
+          }
+          window.location.reload();
+          return;
+        }
+        if (resposta.redirected) {
+          window.location.assign(resposta.url);
+          return;
+        }
+        const html = await resposta.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const erroEl = doc.querySelector('.bad:not([hidden]), [data-erro]');
+        const mensagemErro = erroEl?.textContent?.trim() || '';
+        if (!resposta.ok || mensagemErro) {
+          throw new Error(mensagemErro || 'Não foi possível salvar.');
+        }
+        // Página de sucesso não prevista: recarrega sem perder a URL atual.
+        window.location.reload();
+      } catch (erro) {
+        mostrarErroFormulario(form, erro.message || 'Não foi possível salvar. Tente novamente.');
+        if (submitter) {
+          submitter.disabled = false;
+          submitter.textContent = textoOriginal || 'Salvar';
+        }
+      }
+    });
+    form.addEventListener('input', () => {
+      const alvo = form.querySelector('.login-erro:not([hidden])');
+      if (alvo) alvo.hidden = true;
     });
   });
   registrarUi();

@@ -7,7 +7,7 @@
 ./autoseg check   # suíte + compilação + portal.js
 ```
 
-Estado em 2026-11-08: **338 testes, 0 falhas, 1 skip**.
+Estado em 2026-11-08: **343 testes, 0 falhas, 1 skip**.
 
 O comando cria uma pasta temporária e aponta `AUTOSEG_BASE`,
 `GESTAO_BANCO`, `AUTOSEG_USER_DATA`, `AUTOSEG_SERVER_DATA` e

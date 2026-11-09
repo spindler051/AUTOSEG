@@ -20,6 +20,8 @@ from officina.application.contracts import OSInput, OSResultado, ValidacaoError
 
 
 def salvar_os(banco, dados: OSInput) -> OSResultado:
+    if dados.acao == 'Concluída' and not str(dados.forma_pagamento or '').strip():
+        raise ValidacaoError('Selecione a forma de pagamento antes de concluir a OS.')
     anterior = None
     status_anterior = ''
     with ext.db(banco) as conexao:

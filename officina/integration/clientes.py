@@ -202,8 +202,8 @@ def listar_paginado(termo="", limite=40, offset=0, banco=None):
         total = int(conexao.execute(
             'SELECT COUNT(*) FROM clientes' + filtro, params).fetchone()[0])
         linhas = conexao.execute(
-            'SELECT id,nome,documento,cidade,telefone,email,status FROM clientes'
-            + filtro + ' ORDER BY nome LIMIT ? OFFSET ?',
+            'SELECT id,nome,documento,cidade,telefone,email,status,dados_incompletos '
+            'FROM clientes' + filtro + ' ORDER BY nome LIMIT ? OFFSET ?',
             params + [int(limite), int(offset)]).fetchall()
     return total, [dict(linha) for linha in linhas]
 
@@ -212,7 +212,8 @@ def listar_para_selecao(banco=None, limite=500):
     """Clientes ativos para selects de orçamento/OS."""
     with ext.db(banco or BANCO) as conexao:
         linhas = conexao.execute(
-            "SELECT id,nome,documento FROM clientes WHERE status NOT IN ('Inativo','A definir') "
+            "SELECT id,nome,documento,dados_incompletos FROM clientes "
+            "WHERE status NOT IN ('Inativo','A definir') "
             "ORDER BY nome LIMIT ?", (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
 
@@ -221,7 +222,7 @@ def listar_para_os(banco=None):
     """Clientes ativos para o seletor do formulário completo de OS."""
     with ext.db(banco or BANCO) as conexao:
         linhas = conexao.execute(
-            "SELECT id,nome,cidade,bairro,endereco,numero FROM clientes "
+            "SELECT id,nome,cidade,bairro,endereco,numero,dados_incompletos FROM clientes "
             "WHERE status NOT IN ('Inativo','A definir') ORDER BY nome").fetchall()
     return [dict(linha) for linha in linhas]
 
@@ -272,15 +273,47 @@ def buscar_rapida(termo="", banco=None, limite=100):
                 params.append('%' + documentos + '%')
             filtro += ")"
             linhas = conexao.execute(
-                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento,dados_incompletos "
                 "FROM clientes " + filtro + " ORDER BY nome LIMIT ?",
                 params + [int(limite)]).fetchall()
         else:
             linhas = conexao.execute(
-                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento "
+                "SELECT id,nome,tipo_pessoa,cidade,bairro,email,documento,dados_incompletos "
                 "FROM clientes WHERE status NOT IN ('Inativo','A definir') ORDER BY nome LIMIT ?",
                 (int(limite),)).fetchall()
     return [dict(linha) for linha in linhas]
+
+
+def buscar_por_nome_exato(nome, banco=None):
+    """Return the first active client with exactly this display name."""
+    nome = str(nome or "").strip()
+    if not nome:
+        return None
+    with ext.db(banco or BANCO) as conexao:
+        linha = conexao.execute(
+            "SELECT id,nome FROM clientes WHERE status NOT IN ('Inativo','A definir') "
+            "AND lower(nome)=lower(?) ORDER BY id LIMIT 1", (nome,)).fetchone()
+    return dict(linha) if linha else None
+
+
+def criar_provisorio(nome, banco=None):
+    """Create a minimal client, explicitly marked as incomplete.
+
+    Used when a provider types a new client name directly in the OS form.
+    The record can be completed later; does not create an organization.
+    """
+    nome = str(nome or "").strip()[:250]
+    if len(nome) < 2:
+        raise ErroCliente("Cliente não criado", "Informe ao menos 2 caracteres no nome.")
+    existente = buscar_por_nome_exato(nome, banco=banco)
+    if existente:
+        return int(existente["id"])
+    registro = salvar(None, {
+        "nome": nome,
+        "status": "Ativo",
+        "provisorio": True,
+    }, banco=banco)
+    return int(registro["id"])
 
 
 def salvar(cliente_id, dados, banco=None):
@@ -321,7 +354,9 @@ def salvar(cliente_id, dados, banco=None):
         else:
             valor = dados.get(campo, "")
             campos[campo] = "" if valor is None else str(valor)
-    campos["dados_incompletos"] = bool(completude.cliente_faltantes(campos))
+    campos["dados_incompletos"] = bool(
+        dados.get("provisorio") or dados.get("dados_incompletos_provisorio")
+        or completude.cliente_faltantes(campos))
     if existente is None:
         return servico.create("cliente", campos)
     return servico.update("cliente", str(cliente_id), campos,

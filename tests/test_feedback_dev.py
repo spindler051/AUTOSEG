@@ -401,5 +401,93 @@ class FeedbackDevTest(unittest.TestCase):
         self.assertEqual(int(atual['prestador_id']), int(self.employee))
 
 
+    def test_lista_clientes_mostra_dados_incompletos(self):
+        with ext.db(self.db) as c:
+            c.execute("""INSERT INTO clientes
+                (tipo_pessoa,documento,nome,status,dados_incompletos,criado_em)
+                VALUES('Física','','Roberto Incompleto','Ativo',1,?)""",
+                      (ext.agora(),))
+        pagina = self.http.get(self.base + '/clientes', timeout=10)
+        self.assertEqual(pagina.status_code, 200)
+        self.assertIn('Roberto Incompleto', pagina.text)
+        self.assertIn('Dados incompletos', pagina.text)
+
+    def test_os_form_busca_cliente_e_cria_novo_por_nome(self):
+        os_id, pagina = self._criar_os(descricao='OS para cliente novo')
+        self.assertIn('id="busca-cliente-os"', pagina)
+        self.assertIn('id="clientes-os-lista"', pagina)
+        dados = self._form_base(os_id)
+        dados.pop('cliente_id')
+        dados['cliente_busca'] = 'Cliente Criado no Formulário'
+        dados['acao_status'] = 'Pendente'
+        dados['modo_envio'] = 'encerrar'
+        resposta = self.http.post(self.base + f'/os/{os_id}/salvar',
+                                  data=dados, timeout=10)
+        self.assertEqual(resposta.status_code, 200, resposta.text[:400])
+        with ext.db(self.db) as c:
+            cliente = c.execute(
+                "SELECT id,dados_incompletos FROM clientes WHERE nome=?",
+                ('Cliente Criado no Formulário',)).fetchone()
+            os_ = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+        self.assertIsNotNone(cliente)
+        self.assertTrue(cliente['dados_incompletos'])
+        self.assertEqual(int(os_['cliente_id']), int(cliente['id']))
+
+    def test_conclusao_exige_forma_de_pagamento(self):
+        os_id, _pagina = self._criar_os(descricao='OS sem forma de pagamento')
+        dados = self._form_base(os_id)
+        dados['forma_pagamento'] = ''
+        dados['acao_status'] = 'Concluída'
+        dados['modo_envio'] = 'encerrar'
+        dados['v9_execucao'] = 'Serviço executado'
+        dados['sem_nota_fiscal'] = '1'
+        resposta = self.http.post(self.base + f'/os/{os_id}/salvar',
+                                  data=dados, timeout=10)
+        self.assertEqual(resposta.status_code, 400)
+        self.assertIn('forma de pagamento', resposta.text.lower())
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+        self.assertNotEqual(os_['status'], 'Concluída')
+
+    def test_conclusao_sem_destinatario_nao_exige_email(self):
+        os_id, pagina = self._criar_os(descricao='OS sem destinatário')
+        self.assertIn('name="sem_destinatario"', pagina)
+        dados = self._form_base(os_id)
+        dados['acao_status'] = 'Concluída'
+        dados['modo_envio'] = 'encerrar'
+        dados['v9_execucao'] = 'Serviço executado'
+        dados['sem_nota_fiscal'] = '1'
+        dados['sem_destinatario'] = '1'
+        resposta = self.http.post(self.base + f'/os/{os_id}/salvar',
+                                  data=dados, timeout=15)
+        self.assertIn(resposta.status_code, (200, 503), resposta.text[:400])
+        with ext.db(self.db) as c:
+            os_ = c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                            (os_id,)).fetchone()
+            envios = c.execute('SELECT COUNT(*) FROM produtividade_email '
+                               'WHERE os_id=?', (os_id,)).fetchone()[0]
+        self.assertEqual(os_['status'], 'Concluída')
+        self.assertEqual(envios, 0)
+
+    def test_login_erro_fica_inline_e_preserva_email(self):
+        pagina = requests.get(self.base + '/login', timeout=10)
+        self.assertIn('data-login-form', pagina.text)
+        self.assertIn('id="login-erro"', pagina.text)
+        ajax = requests.post(self.base + '/login', data={
+            'email': 'naoexiste@example.invalid', 'senha': 'errada'}, headers={
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'}, timeout=10)
+        self.assertEqual(ajax.status_code, 401)
+        self.assertIn('error', ajax.json())
+        normal = requests.post(self.base + '/login', data={
+            'email': 'naoexiste@example.invalid', 'senha': 'errada'}, timeout=10)
+        self.assertEqual(normal.status_code, 200)
+        self.assertIn('Usuário ou senha incorretos', normal.text)
+        self.assertIn('value="naoexiste@example.invalid"', normal.text)
+        self.assertNotIn('value="errada"', normal.text)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

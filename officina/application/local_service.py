@@ -757,7 +757,8 @@ class LocalService:
             cidade=str(campos.get('cidade') or ''),
             telefone=str(campos.get('telefone') or ''),
             status=str(campos.get('status') or ''),
-            incompleto=completude.cliente_faltantes(campos),
+            incompleto=bool(campos.get('dados_incompletos'))
+            or completude.cliente_faltantes(campos),
         )
 
     @staticmethod
@@ -767,5 +768,6 @@ class LocalService:
             id=int(registro.get('id') or 0),
             versao=int(registro.get('version') or 1),
             campos=campos,
-            incompleto=completude.cliente_faltantes(campos),
+            incompleto=bool(campos.get('dados_incompletos'))
+            or completude.cliente_faltantes(campos),
         )

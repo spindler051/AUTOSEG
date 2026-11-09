@@ -747,7 +747,7 @@ def _dialogo_feedback(usuario, banco=None):
     return f'''
 <button type="button" class="feedback-fab" id="abrir-feedback" aria-haspopup="dialog" aria-controls="dialogo-feedback">Dê um feedback</button>
 <dialog class="feedback-dialog" id="dialogo-feedback" aria-labelledby="feedback-titulo">
-  <form method="post" action="/feedback" id="form-feedback">
+  <form method="post" action="/feedback" id="form-feedback" data-no-ajax>
     <input type="hidden" name="csrf" value="{esc(usuario.get('csrf',''))}">
     <input type="hidden" name="rascunho_id" id="feedback-rascunho-id" value="{rascunho_id}">
     <input type="hidden" name="ui_mode" id="feedback-ui-mode" value="">
@@ -1134,8 +1134,11 @@ class PortalPrestador:
                     card('Aviso',f'<p class="bad">{esc(msg)}</p>'
                          f'<p><a href="{destino}">Voltar à página anterior</a></p>'),s,status)
 
-            def login(self):
+            def login(self, erro_login='', email_login=''):
                 ativo=self.ui_app()
+                erro_html=(f'<p class="bad login-erro" id="login-erro" role="alert">'
+                           f'{esc(erro_login)}</p>' if erro_login else
+                           '<p class="bad login-erro" id="login-erro" role="alert" hidden></p>')
                 if ativo:
                     troca=''
                     fatos=(''.join(f'<div class="login-fact">{icone(nome)}<span>{esc(texto)}</span></div>'
@@ -1155,8 +1158,9 @@ class PortalPrestador:
                            f'<section class="login-panel">{troca}'
                            f'<h2>Entrar</h2>'
                            f'<p class="login-lede">Use seu e-mail e senha de prestador.</p>'
-                           f'<form class="login-form" method="post" action="/login">'
-                           +campos_escuros('E-mail','email',kind='email',required=True)
+                           f'<form class="login-form" method="post" action="/login" data-login-form="1">'
+                           +erro_html
+                           +campos_escuros('E-mail','email',email_login,kind='email',required=True)
                            +campos_escuros('Senha','senha',kind='password',required=True)
                            +'<button type="submit">Entrar</button></form>'
                            f'<p class="login-note">O cadastro de prestadores é realizado somente pelo aplicativo desktop.</p>'
@@ -1164,8 +1168,9 @@ class PortalPrestador:
                            f'</section></div>')
                     return self.pagina('Acesso do prestador',corpo)
                 return self.pagina('Acesso do prestador',troca+card('Entrar',
-                    '<form method="post" action="/login">'
-                    +campos_escuros('E-mail','email',kind='email',required=True)
+                    '<form method="post" action="/login" data-login-form="1">'
+                    +erro_html
+                    +campos_escuros('E-mail','email',email_login,kind='email',required=True)
                     +campos_escuros('Senha','senha',kind='password',required=True)
                     +'<button type="submit">Entrar</button></form>'
                     '<p class="muted">O cadastro de prestadores é realizado somente pelo aplicativo desktop.</p>')+v9.barra_links('prestador'))
@@ -1512,7 +1517,7 @@ class PortalPrestador:
                     form+=(f'<form method="post" action="/servicos/{identificador}/arquivar" '
                            'data-confirm="Arquivar este serviço do catálogo?">'+self.hidden(s)
                            +'<button type="submit" class="danger">Arquivar serviço</button></form>')
-                importar=(f'<form method="post" enctype="multipart/form-data" action="/servicos/yaml">{self.hidden(s)}'
+                importar=(f'<form method="post" enctype="multipart/form-data" action="/servicos/yaml" data-no-ajax>{self.hidden(s)}'
                            '<label for="yaml-servico">Preencher serviço a partir de YAML (até 64 KB)</label>'
                            '<input type="file" id="yaml-servico" name="yaml" accept=".yaml,.yml" required>'
                            '<button type="submit" class="secondary">Pré-visualizar YAML de serviço</button></form>'
@@ -1533,7 +1538,8 @@ class PortalPrestador:
                 linhas=[]
                 for r in rows:
                     linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(cad9.formatar_documento(r['documento'])),esc(r['cidade']),
-                        esc(r['telefone']),esc(r['email']),esc(r['status'])))
+                        esc(r['telefone']),esc(r['email']),
+                        esc('Dados incompletos' if r.get('dados_incompletos') else r['status'])))
                 pesquisa=('<form method="get" action="/clientes" data-auto-submit="1">'
                           +campos_escuros('Buscar por nome, CPF/CNPJ, cidade ou e-mail','q',busca,kind='search')
                           +'</form>')
@@ -1677,7 +1683,7 @@ class PortalPrestador:
                         f'<template id="modelo-material-orcamento">{linha_material({})}</template>'
                         '</fieldset>')
 
-                form = (f'<form method="post" action="/orcamento/pdf" id="form-orcamento">{self.hidden(s)}'
+                form = (f'<form method="post" action="/orcamento/pdf" id="form-orcamento" data-no-ajax>{self.hidden(s)}'
                         + campo_busca
                         + select('Cliente','cliente_id',opcoes_clientes,selecionado,required=True)
                         + secao_servicos
@@ -1694,7 +1700,7 @@ class PortalPrestador:
                               if aviso else '')
                 erro_html = card('Verifique os dados', f'<p class="bad">{esc(erro)}</p>') if erro else ''
                 importar = (
-                    f'<form method="post" enctype="multipart/form-data" action="/orcamento/yaml">'
+                    f'<form method="post" enctype="multipart/form-data" action="/orcamento/yaml" data-no-ajax>'
                     f'{self.hidden(s)}'
                     '<label for="yaml-orcamento">Criar orçamento por YAML (até 64 KB)</label>'
                     '<input type="file" id="yaml-orcamento" name="yaml" accept=".yaml,.yml" required>'
@@ -1740,7 +1746,7 @@ class PortalPrestador:
                         +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if s.get('admin') else '')
                     +'<button type="submit">Salvar cliente</button></form>')
                 if not cid:
-                    importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data">{self.hidden(s)}'
+                    importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data" data-no-ajax>{self.hidden(s)}'
                        '<label for="importar-cliente-yaml">Preencher cadastro com arquivo YAML (até 64 KB)</label>'
                        '<input type="file" id="importar-cliente-yaml" name="yaml" accept=".yaml,.yml,.txt,text/yaml,text/plain" required>'
                        '<button type="submit" class="secondary">Pré-visualizar cadastro YAML</button></form>'
@@ -1772,21 +1778,35 @@ class PortalPrestador:
                 return self.pagina('Novo cliente' if cid is None else 'Editar cliente',card('Dados cadastrais',corpo),s)
 
             def _cliente_por_nome(self, nome):
-                nome=str(nome or '').strip()[:250]
-                if len(nome)<2:
-                    raise ValueError('Informe ao menos 2 caracteres no nome do cliente.')
-                with ext.db(banco) as c:
-                    achado=c.execute(
-                        "SELECT id FROM clientes WHERE status!='Inativo' AND lower(nome)=lower(?) "
-                        "ORDER BY id LIMIT 1",(nome,)).fetchone()
-                    if achado:
-                        return int(achado['id'])
-                    cur=c.execute("""INSERT INTO clientes
-                        (tipo_pessoa,documento,nome,status,dados_incompletos,observacoes,criado_em)
-                        VALUES('Física','',?,'Ativo',1,?,?)""",
-                        (nome,'Cadastro criado na abertura rápida da OS. Completar CPF/CNPJ, e-mail, endereço e demais dados.',
-                         ext.agora()))
-                    return int(cur.lastrowid)
+                return clientes_core.criar_provisorio(nome, banco=banco)
+
+            def _resolver_cliente_os(self, d, oid=None):
+                """Existing selected id, new client typed by name, or current OS client."""
+                bruto = str(d.get('cliente_id', '')).strip()
+                if bruto:
+                    try:
+                        cliente_id = int(bruto)
+                    except (TypeError, ValueError):
+                        raise ValueError('Cliente selecionado inválido.') from None
+                    if clientes_core.obter_resumo_ativo(cliente_id, banco=banco):
+                        return cliente_id
+                    # "Cliente a definir" is intentionally allowed on an OS.
+                    with ext.db(banco) as c:
+                        linha = c.execute('SELECT status FROM clientes WHERE id=?',
+                                          (cliente_id,)).fetchone()
+                    if linha and linha['status'] == 'A definir':
+                        return cliente_id
+                    raise ValueError('Cliente selecionado não encontrado ou inativo.')
+                nome = str(d.get('cliente_busca', '')).strip()
+                if len(nome) >= 2:
+                    return self._cliente_por_nome(nome)
+                if oid is not None:
+                    with ext.db(banco) as c:
+                        atual = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
+                                          (oid,)).fetchone()
+                    if atual and atual['cliente_id']:
+                        return int(atual['cliente_id'])
+                raise ValueError('Selecione um cliente existente ou digite o nome de um novo cliente.')
 
             def _cliente_a_definir(self):
                 """Cadastro provisório para OS aberta antes de escolher o cliente."""
@@ -1845,7 +1865,7 @@ class PortalPrestador:
                 aviso=f'<p class="bad">{esc(erro)}</p>' if erro else ''
                 if duplicada:
                     existente_id=int(duplicada['id'])
-                    confirmacao=(f'<form method="post" action="/os/rapida/salvar">'
+                    confirmacao=(f'<form method="post" action="/os/rapida/salvar" data-no-ajax>'
                                  f'{self.hidden(s)}'
                                  f'<input type="hidden" name="cliente_id" value="{esc(str(cliente_id or ""))}">'
                                  f'<input type="hidden" name="cliente_nome" value="{esc(str(dados_form.get("cliente_nome","")))}">'
@@ -1868,7 +1888,7 @@ class PortalPrestador:
                 opcoes_clientes=''.join(
                     f'<option value="{esc(x["nome"])}" data-id="{int(x["id"])}"></option>'
                     for x in clientes)
-                form=(f'<form method="post" action="/os/rapida/salvar">{self.hidden(s)}'
+                form=(f'<form method="post" action="/os/rapida/salvar" data-no-ajax>{self.hidden(s)}'
                       '<label for="cliente-rapida-nome">Cliente (opcional)</label>'
                       f'<input id="cliente-rapida-nome" name="cliente_nome" list="clientes-rapida-lista" '
                       f'value="{esc(nome_atual)}" placeholder="Digite o nome; a busca é automática" autocomplete="off">'
@@ -1889,7 +1909,7 @@ class PortalPrestador:
                 importar_rapida=''
                 if selecionado:
                     importar_rapida=card('Importar OS em YAML',
-                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{self.hidden(s)}'
+                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data" data-no-ajax>{self.hidden(s)}'
                         f'<input type="hidden" name="cliente_id" value="{esc(selecionado)}">'
                         '<label for="importar-os-rapida-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
                         '<input id="importar-os-rapida-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
@@ -2048,10 +2068,24 @@ class PortalPrestador:
                                 f'{token}<button type="submit" class="danger">Arquivar OS</button></form>')
                 if oid and app:
                     corpo+='</div>'
-                if not cl:
-                    corpo+='<p class="notice">Cadastre primeiro um cliente.</p>'
-                    return self.pagina(titulo,corpo,s)
-                dados_cliente=[(x['id'],f'{x["nome"]} — ID {x["id"]}') for x in cl]
+                def campo_cliente_os(valor_id):
+                    atual = next((x for x in cl if str(x['id']) == str(valor_id)), None)
+                    nome_atual = atual['nome'] if atual else ''
+                    opcoes_clientes = ''.join(
+                        f'<option value="{esc(x["nome"])}" data-id="{int(x["id"])}"></option>'
+                        for x in cl)
+                    return (
+                        '<label for="busca-cliente-os">Cliente da OS</label>'
+                        f'<input id="busca-cliente-os" name="cliente_busca" list="clientes-os-lista" '
+                        f'value="{esc(nome_atual)}" autocomplete="off" '
+                        'placeholder="Digite o nome; a busca é automática">'
+                        f'<datalist id="clientes-os-lista">{opcoes_clientes}</datalist>'
+                        f'<input type="hidden" name="cliente_id" id="c_cliente_id" '
+                        f'value="{esc(valor_id if valor_id is not None else "")}">'
+                        '<p class="muted" id="cliente-os-status">Se o nome não existir, ele será '
+                        'cadastrado como cliente com dados incompletos para completar depois.</p>'
+                    )
+
                 # Carregar rascunho salvo pelo prestador se existir
                 try:
                     rasc_salvo = ext.obter_rascunho_web(banco, oid, s['pid']) if oid else None
@@ -2067,7 +2101,7 @@ class PortalPrestador:
                     corpo+='<div class="os-layout"><div class="os-main">'
                 if not oid:
                     corpo+=card('Importar OS em YAML',
-                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data">{token}'
+                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data" data-no-ajax>{token}'
                         '<label for="importar-os-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
                         '<input id="importar-os-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
                         '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
@@ -2177,8 +2211,7 @@ class PortalPrestador:
                     cliente_solicitacao=clientes_core.obter_linha(
                         int(solicitacao['cliente_id']),banco=banco)
                     if not cliente_solicitacao or cliente_solicitacao.get('status')=='A definir' or s.get('admin'):
-                        corpo+=select('Cliente da OS','cliente_id',dados_cliente,
-                                      d.get('cliente_id',solicitacao['cliente_id']),required=True)
+                        corpo+=campo_cliente_os(d.get('cliente_id',solicitacao['cliente_id']))
                         corpo+='<p class="muted">O chamado chegou sem cliente definido. Escolha o cliente real da OS.</p>'
                     else:
                         corpo+=f'<input type="hidden" name="cliente_id" value="{int(solicitacao["cliente_id"])}">'
@@ -2190,12 +2223,9 @@ class PortalPrestador:
                         partes_contato=[str(contato_atual.get(k) or '') for k in
                                         ('email','telefone','sindico_nome','sindico_email')]
                         contato_texto=' · '.join(x for x in partes_contato if x)
-                    corpo+=select('Cliente','cliente_id',dados_cliente,
-                                  d.get('cliente_id',cl[0]['id'] if cl else ''),required=True)
+                    corpo+=campo_cliente_os(d.get('cliente_id') or (cl[0]['id'] if cl else ''))
                     corpo+=f'<p class="muted" id="cliente-contato-os">'+(esc(contato_texto) or 'Sem e-mail ou telefone cadastrado.')+'</p>'
-                corpo+='</div><div class="col2"><div>'
-                corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
-                corpo+='</div><div>'
+                corpo+='</div>'
                 if oid and app and s.get('admin') and d['status'] in ext.ATIVAS and not arquivada:
                     opcoes_responsavel=(([('', 'Não atribuído')] if not responsavel else [])
                                         + [(str(p['id']), p['nome']) for p in prestadores])
@@ -2207,12 +2237,17 @@ class PortalPrestador:
                                      f'{" selected" if str(v)==str(responsavel or "") else ""}>'
                                      f'{esc(nome)}</option>' for v,nome in opcoes_responsavel)
                             +'</select>')
+                corpo+='<div class="col2"><div>'
+                corpo+=campos_escuros('Atendido por (cliente no local)','tecnico',d.get('tecnico','') or '')
+                corpo+='</div><div>'
                 corpo+=select('Forma de pagamento','forma_pagamento',
                     [('', 'Selecione a forma de pagamento')]+[(z,z) for z in neg.OS_FORMAS],
                     d.get('forma_pagamento') or '')
+                corpo+='</div></div><div class="col2"><div>'
                 corpo+=select('Urgência','urgencia',
                     [('Baixa','Baixa'),('Normal','Normal'),('Alta','Alta')],
                     d.get('urgencia') or 'Normal')
+                corpo+='</div><div>'
                 corpo+=campos_escuros('Valor de mão de obra (R$)','valor_mao_obra',d.get('valor_mao_obra') or '0',required=True)+'</div></div>'
                 corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra e <b>0,00</b> no valor cobrado dos materiais. ' \
                        'O custo real dos materiais é interno e não entra no total cobrado.</p>'
@@ -2313,7 +2348,12 @@ class PortalPrestador:
                             marcado=' checked' if chave in selecionados_d else ''
                             corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
                     corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@imobiliaria.com.br"></label>'
-                    corpo+='<p class="muted">A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
+                    marcado_sem_dest=' checked' if str(d.get('sem_destinatario','')) in ('1','on','true','sim') else ''
+                    corpo+=(f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
+                            f'<input type="checkbox" name="sem_destinatario" value="1"{marcado_sem_dest}> '
+                            'Não precisa de destinatário</label>')
+                    corpo+='<p class="muted">Marque para concluir a OS sem enviar o relatório por e-mail. '
+                    corpo+='A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
                 corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
                 corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
@@ -3400,11 +3440,19 @@ class PortalPrestador:
                         agora=time.time()
                         with LOCK_LOGIN:
                             tent=[t for t in TENTATIVAS.get(ip,[]) if agora-t<600]
-                            if len(tent)>=10: return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
-                        p=ext.autenticar(banco,str(d.get('email','')),str(d.get('senha','')))
+                            if len(tent)>=10:
+                                if quer_json:
+                                    return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
+                                return self.login(erro_login='Muitas tentativas. Aguarde dez minutos.',
+                                                  email_login=str(d.get('email','')))
+                        email_login=str(d.get('email',''))
+                        p=ext.autenticar(banco,email_login,str(d.get('senha','')))
                         if not p:
                             with LOCK_LOGIN:TENTATIVAS[ip]=tent+[agora]
-                            return self.erro('Usuário ou senha incorretos.',401)
+                            if quer_json:
+                                return self.erro('Usuário ou senha incorretos.',401)
+                            return self.login(erro_login='Usuário ou senha incorretos.',
+                                              email_login=email_login)
                         with LOCK_LOGIN:TENTATIVAS.pop(ip,None)
                         tok=secrets.token_urlsafe(36)
                         SESSOES[tok]={'pid':p['id'],'nome':p['nome'],'cred':p['senha_hash'],
@@ -3952,6 +4000,8 @@ class PortalPrestador:
                                 pass
                         return self.os_form(s,None,preenchimento=preenchimento)
                     if path=='/os/nova/salvar':
+                        d = dict(d)
+                        d['cliente_id'] = self._resolver_cliente_os(d)
                         oid=neg.os_salvar(banco,d,pid)
                         ext.assumir(banco,oid,pid)
                         return self.redir(f'{url_os(banco, oid)}')
@@ -4243,6 +4293,8 @@ class PortalPrestador:
                             acao_status = 'Cancelada' if cancelar_os else str(d.get('acao_status',''))
                             d = dict(d)
                             d['acao_status'] = acao_status
+                            if cad9.prestador_admin(banco, pid):
+                                d['_permitir_trocar_cliente'] = '1'
                             if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
                                 d = dict(d); d['modo_envio'] = 'encerrar'
                             if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
@@ -4267,9 +4319,14 @@ class PortalPrestador:
                                 if not (str(d.get('acao_status',''))=='Cancelada'
                                         and cad9.prestador_admin(banco,pid)):
                                     prod._os_ativa_responsavel(c,oid,pid)
+                            d['cliente_id'] = self._resolver_cliente_os(d, oid)
+                            if (acao_status=='Concluída'
+                                    and not str(d.get('forma_pagamento','')).strip()):
+                                raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
                             # E-mail só faz parte da conclusão. Pendente não
                             # publica relatório nem exige destinatários.
-                            if str(d.get('acao_status',''))=='Concluída':
+                            sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
+                            if str(d.get('acao_status',''))=='Concluída' and not sem_destinatario:
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),
                                     str(d.get('emails_adicionais','')))

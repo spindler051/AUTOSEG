@@ -97,6 +97,56 @@ snapshot; this ledger is curated by a human.
 | ID | Page | Report (anonymized) | Decision | Fix / test |
 |---|---|---|---|---|
 | FB-0001 | `/financeiro` | Add a due date for receipt; if the date passes without confirming receipt, show it in red as overdue. | Corrigido na DEV | `efc7e3c`; `test_financeiro_vencimento.py` |
+| FB-0057 | `/os` | The client selector was a long list. It should search while typing and allow creating a client with only a name, marked incomplete. The area below “Atendido por” was empty. | Corrigido na DEV | `test_feedback_dev.py` (`test_os_form_busca_cliente_e_cria_novo_por_nome`) |
+| FB-0058 | `/clientes` | A client with only a name appeared as Ativo instead of Dados incompletos. | Corrigido na DEV | `test_feedback_dev.py` (`test_lista_clientes_mostra_dados_incompletos`) |
+| FB-0059 | `/os` | It was not possible to conclude an OS without choosing an e-mail recipient. | Corrigido na DEV | `test_feedback_dev.py` (`test_conclusao_sem_destinatario_nao_exige_email`) |
+| FB-0060 | `/os` | The OS could be concluded without a payment method. | Corrigido na DEV | `test_feedback_dev.py` (`test_conclusao_exige_forma_de_pagamento`) |
+| FB-0062 | `/login` | Login errors appeared as a full page and lost what the user had typed. All form errors should be toast/inline without navigation. | Corrigido na DEV | `test_feedback_dev.py` (`test_login_erro_fica_inline_e_preserva_email`) |
+
+### FB-0057 — Busca e criação de cliente na OS
+
+- **Page:** `/os`
+- **Reported:** the client selector was a long list; the provider wanted to search while typing and create a new client when the name did not exist. The area below “Atendido por” was visually empty.
+- **Expected:** filter existing clients as the provider types; if the name is new, create an active client explicitly marked `dados_incompletos=1`; keep the OS editable while the cadastro is completed.
+- **Decision:** Corrigido na DEV.
+- **Fix:** full OS form now uses a `datalist` search field with a hidden client id; the server resolves an existing exact name or creates a minimal incomplete client. The identification layout was balanced.
+- **Test:** `test_os_form_busca_cliente_e_cria_novo_por_nome`.
+
+### FB-0058 — Cliente incompleto na lista
+
+- **Page:** `/clientes`
+- **Reported:** a client created with only a name appeared as “Ativo”.
+- **Expected:** the list shows “Dados incompletos” while the record is provisional.
+- **Decision:** Corrigido na DEV.
+- **Fix:** `clientes.dados_incompletos` is selected by the paginated query and takes precedence over the raw status in the list; the GTK summary also honors the persisted flag.
+- **Test:** `test_lista_clientes_mostra_dados_incompletos`.
+
+### FB-0059 — Concluir sem destinatário
+
+- **Page:** `/os`
+- **Reported:** the conclusion required at least one report recipient.
+- **Expected:** an explicit “Não precisa de destinatário” option allows concluding without an e-mail.
+- **Decision:** Corrigido na DEV.
+- **Fix:** the checkbox is shown below the recipient fields; when checked, recipient validation and e-mail registration are skipped. The GTK closing dialog has an explicit switch to disable the automatic e-mail.
+- **Test:** `test_conclusao_sem_destinatario_nao_exige_email`.
+
+### FB-0060 — Forma de pagamento obrigatória
+
+- **Page:** `/os`
+- **Reported:** an OS could be concluded without a payment method.
+- **Expected:** conclusion is refused with an inline/toast message until a payment method is selected.
+- **Decision:** Corrigido na DEV.
+- **Fix:** validation moved to `portal_negocios.os_salvar` and `os_write.salvar_os`, after the responsibility check; the same rule applies to the web portal and GTK. Quick OS creation remains allowed without payment.
+- **Test:** `test_conclusao_exige_forma_de_pagamento`; unauthorized conclusion still returns 403.
+
+### FB-0062 — Erros de formulário sem navegação
+
+- **Page:** `/login`
+- **Reported:** an invalid login was rendered as a new error page, losing the typed e-mail and password.
+- **Expected:** errors appear as toast or inline feedback, preserving every field and the user’s context.
+- **Decision:** Corrigido na DEV.
+- **Fix:** the login form has an inline alert and the server returns JSON for Ajax; a generic submit handler now sends the remaining POST forms by `fetch`, reads JSON/HTML error markers and shows toast/inline without navigation. Forms whose success is a page or file declare `data-no-ajax`.
+- **Test:** `test_login_erro_fica_inline_e_preserva_email`; full suite exercises the affected forms.
 
 ### FB-0001 — Prazo de recebimento e destaque de atraso
 

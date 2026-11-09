@@ -38,6 +38,11 @@ ações ficam nas páginas específicas.
 - Importação de cliente por YAML: pré-preenche o formulário, sem salvar.
 - Nomeação de síndico/gestor e vínculos de organizações.
 - O cadastro de prestadores é feito somente no aplicativo desktop.
+- Na OS, o cliente é pesquisado por nome enquanto se digita, no mesmo padrão
+  do campo de material. Se o nome não existir, a OS cria um cliente com dados
+  incompletos para completar depois.
+- Clientes provisórios aparecem na lista como **Dados incompletos**, não como
+  **Ativo**.
 
 ### Ordens de serviço (OS)
 
@@ -46,8 +51,11 @@ ações ficam nas páginas específicas.
   `Aberta`/`Pendente` e passa a `Iniciada`.
 - A OS pode ser atribuída a um técnico, assumida, marcada em rota e ter fotos,
   anexos e relatório técnico.
-- O encerramento exige relatório/serviço executado e nota fiscal ou a opção
-  “não precisa de nota fiscal”.
+- O encerramento exige relatório/serviço executado, forma de pagamento e nota
+  fiscal ou a opção “não precisa de nota fiscal”.
+- O relatório pode ser concluído sem destinatário quando a opção
+  “Não precisa de destinatário” estiver marcada; nesse caso nenhum e-mail é
+  registrado.
 - O PDF do relatório é publicado após o encerramento e pode ser baixado no
   histórico.
 - A importação de relatório por YAML só pré-preenche a OS ativa; não encerra,
@@ -148,6 +156,8 @@ ações ficam nas páginas específicas.
 
 - O portal usa CSRF em formulários e sessão por cookie `HttpOnly`.
 - Ações sensíveis geram auditoria com o prestador autenticado.
+- Erros de login e de formulários aparecem como toast ou mensagem inline,
+  preservando os campos digitados; não devem abrir uma página de erro.
 - O cadastro de prestadores é bloqueado no portal web.
 - O acesso ao financeiro, notas e anexos é restrito ao responsável pela OS ou
   administrador, conforme a ação.
