@@ -2923,7 +2923,7 @@ class PortalPrestador:
                         linha_email=c.execute('SELECT email FROM prestadores WHERE id=?',
                                               (s['pid'],)).fetchone()
                     email_prestador=linha_email['email'] if linha_email else ''
-                    maf_card=maf_loans.render_card(s['pid'],email_prestador,token)
+                    maf_card=maf_loans.render_card(s['pid'],email_prestador,s['csrf'])
                 except Exception:
                     LOG.exception('Falha ao carregar empréstimos entre prestadores (MAF)')
                     maf_card=''
@@ -3508,7 +3508,7 @@ class PortalPrestador:
                             linha=c.execute('SELECT email FROM prestadores WHERE id=?',
                                             (s['pid'],)).fetchone()
                         email=linha['email'] if linha else ''
-                        corpo_maf=maf_loans.render_detail(s['pid'],email,oid,self.hidden(s))
+                        corpo_maf=maf_loans.render_detail(s['pid'],email,oid,s['csrf'])
                         if not corpo_maf:
                             return self.erro('Empréstimo não encontrado.',404,s)
                         return self.pagina('Empréstimo entre prestadores',corpo_maf,s)
