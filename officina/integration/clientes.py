@@ -309,6 +309,7 @@ def criar_provisorio(nome, banco=None):
     if existente:
         return int(existente["id"])
     registro = salvar(None, {
+        "tipo_pessoa": "Física",
         "nome": nome,
         "status": "Ativo",
         "provisorio": True,
