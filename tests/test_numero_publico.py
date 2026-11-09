@@ -152,11 +152,12 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertIn('Visão geral', html)
             _, _, html = pedido(browser, base, url)
             csrf = token(html)
-            self.assertIn('os-ticket-workflow', html)
+            self.assertIn('>Em rota</button>', html)
+            self.assertIn('>Iniciada</button>', html)
             self.assertIn(f'formaction="{url}/em-rota"', html)
             self.assertIn(f'formaction="{url}/iniciar"', html)
             self.assertIn('Baixar preview do PDF', html)
-            self.assertLess(html.find('os-ticket-workflow'),
+            self.assertLess(html.find(f'formaction="{url}/em-rota"'),
                             html.find('Baixar preview do PDF'))
             self.assertEqual(html.count(f'formaction="{url}/em-rota"'), 1)
             status, _, _ = pedido(browser, base, f'{url}/em-rota', {

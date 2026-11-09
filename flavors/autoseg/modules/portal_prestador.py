@@ -383,10 +383,8 @@ body.ui-app .os-ticket-stats{display:grid;grid-template-columns:repeat(3,minmax(
 body.ui-app .os-ticket-stats span{display:block;margin:0 0 4px;color:var(--u-muted);font:400 12px/1.5 var(--u-mono)}
 body.ui-app .os-ticket-stats strong{display:block;color:var(--u-text);font:500 14px/1.35 var(--u-font)}
 body.ui-app .os-ticket-stats .money{color:var(--u-accent);font-family:var(--u-mono);font-variant-numeric:tabular-nums}
-body.ui-app .os-ticket-actions{display:flex;flex-direction:column;flex-wrap:wrap;align-items:stretch;justify-content:center;gap:8px;padding:24px;border-left:1px solid var(--u-line)}
-body.ui-app .os-ticket-actions .btn,body.ui-app .os-ticket-workflow button{min-height:36px;font-size:12px;white-space:nowrap}
-body.ui-app .os-ticket-workflow{display:flex;flex-direction:column;gap:8px;width:100%}
-body.ui-app .os-ticket-workflow button{width:100%}
+body.ui-app .os-ticket-actions{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;padding:24px;border-left:1px solid var(--u-line)}
+body.ui-app .os-ticket-actions .btn,body.ui-app .os-ticket-actions button{min-height:36px;font-size:12px;white-space:nowrap;width:auto}
 body.ui-app .os-workflow{display:grid;grid-template-columns:1fr .8fr;gap:16px;margin:0 0 20px}
 body.ui-app .os-work-status{order:-2}
 body.ui-app .os-work-draft{order:-1}
@@ -527,8 +525,6 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .os-layout,body.ui-app .home-grid{grid-template-columns:minmax(0,1fr) 300px}
   body.ui-app .os-ticket{grid-template-columns:172px minmax(0,1fr)}
   body.ui-app .os-ticket-actions{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;justify-content:flex-end;border-left:0;border-top:1px solid var(--u-line)}
-  body.ui-app .os-ticket-workflow{flex-direction:row;width:auto}
-  body.ui-app .os-ticket-workflow button{width:auto}
 }
 @media(max-width:980px){
   body.ui-app .app-side{position:relative;width:auto;padding:12px 16px;border-right:0;border-bottom:1px solid var(--u-line);gap:12px;flex-direction:row;align-items:center;justify-content:space-between}
@@ -619,8 +615,7 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .login-brand{padding:28px 20px}
   body.ui-app .os-ticket-stub,body.ui-app .os-ticket-body,body.ui-app .os-ticket-actions{padding:20px}
   body.ui-app .os-ticket-actions{flex-direction:column;align-items:stretch}
-  body.ui-app .os-ticket-workflow{flex-direction:column;width:100%}
-  body.ui-app .os-ticket-workflow button{width:100%}
+  body.ui-app .os-ticket-actions .btn,body.ui-app .os-ticket-actions button{width:100%}
   body.ui-app .os-ticket-stats{grid-template-columns:1fr 1fr}
   body.ui-app .panel{padding:16px}
 }
@@ -2071,7 +2066,7 @@ class PortalPrestador:
                 rotulo_assumir='Assumir OS' if app else 'ASSUMIR OS'
                 rotulo_em_rota='Em rota' if app else 'EM ROTA'
                 rotulo_cancelar_rota='Cancelar rota' if app else 'CANCELAR ROTA'
-                rotulo_iniciar='Iniciar OS' if app else 'INICIAR OS'
+                rotulo_iniciar='Iniciada' if app else 'INICIADA'
                 aviso_rota='Em rota — deslocamento iniciado.' if app else '🚗 EM ROTA — deslocamento iniciado.'
                 texto_iniciar=('Iniciar OS registra o início efetivo e encerra o deslocamento. '
                                'Se a OS não tiver responsável, ela será atribuída a você.'
@@ -2116,8 +2111,7 @@ class PortalPrestador:
                                 f'formaction="{url_os(banco, oid)}/iniciar" formnovalidate '
                                 f'title="{esc(texto_iniciar)}">'
                                 f'{rotulo_iniciar}</button>')
-                    ticket_acoes=(('<div class="os-ticket-workflow">'+''.join(ticket_botoes)+'</div>')
-                                  if ticket_botoes else '')
+                    ticket_acoes=''.join(ticket_botoes)
                     ticket_acoes+=(f'<a class="btn secondary" href="{url_os(banco, oid)}/pdf-preview">'
                                    +icone('file')+'Baixar preview do PDF</a>')
                     corpo+=('<section class="os-ticket os-summary">'

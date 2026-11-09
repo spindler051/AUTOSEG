@@ -10,7 +10,7 @@
 - **CI:** workflows atualizados para o monorepo (`officina`, `flavors`, `tests`, `workaholic`) e para a suíte completa.
 - **Histórico público:** a primeira publicação usará um único commit inicial; o histórico de desenvolvimento permanece no repositório privado de arquivo.
 - **OS:** abrir, em rota e iniciar salvam o cliente escolhido no formulário antes de validar.
-- **OS — ações rápidas:** Em rota, Iniciar OS e Cancelar rota ficam agrupados na ficha, separados do preview do PDF; empilhados no desktop e lado a lado em telas largas. Ícones SVG dos botões têm tamanho fixo e não invadem o layout no celular.
+- **OS — ações rápidas:** Em rota e Iniciada aplicam com um clique, na mesma linha do preview do PDF; viram Cancelar rota quando o deslocamento está ativo. No celular ficam empilhados. Ícones SVG dos botões têm tamanho fixo e não invadem o layout.
 - **OS pendente:** mesmo com início antigo registrado, Em rota e Iniciar OS voltam a aparecer; Iniciar registra novo início e muda a OS para Iniciada.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
 - **Testes:** 343 testes OK, 1 skip.
