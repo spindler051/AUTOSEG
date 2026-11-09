@@ -1962,7 +1962,36 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       }
     });
   });
-  // Preferências de aparência: salvas na conta, aplicadas no servidor.
+  document.querySelectorAll('button[data-girar]').forEach(botao => {
+    botao.addEventListener('click', async () => {
+      const card = botao.closest('.foto-rascunho');
+      const form = botao.closest('form');
+      if (!card || !form) return;
+      const corpo = new FormData();
+      const csrf = form.querySelector('input[name="csrf"]')?.value || '';
+      if (csrf) corpo.append('csrf', csrf);
+      botao.disabled = true;
+      try {
+        const resposta = await fetch(botao.dataset.girar, {
+          method: 'POST', body: corpo, credentials: 'same-origin',
+          headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}
+        });
+        let dados = {};
+        try { dados = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !dados.ok) {
+          throw new Error(dados.error || 'Não foi possível girar a foto.');
+        }
+        const imagem = card.querySelector('img');
+        if (imagem) {
+          imagem.src = '/arquivos/anexo/' + dados.anexo_id + '/thumb?v=' + Date.now();
+        }
+      } catch (erro) {
+        mostrarAvisoGlobal(erro.message || 'Não foi possível girar a foto.');
+      } finally {
+        botao.disabled = false;
+      }
+    });
+  });
   // Preferências de aparência: salvas na conta, aplicadas no servidor.
   (() => {
     const form = document.getElementById('form-preferencias');

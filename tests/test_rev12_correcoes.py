@@ -986,7 +986,9 @@ class CorrecoesRev12(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertGreaterEqual(doc, 1)
-            self.assertIsNone(reg)
+            self.assertIsNotNone(reg)
+            self.assertEqual(reg['status'], 'enviado')
+            self.assertIn('orçamento', capt.get('assunto', '').lower())
             with ext.db(self.db) as c:
                 self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                            (oid,)).fetchone()['status'], 'Pendente')

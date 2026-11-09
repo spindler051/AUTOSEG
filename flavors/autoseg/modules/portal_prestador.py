@@ -2199,6 +2199,23 @@ class PortalPrestador:
                                   'unidade':unids_rasc[i] if i<len(unids_rasc) else '',
                                   'valor_unitario':units_rasc[i] if i<len(units_rasc) else ''}
                                  for i,item in enumerate(itens_rasc) if str(item).strip()]
+                        # O rascunho é a fonte dos valores ainda não persistidos;
+                        # sem isso o total negociado antigo reaparece ao reabrir.
+                        if 'valor_materiais_manual' in rasc_salvo:
+                            d['valor_materiais']=rasc_salvo.get('valor_materiais_manual') or '0'
+                        if 'valor_total_override' in rasc_salvo:
+                            override=str(rasc_salvo.get('valor_total_override') or '').strip()
+                            if override:
+                                d['valor_total']=numero_seguro(override)
+                            else:
+                                itens_mat=[m for m in mat if str(m.get('item','')).strip()]
+                                total_mat=sum(numero_seguro(m.get('quantidade'))*
+                                              numero_seguro(m.get('valor_unitario'))
+                                              for m in itens_mat)
+                                if not itens_mat:
+                                    total_mat=numero_seguro(rasc_salvo.get('valor_materiais_manual'))
+                                d['valor_total']=round(
+                                    numero_seguro(rasc_salvo.get('valor_mao_obra'))+total_mat,2)
                 except Exception:
                     rasc_salvo = None
                 if app:
@@ -2542,7 +2559,7 @@ class PortalPrestador:
                                     +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
                                     +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
                                     +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="down" title="Mover para baixo">↓</button>'
-                                    +f'<button class="secondary" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/girar" formnovalidate>Girar 90°</button>'
+                                    +f'<button class="secondary" type="button" data-girar="{url_os(banco, oid)}/anexo/{a["id"]}/girar" title="Girar 90°">Girar 90°</button>'
                                     +f'<button class="danger" type="submit" formaction="{url_os(banco, oid)}/anexo/{a["id"]}/remover" formnovalidate data-confirm="Remover esta foto da OS?">Remover foto</button>')
                             else:
                                 corpo+='<p><b>Legenda:</b> '+(legenda or 'Sem legenda')+'</p>'
@@ -2655,7 +2672,7 @@ class PortalPrestador:
                 elif d['status'] in fluxo.FIM:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="{url_os(banco, oid)}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
-                if d['status'] in ext.ATIVAS:
+                if d['status'] in ext.ATIVAS and not (d['status']=='Pendente' and publicado):
                     if app:
                         docs=('<p class="muted">Use o botão <b>Baixar preview do PDF</b> na ficha '
                               'da OS. A prévia não publica, não envia e-mail e não altera o status.</p>')
@@ -2670,9 +2687,39 @@ class PortalPrestador:
                     if d['status']=='Concluída':
                         docs+=botao('Preparar nota fiscal (.json)',f'{url_os(banco, oid)}/nota')
                     if responsavel==s['pid'] or cad9.prestador_admin(banco,s['pid']):
-                        docs+=(f'<form method="post" action="{url_os(banco, oid)}/reenviar-email" style="display:inline">'
-                               f'{token}<button class="secondary" type="submit">Reenviar e-mail com anexos</button></form>'
-                               '<p class="muted">Use após anexar a nota fiscal. O reenvio inclui o PDF do relatório e a NFS-e mais recente.</p>')
+                        contatos=(contatos_os or {})
+                        with ext.db(banco) as c:
+                            registro_email=c.execute(
+                                'SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
+                                (oid,)).fetchone()
+                        anteriores=[]
+                        if registro_email and registro_email['destinatarios_json']:
+                            try: anteriores=json.loads(registro_email['destinatarios_json'])
+                            except Exception: anteriores=[]
+                        if not anteriores:
+                            anteriores=[contatos.get(k,'') for k in ('cliente','sindico') if contatos.get(k)]
+                        opcoes_reenvio=''
+                        for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),
+                                             ('administradora','Administradora / imobiliária')):
+                            email=contatos.get(chave) or ''
+                            if email:
+                                marcado=' checked' if email in anteriores else ''
+                                opcoes_reenvio+=(
+                                    '<label style="display:block;margin:5px 0">'
+                                    f'<input type="checkbox" name="destinatario_sel[]" '
+                                    f'value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>')
+                        docs+=(f'<form method="post" action="{url_os(banco, oid)}/reenviar-email" '
+                               'style="display:block;margin-top:12px">'
+                               f'{token}'
+                               '<h3>Reenviar e-mail</h3>'
+                               +opcoes_reenvio+
+                               '<label>Outro e-mail (opcional)<input name="emails_adicionais" '
+                               'type="text" maxlength="500" value="" '
+                               'placeholder="financeiro@exemplo.com.br"></label>'
+                               '<button class="secondary" type="submit">Reenviar e-mail com anexos</button>'
+                               '</form>'
+                               '<p class="muted">Desmarque quem não deve receber. O reenvio inclui '
+                               'o PDF do relatório e a NFS-e mais recente.</p>')
                 elif d['status'] in fluxo.FIM:
                     docs='<p class="muted">O PDF ainda não foi publicado. Use “Gerar e publicar PDF” acima.</p>'
                 else:
@@ -2707,7 +2754,7 @@ class PortalPrestador:
                             '<p class="muted">A nota fiscal anexada é enviada junto ao relatório no e-mail de conclusão e em cada reenvio. '
                             'O arquivo fica armazenado no servidor e só é liberado para usuários autorizados.</p>'
                             +upload_nf)
-                corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
+                corpo+=card('Documentos e relatórios',docs+'<p class="muted">O e-mail é enviado automaticamente na conclusão ou na pendência. A nota fiscal é anexada ao e-mail quando cadastrada.</p>')
                 def _evento_html(e):
                     quando=data_hora_br(e['criado_em']) if app else e['criado_em']
                     return ('<div class="card"><small>'+esc(quando)+' · '+esc(e['ator'])+'</small>'
@@ -4127,6 +4174,10 @@ class PortalPrestador:
                             if ext.responsavel_atual(c,oid)!=pid and not admin:
                                 raise PermissionError('Somente o responsável ou administrador edita fotos.')
                         ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
+                        if quer_json:
+                            return self.send_bytes(json.dumps({
+                                'ok':True,'anexo_id':aid}).encode(),
+                                'application/json; charset=utf-8')
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='anexo' and partes[3].isdigit() and partes[4]=='publico':
                         oid=int(partes[1]);aid=int(partes[3])
@@ -4430,10 +4481,11 @@ class PortalPrestador:
                             if (acao_status=='Concluída'
                                     and not str(d.get('forma_pagamento','')).strip()):
                                 raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
-                            # E-mail só faz parte da conclusão. Pendente não
-                            # publica relatório nem exige destinatários.
+                            # Pendente e Concluída publicam relatório e podem
+                            # enviar o e-mail automático aos destinatários.
                             sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
-                            if str(d.get('acao_status',''))=='Concluída' and not sem_destinatario:
+                            if (str(d.get('acao_status','')) in ('Pendente','Concluída')
+                                    and not sem_destinatario):
                                 destinatarios=prod.destinatarios_para_os(
                                     banco,oid,d.get('destinatario_sel[]'),
                                     str(d.get('emails_adicionais','')))
@@ -4500,10 +4552,17 @@ class PortalPrestador:
                                 if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
                                     raise PermissionError('Somente o responsável ou administrador pode reenviar o e-mail.')
                                 registro=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
-                            destinatarios=None
-                            if registro and registro['destinatarios_json']:
-                                try:destinatarios=json.loads(registro['destinatarios_json'])
-                                except Exception:destinatarios=None
+                            if 'destinatario_sel[]' in d or 'emails_adicionais' in d:
+                                selecionados=d.get('destinatario_sel[]')
+                                if isinstance(selecionados,str): selecionados=[selecionados]
+                                if selecionados is None: selecionados=[]
+                                destinatarios=prod.destinatarios_para_os(
+                                    banco,oid,selecionados,str(d.get('emails_adicionais','')))
+                            else:
+                                destinatarios=None
+                                if registro and registro['destinatarios_json']:
+                                    try:destinatarios=json.loads(registro['destinatarios_json'])
+                                    except Exception:destinatarios=None
                             # Republica o PDF com as imagens/legendas atuais antes de reenviar.
                             try:
                                 fluxo.publicar_relatorio(banco,oid)

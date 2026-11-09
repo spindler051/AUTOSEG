@@ -13,6 +13,10 @@
 - **OS — ações rápidas:** Em rota e Iniciada aplicam com um clique, na mesma linha do preview do PDF; viram Cancelar rota quando o deslocamento está ativo. No celular ficam empilhados. Ícones SVG dos botões têm tamanho fixo e não invadem o layout.
 - **OS pendente:** mesmo com início antigo registrado, Em rota e Iniciar OS voltam a aparecer; Iniciar registra novo início e muda a OS para Iniciada.
 - **Permissões:** administradores têm as mesmas ações rápidas (Em rota, Iniciada, Cancelar rota) em OS de outro responsável, sem trocar a responsabilidade.
+- **Financeiro:** prazo de recebimento com vencimento e destaque vermelho de atrasado.
+- **OS pendente:** envia e-mail automático aos destinatários marcados e oferece reenvio com seleção de contatos e e-mail extra.
+- **Fotos:** girar 90° atualiza a imagem na hora, sem recarregar a página.
+- **Rascunho:** valores zerados e total negociado são restaurados corretamente ao reabrir a OS.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
 - **Testes:** 343 testes OK, 1 skip.
 
