@@ -44,6 +44,7 @@ import socket
 from officina.core.versao_app import versao_local
 from officina.core import runtime_config
 from flavors.autoseg.modules import texto_os
+from flavors.autoseg.modules import maf_loans
 from officina.integration import clientes as clientes_core
 from officina.repositories import ordens as ordens_repo
 
@@ -2917,7 +2918,17 @@ class PortalPrestador:
                 else:
                     rotulo_a='A receber (minha produção)';rotulo_r='Recebido (minha produção)'
                     cabecalho=''
+                try:
+                    with ext.db(banco) as c:
+                        linha_email=c.execute('SELECT email FROM prestadores WHERE id=?',
+                                              (s['pid'],)).fetchone()
+                    email_prestador=linha_email['email'] if linha_email else ''
+                    maf_card=maf_loans.render_card(s['pid'],email_prestador,token)
+                except Exception:
+                    LOG.exception('Falha ao carregar empréstimos entre prestadores (MAF)')
+                    maf_card=''
                 corpo=(cabecalho
+                    +maf_card
                     +banco_card
                     +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span><strong>{dinheiro(a_receber_total)}</strong></div>'
                     +f'<div class="kpi"><span>{rotulo_r}</span><strong>{dinheiro(recebido_total)}</strong></div></div>'
@@ -3491,6 +3502,29 @@ class PortalPrestador:
                         except (ValueError,TypeError):cliente_orcamento=None
                         return self.orcamento_form(s,cliente_id=cliente_orcamento)
                     if path=='/clientes/novo':return self.cliente_form(s)
+                    if path.startswith('/financeiro/maf-emprestimo/') and path.rsplit('/',1)[-1].isdigit():
+                        oid=int(path.rsplit('/',1)[-1])
+                        with ext.db(banco) as c:
+                            linha=c.execute('SELECT email FROM prestadores WHERE id=?',
+                                            (s['pid'],)).fetchone()
+                        email=linha['email'] if linha else ''
+                        corpo_maf=maf_loans.render_detail(s['pid'],email,oid,self.hidden(s))
+                        if not corpo_maf:
+                            return self.erro('Empréstimo não encontrado.',404,s)
+                        return self.pagina('Empréstimo entre prestadores',corpo_maf,s)
+                    if path.startswith('/financeiro/maf-comprovante/') and path.rsplit('/',1)[-1].isdigit():
+                        did=int(path.rsplit('/',1)[-1])
+                        with ext.db(banco) as c:
+                            linha=c.execute('SELECT email FROM prestadores WHERE id=?',
+                                            (s['pid'],)).fetchone()
+                        email=linha['email'] if linha else ''
+                        caminho=maf_loans.proof_return(s['pid'],email,did)
+                        if not caminho:
+                            return self.erro('Comprovante não encontrado.',404,s)
+                        mime={'.pdf':'application/pdf','.png':'image/png',
+                              '.jpg':'image/jpeg','.jpeg':'image/jpeg'}.get(
+                                  caminho.suffix.lower(),'application/octet-stream')
+                        return self.send_bytes(caminho.read_bytes(),mime)
                     if path=='/financeiro':return self.financeiro(s)
                     if path=='/prestadores/novo':
                         if not s.get('admin'):
@@ -4579,6 +4613,38 @@ class PortalPrestador:
                             gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
                         else:return self.erro('Operação desconhecida.',404,s)
                         return self.redir(f'{url_os(banco, oid)}')
+                    if path.startswith('/financeiro/maf-'):
+                        with ext.db(banco) as c:
+                            linha=c.execute('SELECT email FROM prestadores WHERE id=?',
+                                            (s['pid'],)).fetchone()
+                        email=linha['email'] if linha else ''
+                        if path=='/financeiro/maf-vinculo/solicitar':
+                            maf_loans.request_link_code(s['pid'],email)
+                            return self.redir('/financeiro')
+                        if path=='/financeiro/maf-vinculo/confirmar':
+                            maf_loans.confirm_link_code(s['pid'],email,
+                                                        str(d.get('codigo','')).strip())
+                            return self.redir('/financeiro')
+                        if path=='/financeiro/maf-emprestimo/criar':
+                            valor=neg.numero(d.get('valor','0'),'Valor do empréstimo')
+                            venc=str(d.get('vencimento','')).strip() or None
+                            maf_loans.create_loan(
+                                s['pid'],email,str(d.get('devedor_email','')),
+                                str(d.get('descricao','')),int(round(valor*100)),venc)
+                            return self.redir('/financeiro')
+                        partes=path.strip('/').split('/')
+                        if (len(partes)==4 and partes[1]=='maf-emprestimo'
+                                and partes[2].isdigit()):
+                            lid=int(partes[2]); acao=partes[3]
+                            extra=dict(d)
+                            if acao in ('devolver','alterar'):
+                                bruto=str(d.get('valor','')).strip()
+                                if bruto:
+                                    extra['valor_centavos']=int(round(
+                                        neg.numero(bruto,'Valor')*100))
+                            maf_loans.act(s['pid'],email,lid,acao,extra)
+                            return self.redir(f'/financeiro/maf-emprestimo/{lid}')
+                        return self.erro('Operação de empréstimo inválida.',404,s)
                     if path=='/financeiro/banco/salvar':
                         prod.salvar_dados_bancarios(banco,pid,str(d.get('dados_bancarios','')))
                         return self.redir('/financeiro')

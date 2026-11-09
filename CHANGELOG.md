@@ -19,6 +19,7 @@
 - **Rascunho:** valores zerados e total negociado são restaurados corretamente ao reabrir a OS.
 - **OS — situação:** o diálogo “Confirmar situação” não repete a situação atual nem oferece Em rota/Iniciada; reabrir para Aberta é exclusivo de administradores, e as demais ações ficam nos botões da ficha.
 - **Meu Auto Financeiro:** contas a pagar separadas em individuais e compartilhadas, com formulários distintos; conta compartilhada exige participante e mostra convite quando falta integrante.
+- **Empréstimos MAF no AUTOSEG:** cartão no financeiro do prestador, vínculo por código enviado ao e-mail, criação por e-mail, aceite, comprovantes e confirmação dos dois lados. Valores pessoais ficam fora do total da empresa.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
 - **Testes:** 343 testes OK, 1 skip.
 
