@@ -2095,6 +2095,22 @@ class PortalPrestador:
                                 continue
                             if isinstance(v,(str,list)):
                                 d[k]=v
+                        # O rascunho pode ter materiais ainda não persistidos em
+                        # materiais_os. Restaurar as linhas exatamente como o
+                        # prestador deixou, inclusive quando removeu todas.
+                        if 'material_item[]' in rasc_salvo or 'materiais_presentes' in rasc_salvo:
+                            def _lista_rasc(valor):
+                                if valor is None:return []
+                                return valor if isinstance(valor,list) else [valor]
+                            itens_rasc=_lista_rasc(rasc_salvo.get('material_item[]'))
+                            qtds_rasc=_lista_rasc(rasc_salvo.get('material_qtd[]'))
+                            unids_rasc=_lista_rasc(rasc_salvo.get('material_unidade[]'))
+                            units_rasc=_lista_rasc(rasc_salvo.get('material_unit[]'))
+                            mat=[{'item':item,
+                                  'quantidade':qtds_rasc[i] if i<len(qtds_rasc) else '',
+                                  'unidade':unids_rasc[i] if i<len(unids_rasc) else '',
+                                  'valor_unitario':units_rasc[i] if i<len(units_rasc) else ''}
+                                 for i,item in enumerate(itens_rasc) if str(item).strip()]
                 except Exception:
                     rasc_salvo = None
                 if app:

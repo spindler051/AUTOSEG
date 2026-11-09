@@ -88,6 +88,30 @@ class NumeroPublicoTest(unittest.TestCase):
         finally:
             servidor.parar()
 
+    def test_draft_materials_restore_on_os_form(self):
+        ext.salvar_rascunho_web(self.db, self.oid, self.pid, {
+            'material_item[]': ['Material do rascunho'],
+            'material_qtd[]': ['2'],
+            'material_unidade[]': ['un'],
+            'material_unit[]': ['10,00'],
+            'materiais_presentes': '1',
+        })
+        servidor = PortalPrestador(self.db, host='127.0.0.1', porta=0)
+        try:
+            servidor.iniciar()
+            base = f'http://127.0.0.1:{servidor.porta}'
+            browser = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            _, _, html = pedido(browser, base, '/login', {
+                'email': 'numero@exemplo.com', 'senha': 'senha-numero-2026!'})
+            self.assertIn('Visão geral', html)
+            status, url, html = pedido(browser, base, f'/os/{self.oid}')
+            self.assertEqual(status, 200)
+            self.assertIn('Material do rascunho', html)
+            self.assertIn('name="material_item[]"', html)
+        finally:
+            servidor.parar()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
