@@ -1862,7 +1862,7 @@ class PortalPrestador:
                     if responsavel!=pid and not admin:
                         raise PermissionError('Somente o responsável ou administrador pode alterar Em rota.')
                 elif rule=='start':
-                    if responsavel not in (None,pid):
+                    if responsavel not in (None,pid) and not admin:
                         raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
                 elif responsavel not in (None,pid) and not admin:
                     raise PermissionError('Somente o responsável ou administrador pode reabrir a OS.')
@@ -2093,7 +2093,8 @@ class PortalPrestador:
                                 f'formaction="{url_os(banco, oid)}/assumir" formnovalidate '
                                 'title="Assume a OS sem iniciar o atendimento.">'
                                 f'{rotulo_assumir}</button>')
-                        if responsavel==s['pid'] and not iniciado:
+                        if ((responsavel==s['pid'] or s.get('admin'))
+                                and responsavel is not None and not iniciado):
                             if em_rota:
                                 ticket_botoes.append(
                                     f'<button type="submit" class="secondary" form="form-os" '
@@ -2106,7 +2107,7 @@ class PortalPrestador:
                                     f'formaction="{url_os(banco, oid)}/em-rota" formnovalidate '
                                     'title="Registra o início do deslocamento.">'
                                     f'{rotulo_em_rota}</button>')
-                        if responsavel in (None,s['pid']) and not iniciado:
+                        if (responsavel in (None,s['pid']) or s.get('admin')) and not iniciado:
                             ticket_botoes.append(
                                 f'<button type="submit" form="form-os" '
                                 f'formaction="{url_os(banco, oid)}/iniciar" formnovalidate '
@@ -4328,7 +4329,8 @@ class PortalPrestador:
                                             motivo=str(d.get('motivo_arquivamento','')))
                             return self.redir('/os')
                         if acao=='rota':
-                            prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1')
+                            prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1',
+                                                admin=bool(s.get('admin')))
                             return self.redir(f'{url_os(banco, oid)}')
                         if acao=='cancelar':
                             motivo=str(d.get('motivo_encerramento','')).strip()[:2000]
@@ -4482,14 +4484,16 @@ class PortalPrestador:
                             cliente_id=self._persist_form_client(
                                 d,oid,pid,f'Prestador {s["nome"]}','route')
                             self._exigir_cliente_os(oid,'colocar em rota',cliente_id)
-                            ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
+                            ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
+                                               admin=bool(s.get('admin')))
                         elif acao=='cancelar-rota':
-                            ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
+                            ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
+                                                 admin=bool(s.get('admin')))
                         elif acao=='iniciar':
                             cliente_id=self._persist_form_client(
                                 d,oid,pid,f'Prestador {s["nome"]}','start')
                             self._exigir_cliente_os(oid,'iniciar o atendimento',cliente_id)
-                            aten.iniciar_assumindo(banco,oid,pid)
+                            aten.iniciar_assumindo(banco,oid,pid,admin=bool(s.get('admin')))
                             prod.limpar_rota_ao_iniciar(banco,oid)
                         elif acao=='reenviar-email':
                             with ext.db(banco) as c:

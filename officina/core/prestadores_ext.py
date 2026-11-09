@@ -857,7 +857,18 @@ def em_rota_atual(c, os_id):
     return r is not None
 
 
-def marcar_em_rota(banco, os_id, pid, ator=None):
+def administrador(c, pid):
+    """True when the provider is an active admin; safe on older databases."""
+    if pid is None:
+        return False
+    if not c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND "
+                     "name='v9_admin_prestadores'").fetchone():
+        return False
+    return bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                          (pid,)).fetchone())
+
+
+def marcar_em_rota(banco, os_id, pid, ator=None, admin=False):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
@@ -866,8 +877,8 @@ def marcar_em_rota(banco, os_id, pid, ator=None):
             raise PermissionError('Prestador ou OS inválida.')
         if o['status'] not in ATIVAS:
             raise ValueError('Apenas OS ativas permitem marcar em rota.')
-        if responsavel_atual(c, os_id) != pid:
-            raise PermissionError('Somente o prestador responsável pode marcar em rota.')
+        if responsavel_atual(c, os_id) != pid and not (admin or administrador(c, pid)):
+            raise PermissionError('Somente o prestador responsável ou um administrador pode marcar em rota.')
         if em_rota_atual(c, os_id):
             return False
         ator_nome = ator or p['nome']
@@ -917,14 +928,14 @@ def obter_rascunho_web(banco, os_id, pid=None):
         return dados
 
 
-def cancelar_em_rota(banco, os_id, pid, ator=None):
+def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
         if not p:
             raise PermissionError('Prestador inválido.')
-        if responsavel_atual(c, os_id) != pid:
-            raise PermissionError('Somente o prestador responsável pode cancelar o deslocamento.')
+        if responsavel_atual(c, os_id) != pid and not (admin or administrador(c, pid)):
+            raise PermissionError('Somente o prestador responsável ou um administrador pode cancelar o deslocamento.')
         if not em_rota_atual(c, os_id):
             return False
         finalizar_em_rota(c, os_id)

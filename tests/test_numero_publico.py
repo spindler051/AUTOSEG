@@ -135,6 +135,50 @@ class NumeroPublicoTest(unittest.TestCase):
         finally:
             servidor.parar()
 
+    def test_admin_has_same_quick_actions_on_another_provider_os(self):
+        outro = ext.cadastrar(self.db, 'Outro Prestador', 'outro@exemplo.com',
+                              'senha-outro-2026!')
+        cad9.definir_admin(self.db, self.pid, True)
+        ext.assumir(self.db, self.oid, outro)
+        url = ordens.url_os(self.db, self.oid)
+        servidor = PortalPrestador(self.db, host='127.0.0.1', porta=0)
+        try:
+            servidor.iniciar()
+            base = f'http://127.0.0.1:{servidor.porta}'
+            browser = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            _, _, html = pedido(browser, base, '/login', {
+                'email': 'numero@exemplo.com', 'senha': 'senha-numero-2026!'})
+            self.assertIn('Visão geral', html)
+            _, _, html = pedido(browser, base, url)
+            csrf = token(html)
+            self.assertIn(f'formaction="{url}/em-rota"', html)
+            self.assertIn(f'formaction="{url}/iniciar"', html)
+            status, _, _ = pedido(browser, base, f'{url}/iniciar', {'csrf': csrf})
+            self.assertEqual(status, 200)
+            with ext.db(self.db) as c:
+                self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                           (self.oid,)).fetchone()['status'], 'Iniciada')
+                self.assertEqual(c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?',
+                                           (self.oid,)).fetchone()['prestador_id'], outro)
+                self.assertEqual(c.execute('SELECT iniciado_por FROM os_atendimentos WHERE os_id=?',
+                                           (self.oid,)).fetchone()['iniciado_por'], self.pid)
+            # Em rota também funciona para admin em OS de outro responsável.
+            with ext.db(self.db) as c:
+                oid2 = c.execute(
+                    "INSERT INTO ordens_servico(numero_os,cliente_id,status,descricao,"
+                    "data_abertura,criado_em) VALUES('261107099',?,'Aberta','Teste',?,?)",
+                    (self.cid, '2026-11-07 10:00:00', '2026-11-07 10:00:00')).lastrowid
+            ext.assumir(self.db, oid2, outro)
+            status, _, _ = pedido(browser, base, f'/os/261107099/em-rota', {'csrf': csrf})
+            self.assertEqual(status, 200)
+            with ext.db(self.db) as c:
+                rota = c.execute('SELECT prestador_id FROM os_deslocamentos WHERE os_id=? '
+                                 'AND finalizado_em IS NULL', (oid2,)).fetchone()
+            self.assertEqual(rota['prestador_id'], self.pid)
+        finally:
+            servidor.parar()
+
     def test_pending_os_groups_workflow_before_preview(self):
         with ext.db(self.db) as c:
             c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",

@@ -32,14 +32,16 @@ def registrar_solicitacao(c,os_id,cliente_id,descricao,observacoes='',origem='Ap
         (os_id,cliente_id,descricao_original,observacoes_originais,criado_em,origem)
         VALUES(?,?,?,?,?,?)""",(os_id,cliente_id,descricao,observacoes,ext.agora(),origem))
 
-def iniciar(banco,os_id,pid=None,ator='Administrador desktop'):
+def iniciar(banco,os_id,pid=None,ator='Administrador desktop',admin=False):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ext.ATIVAS: raise ValueError('A OS não está ativa.')
         if pid is not None:
             p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
-            if not p or ext.responsavel_atual(c,os_id)!=pid:
+            if not p:
+                raise PermissionError('Prestador inválido.')
+            if ext.responsavel_atual(c,os_id)!=pid and not (admin or ext.administrador(c,pid)):
                 raise PermissionError('Assuma a OS antes de iniciar atendimento.')
             ator=p['nome']
         existente=c.execute('SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone()
@@ -85,11 +87,12 @@ def obter(banco,os_id):
         return (dict(s) if s else None,dict(a) if a else {})
 
 
-def iniciar_assumindo(banco,os_id,pid):
+def iniciar_assumindo(banco,os_id,pid,admin=False):
     """Um botão: assume (quando autorizado) e inicia; os dois fatos são auditados.
 
     A validação de assunção é feita em transação pelo módulo de prestadores.
-    Para OS já aberta e atribuída a outro prestador, não toma posse.
+    Um administrador pode iniciar OS atribuída a outro prestador sem trocar
+    a responsabilidade.
     """
     with ext.db(banco) as c:
         os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
@@ -97,11 +100,12 @@ def iniciar_assumindo(banco,os_id,pid):
             raise ValueError('Esta OS não está disponível para iniciar.')
         atual=ext.responsavel_atual(c,os_id)
         status=os_atual['status']
+        admin=bool(admin or ext.administrador(c,pid))
     if atual is None:
         ext.assumir(banco,os_id,pid)
-    elif atual != pid:
+    elif atual != pid and not admin:
         raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
-    return iniciar(banco,os_id,pid)
+    return iniciar(banco,os_id,pid,admin=admin)
 
 
 def assumir_os(banco, os_id, pid):
