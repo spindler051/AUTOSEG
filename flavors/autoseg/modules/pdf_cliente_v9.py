@@ -46,11 +46,12 @@ def gerar(banco,os_id):
         financeiro=c.execute('SELECT status FROM financeiro WHERE os_id=? ORDER BY id DESC LIMIT 1',(os_id,)).fetchone()
         detalhes=c.execute('SELECT diagnostico,execucao,resultado FROM v9_detalhes_os WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='v9_detalhes_os'").fetchone() else None
         atendimento=c.execute('SELECT rascunho FROM os_atendimentos WHERE os_id=?',(os_id,)).fetchone() if c.execute("SELECT 1 FROM sqlite_master WHERE name='os_atendimentos'").fetchone() else None
+        total_centavos=composicao.centavos_de_reais(os_['valor_total'])
         comp=composicao.de_json(os_['composicao_json']) if 'composicao_json' in os_.keys() else None
-        if not comp or int(comp.get('total_centavos',0))!=composicao.centavos_de_reais(os_['valor_total']):
+        if not comp or int(comp.get('total_centavos',0))!=total_centavos:
             try:
                 comp=composicao.calcular_os(
-                    total_centavos=composicao.centavos_de_reais(os_['valor_total']),
+                    total_centavos=total_centavos,
                     materiais_centavos=composicao.centavos_de_reais(os_['valor_materiais']),
                     horas=os_['tempo_horas'] if 'tempo_horas' in os_.keys() else 0,
                     mao_obra_centavos=composicao.centavos_de_reais(os_['valor_mao_obra']))
@@ -76,6 +77,24 @@ def gerar(banco,os_id):
         return S(f'{secao_num[0]:02d}  {titulo}')
     # Filhos da composição declarativa: recuados e em cinza para diferenciar do pai.
     Pfilho=lambda s:Paragraph('&nbsp;&nbsp;&nbsp;&nbsp;<font color="#555555">— '+escape(str(s or ''))+'</font>',estilo['AutosegCorpoV9'])
+    # A pending OS is a diagnosis when it has no value and a quote when it does.
+    pendente=str(os_['status'])=='Pendente'
+    diagnostico=pendente and total_centavos==0
+    orcamento=pendente and total_centavos>0
+    titulo_documento=('RELATÓRIO DE DIAGNÓSTICO' if diagnostico else
+                      'ORÇAMENTO' if orcamento else
+                      'RELATÓRIO TÉCNICO DE SERVIÇO')
+    situacao_documento=('Pendente — diagnóstico' if diagnostico else
+                        'Pendente — orçamento' if orcamento else
+                        str(os_['status']))
+    rodape_documento=('AUTOSEG • Diagnóstico técnico' if diagnostico else
+                      'AUTOSEG • Orçamento' if orcamento else
+                      'AUTOSEG • Relatório técnico para o cliente')
+    nota_documento=('Documento de diagnóstico. Não representa orçamento nem execução do serviço.'
+                    if diagnostico else
+                    'Documento de orçamento. A situação financeira não equivale a comprovante de quitação nem a nota fiscal.'
+                    if orcamento else
+                    'Documento de atendimento técnico. A situação financeira não equivale a comprovante de quitação nem a nota fiscal.')
     # CNPJ do prestador: usa o documento quando for CNPJ; senão procura um
     # CNPJ nos dados bancários/cadastrais unificados. Sem CNPJ, usa o principal.
     cnpj_prestador = identidade.formatar_cnpj(resp['documento']) if resp else ''
@@ -101,8 +120,8 @@ def gerar(banco,os_id):
         ParagraphStyle('TagV9',fontName='Helvetica-Bold',fontSize=8,alignment=TA_RIGHT))
     topo=Table([[logo,marca]],colWidths=[255,255])
     topo.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),preto),('TOPPADDING',(0,0),(-1,-1),13),('BOTTOMPADDING',(0,0),(-1,-1),13)]))
-    linhas.extend([topo,Spacer(1,13),Paragraph('RELATÓRIO TÉCNICO DE SERVIÇO',estilo['AutosegTituloV9'])])
-    dados=[[P('Ordem de serviço: '+str(os_['numero_os'])),P('Situação: '+str(os_['status']))],
+    linhas.extend([topo,Spacer(1,13),Paragraph(titulo_documento,estilo['AutosegTituloV9'])])
+    dados=[[P('Ordem de serviço: '+str(os_['numero_os'])),P('Situação: '+situacao_documento)],
            [P('Cliente: '+cliente_texto),P('Prestador: '+prestador_texto)],
            [P('Abertura: '+data_br(os_['data_abertura'])),P('Encerramento: '+data_br(enc['encerrado_em'] if enc else os_['data_conclusao']))]]
     tb=Table(dados,colWidths=[255,255]);tb.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'),('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#F7F7F7')),('BOTTOMPADDING',(0,0),(-1,-1),8)]));linhas.append(tb)
@@ -140,11 +159,8 @@ def gerar(banco,os_id):
     tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
     tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
     linhas.append(tm)
-    # A pending OS with no agreed value has no meaningful composition; the
-    # zero-only table adds noise to the client report.
-    sem_composicao=(str(os_['status'])=='Pendente'
-                    and composicao.centavos_de_reais(os_['valor_total'])==0)
-    if not sem_composicao:
+    # Diagnosis-only pending OS: no composition and no financial block.
+    if not diagnostico:
         if comp:
             linhas_comp=[[Paragraph('<b>Componente</b>',estilo['AutosegCorpoV9']),
                           Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
@@ -168,10 +184,11 @@ def gerar(banco,os_id):
         else:
             linhas.append(Secao('COMPOSIÇÃO DO VALOR (VALOR ESTIMADO)'))
             linhas.append(P('Composição não disponível para esta OS.'))
-    linhas.append(Secao('VALORES E PAGAMENTO'))
-    valores=[['TOTAL',brl(os_['valor_total'])],
-            ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
-    tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
+    if not diagnostico:
+        linhas.append(Secao('VALORES E PAGAMENTO'))
+        valores=[['TOTAL',brl(os_['valor_total'])],
+                ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
+        tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
     texto_adicional=str(os_['texto_adicional'] or '').strip() if 'texto_adicional' in os_.keys() else ''
     if texto_adicional:
         linhas.append(S(texto_os.titulo_pdf()))
@@ -207,7 +224,7 @@ def gerar(banco,os_id):
                 primeira_foto=False
             except Exception:continue
     linhas.append(Spacer(1,9))
-    linhas.append(Paragraph('Documento de atendimento técnico. A situação financeira não equivale a comprovante de quitação nem a nota fiscal.',estilo['AutosegPequenoV9']))
+    linhas.append(Paragraph(nota_documento,estilo['AutosegPequenoV9']))
     numero_limpo=re.sub(r"[^A-Za-z0-9_-]","_",str(os_["numero_os"] or "")).strip("_")
     if not numero_limpo:
         raise ValueError('OS sem número público; não é possível gerar o PDF.')
@@ -216,7 +233,7 @@ def gerar(banco,os_id):
     def rodape(cv,doc):
         cv.setStrokeColor(amarelo);cv.line(40,34,A4[0]-40,34)
         cv.setFillColor(cinza);cv.setFont('Helvetica',8)
-        cv.drawString(40,22,'AUTOSEG • Relatório técnico para o cliente')
+        cv.drawString(40,22,rodape_documento)
         cv.drawRightString(A4[0]-40,22,'Página '+str(doc.page))
         identidade.desenhar_selo(cv,doc)
     SimpleDocTemplate(str(destino),pagesize=A4,leftMargin=42,rightMargin=42,topMargin=35,bottomMargin=49,

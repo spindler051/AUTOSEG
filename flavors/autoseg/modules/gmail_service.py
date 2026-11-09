@@ -229,11 +229,13 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
         arquivo = fluxo.validar_pdf_publicado(documento)
         with ext.db(banco) as c:
             dados = c.execute(
-                "SELECT o.numero_os, cl.nome, o.status FROM ordens_servico o "
+                "SELECT o.numero_os, cl.nome, o.status, o.valor_total FROM ordens_servico o "
                 "JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?", (os_id,)).fetchone()
         numero = dados['numero_os'] if dados else f'#{os_id}'
         nome = (dados['nome'] or 'Cliente') if dados else 'Cliente'
         situacao = (dados['status'] if dados else '') or ''
+        diagnostico = situacao == 'Pendente' and float((dados['valor_total'] if dados else 0) or 0) == 0
+        orcamento = situacao == 'Pendente' and float((dados['valor_total'] if dados else 0) or 0) > 0
         nota = ext.ultima_nota_fiscal(banco, os_id)
         caminho_nf = None
         if nota:
@@ -241,10 +243,14 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
             # ler o arquivo é erro real: não enviar sem o anexo nem marcar a nota
             # como entregue por causa do relatório.
             _, caminho_nf = ext.obter_nota_fiscal(banco, os_id, nota['id'])
-        if situacao == 'Pendente':
-            assunto = f"Ordem de Serviço {numero} — atendimento pendente - AUTOSEG"
-            corpo = (f"<h3>Olá {nome},</h3><p>A OS {numero} está com atendimento pendente.</p>"
-                     f"<p>Segue em anexo o relatório parcial do atendimento.</p>")
+        if diagnostico:
+            assunto = f"Ordem de Serviço {numero} — diagnóstico - AUTOSEG"
+            corpo = (f"<h3>Olá {nome},</h3><p>A OS {numero} foi encerrada como pendente "
+                     f"e o diagnóstico técnico segue em anexo.</p>")
+        elif orcamento:
+            assunto = f"Ordem de Serviço {numero} — orçamento - AUTOSEG"
+            corpo = (f"<h3>Olá {nome},</h3><p>A OS {numero} está pendente e o orçamento "
+                     f"segue em anexo.</p>")
         else:
             assunto = f"Ordem de Serviço {numero} Concluída - AUTOSEG"
             corpo = (f"<h3>Olá {nome},</h3><p>Sua OS {numero} foi concluída.</p>"
@@ -253,7 +259,8 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
             corpo += ('<p>A nota fiscal também está anexada a este e-mail.</p>')
         else:
             corpo += '<p>Nenhuma nota fiscal foi anexada a esta OS.</p>'
-        corpo += _dados_pagamento_html(banco, os_id)
+        if not diagnostico:
+            corpo += _dados_pagamento_html(banco, os_id)
         msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
                                     caminho_pdf_relatorio=arquivo,
                                     caminho_pdf_nf=caminho_nf,

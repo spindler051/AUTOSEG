@@ -158,15 +158,16 @@ class PdfRelatorioTest(unittest.TestCase):
                 "composicao_json=? WHERE id=10",
                 (json.dumps(vazia),))
         texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("RELATÓRIO DE DIAGNÓSTICO", texto)
         self.assertNotIn("COMPOSIÇÃO DO VALOR", texto)
-        self.assertIn("VALORES E PAGAMENTO", texto)
-        self.assertIn("04 VALORES E PAGAMENTO", texto)
+        self.assertNotIn("VALORES E PAGAMENTO", texto)
 
-    def test_pdf_pendente_com_valor_mantem_composicao(self):
+    def test_pdf_pendente_com_valor_vira_orcamento(self):
         with sqlite3.connect(self.db) as c:
             c.execute("UPDATE ordens_servico SET status='Pendente', "
                       "data_conclusao=NULL WHERE id=10")
         texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("ORÇAMENTO", texto)
         self.assertIn("COMPOSIÇÃO DO VALOR", texto)
         self.assertIn("05 VALORES E PAGAMENTO", texto)
 
