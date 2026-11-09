@@ -88,6 +88,53 @@ class NumeroPublicoTest(unittest.TestCase):
         finally:
             servidor.parar()
 
+    def test_workflow_actions_persist_form_client(self):
+        from officina.core import atendimento_os as aten
+        from officina.core import produtividade_os as prod
+        aten.instalar(self.db)
+        prod.instalar(self.db)
+        with ext.db(self.db) as c:
+            provisorio = c.execute(
+                "INSERT INTO clientes(nome,status) VALUES('Cliente a definir','A definir')"
+            ).lastrowid
+            escolhido = c.execute(
+                "INSERT INTO clientes(nome,status) VALUES('Cliente Escolhido','Ativo')"
+            ).lastrowid
+        servidor = PortalPrestador(self.db, host='127.0.0.1', porta=0)
+        try:
+            servidor.iniciar()
+            base = f'http://127.0.0.1:{servidor.porta}'
+            browser = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+            _, _, html = pedido(browser, base, '/login', {
+                'email': 'numero@exemplo.com', 'senha': 'senha-numero-2026!'})
+            self.assertIn('Visão geral', html)
+            _, _, html = pedido(browser, base, f'/os/{self.oid}')
+            csrf = token(html)
+            for indice, acao in enumerate(('abrir', 'em-rota', 'iniciar')):
+                numero = f'2611070{10 + indice}'
+                with ext.db(self.db) as c:
+                    oid = c.execute(
+                        "INSERT INTO ordens_servico(numero_os,cliente_id,status,descricao,"
+                        "data_abertura,criado_em) VALUES(?,?,'Aberta','Teste',?,?)",
+                        (numero, provisorio, '2026-11-07 10:00:00',
+                         '2026-11-07 10:00:00')).lastrowid
+                if acao == 'em-rota':
+                    ext.assumir(self.db, oid, self.pid)
+                status, url, html = pedido(browser, base, f'/os/{numero}/{acao}', {
+                    'csrf': csrf,
+                    'cliente_id': str(escolhido),
+                    'cliente_busca': 'Cliente Escolhido',
+                })
+                self.assertEqual(status, 200, (acao, html[:500]))
+                with ext.db(self.db) as c:
+                    salvo = c.execute(
+                        'SELECT cliente_id FROM ordens_servico WHERE id=?',
+                        (oid,)).fetchone()['cliente_id']
+                self.assertEqual(salvo, escolhido, acao)
+        finally:
+            servidor.parar()
+
     def test_draft_materials_restore_on_os_form(self):
         ext.salvar_rascunho_web(self.db, self.oid, self.pid, {
             'material_item[]': ['Material do rascunho'],

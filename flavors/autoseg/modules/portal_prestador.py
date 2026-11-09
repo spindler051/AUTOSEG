@@ -1833,6 +1833,52 @@ class PortalPrestador:
                 if not linha or linha['status'] in ('A definir','Inativo'):
                     raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
 
+            def _persist_form_client(self, d, oid, pid, actor, rule):
+                """Persist the client chosen in a workflow form before its action.
+
+                Workflow buttons submit the whole OS form, but only the regular
+                save route used to persist the client. Without this, selecting
+                a client and clicking "Iniciar OS" still validated the previous
+                client stored on the OS. ``rule`` mirrors the authorization of
+                each action so a denied action never changes the client.
+                """
+                if 'cliente_id' not in d and 'cliente_busca' not in d:
+                    return None
+                with ext.db(banco) as c:
+                    linha=c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+                    if not linha:
+                        raise ValueError('OS não encontrada.')
+                    if linha['status'] not in ext.ATIVAS:
+                        raise ValueError('Esta OS não está ativa.')
+                    responsavel=ext.responsavel_atual(c,oid)
+                    admin=cad9.prestador_admin(banco,pid)
+                if rule=='route':
+                    if responsavel is None:
+                        raise ValueError('Atribua um técnico antes de marcar Em rota.')
+                    if responsavel!=pid and not admin:
+                        raise PermissionError('Somente o responsável ou administrador pode alterar Em rota.')
+                elif rule=='start':
+                    if responsavel not in (None,pid):
+                        raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
+                elif responsavel not in (None,pid) and not admin:
+                    raise PermissionError('Somente o responsável ou administrador pode reabrir a OS.')
+                cliente_id=int(self._resolver_cliente_os(d,oid))
+                with ext.db(banco) as c:
+                    c.execute('BEGIN IMMEDIATE')
+                    atual=c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+                    anterior=int(atual['cliente_id'] or 0) if atual else 0
+                    if anterior!=cliente_id:
+                        c.execute('UPDATE ordens_servico SET cliente_id=?,atualizado_em=? WHERE id=?',
+                                  (cliente_id,ext.agora(),oid))
+                        nome=c.execute('SELECT nome FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+                        rotulo=nome['nome'] if nome else str(cliente_id)
+                        ext.evento(c,oid,'Cliente definido',
+                                   f'{anterior} -> {cliente_id} ({rotulo})',pid,actor)
+                        neg.audit(c,pid,'Cliente da OS alterado',oid,
+                                  f'{anterior} -> {cliente_id} ({rotulo})')
+                    c.commit()
+                return cliente_id
+
             def _os_duplicada_recente(self, cliente_id):
                 """OS do mesmo cliente criada nos últimos 2 minutos."""
                 limite=(datetime.now()-timedelta(minutes=2)).strftime('%Y-%m-%d %H:%M:%S')
@@ -4216,7 +4262,9 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit():
                         oid=int(partes[1]);acao=partes[2]
                         if acao=='abrir':
-                            self._exigir_cliente_os(oid,'reabrir a OS')
+                            cliente_id=self._persist_form_client(
+                                d,oid,pid,f'Prestador {s["nome"]}','reopen')
+                            self._exigir_cliente_os(oid,'reabrir a OS',cliente_id)
                             with ext.db(banco) as c:
                                 c.execute('BEGIN IMMEDIATE')
                                 o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
@@ -4394,12 +4442,16 @@ class PortalPrestador:
                         elif acao=='assumir':
                             ext.assumir(banco,oid,pid)
                         elif acao=='em-rota':
-                            self._exigir_cliente_os(oid,'colocar em rota')
+                            cliente_id=self._persist_form_client(
+                                d,oid,pid,f'Prestador {s["nome"]}','route')
+                            self._exigir_cliente_os(oid,'colocar em rota',cliente_id)
                             ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='cancelar-rota':
                             ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}')
                         elif acao=='iniciar':
-                            self._exigir_cliente_os(oid,'iniciar o atendimento')
+                            cliente_id=self._persist_form_client(
+                                d,oid,pid,f'Prestador {s["nome"]}','start')
+                            self._exigir_cliente_os(oid,'iniciar o atendimento',cliente_id)
                             aten.iniciar_assumindo(banco,oid,pid)
                             prod.limpar_rota_ao_iniciar(banco,oid)
                         elif acao=='reenviar-email':
