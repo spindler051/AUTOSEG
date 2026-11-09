@@ -1255,7 +1255,17 @@
     const urlAuto = '/os/' + formAuto.dataset.osId + '/rascunho/auto';
     let timerAuto = null;
     let salvandoAuto = false;
+    let autoSaveParado = false;
+    const encerrandoOS = () => {
+      const acao = formAuto.querySelector('[name="acao_status"]')?.value || '';
+      return ['Concluída', 'Cancelada', 'Não realizada'].includes(acao);
+    };
+    const pararAutoSave = () => {
+      autoSaveParado = true;
+      window.clearTimeout(timerAuto);
+    };
     const agendarAuto = () => {
+      if (autoSaveParado) return;
       window.clearTimeout(timerAuto);
       timerAuto = window.setTimeout(salvarAuto, 900);
     };
@@ -1282,6 +1292,7 @@
       return dados;
     };
     const salvarAuto = async () => {
+      if (autoSaveParado) return;
       if (salvandoAuto) { agendarAuto(); return; }
       salvandoAuto = true;
       const dados = dadosRascunho();
@@ -1317,8 +1328,9 @@
       if (alvo && ['file', 'submit', 'button'].includes(alvo.type)) return;
       agendarAuto();
     });
+    formAuto.addEventListener('submit', pararAutoSave);
     window.addEventListener('pagehide', () => {
-      if (!timerAuto) return;
+      if (autoSaveParado || encerrandoOS() || !timerAuto) return;
       window.clearTimeout(timerAuto);
       try {
         if (navigator.sendBeacon) navigator.sendBeacon(urlAuto, dadosRascunho());
