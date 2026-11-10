@@ -127,6 +127,8 @@ class AuthTest(unittest.TestCase):
             find_account_by_identifier=lambda _, kind, value: account if kind == "email" else None,
             identity_for_account=lambda _, aid: ident,
             membership_for_account=lambda _, aid: membership,
+            credential_hash=lambda _, account: account.password_hash,
+            effective_active=lambda _, account: account.active,
         )
         with patch.object(auth, "accounts", fake):
             result = auth.authenticate(self.banco, "provider@example.test", self.pwd)
@@ -151,6 +153,8 @@ class AuthTest(unittest.TestCase):
             login_policy=lambda _: SimpleNamespace(allowed_identifier_types=("email",)),
             normalize_identifier=self._normalize,
             find_account_by_identifier=lambda *_: account,
+            credential_hash=lambda _, account: account.password_hash,
+            effective_active=lambda _, account: account.active,
         )
         with patch.object(auth, "accounts", fake):
             self.error("inactive", "provider@example.test")
@@ -193,6 +197,53 @@ class AuthTest(unittest.TestCase):
             with self.assertRaises(auth.LoginError) as raised:
                 auth.authenticate(self.banco, "123.456.789-09", self.pwd)
             self.assertEqual(raised.exception.code, "unsupported")
+
+    def test_account_login_follows_legacy_password_reset(self):
+        from flavors.autoseg.modules import accounts as account_store
+
+        account_store.install(self.banco)
+        account_store.migrate_legacy(self.banco, dry_run=False)
+        ext.redefinir_senha_prestador_desktop(
+            self.banco, self.provider, "ChangedPassword2026")
+        with patch.object(auth, "accounts", account_store):
+            with self.assertRaises(auth.LoginError) as raised:
+                auth.authenticate(self.banco, "provider@example.test", self.pwd)
+            self.assertEqual(raised.exception.code, "invalid")
+            result = auth.authenticate(
+                self.banco, "provider@example.test", "ChangedPassword2026")
+            self.assertEqual(result.source, "account")
+
+    def test_account_login_follows_legacy_admin_change(self):
+        from flavors.autoseg.modules import accounts as account_store
+
+        account_store.install(self.banco)
+        account_store.migrate_legacy(self.banco, dry_run=False)
+        with ext.db(self.banco) as c:
+            c.execute(
+                "INSERT INTO v9_admin_prestadores(prestador_id, autorizado_em) "
+                "VALUES(?,?)", (self.provider, ext.agora()))
+        with patch.object(auth, "accounts", account_store):
+            result = auth.authenticate(
+                self.banco, "provider@example.test", self.pwd)
+            self.assertEqual(result.principal.role, "admin")
+
+    def test_account_login_follows_legacy_reactivation(self):
+        from flavors.autoseg.modules import accounts as account_store
+
+        account_store.install(self.banco)
+        account_store.migrate_legacy(self.banco, dry_run=False)
+        with ext.db(self.banco) as c:
+            c.execute("UPDATE prestadores SET ativo=0 WHERE id=?", (self.provider,))
+        with patch.object(auth, "accounts", account_store):
+            with self.assertRaises(auth.LoginError) as raised:
+                auth.authenticate(self.banco, "provider@example.test", self.pwd)
+            self.assertEqual(raised.exception.code, "inactive")
+        with ext.db(self.banco) as c:
+            c.execute("UPDATE prestadores SET ativo=1 WHERE id=?", (self.provider,))
+        with patch.object(auth, "accounts", account_store):
+            result = auth.authenticate(
+                self.banco, "provider@example.test", self.pwd)
+            self.assertEqual(result.source, "account")
 
     def test_real_phone_and_nametag_login(self):
         from flavors.autoseg.modules import accounts as account_store

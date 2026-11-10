@@ -44,7 +44,7 @@ def current_credential(banco, source: str, account_id: int | None,
             if account_id is None:
                 return None
             account = accounts.load_account(banco, account_id)
-            return account.password_hash if account and account.active else None
+            return accounts.credential_hash(banco, account) if account else None
         if source != "legacy" or identity_record.kind not in ("provider", "client"):
             return None
         table = "prestadores" if identity_record.kind == "provider" else "v9_usuarios"
@@ -76,19 +76,21 @@ def _account_binding(banco, account_id, identity_record: identity.Identity,
     """Check that one active account link still maps to this identity and role."""
     try:
         account = accounts.load_account(banco, account_id)
-        link = accounts.account_link(banco, account_id)
-        if account is None or not account.active or link is None or not link.active:
+        if account is None or not accounts.effective_active(banco, account):
             return False
-        if (link.provider_org_id != membership.provider_org_id
-                or link.role != membership.role):
+        current_identity = accounts.identity_for_account(banco, account_id)
+        current_membership = accounts.membership_for_account(banco, account_id)
+        if current_identity is None or current_membership is None:
             return False
-        if identity_record.kind == "provider":
-            return (link.link_type == "provider"
-                    and link.provider_id == identity_record.id)
-        if identity_record.kind == "client":
-            return (link.link_type == "client"
-                    and link.client_user_id == identity_record.id)
-        return False
+        if (current_identity.kind != identity_record.kind
+                or current_identity.id != identity_record.id
+                or not current_membership.active):
+            return False
+        # Reject changed or removed links; never manufacture a new principal.
+        return (current_membership.role == membership.role
+                and current_membership.provider_org_id == membership.provider_org_id
+                and current_membership.provider_id == membership.provider_id
+                and current_membership.client_id == membership.client_id)
     except Exception:
         return False
 

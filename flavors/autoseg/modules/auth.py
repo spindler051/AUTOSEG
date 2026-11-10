@@ -154,9 +154,10 @@ def _account_login(banco, candidates, identifier, password):
     if not found:
         return None
     account = next(iter(found.values()))
-    if not ext.verificar_senha(password, account.password_hash):
+    current_hash = accounts.credential_hash(banco, account)
+    if not current_hash or not ext.verificar_senha(password, current_hash):
         raise LoginError("invalid")
-    if not account.active:
+    if not accounts.effective_active(banco, account):
         raise LoginError("inactive")
     ident = accounts.identity_for_account(banco, account.id)
     membership = accounts.membership_for_account(banco, account.id)

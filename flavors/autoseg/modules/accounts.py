@@ -347,6 +347,64 @@ def account_link(banco, account_id: int) -> AccountLink | None:
                             r["legacy_client_user_id"], bool(r["active"]))) if r else None
 
 
+def _legacy_target(link: AccountLink) -> tuple[str, int] | None:
+    """Return the legacy identity backing a migrated account, if any."""
+    if link.link_type == "provider" and link.legacy_provider_id is not None:
+        return "provider", int(link.legacy_provider_id)
+    if link.link_type == "client" and link.legacy_client_user_id is not None:
+        return "client", int(link.legacy_client_user_id)
+    return None
+
+
+def credential_hash(banco, account: Account) -> str | None:
+    """Return the hash from the authoritative store for this account.
+
+    Migrated accounts keep the legacy provider/client record as the source of
+    truth until desktop and portal stop writing credentials there. Native
+    accounts use the account store.
+    """
+    account_id = getattr(account, "id", None)
+    if account_id is None:
+        return None
+    try:
+        link = account_link(banco, account_id)
+        if link is None:
+            return None
+        legacy = _legacy_target(link)
+        if legacy is None:
+            return str(getattr(account, "password_hash", "") or "") or None
+        kind, identity_id = legacy
+        table = "prestadores" if kind == "provider" else "v9_usuarios"
+        with ext.db(banco) as c:
+            if not _table(c, table):
+                return None
+            row = c.execute(
+                f"SELECT senha_hash FROM {table} WHERE id=?", (identity_id,)
+            ).fetchone()
+            return str(row["senha_hash"]) if row else None
+    except Exception:
+        # A read failure must never fall back to a possibly stale hash.
+        return None
+
+
+def effective_active(banco, account: Account) -> bool:
+    """Follow the legacy activation while the account is still migrated."""
+    account_id = getattr(account, "id", None)
+    if account_id is None:
+        return False
+    try:
+        link = account_link(banco, account_id)
+        if link is None or not link.active:
+            return False
+        legacy = _legacy_target(link)
+        if legacy is None:
+            return bool(getattr(account, "active", False))
+        ident = identity.load_identity(banco, *legacy)
+        return bool(ident and ident.active)
+    except Exception:
+        return False
+
+
 def identity_for_account(banco, account_id: int) -> identity.Identity | None:
     link = account_link(banco, account_id)
     if not link:
@@ -360,8 +418,18 @@ def membership_for_account(banco, account_id: int) -> identity.Membership | None
     ident = identity_for_account(banco, account_id)
     if not link or not ident:
         return None
+    legacy = _legacy_target(link)
+    if legacy is not None:
+        # Migrated roles follow the legacy admin table, not the stale snapshot
+        # copied into account_links at import time.
+        current = identity.memberships(banco, ident)
+        if len(current) != 1:
+            return None
+        role, active = current[0].role, current[0].active
+    else:
+        role, active = link.role, link.active
     # Keep the linked role and activation distinct from the identity record.
     return identity.Membership(identity_kind=ident.kind, identity_id=ident.id,
-                               role=link.role, provider_org_id=link.provider_org_id,
+                               role=role, provider_org_id=link.provider_org_id,
                                provider_id=link.provider_id, client_id=link.client_id,
-                               active=link.active)
+                               active=bool(link.active and active))

@@ -62,6 +62,24 @@ class WebSessionTests(unittest.TestCase):
         principal = identity.to_principal(ident, membership)
         return aid, ident, membership, principal
 
+    def _native_account(self):
+        with ext.db(self.db) as c:
+            aid = c.execute(
+                "INSERT INTO accounts(display_name,password_hash,active,created_at,updated_at) "
+                "VALUES(?,?,?,?,?)", ('Native Account', self.credential, 1,
+                                      ext.agora(), ext.agora())
+            ).lastrowid
+            c.execute(
+                "INSERT INTO account_links(account_id,provider_org_id,link_type,"
+                "role,provider_id,active,created_at) "
+                "VALUES(?,'autoseg','provider','employee',?,1,?)",
+                (aid, self.provider_id, ext.agora())
+            )
+        ident = accounts.identity_for_account(self.db, aid)
+        membership = accounts.membership_for_account(self.db, aid)
+        principal = identity.to_principal(ident, membership)
+        return aid, ident, membership, principal
+
     def test_create_resolve_preserves_identity_and_principal(self):
         aid, ident, member, principal = self._account()
         token, data = self._make(account_id=aid, identity_record=ident,
@@ -103,7 +121,37 @@ class WebSessionTests(unittest.TestCase):
         token, _ = self._make(account_id=aid, identity_record=ident,
                               membership=member, principal=principal, source='account')
         with ext.db(self.db) as c:
+            c.execute('UPDATE prestadores SET ativo=0 WHERE id=?', (self.provider_id,))
+        self.assertIsNone(sessions.resolve(self.db, token))
+
+    def test_inactive_native_account_revokes(self):
+        aid, ident, member, principal = self._native_account()
+        token, _ = self._make(account_id=aid, identity_record=ident,
+                              membership=member, principal=principal,
+                              source='account')
+        with ext.db(self.db) as c:
             c.execute('UPDATE accounts SET active=0 WHERE id=?', (aid,))
+        self.assertIsNone(sessions.resolve(self.db, token))
+
+    def test_account_password_reset_revokes(self):
+        aid, ident, member, principal = self._account()
+        token, _ = self._make(account_id=aid, identity_record=ident,
+                              membership=member, principal=principal,
+                              source='account')
+        with ext.db(self.db) as c:
+            c.execute('UPDATE prestadores SET senha_hash=? WHERE id=?',
+                      (ext.senha_hash('ChangedPassword123'), self.provider_id))
+        self.assertIsNone(sessions.resolve(self.db, token))
+
+    def test_account_role_change_revokes(self):
+        aid, ident, member, principal = self._account()
+        token, _ = self._make(account_id=aid, identity_record=ident,
+                              membership=member, principal=principal,
+                              source='account')
+        with ext.db(self.db) as c:
+            c.execute(
+                'INSERT INTO v9_admin_prestadores(prestador_id, autorizado_em) '
+                'VALUES(?,?)', (self.provider_id, ext.agora()))
         self.assertIsNone(sessions.resolve(self.db, token))
 
     def test_legacy_role_change_revokes(self):
@@ -244,6 +292,14 @@ class WebSessionTests(unittest.TestCase):
                        membership=member, principal=principal, source='account')
         with ext.db(self.db) as c:
             c.execute('UPDATE account_links SET active=1 WHERE account_id=?', (aid,))
+            c.execute('UPDATE prestadores SET ativo=0 WHERE id=?', (self.provider_id,))
+        with self.assertRaises(ValueError):
+            self._make(account_id=aid, identity_record=ident,
+                       membership=member, principal=principal, source='account')
+
+    def test_reject_inactive_native_account_on_create(self):
+        aid, ident, member, principal = self._native_account()
+        with ext.db(self.db) as c:
             c.execute('UPDATE accounts SET active=0 WHERE id=?', (aid,))
         with self.assertRaises(ValueError):
             self._make(account_id=aid, identity_record=ident,
