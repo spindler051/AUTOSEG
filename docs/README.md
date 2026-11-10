@@ -19,6 +19,7 @@ histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
 - [Permissões e aprovações](PERMISSIONS_AND_APPROVALS.md)
 - [Paridade entre GTK, site e papéis](SURFACE_PARITY.md)
 - [Matriz P0 de permissões](PERMISSIONS_P0.md)
+- [Arquitetura de segurança](security/SECURITY_ARCHITECTURE.md) — fronteiras, atores, sessões, autorização, exposição, anexos, segredos, logs e riscos conhecidos.
 - [Numeração de OS](OS_NUMBERING_REDESIGN.md)
 - [Separação GTK × servidor](GTK_SERVER_DECOUPLING.md)
 - [GTK4/libadwaita no Linux e macOS](GTK4_LINUX_MACOS.md)

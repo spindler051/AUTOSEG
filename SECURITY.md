@@ -21,6 +21,13 @@ Tests and examples must use fictional data and `.invalid`/`example`
 addresses. Company identity values (CNPJ and WhatsApp) are configured outside
 the repository through `AUTOSEG_COMPANY_CNPJ` and `AUTOSEG_WHATSAPP`.
 
+## Architecture and known gaps
+
+The current trust boundaries, authentication/session model, authorization
+state, network exposure rules, file handling, secrets, logging and known gaps
+are documented in [`docs/security/SECURITY_ARCHITECTURE.md`](docs/security/SECURITY_ARCHITECTURE.md).
+It is a living document, not a certification or a penetration test.
+
 ## Supported version
 
 The `main` branch receives public fixes. Development happens in `develop`.
