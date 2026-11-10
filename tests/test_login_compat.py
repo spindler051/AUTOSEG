@@ -41,8 +41,12 @@ def _request(client, base, path, data=None, headers=None):
             return (response.status, response.headers,
                     response.read().decode('utf-8', 'replace'))
     except urllib.error.HTTPError as error:
+        try:
+            body = error.read()
+        except (ConnectionError, OSError):
+            body = b''
         return (error.code, error.headers,
-                error.read().decode('utf-8', 'replace'))
+                body.decode('utf-8', 'replace'))
 
 
 def _flag(value):
