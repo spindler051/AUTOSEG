@@ -123,6 +123,9 @@ def create(banco, account_id, identity_record, membership, principal,
         raise ValueError("Invalid session lifetime.")
     if source == "account" and account_id is None:
         raise ValueError("Missing account.")
+    if source == "account" and (not isinstance(account_id, int)
+                                or isinstance(account_id, bool)):
+        raise ValueError("Invalid account.")
     if source == "legacy" and account_id is not None:
         raise ValueError("Unexpected account.")
     if (not isinstance(identity_record, identity.Identity)

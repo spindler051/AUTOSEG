@@ -237,6 +237,12 @@ class WebSessionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self._make(account_id=aid)
 
+    def test_reject_non_integer_account_id(self):
+        for value in ('1', True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self._make(account_id=value, source='account')
+
     def test_cookie_name_is_shared_with_flag_module(self):
         from flavors.autoseg.modules import login_flags
         self.assertEqual(sessions.COOKIE_NAME, login_flags.COOKIE_NAME)
