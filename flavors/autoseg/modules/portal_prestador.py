@@ -2377,6 +2377,7 @@ class PortalPrestador:
                 corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
                 corpo+='<div>'+campos_escuros('Total negociado (R$), opcional — substitui a soma','valor_total_override',
                   (d.get('valor_total') if d and abs(numero_seguro(d.get('valor_total'))-numero_seguro(d.get('valor_mao_obra'))-numero_seguro(d.get('valor_materiais')))>0.009 else ''))+'</div></div>'
+                corpo+='<p class="muted">O <b>Total negociado</b> é o valor final da OS. A mão de obra é a base da composição; sem total negociado, a composição soma as taxas.</p>'
                 corpo+=campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')
                 if solicitacao:
                     corpo+=f'<input type="hidden" name="descricao" value="{esc(solicitacao["descricao_original"])}">'
