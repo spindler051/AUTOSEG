@@ -269,6 +269,30 @@ an old secondary share, it is absorbed into the finalizer remainder and must
 not be counted twice. A repasse already sent or confirmed blocks the automatic
 absorption and requires an explicit rateio adjustment.
 
+### 9.4 Share the web/GTK presentation contract, not the widgets
+
+**Decision (product owner):** the web site and the GTK app should share a
+presentation contract for screens, fields, labels, actions, permissions,
+validation messages and view models. Each platform keeps its native widgets,
+navigation, dialogs and layout. The goal is to stop implementing the same
+product behavior twice, not to build a UI framework.
+
+**Scope guardrails:**
+
+- documentation and contract tests first; no big rewrite;
+- start with one read-only list (OS or clients) and one form, behind a flag;
+- the contract references `AppService`; it must not contain business rules,
+  SQL, HTML or GTK imports;
+- the service remains the permission authority; the contract only describes
+  what the UI may show;
+- no UI DSL, no code generation and no plugin framework;
+- platform-specific layout and interaction remain native.
+
+The proposed contract and incremental path are in
+`docs/planning/WEB_GTK_SHARED_CONTRACT.md`. This is separate from Workaholic:
+it has two real consumers today (web and GTK) and should be adopted before
+expanding the generic engine.
+
 ## 10. Related documents
 
 - `AGENTS.md`

@@ -132,6 +132,11 @@ O nome que faltou é **SwiftUI/UIKit** (Apple Human Interface Guidelines).
 - **Widgets** são nativos por plataforma.
 - **Regras de negócio** ficam no `AppService`, nunca na guideline.
 
+Para o contrato funcional que web e GTK compartilham (telas, campos, ações,
+permissões, validações e view models), ver
+`docs/planning/WEB_GTK_SHARED_CONTRACT.md`. Este documento continua sendo a
+guideline visual; o outro é o contrato de comportamento.
+
 ---
 
 ## 4. O que deve ser igual

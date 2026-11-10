@@ -7,6 +7,11 @@
 Permissão pertence ao **papel**, não à superfície. GTK, Portal do Prestador e
 Portal do Cliente não devem conceder poderes diferentes para o mesmo papel.
 
+**Paridade não é duplicação:** a mesma tela deve compartilhar contrato de
+campos, ações, permissões, validações e textos, mas renderizar com widgets
+nativos. O contrato funcional está em
+`docs/planning/WEB_GTK_SHARED_CONTRACT.md`.
+
 Papéis atuais:
 
 | Papel | Onde entra hoje | Pode |
