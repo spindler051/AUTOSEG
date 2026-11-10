@@ -107,7 +107,18 @@ def _active(banco, data: SessionData) -> bool:
             # Reject changed or removed links; never manufacture a new principal.
             return _account_binding(banco, data.account_id, data.identity,
                                     data.membership)
-        return data.source == "legacy"
+        if data.source == "legacy":
+            # A role change must end the session instead of silently keeping or
+            # upgrading the legacy role for the remaining lifetime.
+            current_memberships = identity.memberships(banco, current)
+            if len(current_memberships) != 1:
+                return False
+            current_membership = current_memberships[0]
+            return (current_membership.role == data.membership.role
+                    and current_membership.provider_org_id == data.membership.provider_org_id
+                    and current_membership.provider_id == data.membership.provider_id
+                    and current_membership.client_id == data.membership.client_id)
+        return False
     except Exception:
         return False
 

@@ -106,6 +106,23 @@ class WebSessionTests(unittest.TestCase):
             c.execute('UPDATE accounts SET active=0 WHERE id=?', (aid,))
         self.assertIsNone(sessions.resolve(self.db, token))
 
+    def test_legacy_role_change_revokes(self):
+        with ext.db(self.db) as c:
+            c.execute(
+                'INSERT INTO v9_admin_prestadores(prestador_id, autorizado_em) '
+                'VALUES(?,?)', (self.provider_id, ext.agora()))
+        ident = identity.load_identity(self.db, 'provider', self.provider_id)
+        member = identity.memberships(self.db, ident)[0]
+        principal = identity.to_principal(ident, member)
+        self.assertEqual(member.role, 'admin')
+        token, _ = self._make(identity_record=ident, membership=member,
+                              principal=principal)
+        with ext.db(self.db) as c:
+            c.execute('DELETE FROM v9_admin_prestadores WHERE prestador_id=?',
+                      (self.provider_id,))
+        self.assertIsNone(sessions.resolve(self.db, token))
+        self.assertNotIn(token, sessions._SESSIONS)
+
     def test_revoke_only_one_token(self):
         first, _ = self._make()
         second, _ = self._make()
