@@ -1065,7 +1065,11 @@ class PortalPrestador:
                 self.send_response(303)
                 self.send_header('Location',path)
                 self.send_header('Cache-Control','no-store')
-                if cookie: self.send_header('Set-Cookie',cookie)
+                if isinstance(cookie, (list, tuple)):
+                    for item in cookie:
+                        if item: self.send_header('Set-Cookie',item)
+                elif cookie:
+                    self.send_header('Set-Cookie',cookie)
                 self.end_headers()
 
             def sessao(self):
@@ -3999,9 +4003,15 @@ class PortalPrestador:
                     s=self.sessao()
                     self.csrf(s,d)
                     if path=='/sair':
+                        token=web_cookie.token_from_headers(self.headers)
+                        if token:
+                            web_session.revoke(token)
                         cookie=SimpleCookie();cookie.load(self.headers.get('Cookie',''))
                         if 'autosseg_session' in cookie:SESSOES.pop(cookie['autosseg_session'].value,None)
-                        return self.redir('/',self.cookie('',True))
+                        return self.redir('/login',(
+                            web_cookie.clear_cookie(secure=web_cookie.secure_request(self.headers)),
+                            self.cookie('',True),
+                        ))
                     pid=s['pid']
                     if path=='/prestadores/novo' or path.startswith('/prestadores/'):
                         if not s.get('admin'):
@@ -4021,14 +4031,18 @@ class PortalPrestador:
                             alvo=int(partes[1])
                             if partes[2]=='alternar':
                                 ext.alternar_ativo(banco,alvo)
+                                web_session.revoke_identity('provider',alvo)
                             elif partes[2]=='arquivar':
                                 ext.arquivar_prestador(banco,alvo)
+                                web_session.revoke_identity('provider',alvo)
                             elif partes[2]=='senha':
                                 ext.redefinir_senha_prestador_desktop(
                                     banco,alvo,str(d.get('senha','')))
+                                web_session.revoke_identity('provider',alvo)
                             elif partes[2]=='admin':
                                 cad9.definir_admin(banco,alvo,
                                                    not cad9.prestador_admin(banco,alvo))
+                                web_session.revoke_identity('provider',alvo)
                             else:
                                 raise ValueError('Ação de prestador inválida.')
                             return self.redir('/prestadores')
