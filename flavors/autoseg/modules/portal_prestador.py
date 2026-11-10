@@ -4376,12 +4376,22 @@ class PortalPrestador:
                         ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
                         # Auto-save also persists the monetary fields on the OS,
                         # so the PDF/email reflect the values typed in the form.
+                        versao_os=None
+                        aviso_os=''
                         try:
                             dados_os=dict(d)
                             dados_os['acao_status']='salvar'
                             neg.os_salvar(banco,dados_os,pid,oid,silent=True)
+                            with ext.db(banco) as c:
+                                linha_versao=c.execute(
+                                    'SELECT atualizado_em FROM ordens_servico WHERE id=?',
+                                    (oid,)).fetchone()
+                            versao_os=linha_versao['atualizado_em'] if linha_versao else None
                         except Exception:
                             LOG.exception('Auto-save: falha ao aplicar valores na OS %s',oid)
+                            aviso_os=('Rascunho salvo, mas os valores da OS não foram '
+                                      'aplicados. Recarregue a página e confira os campos '
+                                      'obrigatórios.')
                         try:
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
                                                  str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
@@ -4391,7 +4401,12 @@ class PortalPrestador:
                             with ext.db(banco) as c:
                                 aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
                         if quer_json:
-                            return self.send_bytes(json.dumps({'ok':True}).encode(),
+                            resposta={'ok':True}
+                            if versao_os:
+                                resposta['versao_os']=versao_os
+                            if aviso_os:
+                                resposta['aviso']=aviso_os
+                            return self.send_bytes(json.dumps(resposta).encode(),
                                                    'application/json; charset=utf-8')
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==4 and partes[0]=='os' and partes[1].isdigit() and partes[2:] == ['rascunho','salvar']:

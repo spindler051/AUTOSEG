@@ -304,6 +304,47 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('R$ 1.300,00', texto)
         self.assertIn('Mão de obra', texto)
 
+    def test_auto_save_devolve_nova_versao_e_aplica_segunda_alteracao(self):
+        pid = self._prestador('Técnico Versão', email='versao@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Versão')
+        dados = {'cliente_id': str(cid), 'descricao': 'Revisão de DVR',
+                 'tecnico': 'T', 'forma_pagamento': 'Transferência',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        _, base = self._servidor()
+        cliente = self._login(base, 'versao@exemplo.com.br')
+        token = self._csrf(base, cliente, oid)
+        _, html = req(cliente, base, f'/os/{oid}')
+        versao = re.search(r'name="_versao_os" value="([^"]*)"', html).group(1)
+        comum = {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Revisão de DVR',
+                 'tecnico': 'T', 'forma_pagamento': 'Transferência',
+                 'valor_mao_obra': '200', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', '_versao_os': versao}
+        def auto_save(extra):
+            corpo = urllib.parse.urlencode(dict(comum, **extra)).encode()
+            pedido = urllib.request.Request(
+                base + f'/os/{oid}/rascunho/auto', corpo,
+                {'Accept': 'application/json',
+                 'X-Requested-With': 'XMLHttpRequest'})
+            with cliente.open(pedido, timeout=20) as resposta:
+                return resposta.status, json.loads(resposta.read().decode())
+        status, primeira = auto_save({'valor_total_override': '1300'})
+        self.assertEqual(status, 200)
+        self.assertTrue(primeira['ok'])
+        self.assertTrue(primeira.get('versao_os'))
+        self.assertNotEqual(primeira['versao_os'], versao)
+        status, segunda = auto_save({'valor_total_override': '1500',
+                                     '_versao_os': primeira['versao_os']})
+        self.assertEqual(status, 200)
+        self.assertTrue(segunda['ok'])
+        self.assertNotIn('aviso', segunda)
+        with ext.db(self.db) as c:
+            total = c.execute('SELECT valor_total FROM ordens_servico WHERE id=?',
+                              (oid,)).fetchone()['valor_total']
+        self.assertEqual(float(total), 1500.0)
+
     def test_financeiro_unifica_caixa_e_deixa_emprestimos_por_ultimo(self):
         admin = self._prestador('Admin Financeiro', email='admin.fin@exemplo.com.br')
         funcionario = self._prestador('Funcionário Financeiro', email='func.fin@exemplo.com.br')

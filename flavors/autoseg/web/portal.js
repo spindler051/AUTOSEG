@@ -1312,8 +1312,15 @@
         if (!resposta.ok || !corpo.ok) {
           throw new Error(corpo.error || 'Não foi possível salvar o rascunho.');
         }
+        // O auto-save altera atualizado_em; manter a versão local evita que o
+        // próximo salvamento seja recusado pela verificação de concorrência.
+        const campoVersao = formAuto.elements['_versao_os'];
+        if (campoVersao && corpo.versao_os) campoVersao.value = corpo.versao_os;
         const hora = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
-        if (statusAuto) statusAuto.textContent = `Rascunho salvo automaticamente às ${hora}.`;
+        if (statusAuto) {
+          statusAuto.textContent = corpo.aviso
+            || `Rascunho salvo automaticamente às ${hora}.`;
+        }
       } catch (erro) {
         if (statusAuto) statusAuto.textContent = erro.message || 'Não foi possível salvar o rascunho.';
       } finally {

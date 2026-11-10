@@ -23,10 +23,10 @@
 - **Empréstimos no saldo pessoal:** o principal entra no extrato MAF do credor e do devedor e nas colunas pessoais A receber/Recebidos do AUTOSEG; nunca entra no caixa da empresa.
 - **Financeiro unificado:** administradores veem o caixa da empresa dentro da aba Financeiro, com empréstimos por último; funcionários veem apenas o próprio financeiro.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
-- **OS — valores:** o auto-save passa a persistir mão de obra, materiais e total negociado na própria OS, e não apenas no rascunho, para PDF e e-mail refletirem o que foi digitado.
+- **OS — valores:** o auto-save passa a persistir mão de obra, materiais e total negociado na própria OS, e não apenas no rascunho, para PDF e e-mail refletirem o que foi digitado. O servidor devolve a nova versão da OS e o formulário a reutiliza, evitando que a segunda alteração seja recusada pela verificação de concorrência.
 - **Buscas:** páginas que já têm busca no servidor não exibem um segundo filtro de tabela.
 - **Fotos:** miniaturas são geradas no upload e ganham cache privado versionado, reduzindo o tempo de abertura da OS.
-- **Testes:** 353 testes OK, 1 skip.
+- **Testes:** 354 testes OK, 1 skip.
 
 ## 9.6.0-dev.72 — feedbacks da DEV: cliente, encerramento e erros inline — 2026-11-08 — develop
 
