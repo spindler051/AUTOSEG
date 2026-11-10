@@ -166,6 +166,14 @@
     const total = document.getElementById('total-previsto');
     const composicaoPreview = document.getElementById('composicao-prevista');
     const aplicarComposicao = form.querySelector('[name="aplicar_composicao"]');
+    const cobrarVisita = form.querySelector('[name="cobrar_visita"]');
+    const basePercentuais = form.querySelector('[name="base_percentuais"]');
+    const sincronizarVisita = () => {
+      if (!cobrarVisita || !basePercentuais) return;
+      const semVisita = cobrarVisita.value === '0';
+      if (semVisita) basePercentuais.value = 'total';
+      basePercentuais.disabled = semVisita;
+    };
     let timerComposicao = null;
     function number(v) {
       let x = String(v || '').trim().replace(/R\$/g, '').replace(/\s/g, '');
@@ -201,11 +209,14 @@
         return;
       }
       const base = valoresBase();
+      // The displayed service value is authoritative: send it as the total so
+      // the preview only distributes it and never adds fees on top.
       const params = new URLSearchParams({
         materiais: base.material.toFixed(2),
         mao_obra: base.labour.toFixed(2),
-        total: base.negociado || '',
-        base: form.elements['base_percentuais']?.value || 'total'
+        total: base.negociado || base.cost.toFixed(2),
+        base: form.elements['base_percentuais']?.value || 'total',
+        cobrar_visita: cobrarVisita?.value || '1'
       });
       try {
         const resposta = await fetch('/composicao/simular?' + params.toString(), {
@@ -281,7 +292,14 @@
       });
       form.addEventListener('input', recalc);
       if (aplicarComposicao) aplicarComposicao.addEventListener('change', recalc);
-      form.querySelector('[name="base_percentuais"]')?.addEventListener('change', recalc);
+      if (basePercentuais) basePercentuais.addEventListener('change', recalc);
+      if (cobrarVisita) {
+        cobrarVisita.addEventListener('change', () => {
+          sincronizarVisita();
+          recalc();
+        });
+      }
+      sincronizarVisita();
       recalc();
     }
     // Fotos: prévia + legenda individual + chave estável por arquivo.
@@ -382,13 +400,11 @@
     const status = form.querySelector('[name="acao_status"]');
     const fotoBox = document.getElementById('anexo-encerramento');
     const motivo = form.querySelector('[name="motivo_encerramento"]');
-    const rateioBox = document.getElementById('rateio-conclusao');
     const relato = form.querySelector('[name="relatorio_tecnico"]');
     function atualizarEncerramento() {
       if (!status) return;
       if (fotoBox) fotoBox.hidden = false;
       if (motivo) motivo.required = status.value === 'Cancelada';
-      if (rateioBox) rateioBox.hidden = status.value !== 'Concluída';
     }
     if (status) {status.addEventListener('change', atualizarEncerramento); atualizarEncerramento();}
     const irParaCampo = campo => {
@@ -552,6 +568,104 @@
     busca.addEventListener('input',filtrar);
     area.before(titulo,busca,aviso);
     filtrar();
+  });
+  // Financeiro: abas e confirmação de recebimento sem recarregar.
+  const finTabs = Array.from(document.querySelectorAll('[data-fin-tab]'));
+  const finPanels = Array.from(document.querySelectorAll('[data-fin-panel]'));
+  const ativarFin = nome => {
+    finTabs.forEach(botao => {
+      const ativo = botao.dataset.finTab === nome;
+      botao.classList.toggle('active', ativo);
+      botao.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    });
+    finPanels.forEach(painel => {
+      painel.hidden = painel.dataset.finPanel !== nome;
+    });
+  };
+  finTabs.forEach(botao => botao.addEventListener('click', () =>
+    ativarFin(botao.dataset.finTab)));
+  document.querySelectorAll('[data-fin-target]').forEach(elemento => {
+    elemento.addEventListener('click', evento => {
+      evento.preventDefault();
+      const alvo = elemento.dataset.finTarget;
+      ativarFin(alvo);
+      if (elemento.dataset.abrirEmprestimo) {
+        const detalhes = document.getElementById('maf-novo-emprestimo');
+        if (detalhes) {
+          detalhes.open = true;
+          detalhes.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+      }
+    });
+  });
+  if (finTabs.length) ativarFin(finTabs[0].dataset.finTab);
+  const brlNumero = texto => {
+    const limpo = String(texto || '').replace(/[^\d,.-]/g,'')
+      .replace(/\./g,'').replace(',','.');
+    return Number(limpo) || 0;
+  };
+  const brlTexto = valor => Number(valor || 0).toLocaleString(
+    'pt-BR', {style: 'currency', currency: 'BRL'});
+  document.querySelectorAll('form[action$="/receber"]').forEach(form => {
+    const mensagem = form.dataset.confirmReceber
+      || 'Confirma que o valor foi realmente recebido?';
+    form.addEventListener('submit', async evento => {
+      evento.preventDefault();
+      if (!window.confirm(mensagem)) return;
+      const botao = form.querySelector('button[type="submit"]');
+      if (botao) {
+        botao.disabled = true;
+        botao.textContent = 'Confirmando…';
+      }
+      try {
+        const resposta = await fetch(form.action, {
+          method: 'POST', body: new FormData(form), credentials: 'same-origin',
+          headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        });
+        let corpo = {};
+        try { corpo = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !corpo.ok) {
+          throw new Error(corpo.error || 'Não foi possível confirmar o recebimento.');
+        }
+        const item = form.closest('.finance-item');
+        if (item) {
+          const valor = brlNumero(
+            item.querySelector('.finance-item-values strong')?.textContent);
+          const tag = item.querySelector('.finance-item-foot .tag');
+          if (tag) {
+            tag.className = 'tag good';
+            tag.textContent = 'Recebido';
+          }
+          item.querySelectorAll('.finance-item-foot form').forEach(f => f.remove());
+          const origem = item.parentElement;
+          const destino = document.querySelector(
+            '[data-fin-panel="recebidos"] .finance-list');
+          if (destino) {
+            destino.querySelector('p.muted')?.remove();
+            destino.append(item);
+          }
+          if (origem && !origem.querySelector('.finance-item')) {
+            origem.innerHTML = '<p class="muted">Nenhum lançamento a receber.</p>';
+          }
+          const aReceber = document.getElementById('kpi-a-receber');
+          const recebido = document.getElementById('kpi-recebido');
+          if (aReceber) {
+            aReceber.textContent = brlTexto(
+              Math.max(0, brlNumero(aReceber.textContent) - valor));
+          }
+          if (recebido) {
+            recebido.textContent = brlTexto(
+              brlNumero(recebido.textContent) + valor);
+          }
+        }
+      } catch (erro) {
+        window.alert(erro.message || 'Não foi possível confirmar o recebimento.');
+        if (botao) {
+          botao.disabled = false;
+          botao.textContent = 'Confirmar recebimento';
+        }
+      }
+    });
   });
   document.querySelectorAll('form[data-confirm]').forEach(form => {
     form.addEventListener('submit',e => {
@@ -1330,11 +1444,13 @@
     formAuto.addEventListener('input', evento => {
       const alvo = evento.target;
       if (alvo && ['file', 'submit', 'button'].includes(alvo.type)) return;
+      if (alvo?.closest?.('#rateio-colaboradores')) return;
       agendarAuto();
     });
     formAuto.addEventListener('change', evento => {
       const alvo = evento.target;
       if (alvo && ['file', 'submit', 'button'].includes(alvo.type)) return;
+      if (alvo?.closest?.('#rateio-colaboradores')) return;
       agendarAuto();
     });
     formAuto.addEventListener('submit', pararAutoSave);
@@ -1346,6 +1462,192 @@
       } catch (_erro) {}
     });
   }
+  // Rateio e colaboradores: linhas com auto-save, sem botão de salvar.
+  const rateioBox = document.getElementById('rateio-colaboradores');
+  if (rateioBox) {
+    const formRateio = document.getElementById('form-os');
+    const urlRateio = rateioBox.dataset.rateioUrl || '';
+    const csrfRateio = formRateio?.querySelector('[name="csrf"]')?.value || '';
+    const listaRateio = document.getElementById('rateio-lista');
+    const statusRateio = document.getElementById('rateio-auto-status');
+    const totalOs = document.getElementById('rateio-total-os');
+    const totalRateado = document.getElementById('rateio-total-rateado');
+    const restanteRateio = document.getElementById('rateio-restante');
+    const botaoAdicionar = document.getElementById('adicionar-rateio');
+    const modelo = document.getElementById('modelo-rateio');
+    const podeEditarRateio = Boolean(botaoAdicionar && modelo);
+    let timerRateio = null;
+    let salvandoRateio = false;
+    const brlRateio = centavos => Number(centavos || 0).toLocaleString(
+      'pt-BR', {style: 'currency', currency: 'BRL'});
+    const formatarValor = centavos => (Number(centavos || 0) / 100)
+      .toFixed(2).replace('.', ',');
+    const linhaValor = row => row?.querySelector('[name="rateio_manual_valor"]');
+    const linhaTecnico = row => row?.dataset.tecnicoId
+      || row?.querySelector('[name="rateio_manual_tecnico"]')?.value || '';
+    const criarLinhaRateio = item => {
+      const row = document.createElement('div');
+      row.className = 'rateio-row';
+      row.dataset.rateioRow = '';
+      row.dataset.tecnicoId = item.tecnico_id;
+      const colab = document.createElement('div');
+      const labelColab = document.createElement('label');
+      labelColab.textContent = 'Colaborador';
+      const inputColab = document.createElement('input');
+      inputColab.value = item.nome;
+      inputColab.readOnly = true;
+      labelColab.append(inputColab);
+      colab.append(labelColab);
+      const valorCol = document.createElement('div');
+      const labelValor = document.createElement('label');
+      labelValor.textContent = 'Valor da parcela (R$)';
+      const inputValor = document.createElement('input');
+      inputValor.name = 'rateio_manual_valor';
+      inputValor.inputMode = 'decimal';
+      inputValor.value = formatarValor(item.valor_centavos);
+      labelValor.append(inputValor);
+      valorCol.append(labelValor);
+      row.append(colab, valorCol);
+      if (podeEditarRateio) {
+        const remover = document.createElement('button');
+        remover.type = 'button';
+        remover.className = 'secondary remover-rateio';
+        remover.dataset.rateioRemover = item.tecnico_id;
+        remover.textContent = 'Remover';
+        row.append(remover);
+      }
+      return row;
+    };
+    const renderRateio = dados => {
+      if (!listaRateio) return;
+      const novos = Array.from(listaRateio.querySelectorAll('[data-rateio-row][data-novo]'));
+      novos.forEach(row => row.remove());
+      listaRateio.replaceChildren();
+      for (const item of (dados.rateios || [])) {
+        listaRateio.append(criarLinhaRateio(item));
+      }
+      novos.forEach(row => listaRateio.append(row));
+      if (!listaRateio.children.length) {
+        const vazio = document.createElement('p');
+        vazio.className = 'muted';
+        vazio.textContent = 'Nenhum colaborador com parcela nesta OS.';
+        listaRateio.append(vazio);
+      }
+      if (totalOs) totalOs.textContent = brlRateio(dados.total_centavos / 100);
+      if (totalRateado) totalRateado.textContent = brlRateio(dados.rateado_centavos / 100);
+      if (restanteRateio) restanteRateio.textContent = brlRateio(dados.restante_centavos / 100);
+    };
+    const enviarRateio = async (tecnico, texto, mensagem, row = null) => {
+      if (!urlRateio || !tecnico || !String(texto || '').trim()) return;
+      if (salvandoRateio) return;
+      salvandoRateio = true;
+      if (statusRateio) statusRateio.textContent = 'Salvando rateio…';
+      const dados = new FormData();
+      dados.append('csrf', csrfRateio);
+      dados.append('rateio_manual_tecnico', tecnico);
+      dados.append('rateio_manual_valor', texto);
+      try {
+        const resposta = await fetch(urlRateio, {
+          method: 'POST', body: dados, credentials: 'same-origin',
+          headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
+        });
+        let corpo = {};
+        try { corpo = await resposta.json(); } catch (_erro) {}
+        if (!resposta.ok || !corpo.ok) {
+          throw new Error(corpo.error || 'Não foi possível salvar o rateio.');
+        }
+        row?.remove();
+        renderRateio(corpo);
+        if (statusRateio) statusRateio.textContent = mensagem || 'Rateio salvo automaticamente.';
+      } catch (erro) {
+        if (statusRateio) statusRateio.textContent = erro.message || 'Não foi possível salvar o rateio.';
+      } finally {
+        salvandoRateio = false;
+      }
+    };
+    const salvarLinha = row => {
+      const tecnico = linhaTecnico(row);
+      const texto = linhaValor(row)?.value || '';
+      if (!tecnico || !String(texto).trim()) return;
+      enviarRateio(tecnico, texto, null, row);
+    };
+    const agendarLinha = row => {
+      window.clearTimeout(timerRateio);
+      timerRateio = window.setTimeout(() => salvarLinha(row), 800);
+    };
+    listaRateio?.addEventListener('input', evento => {
+      const input = evento.target.closest('[name="rateio_manual_valor"]');
+      if (!input) return;
+      agendarLinha(input.closest('[data-rateio-row]'));
+    });
+    listaRateio?.addEventListener('change', evento => {
+      const select = evento.target.closest('[name="rateio_manual_tecnico"]');
+      if (!select) return;
+      linhaValor(select.closest('[data-rateio-row]'))?.focus();
+    });
+    listaRateio?.addEventListener('blur', evento => {
+      const input = evento.target.closest('[name="rateio_manual_valor"]');
+      if (!input) return;
+      if (evento.relatedTarget?.closest?.('.remover-rateio')) return;
+      window.clearTimeout(timerRateio);
+      salvarLinha(input.closest('[data-rateio-row]'));
+    }, true);
+    listaRateio?.addEventListener('keydown', evento => {
+      if (evento.key !== 'Enter') return;
+      const input = evento.target.closest('[name="rateio_manual_valor"]');
+      if (!input) return;
+      evento.preventDefault();
+      window.clearTimeout(timerRateio);
+      salvarLinha(input.closest('[data-rateio-row]'));
+    });
+    listaRateio?.addEventListener('click', evento => {
+      const botao = evento.target.closest('.remover-rateio');
+      if (!botao) return;
+      evento.preventDefault();
+      const row = botao.closest('[data-rateio-row]');
+      if (!row) return;
+      if (row.dataset.novo) { row.remove(); return; }
+      const tecnico = row.dataset.tecnicoId;
+      if (!tecnico) return;
+      const nome = row.querySelector('input[readonly]')?.value || 'colaborador';
+      if (!window.confirm(`Remover a parcela de ${nome}?`)) return;
+      enviarRateio(tecnico, '0,00', 'Parcela removida.', row);
+    });
+    botaoAdicionar?.addEventListener('click', () => {
+      if (!modelo || !listaRateio) return;
+      const row = modelo.content.firstElementChild.cloneNode(true);
+      listaRateio.append(row);
+      row.querySelector('[name="rateio_manual_tecnico"]')?.focus();
+    });
+  }
+  const textoMetadados = (dataValor, localValor) => {
+    const data = dataValor
+      ? new Date(String(dataValor).replace(' ', 'T'))
+      : new Date();
+    const valida = !Number.isNaN(data.getTime());
+    const dia = valida ? data.toLocaleDateString('pt-BR') : '';
+    const hora = valida
+      ? data.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})
+      : '';
+    const local = String(localValor || '').trim();
+    return [
+      `${dia} ${hora}`.trim(),
+      local ? `Local: ${local}` : ''
+    ].filter(Boolean).join(' · ');
+  };
+  formAuto?.addEventListener('click', evento => {
+    const botao = evento.target.closest('[data-importar-metadados]');
+    if (!botao) return;
+    evento.preventDefault();
+    const linha = botao.closest('.foto-rascunho, .foto-selecionada');
+    const entrada = linha?.querySelector(
+      '[name="anexo_legenda[]"], [name="foto_legenda[]"]');
+    if (!entrada) return;
+    entrada.value = textoMetadados(botao.dataset.metadadosData,
+                                   botao.dataset.metadadosLocal);
+    entrada.dispatchEvent(new Event('input', {bubbles: true}));
+    entrada.dispatchEvent(new Event('change', {bubbles: true}));
+  });
   // Fotos e legendas: sem botão de salvar. Legendas usam debounce e
   // arquivos novos são enviados assim que selecionados.
   if (formAuto && formAuto.dataset.osId && formAuto.dataset.autoSave === '1') {
@@ -1420,7 +1722,7 @@
   // Interface app: transforma os fieldsets da OS em seções navegáveis.
   const formApp = document.getElementById('form-os');
   if (formApp && document.body.classList.contains('ui-app')) {
-    const ordemSecoes = ['identificação', 'situação', 'materiais', 'fotos'];
+    const ordemSecoes = ['identificação', 'situação', 'materiais', 'fotos', 'rateio'];
     const paineis = Array.from(formApp.children)
       .filter(elemento => elemento.tagName === 'FIELDSET')
       .sort((a, b) => {
@@ -1863,13 +2165,19 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
 
   // Abas da OS: somente nome + ícone simbólico.
   const svgsAbas = [
-    '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
-    '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12a9 9 0 1 1-6-8.5"/></svg>',
-    '<svg viewBox="0 0 24 24"><path d="M4 7 12 3l8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>',
-    '<svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>'
+    ['identifica', '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>'],
+    ['situa', '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12a9 9 0 1 1-6-8.5"/></svg>'],
+    ['materiais', '<svg viewBox="0 0 24 24"><path d="M4 7 12 3l8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>'],
+    ['midias', '<svg viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>'],
+    ['rateio', '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>']
   ];
-  document.querySelectorAll('.os-tabs .os-tab .tab-index').forEach((span, indice) => {
-    span.innerHTML = svgsAbas[indice] || '';
+  document.querySelectorAll('.os-tabs .os-tab').forEach(botao => {
+    const span = botao.querySelector('.tab-index');
+    if (!span) return;
+    const texto = (botao.textContent || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const icone = svgsAbas.find(([chave]) => texto.includes(chave));
+    span.innerHTML = icone ? icone[1] : '';
     span.classList.add('tab-icon');
   });
   if (podeCriarElemento) {

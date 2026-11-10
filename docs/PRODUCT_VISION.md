@@ -27,6 +27,16 @@ pieces with clear responsibilities.
 | Locale/vertical modules | **TBD** (`autoseg-br` working name) | Brazilian-specific rules and integrations: CPF/CNPJ, NF-e/NFS-e, municipal tax, PIX, boleto, Brazilian addresses and similar. | Planned modules; not part of the generic core. |
 | Integrations | **TBD** | Email, files, calendars, payment providers, tax providers, storage and external APIs behind replaceable interfaces. | Partly present in AUTOSEG today, coupled to the current app. Future home: modules/adapters. |
 
+**Vocabulary note (2026-11-10):** AUTOSEG is **not a store**. It is the first
+**service provider (prestadora)** in the Officina ecosystem and the first real
+distribution of the product family. The current provider/client portals are the
+seed of **Officina Web**; the current GTK application is the seed of **Officina
+GTK**. This is a planning direction, not an authorization to rewrite: AUTOSEG
+comes first, and the generic products are extracted only after identity,
+permissions and parity are tested. See
+`docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` and
+`docs/planning/OFFICINA_WEB_AND_GTK.md`.
+
 ### 2.1 What “fork” means here
 
 AUTOSEG should be a **downstream flavor/distribution**, not a hard fork with

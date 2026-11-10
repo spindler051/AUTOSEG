@@ -169,6 +169,27 @@ class PdfRelatorioTest(unittest.TestCase):
         texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
         self.assertIn("ORÇAMENTO", texto)
         self.assertIn("COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("04 VALORES E PAGAMENTO", texto)
+
+    def test_pdf_sem_materiais_omite_secao_e_linha_zerada(self):
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertNotIn("MATERIAIS UTILIZADOS", texto)
+        self.assertNotIn("Nenhum material detalhado", texto)
+        # A composição não deve listar o componente de materiais zerado.
+        self.assertNotIn("Materiais", texto)
+        self.assertIn("03 COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("04 VALORES E PAGAMENTO", texto)
+
+    def test_pdf_com_materiais_mantem_secao_e_numeracao(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute(
+                "INSERT INTO materiais_os(os_id,item,quantidade,unidade,"
+                "valor_unitario,valor_total) VALUES(10,?,?,?,?,?)",
+                ("Cabo 20A", 2, "m", 10.0, 20.0))
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("MATERIAIS UTILIZADOS", texto)
+        self.assertIn("Cabo 20A", texto)
+        self.assertIn("04 COMPOSIÇÃO DO VALOR", texto)
         self.assertIn("05 VALORES E PAGAMENTO", texto)
 
     def test_pdf_respeita_orientacao_exif_da_foto(self):
@@ -201,6 +222,35 @@ class PdfRelatorioTest(unittest.TestCase):
                       ("Texto livre configurável no relatório.",))
         texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
         self.assertIn("Texto livre configurável no relatório.", texto)
+        self.assertIn("03 Garantia", texto)
+        self.assertIn("04 COMPOSIÇÃO DO VALOR", texto)
+        self.assertLess(texto.index("Garantia"),
+                        texto.index("COMPOSIÇÃO DO VALOR"))
+
+    def test_pdf_garantia_antes_da_composicao(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute("UPDATE ordens_servico SET texto_adicional=? WHERE id=10",
+                      ("Garantia de 90 dias para o serviço executado.",))
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("03 Garantia", texto)
+        self.assertIn("04 COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("05 VALORES E PAGAMENTO", texto)
+        self.assertLess(texto.index("Garantia de 90 dias"),
+                        texto.index("COMPOSIÇÃO DO VALOR"))
+
+    def test_pdf_com_materiais_e_garantia_mantem_ordem(self):
+        with sqlite3.connect(self.db) as c:
+            c.execute("UPDATE ordens_servico SET texto_adicional=? WHERE id=10",
+                      ("Garantia de 90 dias.",))
+            c.execute(
+                "INSERT INTO materiais_os(os_id,item,quantidade,unidade,"
+                "valor_unitario,valor_total) VALUES(10,?,?,?,?,?)",
+                ("Cabo 20A", 2, "m", 10.0, 20.0))
+        texto = self._texto_pdf(ext.gerar_pdf(self.db, 10))
+        self.assertIn("03 MATERIAIS UTILIZADOS", texto)
+        self.assertIn("04 Garantia", texto)
+        self.assertIn("05 COMPOSIÇÃO DO VALOR", texto)
+        self.assertIn("06 VALORES E PAGAMENTO", texto)
 
     def test_composicao_soma_total(self):
         # Garante que a composição da OS-0010 soma exatamente o total.

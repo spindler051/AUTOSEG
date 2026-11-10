@@ -18,6 +18,7 @@ Current session handoff: `docs/HANDOFF.md`.
 | Service orders | `ordens_servico`, `os_encerramentos`, `os_eventos` | Generic work-order schema + adapter | **legacy only** | Dashboard/history/report/portal read summaries now live in `repositorios/ordens.py`; characterize OS detail and active-list reads before the Workaholic adapter. Do not change status semantics. |
 | Finance | `financeiro`, `produtividade_rateios`, `produtividade_repasses` | Generic receivable/payment/commission contracts | **legacy only** | Separate generic receivable/payment from AUTOSEG commission rules; define locale payment adapter. |
 | Providers / teams | `prestadores`, `os_prestadores`, `os_responsaveis` | Generic actor/assignment contracts | **legacy only** | Define person/provider/team boundary; migrate reads first. |
+| Identity / access | `prestadores`, `v9_usuarios`, `cliente_acessos`, `v9_admin_prestadores`, web cookies/sessions, desktop/API tokens | `accounts`, `account_links`, `provider_orgs`, `ObjectPolicy` | **not started** | Audit and target model in `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`; characterize current auth/permissions; build a `Principal`/`Resource` adapter; no behavior change yet. |
 | Portals | `flavors/autoseg/modules/portal_prestador.py`, `servidor_web.py`, `portal_cliente_v94.py` | AUTOSEG flavor modules | **flavor/locale module (current)** | Keep in AUTOSEG; later extract a generic portal module only if another flavor needs it. |
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
 | Fiscal / NF-e / NFS-e | `officina/core/prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |
@@ -72,19 +73,25 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-07 | Run DEV in server mode with no local DB fallback. | Prove the desktop/server boundary with real API data; offline reads are empty and writes fail explicitly. |
 | 2026-11-07 | Require provider login in the GTK desktop. | Every API action needs an identified provider; local and server logins are separate accounts, with logout and revocable sessions. |
 | 2026-11-08 | Move AUTOSEG branding/config/templates and all AUTOSEG Python modules into `flavors/autoseg/`. | Establish the flavor boundary; generic modules moved to `officina/` and tests to `tests/`. |
+| 2026-11-10 | Treat AUTOSEG as the first service provider in the Officina ecosystem, not a store; current web/GTK are seeds of Officina Web/GTK. | Correct product vocabulary; keep AUTOSEG as the priority and avoid a big-bang rewrite. |
+| 2026-11-10 | Target one site/login for AUTOSEG, but implement identity and object policy before the UI. | Two portals and ad-hoc permission checks cannot be safely merged without a single account/tenant/policy layer. |
 
 ## Next recommended micro-slices
 
-1. **Catalog read adapter** — add characterization tests for
+1. **Authorization characterization** — inventory `s.get('admin')`,
+   `responsavel_atual`, `PermissionError` and the public routes; add tests that
+   describe current behavior without changing it. See
+   `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` §2 and §9.
+2. **Catalog read adapter** — add characterization tests for
    `officina/core/catalogo_servicos.py`, then read through a Workaholic adapter without changing
    the UI.
-2. **Clients write cleanup** — move remaining direct client writes through
+3. **Clients write cleanup** — move remaining direct client writes through
    `officina/integration/clientes.py`; keep the legacy table and IDs.
-3. **Service-order characterization** — lock status, totals, materials and PDF
+4. **Service-order characterization** — lock status, totals, materials and PDF
    behavior before attempting an adapter.
-4. **Workaholic schema revision** — add a minimal schema/versioning mechanism
+5. **Workaholic schema revision** — add a minimal schema/versioning mechanism
    needed by the next slice.
-5. **Module contract decision** — choose entry points + manifest, document it,
+6. **Module contract decision** — choose entry points + manifest, document it,
    and implement only what the first two modules need.
 
 ## Update rule

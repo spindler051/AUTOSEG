@@ -252,6 +252,10 @@ body.ui-app .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap
 body.ui-app .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
 body.ui-app .material-add{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
+body.ui-app .rateio-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
+body.ui-app .rateio-row label{margin:0 0 4px}
+body.ui-app .rateio-row input,body.ui-app .rateio-row select{min-height:36px}
+body.ui-app .rateio-row button{min-height:36px;padding:0 12px}
 body.ui-app .material-row label{margin:0 0 4px}
 body.ui-app .material-row input{min-height:36px}
 body.ui-app .material-row button{min-height:36px;padding:0 12px}
@@ -597,6 +601,9 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
   body.ui-app .os-status-block{grid-template-columns:1fr}
   body.ui-app .os-status-block button{width:100%}
   body.ui-app .material-row{grid-template-columns:1fr 1fr}
+  body.ui-app .rateio-row{grid-template-columns:1fr 1fr}
+  body.ui-app .rateio-row>div:first-child,body.ui-app .rateio-row>div:nth-child(2){grid-column:1/-1}
+  body.ui-app .rateio-row button{grid-column:1/-1;width:100%}
   body.ui-app .material-row>div:first-child{grid-column:1/-1}
   body.ui-app .material-row button{grid-column:1/-1;width:100%}
   body.ui-app .foto-rascunho{grid-template-columns:1fr!important}
@@ -948,7 +955,7 @@ fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}l
 .composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}.composicao-preview .filho{{padding-left:14px;color:#aaa}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row,.material-row-os{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-{CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
+{CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js?v={VERSAO_PORTAL}" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
 
 
 class PortalPrestador:
@@ -2220,6 +2227,36 @@ class PortalPrestador:
                                     numero_seguro(rasc_salvo.get('valor_mao_obra'))+total_mat,2)
                 except Exception:
                     rasc_salvo = None
+                # O auto-save envia a composição como texto JSON. Normalizar
+                # depois do merge evita iterar caracteres e mantém a composição
+                # declarativa já gravada quando o rascunho não a trouxer.
+                def _lista_composicao(valor):
+                    if isinstance(valor,str):
+                        try:
+                            valor=json.loads(valor)
+                        except (TypeError,ValueError):
+                            return None
+                    if isinstance(valor,dict):
+                        valor=valor.get('componentes')
+                    if not isinstance(valor,list):
+                        return None
+                    return [x for x in valor if isinstance(x,dict)]
+                composicao_rascunho=_lista_composicao(d.get('composicao_yaml'))
+                if composicao_rascunho is not None:
+                    d['composicao_yaml']=composicao_rascunho
+                else:
+                    d.pop('composicao_yaml',None)
+                    if oid and o and o['composicao_json']:
+                        try:
+                            comp_salva=json.loads(o['composicao_json'])
+                        except (TypeError,ValueError):
+                            comp_salva={}
+                        if isinstance(comp_salva,dict) and comp_salva.get('declarativa'):
+                            d['composicao_yaml']=[
+                                {'id':x.get('id'),'nome':x.get('nome'),
+                                 'valor':f'{int(x.get("valor_centavos") or 0)/100:.2f}'.replace('.',',')}
+                                for x in comp_salva.get('componentes',[])
+                                if isinstance(x,dict)]
                 if app:
                     corpo+='<div class="os-layout"><div class="os-main">'
                 if not oid:
@@ -2243,7 +2280,6 @@ class PortalPrestador:
                 servicos_ativos=catalogo.listar(banco,ativos=True)
                 bloco_modelo=''
                 if servicos_ativos:
-                    import json
                     js_json=json.dumps([{'id':v['id'],'nome':v['nome'],
                         'preco':str(v['preco_servico_centavos']/100),
                         'relatorio':v['relatorio_padrao'],
@@ -2326,7 +2362,9 @@ class PortalPrestador:
                 corpo+='<div class="os-client-block">'
                 if solicitacao:
                     nome_cliente_solicitacao=next((x['nome'] for x in cl if x['id']==solicitacao['cliente_id']),'')
-                    corpo+=('<p class="notice"><strong>Chamado de origem — somente leitura</strong><br>'
+                    rotulo_origem=('Chamado de origem' if s.get('admin')
+                                   else 'Chamado de origem — somente leitura')
+                    corpo+=(f'<p class="notice"><strong>{esc(rotulo_origem)}</strong><br>'
                         f'Cliente: {esc(nome_cliente_solicitacao)} · {esc(solicitacao["criado_em"])}<br>'
                         f'{esc(solicitacao["descricao_original"])}<br>'
                         f'<span class="muted">Número da OS: {esc(d.get("numero_os") or "")}. '
@@ -2371,14 +2409,41 @@ class PortalPrestador:
                     [('Baixa','Baixa'),('Normal','Normal'),('Alta','Alta')],
                     d.get('urgencia') or 'Normal')
                 corpo+='</div><div>'
-                corpo+=campos_escuros('Valor de mão de obra (R$)','valor_mao_obra',d.get('valor_mao_obra') or '0',required=True)+'</div></div>'
-                corpo+='<p class="muted">Serviço em garantia ou cortesia: informe <b>0,00</b> na mão de obra e <b>0,00</b> no valor cobrado dos materiais. ' \
-                       'O custo real dos materiais é interno e não entra no total cobrado.</p>'
-                corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
-                corpo+='<div>'+campos_escuros('Total negociado (R$), opcional — substitui a soma','valor_total_override',
-                  (d.get('valor_total') if d and abs(numero_seguro(d.get('valor_total'))-numero_seguro(d.get('valor_mao_obra'))-numero_seguro(d.get('valor_materiais')))>0.009 else ''))+'</div></div>'
-                corpo+='<p class="muted">O <b>Total negociado</b> é o valor final da OS. A mão de obra é a base da composição; sem total negociado, a composição soma as taxas.</p>'
-                corpo+=campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')
+                # Saved OSs store the labor component of the composition, not
+                # the service value the user typed. When there is an explicit
+                # final total, show the actual hour remainder; otherwise
+                # derive the service value from total - materials so reopening
+                # the form does not freeze a split.
+                comp_salva_form=composicao.de_json(d.get('composicao_json'))\
+                    if d.get('composicao_json') else None
+                hora_salva=next((x for x in (comp_salva_form or {}).get('componentes',[])
+                                 if x.get('modo')=='hora' or x.get('id')=='hora_tecnica'),
+                                None)
+                sem_visita_atual=bool(comp_salva_form and comp_salva_form.get('sem_visita'))
+                composicao_simplificada=bool(comp_salva_form and comp_salva_form.get('simplificada'))
+                valor_final_override=d.get('valor_total_override') or ''
+                if (not valor_final_override and oid and comp_salva_form
+                        and comp_salva_form.get('valor_total_override') is not None):
+                    valor_final_override=comp_salva_form.get('valor_total_override')
+                valor_servico=d.get('valor_mao_obra') or '0'
+                if hora_salva is not None and str(valor_final_override).strip():
+                    valor_servico=int(hora_salva.get('valor_centavos') or 0)/100
+                elif d.get('valor_total') is not None:
+                    if oid or not str(d.get('valor_mao_obra') or '').strip():
+                        valor_servico=max(
+                            0.0, numero_seguro(d.get('valor_total'))
+                            - numero_seguro(d.get('valor_materiais')))
+                if not oid and d.get('valor_total') is not None:
+                    if abs(numero_seguro(d.get('valor_total'))
+                           - numero_seguro(valor_servico)
+                           - numero_seguro(d.get('valor_materiais')))>0.009:
+                        valor_final_override=d.get('valor_total')
+                corpo+=campos_escuros('Valor do serviço — mão de obra, sem materiais (R$)','valor_mao_obra',valor_servico,required=True)+'</div></div>'
+                corpo+='<p class="muted">Este é o valor da mão de obra, sem materiais. Quando há valor final informado, a mão de obra é o restante depois de materiais, visita (se cobrada) e custos percentuais; a composição não soma taxas por cima do total. ' \
+                       'Em garantia ou cortesia, informe <b>0,00</b> na mão de obra e <b>0,00</b> no valor cobrado dos materiais. O custo real dos materiais é interno e não entra no total cobrado.</p>'
+                corpo+=campos_escuros('Valor final da OS (R$), opcional','valor_total_override',
+                  valor_final_override)
+                corpo+='<p class="muted">O <b>valor final da OS</b> é o que o cliente paga. Quando informado, prevalece sobre serviço + materiais. A composição apenas distribui esse total — nunca acrescenta visita, percentuais ou custos por cima.</p>'
                 if solicitacao:
                     corpo+=f'<input type="hidden" name="descricao" value="{esc(solicitacao["descricao_original"])}">'
                 else:
@@ -2407,7 +2472,7 @@ class PortalPrestador:
                         corpo+='<button type="button" class="danger" id="abrir-cancelar-os">Cancelar OS</button>'
                     corpo+='</div>'
                 corpo+='</fieldset>'
-                corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total é calculado por mão de obra + materiais; o total negociado, quando informado, prevalece. Materiais detalhados prevalecem sobre o campo de materiais sem itens.</p>'
+                corpo+='<fieldset><legend>Materiais utilizados</legend><p class="muted">O total da OS é serviço + materiais, salvo quando houver um valor final informado. Materiais detalhados prevalecem sobre o campo de materiais sem itens. Sem materiais, o relatório não exibe esta seção.</p>'
                 corpo+=datalist_unidades_material()
                 produtos=estoque.listar(banco,ativos=True)
                 attr_estoque=' list="materiais-estoque-lista"' if produtos else ''
@@ -2443,6 +2508,9 @@ class PortalPrestador:
                 corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
                 corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
                 corpo+='<div class="material-add"><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button></div>'
+                corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
+                corpo+='<div>'+campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')+'</div></div>'
+                corpo+='<p class="muted">Use o valor sem itens apenas quando não houver materiais detalhados. O custo real é interno e não entra no total cobrado.</p>'
                 try:
                     cfg_comp=composicao.carregar()
                     bases_comp=cfg_comp.get('bases_percentuais') or {}
@@ -2452,7 +2520,8 @@ class PortalPrestador:
                 if not bases_comp:
                     bases_comp={'total':{'nome':'Total da OS'},
                                 'visita':{'nome':'Visita mínima'}}
-                base_atual=str(d.get('base_percentuais') or base_padrao)
+                base_atual=('total' if sem_visita_atual
+                            else str(d.get('base_percentuais') or base_padrao))
                 opcoes_base=[(chave,(valor or {}).get('nome',chave))
                              for chave,valor in bases_comp.items()]
                 corpo+='</fieldset>'
@@ -2478,6 +2547,13 @@ class PortalPrestador:
                             'Não precisa de destinatário</label>')
                     corpo+='<p class="muted">Marque para concluir a OS sem enviar o relatório por e-mail. '
                     corpo+='A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
+                if oid and s.get('admin'):
+                    valor_solicitacao=(d.get('solicitacao_original')
+                                       or (solicitacao['descricao_original']
+                                           if solicitacao else d.get('descricao')) or '')
+                    corpo+=textarea('Solicitação original','solicitacao_original',
+                                    valor_solicitacao,rows=4,required=True)
+                    corpo+='<p class="muted">Este texto é a solicitação original do cliente. Ele aparece no PDF e no chamado de origem; editar aqui atualiza os dois.</p>'
                 corpo+=textarea('Diagnóstico','v9_diagnostico',d.get('v9_diagnostico',(detalhes['diagnostico'] if detalhes else '')) or '',rows=3)
                 corpo+=textarea('Serviço executado','v9_execucao',d.get('v9_execucao',(detalhes['execucao'] if detalhes else '')) or '',rows=4)
                 corpo+=textarea('Resultado e testes','v9_resultado',d.get('v9_resultado',(detalhes['resultado'] if detalhes else '')) or '',rows=3)
@@ -2485,63 +2561,61 @@ class PortalPrestador:
                 corpo+=textarea(texto_os.rotulo(),'texto_adicional',d.get('texto_adicional',texto_os.padrao()) or '',rows=4)
                 if texto_os.ajuda():
                     corpo+=f'<p class="muted">{esc(texto_os.ajuda())}</p>'
-                corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1" checked> Aplicar composição padrão (visita, custos e margem)</label>'
-                corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. Desmarque para usar somente mão de obra + materiais.</p>'
-                corpo+=select('Composição dos valores','base_percentuais',opcoes_base,base_atual)
-                corpo+='<p class="muted">Visita mínima: os percentuais ficam dentro da visita. Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante.</p>'
-                corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
-                corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
+                comp_itemizado=bool(d.get('composicao_yaml'))
+                if comp_itemizado:
+                    itens_comp=[]
+                    for x in d.get('composicao_yaml') or []:
+                        if not isinstance(x,dict):
+                            continue
+                        nome=esc(str(x.get('nome') or x.get('id') or ''))
+                        valor_c=composicao.centavos_de_reais(str(x.get('valor') or '0'))
+                        itens_comp.append(f'<li>{nome} — {dinheiro(valor_c/100)}</li>')
+                    corpo+=('<div class="notice"><b>Composição itemizada desta OS</b>'
+                            '<ul>'+''.join(itens_comp)+'</ul>'
+                            '<p class="muted">Os itens são preservados ao salvar a OS.</p></div>')
+                else:
+                    marcado_comp='' if composicao_simplificada else ' checked'
+                    corpo+=f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1"{marcado_comp}> Aplicar composição padrão (custos e margem)</label>'
+                    corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. A taxa de visita é opcional nesta OS.</p>'
+                    corpo+=select('Taxa mínima de visita','cobrar_visita',
+                                  [('1','Cobrar'),('0','Não cobrar')],
+                                  '0' if sem_visita_atual else '1')
+                    corpo+='<p class="muted">Escolha <b>Não cobrar</b> para uma OS negociada sem taxa de visita: os custos percentuais continuam incidindo sobre o total e a mão de obra recebe o restante.</p>'
+                    corpo+=select('Composição dos valores','base_percentuais',opcoes_base,base_atual)
+                    corpo+='<p class="muted">Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante. Visita mínima: os percentuais ficam dentro da visita e a hora recebe o restante. Em ambas, o total final não muda.</p>'
+                    corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
+                    corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     if iniciado_ativo:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
                     else:
                         corpo+='<p class="warn">OS ainda não iniciada. Assumir uma OS não inicia o atendimento automaticamente.</p>'
-                if oid and d['status'] in ext.ATIVAS and (responsavel==s['pid'] or s.get('admin')):
-                    corpo+='<div id="rateio-conclusao"><h3>Técnicos secundários — somente na conclusão</h3>'
-                    corpo+='<p class="muted">Distribua valores do mesmo total cobrado à imobiliária. O restante fica com o técnico que conclui a OS. Deixar vazio não cria parcela.</p>'
-                    opcoes=[('', 'Sem técnico secundário')]+[(p['id'],p['nome']) for p in prestadores if p['id']!=s['pid']]
-                    for i in range(3):
-                        corpo+='<div class="col2"><div>'+select('Técnico secundário','rateio_tecnico[]',opcoes,'')+'</div>'
-                        corpo+='<div>'+campos_escuros('Valor da parcela (R$)','rateio_valor[]','',placeholder='0,00')+'</div></div>'
-                    corpo+='</div>'
-                if oid and d['status']=='Concluída':
-                    with ext.db(banco) as c:
-                        fin=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
-                                      (oid,)).fetchone()
-                        rateios_manuais=c.execute('''SELECT r.tecnico_id,p.nome,r.valor_centavos
-                            FROM produtividade_rateios r JOIN prestadores p ON p.id=r.tecnico_id
-                            WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()
-                    finalizador_id=fin['prestador_id'] if fin else None
-                    if finalizador_id==s['pid'] or s.get('admin'):
-                        corpo+='<div id="rateio-manual"><h3>Rateio e repasses</h3>'
-                        if rateios_manuais:
-                            corpo+='<ul>'+''.join(
-                                f'<li>{esc(x["nome"])} — {dinheiro(float(x["valor_centavos"] or 0)/100)}</li>'
-                                for x in rateios_manuais)+'</ul>'
-                        else:
-                            corpo+='<p class="muted">Nenhum técnico secundário com parcela nesta OS.</p>'
-                        opcoes_manual=[('', 'Selecione o técnico')]+[
-                            (p['id'], p['nome']) for p in prestadores
-                            if p['id']!=finalizador_id]
-                        corpo+='<div class="col2"><div>'+select('Técnico secundário',
-                            'rateio_manual_tecnico',opcoes_manual,'')+'</div>'
-                        corpo+='<div>'+campos_escuros('Valor do rateio (R$)',
-                            'rateio_manual_valor','',placeholder='0,00')+'</div></div>'
-                        corpo+=f'<button type="submit" class="secondary" formaction="{url_os(banco, oid)}/rateio" formnovalidate>Salvar rateio</button>'
-                        corpo+='<p class="muted">Use 0,00 para remover a parcela. O total cobrado do cliente não muda; '
-                        corpo+='o restante fica com o finalizador. Depois de enviado/confirmado, o repasse não pode ser alterado.</p></div>'
                 corpo+='</fieldset>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     pode_editar_fotos = (responsavel == s['pid']) or bool(s.get('admin'))
                     pode_nota = (responsavel == s['pid']) or cad9.prestador_admin(banco, s['pid'])
-                    corpo+='<fieldset><legend>Fotos do relatório e legendas</legend>'
+                    try:
+                        cliente_metadados=next(
+                            (dict(x) for x in cl
+                             if int(x['id'])==int(d.get('cliente_id'))), {}
+                        ) if d.get('cliente_id') else {}
+                    except (TypeError,ValueError):
+                        cliente_metadados={}
+                    local_metadados=' · '.join(
+                        str(cliente_metadados.get(k) or '').strip()
+                        for k in ('bairro','cidade')
+                        if str(cliente_metadados.get(k) or '').strip())
+                    corpo+=(f'<fieldset data-local-metadados="{esc(local_metadados)}">'
+                            '<legend>Fotos do relatório e legendas</legend>')
                     if pode_editar_fotos:
                         corpo+=('<p class="muted">Você pode adicionar fotos e alterar legendas. '
                                 'Tudo é salvo automaticamente ao selecionar arquivos ou '
                                 'editar uma legenda. A conclusão gera o PDF com as fotos e '
                                 'legendas.</p>'
                                 '<p class="muted auto-save-status" id="fotos-auto-status" '
-                                'aria-live="polite">Fotos e legendas salvas automaticamente.</p>')
+                                'aria-live="polite">Fotos e legendas salvas automaticamente.</p>'
+                                '<p class="muted">Importar metadados usa a data da foto e o '
+                                'bairro/cidade do cliente. Leitura EXIF/GPS pode ser adicionada depois.</p>')
                     else:
                         corpo+=('<p class="muted">Somente o responsável ou administrador pode '
                                 'adicionar fotos e alterar legendas.</p>')
@@ -2559,6 +2633,10 @@ class PortalPrestador:
                             if pode_editar_fotos:
                                 marcado=' checked' if vis=='1' else ''
                                 corpo+=('<label>Legenda da foto<input name="anexo_legenda[]" maxlength="160" value="'+legenda+'" placeholder="Ex.: Quadro elétrico antes do reparo"></label>'
+                                    +'<button type="button" class="secondary importar-metadados" '
+                                    'data-importar-metadados '
+                                    f'data-metadados-data="{esc(a["criado_em"])}" '
+                                    f'data-metadados-local="{esc(local_metadados)}">Importar metadados</button>'
                                     +'<input type="hidden" name="anexo_id[]" value="'+str(a['id'])+'">'
                                     +f'<label class="foto-incluir"><input type="checkbox" name="anexo_incluir[]" value="{a["id"]}"{marcado}> Incluir no PDF</label>'
                                     +f'<button class="secondary" type="button" data-mover="{url_os(banco, oid)}/anexo/{a["id"]}/mover" data-direcao="up" title="Mover para cima">↑</button>'
@@ -2611,6 +2689,86 @@ class PortalPrestador:
                             corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> Não precisa de nota fiscal</label>'
                             corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
+                    corpo+='</fieldset>'
+                if oid:
+                    with ext.db(banco) as c:
+                        fin_rateio=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
+                                             (oid,)).fetchone()
+                        rateios_atuais=[dict(x) for x in c.execute('''SELECT r.tecnico_id,
+                            p.nome,r.valor_centavos,
+                            COALESCE(rep.pago_centavos,0) pago_centavos,
+                            COALESCE(rep.enviado_centavos,0) enviado_centavos
+                            FROM produtividade_rateios r
+                            JOIN prestadores p ON p.id=r.tecnico_id
+                            LEFT JOIN produtividade_repasses rep
+                              ON rep.os_id=r.os_id AND rep.tecnico_id=r.tecnico_id
+                            WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()]
+                    finalizador_rateio=(fin_rateio['prestador_id'] if fin_rateio
+                                        else responsavel)
+                    admin_rateio=bool(s.get('admin'))
+                    pode_editar_rateio=(admin_rateio or
+                        (finalizador_rateio is not None
+                         and int(finalizador_rateio)==int(s['pid'])))
+                    if arquivada or d['status'] in ('Cancelada','Não realizada'):
+                        pode_editar_rateio=False
+                    total_rateado=sum(int(x['valor_centavos'] or 0)
+                                      for x in rateios_atuais)
+                    total_os_centavos=int(round(numero_seguro(d.get('valor_total'))*100))
+                    corpo+=(f'<fieldset id="rateio-colaboradores" '
+                            f'data-rateio-url="{url_os(banco, oid)}/rateio">'
+                            '<legend>Rateio e colaboradores</legend>')
+                    corpo+=('<p class="muted">Defina agora quem participa e quanto cada técnico '
+                            'secundário recebe. O total cobrado do cliente não muda; o restante '
+                            'fica com o responsável/finalizador.</p>')
+                    corpo+='<div id="rateio-lista">'
+                    if rateios_atuais:
+                        for x in rateios_atuais:
+                            valor_x=int(x['valor_centavos'] or 0)
+                            valor_texto=f'{float(valor_x)/100:.2f}'.replace('.', ',')
+                            readonly='' if pode_editar_rateio else ' readonly'
+                            corpo+=(f'<div class="rateio-row" data-rateio-row '
+                                    f'data-tecnico-id="{int(x["tecnico_id"])}">')
+                            corpo+=(f'<div><label>Colaborador<input value="{esc(x["nome"])}" '
+                                    'readonly></label></div>')
+                            corpo+=(f'<div><label>Valor da parcela (R$)'
+                                    f'<input name="rateio_manual_valor" value="{valor_texto}" '
+                                    f'inputmode="decimal"{readonly}></label></div>')
+                            if pode_editar_rateio:
+                                corpo+=(f'<button type="button" class="secondary remover-rateio" '
+                                        f'data-rateio-remover="{int(x["tecnico_id"])}">Remover</button>')
+                            corpo+='</div>'
+                    else:
+                        corpo+='<p class="muted">Nenhum colaborador com parcela nesta OS.</p>'
+                    corpo+='</div>'
+                    corpo+=(f'<p id="rateio-totais"><b>Total da OS:</b> '
+                            f'<span id="rateio-total-os">{dinheiro(total_os_centavos/100)}</span> · '
+                            f'<b>Rateado:</b> <span id="rateio-total-rateado">{dinheiro(total_rateado/100)}</span> · '
+                            f'<b>Restante:</b> <span id="rateio-restante">{dinheiro(max(0,total_os_centavos-total_rateado)/100)}</span></p>')
+                    if pode_editar_rateio:
+                        opcoes_rateio=[('', 'Selecione o colaborador')]+[
+                            (p['id'], p['nome']) for p in prestadores
+                            if (p['id']!=s['pid'] or admin_rateio)
+                            and (finalizador_rateio is None
+                                 or int(p['id'])!=int(finalizador_rateio))]
+                        opcoes_html=''.join(
+                            f'<option value="{pid}">{esc(nome)}</option>'
+                            for pid,nome in opcoes_rateio)
+                        corpo+='<div class="material-add"><button id="adicionar-rateio" class="secondary" type="button">+ Adicionar colaborador</button></div>'
+                        corpo+=('<template id="modelo-rateio"><div class="rateio-row" '
+                                'data-rateio-row data-novo="1">'
+                                '<div><label>Colaborador<select name="rateio_manual_tecnico">'
+                                +opcoes_html+'</select></label></div>'
+                                '<div><label>Valor da parcela (R$)'
+                                '<input name="rateio_manual_valor" placeholder="0,00" '
+                                'inputmode="decimal"></label></div>'
+                                '<button type="button" class="secondary remover-rateio">Remover</button>'
+                                '</div></template>')
+                        corpo+=('<p class="muted auto-save-status" id="rateio-auto-status" '
+                                'aria-live="polite">Selecione o colaborador e digite o valor; '
+                                'salva automaticamente.</p>')
+                    else:
+                        corpo+=('<p class="muted">Somente o responsável/finalizador ou um '
+                                'administrador pode editar o rateio.</p>')
                     corpo+='</fieldset>'
                 corpo+=cancelar_dialogo
                 corpo+=status_bloco
@@ -2803,7 +2961,7 @@ class PortalPrestador:
                                '<button type="submit">Salvar prazo</button></form>')
                         acao=(prazo
                               +f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/receber" '
-                              'data-confirm="Confirma que o valor foi realmente recebido?">'
+                              'data-confirm-receber="Confirma que o valor foi realmente recebido?">'
                               f'{token}<button type="submit">Confirmar recebimento</button></form>'
                               f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/cancelar" '
                               'data-confirm="Cancelar este pagamento? Ele deixará de ser contabilizado.">'
@@ -2875,7 +3033,7 @@ class PortalPrestador:
                         'meu':float(emprestimo['restante'] or 0)/100,
                         'status':'A receber','status_classe':'bad',
                         'detalhe':detalhe,
-                        'acao':botao('Analisar comprovante' if pendente>0 else 'Abrir empréstimo',
+                        'acao':botao('Analisar comprovante' if pendente>0 else 'Abrir',
                                      f'/financeiro/maf-emprestimo/{int(emprestimo["id"])}',
                                      'secondary'),
                         'recebido':False})
@@ -2888,7 +3046,7 @@ class PortalPrestador:
                         'status':'Recebido','status_classe':'good',
                         'detalhe':('Empréstimo pessoal recebido · saldo em aberto; '
                                    'não é receita da empresa'),
-                        'acao':botao('Abrir empréstimo',
+                        'acao':botao('Abrir',
                                      f'/financeiro/maf-emprestimo/{int(emprestimo["id"])}',
                                      'secondary'),
                         'recebido':True})
@@ -2913,15 +3071,16 @@ class PortalPrestador:
                             f'<div class="finance-item-foot"><span class="tag {esc(item.get("status_classe") or "")}">{esc(item["status"])}</span>'
                             f'{item["acao"]}</div></article>')
 
-                def _coluna(titulo,itens,vazio):
+                def _coluna(titulo,itens,vazio,acao=''):
                     conteudo=''.join(_item_html(x) for x in itens) or f'<p class="muted">{vazio}</p>'
-                    return (f'<section class="card finance-col"><h2>{esc(titulo)}</h2>'
+                    cabecalho=(f'<div class="panel-head"><h2>{esc(titulo)}</h2>{acao}</div>'
+                               if acao else f'<h2>{esc(titulo)}</h2>')
+                    return (f'<section class="card finance-col">{cabecalho}'
                             f'<div class="finance-list">{conteudo}</div></section>')
 
-                colunas=('<div class="finance-columns">'
-                         +_coluna('A receber / Confirmar recebimento',a_receber,'Nenhum lançamento a receber.')
-                         +_coluna('Recebidos',recebidos,'Nenhum lançamento recebido.')
-                         +'</div>')
+                emprestar=('<button type="button" class="secondary" '
+                           'data-fin-target="emprestimos" data-abrir-emprestimo="1">'
+                           'Emprestar</button>')
                 banco_card=card('Dados bancários e cadastrais para cobrança',
                     f'<form method="post" action="/financeiro/banco/salvar">{token}'
                     +textarea('Dados bancários e cadastrais (texto livre)','dados_bancarios',banco_texto,rows=5)
@@ -3011,16 +3170,46 @@ class PortalPrestador:
                 except Exception:
                     LOG.exception('Falha ao carregar empréstimos entre prestadores (MAF)')
                     maf_card=''
-                corpo=(cabecalho
-                    +banco_card
-                    +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span><strong>{dinheiro(a_receber_total)}</strong></div>'
-                    +f'<div class="kpi"><span>{rotulo_r}</span><strong>{dinheiro(recebido_total)}</strong></div></div>'
+                def _tab(chave,rotulo,icone_nome,ativo=False):
+                    return (f'<button type="button" class="os-tab{" active" if ativo else ""}" '
+                            f'data-fin-tab="{chave}" role="tab" '
+                            f'aria-selected="{"true" if ativo else "false"}" '
+                            f'aria-controls="fin-panel-{chave}">'
+                            f'<span class="tab-icon">{icone(icone_nome)}</span>'
+                            f'<span>{esc(rotulo)}</span></button>')
+                def _painel(chave,conteudo,ativo=False):
+                    oculto='' if ativo else ' hidden'
+                    return (f'<section class="finance-panel" id="fin-panel-{chave}" '
+                            f'data-fin-panel="{chave}" role="tabpanel"{oculto}>'
+                            f'{conteudo}</section>')
+                tabs=('<div class="os-tabs finance-tabs" role="tablist" '
+                      'aria-label="Seções do financeiro">'
+                      +_tab('resumo','Resumo','home',True)
+                      +_tab('a-receber','A receber','wallet')
+                      +_tab('recebidos','Recebidos','check')
+                      +_tab('repasses','Repasses','users')
+                      +_tab('emprestimos','Empréstimos','receipt')
+                      +'</div>')
+                resumo_painel=(caixa_card
+                    +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span>'
+                    +f'<strong id="kpi-a-receber">{dinheiro(a_receber_total)}</strong></div>'
+                    +f'<div class="kpi"><span>{rotulo_r}</span>'
+                    +f'<strong id="kpi-recebido">{dinheiro(recebido_total)}</strong></div></div>'
                     +'<p class="notice">A forma de pagamento PIX não comprova recebimento. '
                     'Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
                     +'<p class="muted">A lista mostra a sua parcela nas OS em que você participou, '
                     'como finalizador ou técnico secundário. O valor bruto e os repasses aparecem no detalhe de cada item.</p>'
-                    +'<h2>Lançamentos das OS em que participo</h2>'
-                    +colunas+repasses_card+caixa_card+maf_card)
+                    +banco_card)
+                a_receber_painel=_coluna('A receber / Confirmar recebimento',a_receber,
+                                         'Nenhum lançamento a receber.',emprestar)
+                recebidos_painel=_coluna('Recebidos',recebidos,'Nenhum lançamento recebido.')
+                corpo=(cabecalho
+                    +tabs
+                    +_painel('resumo',resumo_painel,True)
+                    +_painel('a-receber',a_receber_painel)
+                    +_painel('recebidos',recebidos_painel)
+                    +_painel('repasses',repasses_card)
+                    +_painel('emprestimos',maf_card))
                 return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):
@@ -3539,14 +3728,35 @@ class PortalPrestador:
                                     campos[chave]=composicao.centavos_de_reais(str(valores[0]))
                                 except (ValueError,TypeError):
                                     continue
-                            comp=composicao.calcular_os(
-                                total_centavos=(composicao.centavos_de_reais(total_txt)
-                                                if total_txt else None),
-                                materiais_centavos=composicao.centavos_de_reais(_valor('materiais','0')),
-                                mao_obra_centavos=composicao.centavos_de_reais(_valor('mao_obra','0')),
-                                horas=_valor('horas','0') or 0,
-                                base_percentuais=(_valor('base','total') or 'total'),
-                                campos=campos)
+                            materiais_centavos=composicao.centavos_de_reais(
+                                _valor('materiais','0'))
+                            mao_obra_centavos=composicao.centavos_de_reais(
+                                _valor('mao_obra','0'))
+                            # Without an explicit final total, the preview uses
+                            # labor + materials. The composition may split that
+                            # value, never increase it.
+                            total_centavos=(composicao.centavos_de_reais(total_txt)
+                                            if total_txt else None)
+                            if total_centavos is None:
+                                total_centavos=(materiais_centavos
+                                                + mao_obra_centavos)
+                            cobrar_visita=str(_valor('cobrar_visita','1')).strip().lower() not in (
+                                '0','nao','não','false','off')
+                            if cobrar_visita:
+                                comp=composicao.calcular_os(
+                                    total_centavos=total_centavos,
+                                    materiais_centavos=materiais_centavos,
+                                    mao_obra_centavos=mao_obra_centavos,
+                                    horas=_valor('horas','0') or 0,
+                                    base_percentuais=(_valor('base','total') or 'total'),
+                                    campos=campos)
+                            else:
+                                comp=composicao.calcular_os_sem_visita(
+                                    total_centavos=total_centavos,
+                                    materiais_centavos=materiais_centavos,
+                                    mao_obra_centavos=mao_obra_centavos,
+                                    horas=_valor('horas','0') or 0,
+                                    campos=campos)
                             componentes=[]
                             for x in comp['componentes']:
                                 item={'nome':x['nome'],
@@ -3560,6 +3770,7 @@ class PortalPrestador:
                                 componentes.append(item)
                             dados={'ok':True,'total_centavos':comp['total_centavos'],
                                    'base_percentuais':comp.get('base_percentuais',''),
+                                   'sem_visita':bool(comp.get('sem_visita')),
                                    'aviso':comp.get('aviso',''),
                                    'componentes':componentes}
                             return self.send_bytes(json.dumps(dados,ensure_ascii=False).encode(),
@@ -4388,11 +4599,15 @@ class PortalPrestador:
                                     'SELECT atualizado_em FROM ordens_servico WHERE id=?',
                                     (oid,)).fetchone()
                             versao_os=linha_versao['atualizado_em'] if linha_versao else None
-                        except Exception:
+                        except Exception as exc:
                             LOG.exception('Auto-save: falha ao aplicar valores na OS %s',oid)
                             aviso_os=('Rascunho salvo, mas os valores da OS não foram '
-                                      'aplicados. Recarregue a página e confira os campos '
-                                      'obrigatórios.')
+                                      'aplicados.')
+                            if isinstance(exc,(ValueError,PermissionError)) and str(exc):
+                                aviso_os+=f' {exc}'
+                            else:
+                                aviso_os+=(' Recarregue a página e confira os campos '
+                                           'obrigatórios.')
                         try:
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
                                                  str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
@@ -4447,9 +4662,55 @@ class PortalPrestador:
                         try:
                             tecnico=int(str(d.get('rateio_manual_tecnico','')).strip())
                         except (TypeError,ValueError):
-                            raise ValueError('Selecione o técnico secundário.')
-                        prod.definir_rateio_manual(banco,oid,pid,tecnico,
-                                                   str(d.get('rateio_manual_valor','0')))
+                            erro='Selecione o técnico secundário.'
+                            if quer_json:
+                                return self.send_bytes(json.dumps(
+                                    {'ok':False,'error':erro}).encode(),
+                                    'application/json; charset=utf-8',status=400)
+                            raise ValueError(erro)
+                        try:
+                            prod.definir_rateio_manual(banco,oid,pid,tecnico,
+                                                       str(d.get('rateio_manual_valor','0')))
+                        except Exception as exc:
+                            if quer_json:
+                                status=403 if isinstance(exc,PermissionError) else 400
+                                return self.send_bytes(json.dumps(
+                                    {'ok':False,'error':str(exc)}).encode(),
+                                    'application/json; charset=utf-8',status=status)
+                            raise
+                        if quer_json:
+                            with ext.db(banco) as c:
+                                o=c.execute('SELECT valor_total FROM ordens_servico WHERE id=?',
+                                            (oid,)).fetchone()
+                                rows=c.execute('''SELECT r.tecnico_id,p.nome,r.valor_centavos,
+                                    COALESCE(rep.pago_centavos,0) pago_centavos,
+                                    COALESCE(rep.enviado_centavos,0) enviado_centavos
+                                    FROM produtividade_rateios r
+                                    JOIN prestadores p ON p.id=r.tecnico_id
+                                    LEFT JOIN produtividade_repasses rep
+                                      ON rep.os_id=r.os_id AND rep.tecnico_id=r.tecnico_id
+                                    WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()
+                            rateios=[]
+                            for x in rows:
+                                valor_x=int(x['valor_centavos'] or 0)
+                                pago_x=int(x['pago_centavos'] or 0)
+                                enviado_x=int(x['enviado_centavos'] or 0)
+                                situacao=('Repasse confirmado' if pago_x>=valor_x
+                                          else 'Repasse enviado' if enviado_x>0
+                                          else 'Aguardando repasse')
+                                rateios.append({'tecnico_id':int(x['tecnico_id']),
+                                                'nome':x['nome'],
+                                                'valor_centavos':valor_x,
+                                                'situacao':situacao})
+                            total_centavos=int(round(float(
+                                (o['valor_total'] if o else 0) or 0)*100))
+                            rateado_centavos=sum(x['valor_centavos'] for x in rateios)
+                            return self.send_bytes(json.dumps({
+                                'ok':True,'rateios':rateios,
+                                'total_centavos':total_centavos,
+                                'rateado_centavos':rateado_centavos,
+                                'restante_centavos':max(0,total_centavos-rateado_centavos)
+                            }).encode(),'application/json; charset=utf-8')
                         return self.redir(f'{url_os(banco, oid)}')
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='remover':
                         oid=int(partes[1]);nid=int(partes[3])
@@ -4778,6 +5039,15 @@ class PortalPrestador:
                                 banco,fid,pid,str(d.get('vencimento','')))
                         else:
                             neg.financeiro_receber(banco,fid,pid)
+                            if quer_json:
+                                with ext.db(banco) as c:
+                                    linha=c.execute(
+                                        'SELECT status FROM financeiro WHERE id=?',
+                                        (fid,)).fetchone()
+                                return self.send_bytes(json.dumps({
+                                    'ok':True,
+                                    'status':(linha['status'] if linha else 'Recebido')
+                                }).encode(),'application/json; charset=utf-8')
                         return self.redir('/financeiro')
                     return self.erro('Operação desconhecida.',404,s)
                 except PermissionError as e:

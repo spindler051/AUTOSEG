@@ -225,6 +225,20 @@ class ComposicaoTest(unittest.TestCase):
             composicao.declarativa(total_centavos=25000, blocos=[{
                 "id": "visita", "valor": "200.00"}])
 
+    def test_composicao_declarativa_com_itens_customizados(self):
+        comp = composicao.declarativa(total_centavos=170000, blocos=[
+            {"id": "servico_atendimento", "nome": "Atendimento técnico emergencial noturno", "valor": "350,00"},
+            {"id": "servico_desmontagem", "nome": "Desmontagem e acesso técnico", "valor": "400,00"},
+            {"id": "servico_alinhamento", "nome": "Alinhamento e correção das lâminas", "valor": "500,00"},
+            {"id": "servico_regulagem", "nome": "Regulagem mecânica e ajustes operacionais", "valor": "300,00"},
+            {"id": "servico_montagem", "nome": "Montagem e testes funcionais", "valor": "150,00"},
+        ])
+        self.assertTrue(comp["declarativa"])
+        self.assertEqual(comp["total_centavos"], 170000)
+        self.assertEqual(sum(x["valor_centavos"] for x in comp["componentes"]), 170000)
+        self.assertEqual(comp["componentes"][0]["nome"],
+                         "Atendimento técnico emergencial noturno")
+
 
 class ComposicaoBancoTest(unittest.TestCase):
     def setUp(self):
@@ -363,6 +377,41 @@ class ComposicaoOSTest(unittest.TestCase):
                 total_centavos=45000, materiais_centavos=11075,
                 mao_obra_centavos=10000, base_percentuais="total",
                 config=self._config_os())
+
+    def test_calcular_os_abaixo_do_minimo_mantem_total_com_aviso(self):
+        comp = composicao.calcular_os(
+            total_centavos=45000, materiais_centavos=0,
+            mao_obra_centavos=45000, base_percentuais="total",
+            config=self._config_os())
+        valores = {x["nome"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 45000)
+        self.assertEqual(sum(valores.values()), 45000)
+        self.assertEqual(valores["Mão de obra / hora técnica"], 6500)
+        self.assertIn("abaixo do mínimo", comp["aviso"])
+
+    def test_calcular_os_sem_visita_total_230(self):
+        comp = composicao.calcular_os_sem_visita(
+            total_centavos=23000, materiais_centavos=8900,
+            mao_obra_centavos=26000, config=self._config_os())
+        valores = {x["id"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(comp["total_centavos"], 23000)
+        self.assertTrue(comp["sem_visita"])
+        self.assertNotIn("visita", valores)
+        self.assertEqual(valores["materiais"], 8900)
+        self.assertEqual(valores["hora_tecnica"], 7200)
+        self.assertEqual(valores["administrativo"], 2300)
+        self.assertEqual(valores["operacional"], 2300)
+        self.assertEqual(valores["risco"], 2300)
+        self.assertEqual(sum(valores.values()), 23000)
+        self.assertIn("abaixo do mínimo", comp["aviso"])
+
+    def test_calcular_os_sem_visita_sem_materiais(self):
+        comp = composicao.calcular_os_sem_visita(
+            total_centavos=23000, materiais_centavos=0,
+            mao_obra_centavos=26000, config=self._config_os())
+        valores = {x["id"]: x["valor_centavos"] for x in comp["componentes"]}
+        self.assertEqual(valores["hora_tecnica"], 16100)
+        self.assertEqual(sum(valores.values()), 23000)
 
     def test_calcular_os_base_visita_incluida(self):
         comp = composicao.calcular_os(

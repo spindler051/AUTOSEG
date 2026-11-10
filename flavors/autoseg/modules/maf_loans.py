@@ -595,7 +595,7 @@ def render_card(pid, email, csrf):
     else:
         aviso = ('<p class="good">Integração com o Meu Auto Financeiro ativa.</p>'
                  '<p class="muted">Seu e-mail é a identidade. Não precisa criar outra conta MAF.</p>')
-    novo = ('<details><summary>Novo empréstimo</summary>'
+    novo = ('<details id="maf-novo-emprestimo"><summary>Novo empréstimo</summary>'
             '<form method="post" action="/financeiro/maf-emprestimo/criar">'
             f'<input type="hidden" name="csrf" value="{_esc(csrf)}">'
             '<label>E-mail do devedor</label><input type="email" name="devedor_email" required>'

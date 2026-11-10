@@ -21,6 +21,22 @@ generic, modular, open-source platform. Read this file before changing code.
    the engine.
 9. `CHANGELOG.md` — recent behavior changes and known constraints.
 
+## Terminology
+
+- **AUTOSEG is a service provider (prestadora) in the Officina ecosystem, not a
+  store.** Do not use “loja” for the product, the tenant or the business.
+- The current AUTOSEG web portal is the seed of **Officina Web**; the current
+  GTK app is the seed of **Officina GTK**. These are planning directions, not
+  authorization to rewrite. AUTOSEG comes first.
+- Use **provider organization / prestadora** for the operational tenant and
+  **client organization** for the condominium/company being served.
+- The target is one site, one link and one login, with account/links/context
+  and object-level permissions. See
+  `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` and
+  `docs/planning/OFFICINA_WEB_AND_GTK.md`.
+- Auth, permissions, data migration and multi-provider work are N3/N4: require
+  human review or stay behind a flag.
+
 ## Non-negotiable rules
 
 1. **Preserve AUTOSEG behavior.** Structural work must not change the visible
@@ -66,6 +82,14 @@ generic, modular, open-source platform. Read this file before changing code.
     `docs/EXTERNAL_AI_REVIEW_ROUTINE.md`: one file/module per cycle, code only,
     no secrets or production data, two independent reviewers, evidence and
     citations. It does not replace the N3/N4 human review.
+14. **OS edits auto-save; do not add manual apply buttons.** In the OS screen,
+    a change must be persisted automatically (debounce, blur, Enter or
+    selection) and reflected in the page without a separate "Salvar" button.
+    Adding a button or link whose only purpose is to confirm something that can
+    be applied automatically is a prohibited design anti-pattern. Do not add
+    extra action controls (including "undo" controls) unless the product owner
+    explicitly asks for them. Destructive actions may ask for confirmation.
+    See `docs/HUMAN_CENTERED_DECISIONS.md` §9.
 
 ## Workaholic fit check
 

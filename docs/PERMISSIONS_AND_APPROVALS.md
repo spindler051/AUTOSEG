@@ -4,10 +4,17 @@
 autenticação são N3/N4; a implementação precisa de revisão humana externa ou
 fica em DEV atrás de flag.
 
+> **Leia junto:** o estado real do código e a ordem de migração estão em
+> `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`. Este documento
+> descreve o modelo desejado de grupos/papéis/aprovação; ele não é a
+> implementação atual. O esqueleto `officina/application/object_policy.py`
+> ainda não está ligado ao serviço.
+
 **Ideia central:** a Officina não deve ter só três papéis fixos. Cada
-organização deve poder criar grupos, papéis e flags, com escopo de dados e
-política de aprovação. O AUTOSEG é a primeira distribuição e define os padrões;
-outros prestadores podem configurar os seus.
+prestadora/organização deve poder criar grupos, papéis e flags, com escopo de
+dados e política de aprovação. O AUTOSEG é a primeira prestadora de serviço e a
+primeira distribuição real; ela define os padrões, e outras prestadoras poderão
+configurar os seus.
 
 ---
 

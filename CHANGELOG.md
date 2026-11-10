@@ -2,6 +2,17 @@
 
 ## 9.6.0-dev.73 — preparação da primeira publicação pública — 2026-11-09 — develop
 
+- **Documentação — site único:** auditoria do estado atual e arquitetura-alvo de conta/vínculo, prestadora/tenant, política por objeto e OS anônima. O AUTOSEG é a primeira prestadora de serviço do ecossistema Officina; site e GTK atuais são as sementes do Officina Web/GTK. Sem mudança de código nesta fase. Ver `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` e `docs/planning/OFFICINA_WEB_AND_GTK.md`.
+- **Financeiro em abas:** Resumo, A receber, Recebidos, Repasses e Empréstimos (último), com botão “Emprestar” no topo de A receber. Confirmar recebimento atualiza o item e os KPIs sem recarregar a página; empréstimos usam “Abrir” para o detalhe.
+- **OS — finalizador financeiro:** quando um administrador conclui uma OS de outro responsável, o finalizador financeiro passa a ser o **responsável atual**, não o admin que clicou. O admin continua registrado como ator na auditoria. Se o novo responsável tinha uma parcela antiga de secundário, ela é absorvida no restante e não é contada duas vezes. Corrige a OS 261109003: João Lucas recebe R$ 100,00 e João Paulo, responsável, recebe R$ 1.600,00.
+- **OS — taxa de visita opcional:** o formulário permite escolher **Cobrar** ou **Não cobrar** a taxa mínima de visita. Com **Não cobrar**, os custos percentuais continuam incidindo sobre o valor final e a mão de obra recebe o restante. Exemplo: total R$ 230,00, materiais R$ 89,00 e três custos de 10% = R$ 23,00 cada; mão de obra R$ 72,00. A escolha e o valor final negociado ficam gravados e o formulário reabre com os mesmos valores.
+- **OS — composição itemizada:** a composição declarativa aceita itens customizados com nome e valor; o formulário preserva os itens e o PDF mostra o investimento detalhado. A OS 261109003 foi completada com o relatório da porta metálica e total de R$ 1.700,00.
+- **OS — rascunho:** a composição declarativa salva como texto JSON pelo auto-save é normalizada ao abrir a OS; se o rascunho estiver inválido, a composição já gravada é preservada. Corrige o erro ao reabrir a OS 261109003 depois da troca de responsável.
+- **CLI operacional:** `update` reinicia apenas o processo do site e deixa de encerrar túneis que aparecem como clientes das mesmas portas.
+- **Composição:** o valor final é autoritativo; quando a hora técnica fica abaixo do mínimo configurado, a OS salva com aviso em vez de ficar em R$ 0,00.
+- **Auto-save:** o erro real do servidor aparece na tela e o `portal.js` é versionado na URL para evitar cache antigo.
+- **Site único — arquitetura-alvo:** documentado o fim dos portais separados de cliente/prestador, com OS rápida sem login e login único com detecção de papel. Esqueleto de permissões por objeto em `officina/application/object_policy.py`, sem integração; os portais atuais permanecem até a migração.
+- **CLI operacional:** `./autoseg start|stop|status site|server|tunnel|all` para a MAIN e `./autoseg-dev ...` para DEV, com PIDs e logs em `~/Library/Application Support/AUTOSEG/cli`. Os comandos antigos continuam funcionando.
 - **Credenciais:** senhas DEV removidas dos scripts visuais; agora vêm de `AUTOSEG_DEV_PROVIDER_PASSWORD` e `AUTOSEG_DEV_CLIENT_PASSWORD`.
 - **Identidade comercial:** CNPJ e WhatsApp são configuráveis por `AUTOSEG_COMPANY_CNPJ` e `AUTOSEG_WHATSAPP`; o repositório público usa valores fictícios.
 - **Privacidade:** IP privado, usuário local e nomes pessoais removidos de scripts e documentação.
@@ -24,9 +35,14 @@
 - **Financeiro unificado:** administradores veem o caixa da empresa dentro da aba Financeiro, com empréstimos por último; funcionários veem apenas o próprio financeiro.
 - **PDF:** OS Pendente com R$ 0,00 vira relatório de diagnóstico, sem composição nem bloco financeiro; Pendente com valor vira orçamento, com composição e valores. O e-mail usa assunto e corpo correspondentes.
 - **OS — valores:** o auto-save passa a persistir mão de obra, materiais e total negociado na própria OS, e não apenas no rascunho, para PDF e e-mail refletirem o que foi digitado. O servidor devolve a nova versão da OS e o formulário a reutiliza, evitando que a segunda alteração seja recusada pela verificação de concorrência.
+- **Rateio e colaboradores:** nova aba depois de Mídias, disponível em qualquer OS, antes ou depois da conclusão. Responsável/finalizador ou administrador define técnicos secundários e valores; o colaborador vê somente leitura. Administrador pode incluir a si mesmo quando não for o finalizador; o finalizador recebe o restante automaticamente. A conclusão preserva o rateio já definido e o total da OS não pode ficar abaixo do valor rateado.
+- **OS — composição:** o valor do serviço é autoritativo. Sem valor final informado, o total é mão de obra + materiais, e a composição apenas distribui esse valor; visita, percentuais e custos não são mais somados por cima. O campo “Total negociado” passa a ser exibido como **Valor final da OS**.
+- **PDF:** a seção **Materiais utilizados** só aparece quando há materiais; a linha de materiais zerada sai da composição e as seções seguintes são renumeradas.
+- **OS — solicitação original:** administradores passam a editar a solicitação original acima de Diagnóstico, em Situação e relatório. O mesmo texto aparece no chamado de origem e no PDF; a alteração é auditada. Para não administradores, o chamado de origem continua marcado como somente leitura e o campo editável não é exibido.
+- **PDF — garantia:** o texto configurado como Garantia passa a ser uma seção numerada antes da composição do valor. Sem garantia, a composição continua sendo a seção 03.
 - **Buscas:** páginas que já têm busca no servidor não exibem um segundo filtro de tabela.
 - **Fotos:** miniaturas são geradas no upload e ganham cache privado versionado, reduzindo o tempo de abertura da OS.
-- **Testes:** 354 testes OK, 1 skip.
+- **Testes:** 361 testes OK, 1 skip.
 
 ## 9.6.0-dev.72 — feedbacks da DEV: cliente, encerramento e erros inline — 2026-11-08 — develop
 

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from officina.core.banco import criar_banco
+from officina.core import cadastros_v9 as cad
 from officina.core import prestadores_ext as ext
 from officina.core import produtividade_os as prod
 class ProdutividadeTestes(unittest.TestCase):
@@ -86,6 +87,19 @@ class ProdutividadeTestes(unittest.TestCase):
         self.assertEqual(prod.registrar_etapa(self.db,osid,self.a,'Pendente',dados),i)
         prod.registrar_etapa(self.db,osid,self.a,'Pendente',{'relatorio_tecnico':'Segunda visita'})
         self.assertEqual(len(prod.listar_etapas(self.db,osid)),2)
+
+    def test_admin_registra_etapa_de_os_de_outro(self):
+        osid=self.nova_os()
+        ext.assumir(self.db,osid,self.a)
+        dados={'relatorio_tecnico':'Admin registrou'}
+        with self.assertRaises(PermissionError):
+            prod.registrar_etapa(self.db,osid,self.b,'Pendente',dados)
+        cad.instalar(self.db)
+        with ext.db(self.db) as c:
+            c.execute('INSERT INTO v9_admin_prestadores(prestador_id,autorizado_em) '
+                      'VALUES(?,?)',(self.b,ext.agora()))
+        etapa=prod.registrar_etapa(self.db,osid,self.b,'Pendente',dados)
+        self.assertIsInstance(etapa,int)
 
     def test_destinatarios_condominio_e_morador_ignorado(self):
         osid=self.nova_os('Jurídica','condominio@example.org','sindico@example.org')

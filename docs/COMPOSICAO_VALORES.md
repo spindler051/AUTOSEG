@@ -141,11 +141,37 @@ base_percentuais_padrao: total
   o restante.
 - `cobertura: incluido`: os percentuais ficam dentro da base (filhos), sem
   somar novamente. A hora técnica recebe `total − materiais − base`.
-- O total negociado é autoritativo. Se não cobrir a hora mínima, a gravação é
-  recusada com mensagem; não há desconto automático.
-- Sem total negociado, o total é calculado e fechado em reais inteiros.
+- O **valor final da OS** (campo `valor_total_override`, antes exibido como
+  “Total negociado”) é autoritativo. Se não cobrir a hora mínima, a OS salva
+  com aviso e a hora é ajustada; a gravação não é recusada por causa do mínimo.
+- A **taxa mínima de visita é opcional por OS**. No formulário, o seletor
+  **Taxa mínima de visita** permite **Cobrar** ou **Não cobrar**.
+- Com **Não cobrar**, a linha da visita não entra na composição, os custos
+  percentuais continuam incidindo sobre o valor final e a mão de obra recebe o
+  restante depois de materiais e custos.
+- Exemplo com a configuração do MAIN (três custos de 10%), total R$ 230,00 e
+  materiais R$ 89,00: administrativo R$ 23,00 + operacional R$ 23,00 + risco
+  R$ 23,00 = R$ 69,00; mão de obra = R$ 230,00 − R$ 89,00 − R$ 69,00 =
+  **R$ 72,00**. A visita fica em R$ 0,00 e o total permanece R$ 230,00. Se a
+  mão de obra ficar abaixo do mínimo configurado, a OS salva com aviso.
+- Sem valor final informado, o total é exatamente `mão de obra + materiais`.
+  A composição apenas distribui esse valor entre os componentes; visita,
+  percentuais e custos **não são somados por cima** do valor informado.
+- Para uma OS sem **nenhuma** composição (somente mão de obra + materiais),
+  desmarque “Aplicar composição padrão”.
 - OS de garantia/cortesia com mão de obra zero mantêm o comportamento
   anterior.
+
+Exemplo com a configuração do MAIN (visita R$ 250,00, três custos de 10% e
+sem deslocamento separado), serviço de R$ 1.500,00 e nenhum material:
+
+- base `total`: hora técnica R$ 800,00 + visita R$ 250,00 + três custos de
+  R$ 150,00 = R$ 1.500,00;
+- base `visita`: hora técnica R$ 1.250,00 + visita R$ 250,00 (com três filhos
+  de R$ 25,00 dentro dela) = R$ 1.500,00.
+
+Em ambas as bases o total permanece R$ 1.500,00. A divisão interna depende dos
+componentes ativos e dos percentuais configurados no `composicao.yaml`.
 
 Exemplo da OS-0023 (total R$ 450,00, base `visita`):
 
@@ -192,9 +218,19 @@ O PDF do orçamento (`catalogo_servicos.pdf_orcamento`) mostra:
 
 O PDF final da OS (`pdf_cliente_v9.gerar`) mostra:
 
-- **04 Composição do valor**;
-- **05 Valores e pagamento** com total, forma de pagamento e situação;
-- **06 Registro fotográfico**, quando houver.
+- **Solicitação original**;
+- **Atendimento realizado**;
+- **Materiais utilizados**, apenas quando existem linhas de material;
+- **Garantia** (ou o título configurado em `texto_os.yaml`), quando houver
+  texto, sempre antes da composição;
+- **Composição do valor**, sem a linha de materiais quando ela for R$ 0,00;
+- **Valores e pagamento** com total, forma de pagamento e situação;
+- **Registro fotográfico**, quando houver.
+
+A numeração acompanha as seções realmente exibidas. Sem materiais e sem
+garantia, a composição é **03** e os valores são **04**. Com garantia, ela é
+**03**, a composição passa a **04** e os valores a **05**. Com materiais, a
+ordem é materiais, garantia (quando houver), composição e valores.
 
 ## Tela de administração
 

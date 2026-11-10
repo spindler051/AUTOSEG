@@ -145,20 +145,28 @@ def gerar(banco,os_id):
         if enc and enc['relatorio']:linhas.append(P(enc['relatorio']))
         else:linhas.append(P('Relato técnico não informado.'))
     if enc and enc['motivo']:linhas.append(P('Motivo: '+enc['motivo']))
-    linhas.append(Secao('MATERIAIS UTILIZADOS'))
-    cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]
-    registros=[cab]
-    for m in mats:
-        qtd=m['quantidade']; unidade=str(m['unidade'] or '').strip()
-        if qtd is None:
-            quantidade='—' + (' '+unidade if unidade else '')
-        else:
-            quantidade=f'{float(qtd):g}' + (' '+unidade if unidade else ' un.')
-        registros.append([P(m['item']),P(quantidade),P(brl(m['valor_total']))])
-    if len(registros)==1:registros.append([P('Nenhum material detalhado'),P('—'),P('—')])
-    tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
-    tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-    linhas.append(tm)
+    # Omit the whole material block when the OS has no material rows; the
+    # client report should not show an empty section.
+    if mats:
+        linhas.append(Secao('MATERIAIS UTILIZADOS'))
+        cab=[Paragraph('<b>Material</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Quantidade</b>',estilo['AutosegCorpoV9']),Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9'])]
+        registros=[cab]
+        for m in mats:
+            qtd=m['quantidade']; unidade=str(m['unidade'] or '').strip()
+            if qtd is None:
+                quantidade='—' + (' '+unidade if unidade else '')
+            else:
+                quantidade=f'{float(qtd):g}' + (' '+unidade if unidade else ' un.')
+            registros.append([P(m['item']),P(quantidade),P(brl(m['valor_total']))])
+        tm=Table(registros,colWidths=[315,85,110],repeatRows=1)
+        tm.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#F0F0F0')),('LINEBELOW',(0,0),(-1,0),1,amarelo),('LINEBELOW',(0,1),(-1,-1),0.3,colors.HexColor('#DDDDDD')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
+        linhas.append(tm)
+    # The configured free-text section (warranty in AUTOSEG) is numbered and
+    # comes before the value composition so the client reads the terms first.
+    texto_adicional=str(os_['texto_adicional'] or '').strip() if 'texto_adicional' in os_.keys() else ''
+    if texto_adicional:
+        linhas.append(Secao(texto_os.titulo_pdf()))
+        linhas.append(P(texto_adicional))
     # Diagnosis-only pending OS: no composition and no financial block.
     if not diagnostico:
         if comp:
@@ -166,6 +174,11 @@ def gerar(banco,os_id):
                           Paragraph('<b>Valor</b>',estilo['AutosegCorpoV9']),
                           Paragraph('<b>%</b>',estilo['AutosegCorpoV9'])]]
             for item in comp.get('componentes',[]):
+                # A zero material line is noise when the OS had no materials;
+                # the total already matches the remaining components.
+                if (item.get('modo') == 'materiais'
+                        and not int(item.get('valor_centavos') or 0)):
+                    continue
                 linhas_comp.append([P(item.get('nome','')),P(brl(item.get('valor_centavos',0)/100)),
                                     P(f"{item.get('percentual',0):.2f}%".replace('.',','))])
                 for filho in item.get('filhos',[]):
@@ -189,10 +202,6 @@ def gerar(banco,os_id):
         valores=[['TOTAL',brl(os_['valor_total'])],
                 ['Forma de pagamento',str(os_['forma_pagamento'] or 'Não informada')],['Situação financeira',str(financeiro['status'] if financeiro else 'Sem lançamento')]]
         tf=Table([[P(a),P(b)] for a,b in valores],colWidths=[330,180]);tf.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#FFF7D9')),('LINEABOVE',(0,0),(-1,0),1,amarelo),('BOTTOMPADDING',(0,0),(-1,-1),7)]));linhas.append(tf)
-    texto_adicional=str(os_['texto_adicional'] or '').strip() if 'texto_adicional' in os_.keys() else ''
-    if texto_adicional:
-        linhas.append(S(texto_os.titulo_pdf()))
-        linhas.append(P(texto_adicional))
     if anexos:
         comprimir=True
         if 'comprimir_fotos_pdf' in os_.keys():

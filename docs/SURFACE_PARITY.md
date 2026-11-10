@@ -1,6 +1,6 @@
 # Paridade entre superfícies e papéis
 
-**Atualizado:** 2026-11-07
+**Atualizado:** 2026-11-10
 
 ## Regra
 
@@ -58,6 +58,11 @@ O GTK continua sem login de cliente; o Portal do Cliente segue separado.
 - Esconder um botão na UI não é autorização; a regra precisa viver no serviço.
 - As telas de admin existem nos dois lados; a autorização ainda precisa ser
   aplicada no serviço para admin × funcionário.
+- A auditoria de 2026-11-10 encontrou lacunas mais graves do que a paridade de
+  telas: leitura de qualquer OS/PII por qualquer prestador, API desktop sem
+  autorização, admin global sem tenant e participação permanente. O diagnóstico
+  completo e a ordem de correção estão em
+  `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` §2.
 
 ## Próximo passo
 

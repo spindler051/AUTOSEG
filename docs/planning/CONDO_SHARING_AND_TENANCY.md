@@ -4,6 +4,12 @@
 arquitetura.** Registra um caminho possível para o Officina/AUTOSEG em
 condomínios, com consentimento e isolamento de dados.
 
+> **Vocabulário:** neste documento, “organização” geralmente significa
+> **organização cliente** (condomínio/empresa). A **prestadora** é a empresa que
+> executa o serviço e é dona dos dados operacionais (tenant); o AUTOSEG é a
+> primeira prestadora. Não usar “loja”. Ver
+> `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`.
+
 ## 1. A ideia
 
 Hoje o AUTOSEG é usado pela prestadora. O condomínio é o cliente do serviço.

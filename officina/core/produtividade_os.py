@@ -177,8 +177,8 @@ def registrar_etapa(banco,os_id,pid,situacao,d):
     digest=sha256(conteudo.encode('utf-8')).hexdigest()
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        if ext.responsavel_atual(c,os_id)!=pid:
-            raise PermissionError('Somente responsável registra etapa.')
+        if ext.responsavel_atual(c,os_id)!=pid and not ext.administrador(c,pid):
+            raise PermissionError('Somente o responsável ou administrador registra etapa.')
         anterior=c.execute("""SELECT id FROM produtividade_etapas
             WHERE os_id=? AND prestador_id=? AND situacao=? AND hash_conteudo=?
             ORDER BY id DESC LIMIT 1""",(os_id,pid,situacao,digest)).fetchone()
@@ -298,6 +298,46 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
     if not isinstance(valores,list):valores=[valores]
     if len(tecnicos)>25 or len(tecnicos)!=len(valores):
         raise ValueError('Rateio incompleto ou com técnicos demais.')
+    bruto=_centavos(valor_bruto)
+    existentes=c.execute('''SELECT tecnico_id,valor_centavos FROM produtividade_rateios
+        WHERE os_id=?''',(os_id,)).fetchall()
+    if existentes:
+        if any(str(x).strip() for x in tecnicos) or any(str(x).strip() for x in valores):
+            raise ValueError('Esta OS já possui rateio definido. Ajuste em '
+                             'Rateio e colaboradores antes de concluir.')
+        # Um responsável transferido pode carregar uma parcela antiga de
+        # secundário. O finalizador recebe o restante automaticamente; a
+        # parcela antiga precisa ser absorvida, nunca somada duas vezes.
+        propria=next((x for x in existentes
+                      if int(x['tecnico_id'])==int(finalizador_id)),None)
+        if propria:
+            rep=c.execute('''SELECT pago_centavos,enviado_centavos
+                             FROM produtividade_repasses
+                             WHERE os_id=? AND tecnico_id=?''',
+                          (os_id,finalizador_id)).fetchone()
+            if rep and (int(rep['pago_centavos'] or 0)>0
+                        or int(rep['enviado_centavos'] or 0)>0):
+                raise ValueError('O finalizador tem repasse já enviado ou confirmado; '
+                                 'ajuste o rateio antes de concluir.')
+            c.execute('DELETE FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
+                      (os_id,finalizador_id))
+            c.execute('DELETE FROM produtividade_repasses WHERE os_id=? AND tecnico_id=?',
+                      (os_id,finalizador_id))
+            ext.evento(c,os_id,'Rateio do finalizador absorvido',
+                      f'Parcela de {int(propria["valor_centavos"] or 0)} centavos '
+                      'do finalizador foi incorporada ao restante.',
+                      finalizador_id,f'Prestador {finalizador_id}')
+            existentes=[x for x in existentes
+                        if int(x['tecnico_id'])!=int(finalizador_id)]
+        total_existente=sum(int(x['valor_centavos'] or 0) for x in existentes)
+        if total_existente>bruto:
+            raise ValueError('O rateio definido supera o valor total da OS. '
+                             'Ajuste antes de concluir.')
+        ext.evento(c,os_id,'Rateio preservado',
+                  f'Bruto {bruto} centavos; secundários {total_existente} centavos; '
+                  f'líquido do finalizador {bruto-total_existente} centavos.',
+                  finalizador_id,f'Prestador {finalizador_id}')
+        return bruto-total_existente
     parcelas={}
     for tid,valor in zip(tecnicos,valores):
         if not str(tid).strip() and not str(valor).strip():continue
@@ -311,13 +351,10 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
         ativo=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(ident,)).fetchone()
         if not ativo:raise ValueError('Técnico secundário não encontrado ou inativo.')
         parcelas[ident]=cents
-    bruto=_centavos(valor_bruto)
+    if not parcelas:
+        return bruto
     if sum(parcelas.values())>bruto:
         raise ValueError('As parcelas dos técnicos superam o valor cobrado pela OS.')
-    # Esta função só roda na primeira conclusão. Mudanças posteriores exigem
-    # Fluxo formal de revisão com auditoria; substituições são registradas.
-    if c.execute('SELECT 1 FROM produtividade_rateios WHERE os_id=?',(os_id,)).fetchone():
-        raise ValueError('Esta OS já possui rateio registrado; não é possível sobrescrever.')
     for ident,cents in parcelas.items():
         c.execute("""INSERT INTO os_prestadores(os_id,prestador_id,atribuido_em,ativo)
             VALUES(?,?,?,1) ON CONFLICT(os_id,prestador_id) DO UPDATE SET ativo=1""",
@@ -342,28 +379,42 @@ def definir_rateio_manual(banco,os_id,ator_id,tecnico_id,valor):
     cents=_centavos(valor)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        o=c.execute('SELECT numero_os,status,valor_total FROM ordens_servico WHERE id=?',
+        o=c.execute('SELECT numero_os,status,valor_total,arquivada FROM ordens_servico WHERE id=?',
                     (os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
-        if o['status']!='Concluída':
-            raise ValueError('O rateio manual está disponível apenas para OS concluída.')
-        if int(tecnico_id)==int(ator_id):
-            raise ValueError('O finalizador não pode receber parcela de si mesmo.')
-        alvo=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',
-                       (int(tecnico_id),)).fetchone()
-        if not alvo:
-            raise ValueError('Técnico secundário não encontrado ou inativo.')
-        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
-                        (os_id,)).fetchone()
-        if not final:
-            raise ValueError('OS sem encerramento; não há finalizador definido.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
+        if o['status'] in ('Cancelada', 'Não realizada'):
+            raise ValueError('OS cancelada ou não realizada não aceita rateio.')
         tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
                                  "AND name='v9_admin_prestadores'").fetchone())
         admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
                              (ator_id,)).fetchone()) if tem_admin else False
-        if int(final['prestador_id'])!=int(ator_id) and not admin:
-            raise PermissionError('Somente o finalizador ou um administrador pode ajustar o rateio.')
+        if o['status']=='Concluída':
+            final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
+                            (os_id,)).fetchone()
+            if not final:
+                raise ValueError('OS sem encerramento; não há finalizador definido.')
+            finalizador_id=int(final['prestador_id'])
+        else:
+            responsavel=ext.responsavel_atual(c,os_id)
+            finalizador_id=int(responsavel) if responsavel is not None else None
+        if finalizador_id is None and not admin:
+            raise PermissionError('Defina o responsável pela OS ou peça a um administrador '
+                                  'para ajustar o rateio.')
+        if finalizador_id is not None and finalizador_id!=int(ator_id) and not admin:
+            raise PermissionError('Somente o responsável/finalizador ou um administrador '
+                                  'pode ajustar o rateio.')
+        if not admin and int(tecnico_id)==int(ator_id):
+            raise ValueError('Você não pode definir parcela para si mesmo.')
+        if finalizador_id is not None and int(tecnico_id)==finalizador_id:
+            raise ValueError('O responsável/finalizador recebe o restante automaticamente '
+                             'e não pode ter uma parcela separada.')
+        alvo=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',
+                       (int(tecnico_id),)).fetchone()
+        if not alvo:
+            raise ValueError('Técnico secundário não encontrado ou inativo.')
         atual=c.execute('SELECT valor_centavos FROM produtividade_rateios WHERE os_id=? AND tecnico_id=?',
                         (os_id,int(tecnico_id))).fetchone()
         rep=c.execute('''SELECT pago_centavos,enviado_centavos FROM produtividade_repasses
@@ -396,7 +447,8 @@ def definir_rateio_manual(banco,os_id,ator_id,tecnico_id,valor):
                          VALUES(?,?,0,?) ON CONFLICT(os_id,tecnico_id) DO UPDATE SET
                          atualizado_em=excluded.atualizado_em''',
                       (os_id,int(tecnico_id),ext.agora()))
-            acao='Rateio ajustado manualmente'
+            acao=('Rateio definido' if o['status'] in ext.ATIVAS
+                  else 'Rateio ajustado manualmente')
         ext.evento(c,os_id,acao,
                    f'{o["numero_os"]} · {alvo["nome"]}: {antes} → {cents} centavos. '
                    f'Total da OS mantido em {total} centavos.',
@@ -411,7 +463,8 @@ def financeiro_pessoal(banco,pid):
             f.valor,f.forma_pagamento,f.vencimento,f.data_pagamento,
             cl.nome cliente,
             COALESCE((SELECT SUM(r.valor_centavos) FROM produtividade_rateios r
-                      WHERE r.os_id=f.os_id),0) partes_centavos,f.status
+                      WHERE r.os_id=f.os_id
+                        AND r.tecnico_id!=e.prestador_id),0) partes_centavos,f.status
             FROM financeiro f
             JOIN ordens_servico o ON o.id=f.os_id
             JOIN clientes cl ON cl.id=o.cliente_id
@@ -430,7 +483,8 @@ def financeiro_pessoal(banco,pid):
             JOIN clientes cl ON cl.id=o.cliente_id
             JOIN os_encerramentos e ON e.os_id=r.os_id
             LEFT JOIN produtividade_repasses p ON p.os_id=r.os_id AND p.tecnico_id=r.tecnico_id
-            WHERE r.tecnico_id=? AND COALESCE(o.arquivada,0)=0 ORDER BY r.os_id DESC""",(pid,))]
+            WHERE r.tecnico_id=? AND r.tecnico_id!=e.prestador_id
+              AND COALESCE(o.arquivada,0)=0 ORDER BY r.os_id DESC""",(pid,))]
         repassar=[dict(r) for r in c.execute("""SELECT r.os_id,o.numero_os,cl.nome cliente,
             r.tecnico_id,t.nome tecnico,r.valor_centavos,
             COALESCE(p.pago_centavos,0) pago_centavos,

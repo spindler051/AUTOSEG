@@ -304,6 +304,26 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('R$ 1.300,00', texto)
         self.assertIn('Mão de obra', texto)
 
+    def test_campos_de_materiais_ficam_na_aba_materiais(self):
+        pid = self._prestador('Técnico Campos Materiais',
+                              email='campos.materiais@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Campos Materiais')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço com materiais',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'materiais_presentes': '1',
+                 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        _, base = self._servidor()
+        cliente = self._login(base, 'campos.materiais@exemplo.com.br')
+        _, html = req(cliente, base, f'/os/{oid}')
+        inicio = html.find('Materiais utilizados')
+        fim = html.find('Situação e relatório técnico')
+        for campo in ('name="valor_materiais_manual"', 'name="custo_materiais"'):
+            posicao = html.find(campo)
+            self.assertGreater(posicao, inicio)
+            self.assertLess(posicao, fim)
+
     def test_auto_save_devolve_nova_versao_e_aplica_segunda_alteracao(self):
         pid = self._prestador('Técnico Versão', email='versao@exemplo.com.br')
         cid = self._cliente(pid, 'Condomínio Versão')
@@ -358,9 +378,19 @@ class CorrecoesRev12(unittest.TestCase):
             _, html = req(cliente, base, '/financeiro')
             self.assertIn('Caixa da empresa', html)
             self.assertIn('Empréstimos (MAF)', html)
+            self.assertLess(html.find('Caixa da empresa'),
+                            html.find('Dados bancários e cadastrais para cobrança'))
             self.assertGreater(html.find('Empréstimos (MAF)'),
                                html.find('Caixa da empresa'))
             self.assertEqual(html.count('href="/caixa"'), 1)
+            self.assertIn('data-fin-tab="resumo"', html)
+            self.assertLess(html.find('data-fin-tab="a-receber"'),
+                            html.find('data-fin-tab="recebidos"'))
+            self.assertLess(html.find('data-fin-tab="recebidos"'),
+                            html.find('data-fin-tab="repasses"'))
+            self.assertLess(html.find('data-fin-tab="repasses"'),
+                            html.find('data-fin-tab="emprestimos"'))
+            self.assertIn('data-abrir-emprestimo="1"', html)
             outro = self._login(base, 'func.fin@exemplo.com.br')
             _, html_func = req(outro, base, '/financeiro')
             self.assertNotIn('Caixa da empresa', html_func)
@@ -368,12 +398,57 @@ class CorrecoesRev12(unittest.TestCase):
             status, _ = req(outro, base, '/caixa')
             self.assertEqual(status, 403)
 
+    def test_confirmar_recebimento_json_nao_redireciona(self):
+        a = self._prestador('Recebedor JSON', email='recebedor.json@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Recebedor JSON')
+        oid = self._os_concluida(a, cid)
+        with ext.db(self.db) as c:
+            fid = c.execute('SELECT id FROM financeiro WHERE os_id=?',
+                            (oid,)).fetchone()['id']
+        _, base = self._servidor()
+        cliente = self._login(base, 'recebedor.json@exemplo.com.br')
+        _, html = req(cliente, base, '/financeiro')
+        self.assertIn('data-confirm-receber', html)
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+        corpo = urllib.parse.urlencode({'csrf': token}).encode()
+        pedido = urllib.request.Request(
+            base + f'/financeiro/{fid}/receber', corpo,
+            {'Accept': 'application/json',
+             'X-Requested-With': 'XMLHttpRequest'})
+        with cliente.open(pedido, timeout=20) as resposta:
+            dados = json.loads(resposta.read().decode())
+            status = resposta.status
+        self.assertEqual(status, 200)
+        self.assertTrue(dados['ok'])
+        self.assertEqual(dados['status'], 'Recebido')
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM financeiro WHERE id=?',
+                                       (fid,)).fetchone()['status'], 'Recebido')
+
+    def test_financeiro_emprestimo_usa_abrir_e_botao_emprestar(self):
+        admin = self._prestador('Admin Empréstimo', email='admin.emp@exemplo.com.br')
+        cad.definir_admin(self.db, admin, True)
+        _, base = self._servidor()
+        credor = {'id': 1, 'devedor_email': 'dev@exemplo.com',
+                  'pendente': 0, 'restante': 105000}
+        devedor = {'id': 2, 'credor_email': 'cred@exemplo.com',
+                   'pendente': 0, 'restante': 105000}
+        with mock.patch.object(maf_loans, 'MAF_DB', self.dir / 'sem_maf.db'), \
+             mock.patch.object(maf_loans, 'loan_receivables', return_value=[credor]), \
+             mock.patch.object(maf_loans, 'loan_payables', return_value=[devedor]):
+            cliente = self._login(base, 'admin.emp@exemplo.com.br')
+            _, html = req(cliente, base, '/financeiro')
+        self.assertNotIn('Abrir empréstimo', html)
+        self.assertIn('/financeiro/maf-emprestimo/1', html)
+        self.assertIn('/financeiro/maf-emprestimo/2', html)
+        self.assertIn('data-abrir-emprestimo="1"', html)
+
     def test_material_unidade_livre_quantidade_opcional_e_composicao(self):
         pid = self._prestador('Técnico Unidades', email='unidades@exemplo.com.br')
         cid = self._cliente(pid, 'Condomínio Unidades')
         dados = {
             'cliente_id': str(cid), 'descricao': 'Ajuste com materiais',
-            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '600',
             'materiais_presentes': '1', 'acao_status': 'salvar',
             'aplicar_composicao': '1',
             'material_item[]': ['Cola silicone', 'Cabo 20A'],
@@ -395,7 +470,9 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertAlmostEqual(float(mats[1]['valor_total']), 25.0, places=2)
         comp = json.loads(os_['composicao_json'])
         esperado = composicao.calcular_os(
-            materiais_centavos=5000, mao_obra_centavos=10000)
+            total_centavos=65000, materiais_centavos=5000,
+            mao_obra_centavos=60000)
+        self.assertAlmostEqual(float(os_['valor_total']), 650.0, places=2)
         self.assertAlmostEqual(float(os_['valor_total']),
                                esperado['total_centavos'] / 100, places=2)
         hora = next(x for x in comp['componentes'] if x['modo'] == 'hora')
@@ -453,6 +530,239 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(filhos['Margem de risco e contingência'], 2500)
         self.assertEqual(sum(valores.values()), 45000)
 
+    def test_os_sem_taxa_de_visita_calcula_mao_de_obra_como_restante(self):
+        pid = self._prestador('Técnico Sem Visita', email='semvisita@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Sem Visita')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Interfone sem taxa de visita',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '260', 'valor_materiais_manual': '0',
+            'valor_total_override': '230', 'materiais_presentes': '1',
+            'aplicar_composicao': '1', 'base_percentuais': 'visita',
+            'cobrar_visita': '0',
+            'material_item[]': ['Interfone 13 teclas'],
+            'material_qtd[]': ['1'], 'material_unidade[]': ['un'],
+            'material_unit[]': ['89.00'], 'acao_status': 'salvar',
+        }
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            config = composicao.carregar()
+            config['componentes'] = [
+                c for c in config['componentes'] if c['id'] != 'deslocamento']
+            for componente in config['componentes']:
+                if componente['id'] == 'risco':
+                    componente['valor'] = 10
+                if componente['id'] == 'hora_tecnica':
+                    componente['minimo_centavos'] = 10000
+            composicao.salvar(config)
+            oid = neg.os_salvar(self.db, dados, pid)
+        ext.assumir(self.db, oid, pid)
+        with ext.db(self.db) as c:
+            os_ = c.execute(
+                'SELECT valor_mao_obra,valor_materiais,valor_total,'
+                'base_percentuais,composicao_json FROM ordens_servico WHERE id=?',
+                (oid,)).fetchone()
+        self.assertAlmostEqual(float(os_['valor_mao_obra']), 72.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_materiais']), 89.0, places=2)
+        self.assertAlmostEqual(float(os_['valor_total']), 230.0, places=2)
+        self.assertEqual(os_['base_percentuais'], 'total')
+        comp = json.loads(os_['composicao_json'])
+        self.assertTrue(comp.get('sem_visita'))
+        valores = {x['id']: x['valor_centavos'] for x in comp['componentes']}
+        self.assertNotIn('visita', valores)
+        self.assertEqual(valores['materiais'], 8900)
+        self.assertEqual(valores['hora_tecnica'], 7200)
+        self.assertEqual(valores['administrativo'], 2300)
+        self.assertEqual(valores['operacional'], 2300)
+        self.assertEqual(valores['risco'], 2300)
+        self.assertEqual(sum(valores.values()), 23000)
+        _, base = self._servidor()
+        cliente = self._login(base, 'semvisita@exemplo.com.br')
+        status, html = req(cliente, base, f'/os/{oid}')
+        self.assertEqual(status, 200)
+        self.assertIn('name="cobrar_visita"', html)
+        self.assertIn('value="0" selected>Não cobrar', html)
+        self.assertRegex(html, r'name="valor_mao_obra" value="72(?:[.,]0+)?"')
+
+    def test_servico_1500_distribui_o_total_sem_somar_taxas(self):
+        pid = self._prestador('Técnico 1500', email='servico1500@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio 1500')
+
+        def dados(base):
+            return {
+                'cliente_id': str(cid),
+                'descricao': f'Serviço de 1500 na base {base}',
+                'tecnico': 'T', 'forma_pagamento': 'PIX',
+                'valor_mao_obra': '1500', 'valor_materiais_manual': '0',
+                'materiais_presentes': '1', 'aplicar_composicao': '1',
+                'base_percentuais': base, 'acao_status': 'salvar',
+            }
+
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            config = composicao.carregar()
+            # Configuração do ambiente do usuário: visita de R$ 250 e três
+            # custos de 10%, sem deslocamento separado.
+            config['componentes'] = [
+                c for c in config['componentes'] if c['id'] != 'deslocamento']
+            for componente in config['componentes']:
+                if componente['id'] in ('administrativo', 'operacional', 'risco'):
+                    componente['valor'] = 10
+            composicao.salvar(config)
+            oid_total = neg.os_salvar(self.db, dados('total'), pid)
+            oid_visita = neg.os_salvar(self.db, dados('visita'), pid)
+            with ext.db(self.db) as c:
+                linha_total = c.execute(
+                    'SELECT valor_mao_obra,valor_total,composicao_json '
+                    'FROM ordens_servico WHERE id=?', (oid_total,)).fetchone()
+                linha_visita = c.execute(
+                    'SELECT valor_mao_obra,valor_total,composicao_json '
+                    'FROM ordens_servico WHERE id=?', (oid_visita,)).fetchone()
+
+        self.assertEqual(float(linha_total['valor_total']), 1500.0)
+        comp_total = json.loads(linha_total['composicao_json'])
+        valores = {x['nome']: x['valor_centavos']
+                   for x in comp_total['componentes']}
+        self.assertEqual(comp_total['total_centavos'], 150000)
+        self.assertEqual(valores['Mão de obra / hora técnica'], 80000)
+        self.assertEqual(valores['Taxa mínima de visita'], 25000)
+        self.assertEqual(valores['Custos administrativos'], 15000)
+        self.assertEqual(valores['Custos operacionais e tecnológicos'], 15000)
+        self.assertEqual(valores['Margem de risco e contingência'], 15000)
+        self.assertEqual(sum(valores.values()), 150000)
+
+        self.assertEqual(float(linha_visita['valor_total']), 1500.0)
+        comp_visita = json.loads(linha_visita['composicao_json'])
+        valores = {x['nome']: x['valor_centavos']
+                   for x in comp_visita['componentes']}
+        self.assertEqual(comp_visita['total_centavos'], 150000)
+        self.assertEqual(valores['Mão de obra / hora técnica'], 125000)
+        self.assertEqual(valores['Taxa mínima de visita'], 25000)
+        self.assertNotIn('Custos administrativos', valores)
+        visita = next(x for x in comp_visita['componentes']
+                      if x['id'] == 'visita')
+        filhos = {x['nome']: x['valor_centavos'] for x in visita['filhos']}
+        self.assertEqual(filhos['Custos administrativos'], 2500)
+        self.assertEqual(filhos['Custos operacionais e tecnológicos'], 2500)
+        self.assertEqual(filhos['Margem de risco e contingência'], 2500)
+        self.assertEqual(sum(valores.values()), 150000)
+
+    def test_formulario_mostra_valor_do_servico_sem_congelar_total(self):
+        pid = self._prestador('Técnico Formulário', email='formulario1500@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Formulário')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço de 1500 no formulário',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '1500', 'valor_materiais_manual': '0',
+            'materiais_presentes': '1', 'aplicar_composicao': '1',
+            'base_percentuais': 'total', 'acao_status': 'salvar',
+        }
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            config = composicao.carregar()
+            config['componentes'] = [
+                c for c in config['componentes'] if c['id'] != 'deslocamento']
+            for componente in config['componentes']:
+                if componente['id'] in ('administrativo', 'operacional', 'risco'):
+                    componente['valor'] = 10
+            composicao.salvar(config)
+            oid = neg.os_salvar(self.db, dados, pid)
+            ext.atribuir(self.db, oid, pid)
+            _, base = self._servidor()
+            cliente = self._login(base, 'formulario1500@exemplo.com.br')
+            _, html = req(cliente, base, f'/os/{oid}')
+        servico = re.search(
+            r'name="valor_mao_obra" value="([^"]*)"', html).group(1)
+        final = re.search(
+            r'name="valor_total_override" value="([^"]*)"', html).group(1)
+        self.assertEqual(float(servico), 1500.0)
+        self.assertEqual(final, '')
+
+    def test_solicitacao_original_editavel_apenas_por_admin(self):
+        admin = self._prestador(
+            'Admin Solicitação', email='admin.solicitacao@exemplo.com.br')
+        tecnico = self._prestador(
+            'Técnico Solicitação', email='tecnico.solicitacao@exemplo.com.br')
+        cad.definir_admin(self.db, admin, True)
+        cid = self._cliente(admin, 'Condomínio Solicitação')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Trocar o portão da garagem',
+            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '100',
+            'materiais_presentes': '1', 'acao_status': 'salvar',
+        }
+        oid = neg.os_salvar(self.db, dados, admin)
+        ext.atribuir(self.db, oid, tecnico)
+        _, base = self._servidor()
+
+        cliente_admin = self._login(base, 'admin.solicitacao@exemplo.com.br')
+        _, html_admin = req(cliente_admin, base, f'/os/{oid}')
+        self.assertIn('name="solicitacao_original"', html_admin)
+        self.assertIn('Chamado de origem</strong>', html_admin)
+        self.assertNotIn('Chamado de origem — somente leitura', html_admin)
+        self.assertIn('Trocar o portão da garagem', html_admin)
+
+        cliente_tecnico = self._login(base, 'tecnico.solicitacao@exemplo.com.br')
+        _, html_tecnico = req(cliente_tecnico, base, f'/os/{oid}')
+        self.assertNotIn('name="solicitacao_original"', html_tecnico)
+        self.assertIn('Chamado de origem — somente leitura', html_tecnico)
+
+        # Um não-admin não altera a solicitação original nem forjando o campo.
+        neg.os_salvar(
+            self.db, dict(dados, solicitacao_original='Tentativa indevida'),
+            tecnico, oid)
+        with ext.db(self.db) as c:
+            original = c.execute(
+                'SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',
+                (oid,)).fetchone()[0]
+        self.assertEqual(original, 'Trocar o portão da garagem')
+
+        # O admin corrige o texto; a OS, o chamado de origem e o PDF acompanham.
+        token = self._csrf(base, cliente_admin, oid)
+        status, _ = req(cliente_admin, base, f'/os/{oid}/rascunho/salvar', {
+            'csrf': token, 'cliente_id': str(cid),
+            'descricao': 'Trocar o portão da garagem',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '100', 'materiais_presentes': '1',
+            'solicitacao_original':
+                'Corrigir a solicitação original do cliente.',
+        })
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            os_ = c.execute(
+                'SELECT descricao FROM ordens_servico WHERE id=?',
+                (oid,)).fetchone()
+            original = c.execute(
+                'SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',
+                (oid,)).fetchone()
+        self.assertEqual(
+            os_['descricao'], 'Corrigir a solicitação original do cliente.')
+        self.assertEqual(
+            original['descricao_original'],
+            'Corrigir a solicitação original do cliente.')
+        _, html_admin = req(cliente_admin, base, f'/os/{oid}')
+        self.assertIn('Corrigir a solicitação original do cliente.', html_admin)
+
+        from pypdf import PdfReader
+        leitor = PdfReader(pdf_cliente_v9.gerar(self.db, oid))
+        texto_pdf = ' '.join((p.extract_text() or '') for p in leitor.pages)
+        self.assertIn('Corrigir a solicitação original do cliente.', texto_pdf)
+
+    def test_simulacao_sem_total_usa_servico_mais_materiais(self):
+        self._prestador('Técnico Simulação', email='simulacao@exemplo.com.br')
+        _, base = self._servidor()
+        cliente = self._login(base, 'simulacao@exemplo.com.br')
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            composicao.instalar()
+            status, corpo = req(
+                cliente, base,
+                '/composicao/simular?materiais=0&mao_obra=1500&total=&base=total')
+        self.assertEqual(status, 200)
+        dados = json.loads(corpo)
+        self.assertTrue(dados['ok'])
+        self.assertEqual(dados['total_centavos'], 150000)
+        self.assertEqual(
+            sum(x['valor_centavos'] for x in dados['componentes']), 150000)
+
     def test_encerramento_preserva_composicao_modular(self):
         pid = self._prestador('Técnico Encerramento', email='encerramento@exemplo.com.br')
         cid = self._cliente(pid, 'Condomínio Encerramento')
@@ -493,6 +803,43 @@ class CorrecoesRev12(unittest.TestCase):
         visita = next(x for x in comp['componentes'] if x['id'] == 'visita')
         self.assertEqual(len(visita['filhos']), 3)
         self.assertEqual(sum(valores.values()), 45000)
+
+    def test_os_form_normaliza_composicao_do_rascunho_em_texto(self):
+        pid = self._prestador('Técnico Composição', email='comp.json@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Composição')
+        itens = [
+            {'id': 'atendimento', 'nome': 'Atendimento técnico', 'valor': '350,00'},
+            {'id': 'montagem', 'nome': 'Montagem e testes', 'valor': '150,00'},
+        ]
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Porta metálica',
+            'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '500',
+            'valor_materiais_manual': '0', 'valor_total_override': '500',
+            'materiais_presentes': '1', 'composicao_yaml': itens,
+            'acao_status': 'salvar',
+        }
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.assumir(self.db, oid, pid)
+        ext.salvar_rascunho_web(self.db, oid, pid, {
+            'composicao_yaml': json.dumps(itens, ensure_ascii=False),
+            'valor_mao_obra': '500', 'valor_materiais_manual': '0',
+            'materiais_presentes': '1',
+        })
+        _, base = self._servidor()
+        cliente = self._login(base, 'comp.json@exemplo.com.br')
+        status, html = req(cliente, base, f'/os/{oid}')
+        self.assertEqual(status, 200)
+        self.assertIn('Composição itemizada desta OS', html)
+        self.assertIn('Atendimento técnico', html)
+        self.assertIn('Montagem e testes', html)
+        # Um rascunho inválido não apaga a composição já gravada na OS.
+        ext.salvar_rascunho_web(self.db, oid, pid, {
+            'composicao_yaml': 'texto solto sem JSON',
+        })
+        status, html = req(cliente, base, f'/os/{oid}')
+        self.assertEqual(status, 200)
+        self.assertIn('Composição itemizada desta OS', html)
+        self.assertIn('Atendimento técnico', html)
 
     def test_cancelamento_exige_numero_da_os(self):
         pid = self._prestador('Técnico Cancelamento', email='cancelamento@exemplo.com.br')
@@ -626,6 +973,8 @@ class CorrecoesRev12(unittest.TestCase):
 
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn('name="anexo_incluir[]"', html)
+        self.assertIn('data-importar-metadados', html)
+        self.assertIn('Importar metadados', html)
         self.assertIn(f'data-mover="/os/{self._numero(oid)}/anexo/{foto["id"]}/mover"', html)
         self.assertIn(f'/arquivos/anexo/{foto["id"]}/thumb?v=', html)
         with cliente_b.open(urllib.request.Request(
@@ -1161,8 +1510,14 @@ class CorrecoesRev12(unittest.TestCase):
         _, base = self._servidor()
         cliente = self._login(base, 'finalizador.manual@exemplo.com.br')
         _, html = req(cliente, base, f'/os/{oid}')
-        self.assertIn('Rateio e repasses', html)
-        self.assertIn(f'formaction="/os/{self._numero(oid)}/rateio"', html)
+        self.assertIn('Rateio e colaboradores', html)
+        self.assertIn(f'data-rateio-url="/os/{self._numero(oid)}/rateio"', html)
+        self.assertNotIn('>Salvar rateio</button>', html)
+        self.assertNotIn('Desfazer última alteração', html)
+        self.assertIn(f'data-rateio-remover="{b}"', html)
+        self.assertIn('id="adicionar-rateio"', html)
+        self.assertIn('id="modelo-rateio"', html)
+        self.assertIn('class="rateio-row"', html)
         self.assertIn('R$ 300,00', html)
         self.assertEqual(prod.definir_rateio_manual(self.db, oid, a, b, '400,00'), 40000)
         with self.assertRaisesRegex(ValueError, 'ultrapassa'):
@@ -1171,6 +1526,92 @@ class CorrecoesRev12(unittest.TestCase):
         prod.confirmar_repasse(self.db, oid, a, b, '400,00')
         with self.assertRaisesRegex(ValueError, 'já enviado'):
             prod.definir_rateio_manual(self.db, oid, a, b, '0')
+
+    def test_rateio_disponivel_antes_da_conclusao_e_permissoes(self):
+        a = self._prestador('Responsável Rateio', email='responsavel.rateio@exemplo.com.br')
+        b = self._prestador('Colaborador Rateio', email='colaborador.rateio@exemplo.com.br')
+        funcionario = self._prestador('Funcionário Rateio', email='funcionario.rateio@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Rateio Antecipado')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço com rateio antecipado',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '1000', 'materiais_presentes': '1',
+                 'relatorio_tecnico': 'Serviço concluído', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        self.assertEqual(prod.definir_rateio_manual(self.db, oid, a, b, '300,00'), 30000)
+        with ext.db(self.db) as c:
+            rateio = c.execute('SELECT valor_centavos FROM produtividade_rateios '
+                               'WHERE os_id=? AND tecnico_id=?', (oid, b)).fetchone()
+        self.assertEqual(rateio['valor_centavos'], 30000)
+        with self.assertRaises(PermissionError):
+            prod.definir_rateio_manual(self.db, oid, funcionario, b, '400,00')
+        with self.assertRaises(PermissionError):
+            prod.definir_rateio_manual(self.db, oid, b, funcionario, '100,00')
+        cad.definir_admin(self.db, funcionario, True)
+        self.assertEqual(prod.definir_rateio_manual(self.db, oid, funcionario, b, '400,00'), 40000)
+        # Admin pode incluir a si mesmo quando não é o finalizador.
+        self.assertEqual(prod.definir_rateio_manual(self.db, oid, funcionario,
+                                                    funcionario, '100,00'), 10000)
+        with self.assertRaisesRegex(ValueError, 'rateado'):
+            neg.os_salvar(self.db, dict(dados, valor_mao_obra='100',
+                                        valor_total_override='300'), a, oid)
+        _, base = self._servidor()
+        cliente_a = self._login(base, 'responsavel.rateio@exemplo.com.br')
+        _, html_a = req(cliente_a, base, f'/os/{oid}')
+        self.assertIn('Rateio e colaboradores', html_a)
+        self.assertGreater(html_a.find('Rateio e colaboradores'),
+                           html_a.find('Fotos do relatório e legendas'))
+        self.assertIn(f'data-rateio-url="/os/{self._numero(oid)}/rateio"', html_a)
+        self.assertNotIn('>Salvar rateio</button>', html_a)
+        cliente_b = self._login(base, 'colaborador.rateio@exemplo.com.br')
+        _, html_b = req(cliente_b, base, f'/os/{oid}')
+        self.assertIn('Rateio e colaboradores', html_b)
+        self.assertIn('Somente o responsável/finalizador', html_b)
+        conclusao = dict(dados)
+        conclusao.update(acao_status='Concluída', sem_nota_fiscal='1')
+        neg.os_salvar(self.db, conclusao, a, oid)
+        with ext.db(self.db) as c:
+            rateio = c.execute('SELECT valor_centavos FROM produtividade_rateios '
+                               'WHERE os_id=? AND tecnico_id=?', (oid, b)).fetchone()
+        self.assertEqual(rateio['valor_centavos'], 40000)
+
+    def test_rateio_salva_automaticamente_via_json(self):
+        a = self._prestador('Responsável Rateio JSON', email='resp.rateio.json@exemplo.com.br')
+        b = self._prestador('Colaborador Rateio JSON', email='col.rateio.json@exemplo.com.br')
+        cid = self._cliente(a, 'Condomínio Rateio JSON')
+        dados = {'cliente_id': str(cid), 'descricao': 'Serviço com rateio automático',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '1000', 'materiais_presentes': '1',
+                 'relatorio_tecnico': 'Serviço concluído', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente = self._login(base, 'resp.rateio.json@exemplo.com.br')
+        _, html = req(cliente, base, f'/os/{oid}')
+        token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
+
+        def auto_rateio(tecnico, valor):
+            corpo = urllib.parse.urlencode({
+                'csrf': token, 'rateio_manual_tecnico': str(tecnico),
+                'rateio_manual_valor': valor}).encode()
+            pedido = urllib.request.Request(
+                base + f'/os/{oid}/rateio', corpo,
+                {'Accept': 'application/json',
+                 'X-Requested-With': 'XMLHttpRequest'})
+            with cliente.open(pedido, timeout=20) as resposta:
+                return resposta.status, json.loads(resposta.read().decode())
+
+        status, resposta = auto_rateio(b, '300,00')
+        self.assertEqual(status, 200)
+        self.assertTrue(resposta['ok'])
+        self.assertEqual(resposta['rateado_centavos'], 30000)
+        self.assertEqual(resposta['restante_centavos'], 70000)
+        self.assertEqual(resposta['rateios'][0]['tecnico_id'], b)
+        status, resposta = auto_rateio(b, '0,00')
+        self.assertEqual(status, 200)
+        self.assertTrue(resposta['ok'])
+        self.assertEqual(resposta['rateado_centavos'], 0)
+        self.assertEqual(resposta['rateios'], [])
 
     def test_cancelar_pagamento_remove_do_financeiro(self):
         a = self._prestador('Finalizador Cancelar', email='finalizador.cancelar@exemplo.com.br')
@@ -1283,41 +1724,135 @@ class CorrecoesRev12(unittest.TestCase):
         cliente_a = self._login(base, 'tecnico.a@exemplo.com.br')
         status, html = req(cliente_a, base, '/financeiro')
         self.assertEqual(status, 200)
-        self.assertIn('<span>A receber</span><strong>R$ 700,00</strong>', html)
-        self.assertIn('<span>Recebido</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong id="kpi-a-receber">R$ 700,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong id="kpi-recebido">R$ 0,00</strong>', html)
         self.assertIn('Dados bancários', html)
-        self.assertIn('Lançamentos das OS em que participo', html)
         self.assertIn('A receber / Confirmar recebimento', html)
         self.assertIn('Recebidos', html)
-        self.assertIn('finance-columns', html)
+        self.assertIn('data-fin-panel="a-receber"', html)
         self.assertIn('Minha parcela', html)
-        self.assertLess(html.index('Dados bancários'), html.index('Lançamentos das OS em que participo'))
+        self.assertLess(html.index('Dados bancários'),
+                        html.index('A receber / Confirmar recebimento'))
         self.assertIn(f'action="/financeiro/{fid}/receber"', html)
         token = re.search(r'name="csrf" value="([^"]+)"', html).group(1)
         req(cliente_a, base, f'/financeiro/{fid}/receber', {'csrf': token})
         _, html = req(cliente_a, base, '/financeiro')
-        self.assertIn('<span>A receber</span><strong>R$ 0,00</strong>', html)
-        self.assertIn('<span>Recebido</span><strong>R$ 700,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong id="kpi-a-receber">R$ 0,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong id="kpi-recebido">R$ 700,00</strong>', html)
         self.assertNotIn(f'action="/financeiro/{fid}/receber"', html)
 
         cliente_b = self._login(base, 'tecnico.b@exemplo.com.br')
         status, html = req(cliente_b, base, '/financeiro')
         self.assertEqual(status, 200)
-        self.assertIn('<span>A receber</span><strong>R$ 300,00</strong>', html)
-        self.assertIn('Lançamentos das OS em que participo', html)
+        self.assertIn('<span>A receber</span><strong id="kpi-a-receber">R$ 300,00</strong>', html)
+        self.assertIn('A receber / Confirmar recebimento', html)
         self.assertIn('Aguardando envio', html)
         self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
 
         prod.confirmar_repasse(self.db, oid, a, b, '300,00')
         _, html = req(cliente_b, base, '/financeiro')
-        self.assertIn('<span>A receber</span><strong>R$ 300,00</strong>', html)
-        self.assertIn('<span>Recebido</span><strong>R$ 0,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong id="kpi-a-receber">R$ 300,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong id="kpi-recebido">R$ 0,00</strong>', html)
         self.assertIn('action="/financeiro/repasse/confirmar"', html)
         prod.confirmar_recebimento_repasse(self.db, oid, b)
         _, html = req(cliente_b, base, '/financeiro')
-        self.assertIn('<span>A receber</span><strong>R$ 0,00</strong>', html)
-        self.assertIn('<span>Recebido</span><strong>R$ 300,00</strong>', html)
+        self.assertIn('<span>A receber</span><strong id="kpi-a-receber">R$ 0,00</strong>', html)
+        self.assertIn('<span>Recebido</span><strong id="kpi-recebido">R$ 300,00</strong>', html)
         self.assertNotIn('action="/financeiro/repasse/confirmar"', html)
+
+    def test_admin_conclui_os_de_outro_responsavel_e_financeiro_fica_com_o_responsavel(self):
+        responsavel = self._prestador(
+            'Responsável Financeiro', email='resp.financeiro@exemplo.com.br')
+        secundario = self._prestador(
+            'Secundário Financeiro', email='sec.financeiro@exemplo.com.br')
+        admin = self._prestador(
+            'Admin Conclusão', email='admin.conclusao@exemplo.com.br')
+        cad.definir_admin(self.db, admin, True)
+        cid = self._cliente(responsavel, 'Condomínio Conclusão Admin')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço concluído por admin',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '1700', 'valor_materiais_manual': '0',
+            'materiais_presentes': '1', 'acao_status': 'salvar',
+        }
+        oid = neg.os_salvar(self.db, dados, responsavel)
+        ext.atribuir(self.db, oid, responsavel)
+        prod.definir_rateio_manual(
+            self.db, oid, responsavel, secundario, '100,00')
+        conclusao = dict(dados)
+        conclusao.update(
+            acao_status='Concluída', sem_nota_fiscal='1',
+            relatorio_tecnico='Serviço concluído pelo admin em nome do responsável.')
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            neg.os_salvar(self.db, conclusao, admin, oid)
+        with ext.db(self.db) as c:
+            enc = c.execute(
+                'SELECT prestador_id,ator FROM os_encerramentos WHERE os_id=?',
+                (oid,)).fetchone()
+        self.assertEqual(enc['prestador_id'], responsavel)
+        self.assertEqual(enc['ator'], f'Prestador ID {admin}')
+        fin_resp = prod.financeiro_pessoal(self.db, responsavel)
+        item_resp = next(x for x in fin_resp['brutos_proprios'] if x['os_id'] == oid)
+        self.assertEqual(item_resp['partes_centavos'], 10000)
+        fin_sec = prod.financeiro_pessoal(self.db, secundario)
+        item_sec = next(x for x in fin_sec['receber_de_colegas'] if x['os_id'] == oid)
+        self.assertEqual(item_sec['valor_centavos'], 10000)
+
+        _, base = self._servidor()
+        cliente_resp = self._login(base, 'resp.financeiro@exemplo.com.br')
+        _, html_resp = req(cliente_resp, base, '/financeiro')
+        self.assertIn(
+            '<span>A receber</span><strong id="kpi-a-receber">R$ 1.600,00</strong>',
+            html_resp)
+        cliente_sec = self._login(base, 'sec.financeiro@exemplo.com.br')
+        _, html_sec = req(cliente_sec, base, '/financeiro')
+        self.assertIn(
+            '<span>A receber</span><strong id="kpi-a-receber">R$ 100,00</strong>',
+            html_sec)
+
+    def test_responsavel_transferido_absorve_rateio_antigo_ao_concluir(self):
+        antigo = self._prestador(
+            'Responsável Antigo', email='resp.antigo@exemplo.com.br')
+        novo = self._prestador(
+            'Responsável Novo', email='resp.novo@exemplo.com.br')
+        admin = self._prestador(
+            'Admin Absorção', email='admin.absorcao@exemplo.com.br')
+        cad.definir_admin(self.db, admin, True)
+        cid = self._cliente(antigo, 'Condomínio Absorção')
+        dados = {
+            'cliente_id': str(cid), 'descricao': 'Serviço com rateio antigo',
+            'tecnico': 'T', 'forma_pagamento': 'PIX',
+            'valor_mao_obra': '1700', 'valor_materiais_manual': '0',
+            'materiais_presentes': '1', 'acao_status': 'salvar',
+        }
+        oid = neg.os_salvar(self.db, dados, antigo)
+        ext.atribuir(self.db, oid, antigo)
+        prod.definir_rateio_manual(self.db, oid, antigo, novo, '100,00')
+        ext.atribuir(self.db, oid, novo)
+        conclusao = dict(dados)
+        conclusao.update(
+            acao_status='Concluída', sem_nota_fiscal='1',
+            relatorio_tecnico='Conclusão após transferência de responsável.')
+        with mock.patch.dict(os.environ, {'AUTOSEG_BASE': str(self.dir)}):
+            neg.os_salvar(self.db, conclusao, admin, oid)
+        with ext.db(self.db) as c:
+            enc = c.execute(
+                'SELECT prestador_id,ator FROM os_encerramentos WHERE os_id=?',
+                (oid,)).fetchone()
+            rateio_novo = c.execute(
+                'SELECT valor_centavos FROM produtividade_rateios '
+                'WHERE os_id=? AND tecnico_id=?', (oid, novo)).fetchone()
+            evento = c.execute(
+                "SELECT 1 FROM os_eventos WHERE os_id=? AND acao='Rateio do finalizador absorvido'",
+                (oid,)).fetchone()
+        self.assertEqual(enc['prestador_id'], novo)
+        self.assertEqual(enc['ator'], f'Prestador ID {admin}')
+        self.assertIsNone(rateio_novo)
+        self.assertIsNotNone(evento)
+        fin_novo = prod.financeiro_pessoal(self.db, novo)
+        item_novo = next(x for x in fin_novo['brutos_proprios'] if x['os_id'] == oid)
+        self.assertEqual(item_novo['partes_centavos'], 0)
+        self.assertFalse(any(x['os_id'] == oid for x in fin_novo['receber_de_colegas']))
 
     def test_nao_admin_nao_edita_fotos_de_outro(self):
         a = self._prestador('Técnico Foto Responsável', email='foto.resp@exemplo.com.br')

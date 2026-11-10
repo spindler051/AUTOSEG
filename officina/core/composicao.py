@@ -86,6 +86,11 @@ def reais_de_centavos(centavos):
     return float(Decimal(int(centavos or 0)) / 100)
 
 
+def _aviso_hora_minima(minimo):
+    valor = f'R$ {int(minimo or 0) / 100:.2f}'.replace('.', ',')
+    return f'Hora técnica abaixo do mínimo configurado ({valor}).'
+
+
 def _numero(valor, rotulo):
     try:
         numero = Decimal(str(valor if valor is not None else 0))
@@ -477,8 +482,8 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
     ``total`` ou uma referência a componente/campo. ``cobertura`` define se os
     percentuais ficam dentro da base (``incluido``) ou em linhas próprias
     (``separado``). O total negociado é autoritativo e nunca recebe desconto
-    automático; se não comportar a hora mínima, a operação é recusada com uma
-    mensagem clara.
+    automático; se não comportar a hora mínima, o total é mantido e a
+    composição devolve um aviso.
     """
     config = validar(config or carregar())
     componentes = [c for c in config["componentes"]
@@ -502,6 +507,7 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
                         tipo_servico=tipo_servico, config=config,
                         mao_obra_centavos=labor)
     minimo = int(hora.get("minimo_centavos") or hora_minima_centavos or 0)
+    avisos = []
     labor = max(labor, minimo)
     fixos = [c for c in componentes if c["modo"] == "fixo"]
     percentuais = [c for c in componentes if c["modo"] == "percentual"]
@@ -568,9 +574,8 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
             valores_pct = percentuais_da_base(total)
             hora_valor = total - materiais - soma_fixa - sum(valores_pct.values())
             if hora_valor < minimo:
-                raise ValueError(
-                    "O total não cobre a hora técnica mínima. Aumente o total, "
-                    "reduza materiais/visita ou use a base de visita mínima.")
+                avisos.append(_aviso_hora_minima(minimo))
+                hora_valor = max(0, hora_valor)
         top_percentuais = valores_pct
         base_extra = 0
     else:
@@ -591,9 +596,8 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
                 total = max(0, int(total_centavos))
                 hora_valor = total - materiais - soma_fixa - base_extra
                 if hora_valor < minimo:
-                    raise ValueError(
-                        "O total não cobre a hora técnica mínima com esta base. "
-                        "Aumente o total, reduza materiais/visita ou troque a base.")
+                    avisos.append(_aviso_hora_minima(minimo))
+                    hora_valor = max(0, hora_valor)
             top_percentuais = {}
         else:
             if total_centavos is None:
@@ -606,9 +610,8 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
                 total = max(0, int(total_centavos))
                 hora_valor = total - materiais - soma_fixa - soma_pct
                 if hora_valor < minimo:
-                    raise ValueError(
-                        "O total não cobre a hora técnica mínima com esta base. "
-                        "Aumente o total, reduza materiais/visita ou troque a base.")
+                    avisos.append(_aviso_hora_minima(minimo))
+                    hora_valor = max(0, hora_valor)
             top_percentuais = valores_pct
 
     valores = {}
@@ -632,9 +635,13 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
     if diferenca:
         valores[hora["id"]] = max(0, valores[hora["id"]] + diferenca)
     if sum(valores.values()) != total:
-        raise ValueError("Não foi possível fechar a composição no valor total.")
+        raise ValueError(
+            "O total não cobre a taxa de visita e os materiais. "
+            "Escolha 'Não cobrar' na taxa de visita ou aumente o valor final.")
     if valores[hora["id"]] < minimo:
-        raise ValueError("A hora técnica ficou abaixo do mínimo configurado.")
+        aviso_minimo = _aviso_hora_minima(minimo)
+        if aviso_minimo not in avisos:
+            avisos.append(aviso_minimo)
 
     saida = []
     for componente in componentes:
@@ -691,6 +698,8 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
                  f"incluídos nela.")
     else:
         aviso = f"Percentuais calculados sobre {base_cfg.get('nome') or base_nome}."
+    if avisos:
+        aviso = ' '.join([aviso, *avisos])
     return {
         "versao": 1,
         "total_centavos": total,
@@ -698,6 +707,40 @@ def calcular_os(total_centavos=None, materiais_centavos=0, mao_obra_centavos=0,
         "base_percentuais": base_nome,
         "aviso": aviso,
     }
+
+
+def calcular_os_sem_visita(total_centavos=None, materiais_centavos=0,
+                           mao_obra_centavos=0, horas=None, tipo_servico="",
+                           config=None, hora_minima_centavos=10000, campos=None):
+    """Composição da OS sem a taxa mínima de visita.
+
+    O total final continua autoritativo. Os percentuais são calculados sobre o
+    total e a hora técnica recebe o restante depois de materiais e custos. É
+    usada quando o prestador escolhe não cobrar a visita nesta OS; a linha da
+    visita não entra na composição.
+    """
+    base_config = validar(config or carregar())
+    componentes = []
+    for componente in base_config["componentes"]:
+        item = dict(componente)
+        if item["id"] == "visita":
+            item["ativo"] = False
+        componentes.append(item)
+    config_sem_visita = dict(base_config)
+    config_sem_visita["componentes"] = componentes
+    comp = calcular_os(
+        total_centavos=total_centavos,
+        materiais_centavos=materiais_centavos,
+        mao_obra_centavos=mao_obra_centavos,
+        horas=horas,
+        tipo_servico=tipo_servico,
+        config=config_sem_visita,
+        hora_minima_centavos=hora_minima_centavos,
+        base_percentuais="total",
+        campos=campos,
+    )
+    comp["sem_visita"] = True
+    return comp
 
 
 def declarativa(total_centavos, blocos, config=None):
@@ -710,6 +753,7 @@ def declarativa(total_centavos, blocos, config=None):
     """
     config = validar(config or carregar())
     catalogo = {c["id"]: c for c in config["componentes"]}
+    ids_usados = set()
     total = int(total_centavos or 0)
     if total < 0:
         raise ValueError("O valor total não pode ser negativo.")
@@ -719,10 +763,27 @@ def declarativa(total_centavos, blocos, config=None):
     def _normalizar(entrada, base_centavos, rotulo):
         if not isinstance(entrada, dict):
             raise ValueError(f"{rotulo}: componente inválido.")
-        cid = str(entrada.get("id") or "").strip()
-        if cid not in catalogo:
-            raise ValueError(f"{rotulo}: componente desconhecido: {cid or '(vazio)'}")
-        cfg = catalogo[cid]
+        cid = str(entrada.get("id") or "").strip()[:80]
+        if not cid:
+            raise ValueError(f"{rotulo}: componente sem id.")
+        if cid in ids_usados:
+            raise ValueError(f"{rotulo}: componente repetido: {cid}")
+        ids_usados.add(cid)
+        if cid in catalogo:
+            cfg = catalogo[cid]
+        else:
+            nome = str(entrada.get("nome") or "").strip()
+            if not nome:
+                raise ValueError(f"{rotulo}: componente desconhecido: {cid}")
+            cfg = {
+                "id": cid,
+                "nome": nome[:120],
+                "descricao": str(entrada.get("descricao") or "")[:500],
+                "modo": "fixo",
+                "valor": 0,
+                "obrigatorio": False,
+                "ordem": 0,
+            }
         if entrada.get("valor") not in (None, ""):
             valor = centavos_de_reais(entrada["valor"])
         elif entrada.get("percentual") not in (None, ""):

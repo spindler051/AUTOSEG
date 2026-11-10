@@ -9,6 +9,14 @@ Este é o ponto de retomada. O índice completo fica em
 [`docs/README.md`](README.md); o histórico de mudanças no
 [`CHANGELOG.md`](../CHANGELOG.md); o plano no [`ROADMAP.md`](ROADMAP.md).
 
+> **Direção registrada em 2026-11-10:** o AUTOSEG é a primeira **prestadora de
+> serviço** do ecossistema Officina — não uma loja. O alvo é um site, um link e
+> um login, com conta/vínculo/contexto e política por objeto. O site e o GTK
+> atuais são as sementes do Officina Web/GTK. Nenhuma mudança de código foi
+> feita nesta fase. Ver
+> [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
+> e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
+
 ## O que está funcionando
 
 - App desktop GTK4/libadwaita em macOS e Linux.

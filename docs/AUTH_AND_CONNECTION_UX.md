@@ -24,6 +24,12 @@ O modo híbrido (local + sync) é uma fase posterior.
 > A decomposição completa de modos, papéis, paridade web/GTK/Qt/nativo,
 > descoberta de servidores e solicitação sem login está em
 > `docs/APP_MODES_ROLES_AND_SERVERS.md`.
+>
+> **Site único:** o alvo de um login único para cliente e prestador, com
+> conta/vínculo/contexto e política por objeto, está em
+> `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`. Este documento
+> continua descrevendo o login local/servidor do GTK atual; ele não é o login
+> único do site.
 
 ```text
 ┌─────────────────────────────────────────────┐

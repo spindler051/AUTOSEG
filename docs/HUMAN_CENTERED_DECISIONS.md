@@ -103,6 +103,32 @@ authority, E2E encryption versus server-side document generation, and the Rust
 scope. Reversible groundwork and documentation are allowed; no new client or
 sync implementation should start before GTK/web parity and a protocol v0 exist.
 
+### 5.2 Deferred identity, single-site and permission decisions
+
+The target model is documented in
+`docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` and
+`docs/planning/OFFICINA_WEB_AND_GTK.md`. The following product decisions are
+deferred; the recommended defaults are documentation/test defaults only and do
+not authorize production behavior.
+
+| Decision | Why deferred | Evidence needed | Default until decided | Review trigger |
+|---|---|---|---|---|
+| Login identifier: e-mail, CPF, or both | Clients use CPF today; providers use e-mail. Changing this affects recovery, privacy and legacy accounts. | Real login/support history, client and provider interviews, migration cost. | Accept either e-mail or CPF; the account stores both. | Before the unified login flag is enabled. |
+| Same account for client and provider roles | This is the core UX request, but it changes identity, recovery and context selection. | A small prototype with one person who is both client and provider; support review. | Yes: one account, separate links and an explicit context selector. | Before phase 2. |
+| One account across multiple service providers | AUTOSEG is the first provider; multi-provider is an Officina Web goal, not a first-release requirement. | A second real provider or a concrete pilot. | One provider (AUTOSEG); model the provider link from day one. | Before Officina Web multi-provider work. |
+| Anonymous OS: target, proof, photos, moderation, retention | Abuse, privacy and support cost depend on real use. | Pilot with real anonymous requests; spam/quality data; privacy review. | Allowed by AUTOSEG policy, protocol + tracking link, contact required, no photos in phase 1, manual triage. | Before phase 6. |
+| Roles at launch | More roles create UI and training cost before there is usage evidence. | Time observation with providers; support tickets. | Admin, provider, finance, read, client; dispatcher/field later. | Before phase 5. |
+| Staff access to the full client base and PII | Legal/privacy and trust decision; current code exposes everything. | LGPD review, provider interviews, support needs. | Staff sees only clients involved in their OS; no CPF/CNPJ search or export. | Before phase 4. |
+| Client can approve budget or close an OS | Changes responsibility and legal exposure. | Pilot with real clients; contract review. | Client can respond/approve, not edit or close the technical OS. | Before phase 5. |
+| Who can change permissions and roles | Self-approval and last-admin lockout are high-impact. | Security review and a recovery drill. | Provider admin; platform admin audits; last admin protected. | Before phase 5. |
+| Audit retention and export | Legal/support decision. | LGPD review and storage cost. | Keep sensitive decisions; define retention before production. | Before production. |
+| Per-provider branding, CNPJ and fiscal identity | Needed for Officina Web, not for the first AUTOSEG-only release. | A second provider or a real white-label need. | AUTOSEG branding as default; model the fields. | Before multi-provider. |
+
+Technical choices that follow from these decisions (shared database versus
+database per provider, table names, token format) do not need the product owner
+to choose directly, but auth/permission/data migration still require N3/N4
+review.
+
 ## 6. How AI agents must behave
 
 1. Do not make an irreversible product/architecture decision alone.
@@ -176,7 +202,74 @@ recorded as deferred with explicit evidence triggers. Until then:
 - characterization tests, documentation, small adapters and reversible
   improvements are still welcome.
 
-## 9. Related documents
+## 9. OS interactions save automatically
+
+**Decision (product owner):** in the OS screen, edits apply automatically.
+Do not add an explicit "Salvar" button for fields that can be auto-saved.
+New interactions must follow the same pattern: debounce while typing, save on
+blur/Enter or selection, and update the list and totals in place.
+
+**Prohibited design anti-pattern:** a button whose only job is to confirm or
+apply something the system can already apply automatically. This includes
+"Salvar", "Aplicar", "Confirmar alteração" and similar controls. Do not add
+extra action controls — including an "undo last change" control — unless the
+product owner explicitly requests them. Destructive actions that are genuinely
+necessary, such as removing a collaborator, may ask for confirmation.
+
+**Consequence for new features:** if a new OS section is added, it must behave
+like the existing auto-save fields, not like a separate form with its own
+submit button. The OS event history remains the audit trail.
+
+### 9.1 The visit fee is optional per work item
+
+**Decision (product owner):** the final OS total is authoritative. The minimum
+visit fee can be charged or waived per OS. When it is waived, percentage costs
+still apply to the final total and labor receives the remainder after materials
+and percentage costs. The chosen mode and the negotiated total must be persisted
+and restored when the OS is reopened.
+
+Example with three 10% costs: total R$ 230.00, materials R$ 89.00, percentage
+costs R$ 69.00, labor R$ 72.00, visit R$ 0.00. If labor falls below the
+configured minimum, the OS saves with a warning; it must not refuse the save or
+silently change the total.
+
+### 9.2 Negotiated value must be an explicit discount
+
+**Decision (product owner, proposed UX):** the OS has a nominal calculated
+total and an optional negotiated final total. A single checkbox reveals the
+negotiated field. The report/PDF shows `Subtotal`, `Desconto negociado` and
+`Total`, instead of silently redistributing labor and costs to hide the
+difference.
+
+Example: calculated total R$ 260.00, negotiated total R$ 230.00, discount
+R$ 30.00. The composition is calculated on R$ 260.00; the discount is a
+separate negative line. The checkbox, negotiated value and discount must be
+persisted and restored.
+
+**Open decision before implementation:** who absorbs the discount in the
+rateio? Options: (A) the total distributable is the final total and collaborator
+shares are proportional; (B) the provider/responsible absorbs the discount and
+collaborator shares remain based on the nominal total; (C) the discount is
+deducted only from the responsible person's share. This changes third-party
+money and needs an explicit human decision.
+
+Other open points: whether the nominal total includes materials, who can apply
+the discount, and whether the client PDF shows the discount line. The proposed
+UX and test matrix are in `docs/planning/OS_NEGOTIATED_VALUE_UX.md`.
+
+### 9.3 The financial finalizer follows the current responsible
+
+**Decision (product owner):** when an administrator concludes an OS on behalf
+of another provider, the financial finalizer is the **current responsible**,
+not the administrator who clicked. The administrator remains the audit actor in
+`os_encerramentos.ator` and in the event history.
+
+The finalizer receives `total − other participants`. If the new responsible had
+an old secondary share, it is absorbed into the finalizer remainder and must
+not be counted twice. A repasse already sent or confirmed blocks the automatic
+absorption and requires an explicit rateio adjustment.
+
+## 10. Related documents
 
 - `AGENTS.md`
 - `docs/PRODUCT_VISION.md`

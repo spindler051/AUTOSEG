@@ -67,6 +67,31 @@ licenses. The Workaholic subproject has its own
 
 ## Running the current app
 
+Operação resumida MAIN/DEV:
+
+```bash
+# MAIN
+./autoseg start site      # site 8765/8766; a API vai embutida
+./autoseg start tunnel    # túneis 8765/8766
+./autoseg status
+./autoseg stop all
+
+# DEV
+./autoseg-dev start site      # site 8865/8866
+./autoseg-dev start tunnel    # túneis 8865/8866
+./autoseg-dev status
+./autoseg-dev stop all
+```
+
+O `start site` da MAIN já sobe a API; para uma API separada, pare o site e use
+`./autoseg start server`. No DEV, o `server`/API usa a porta 8766 e exige a MAIN
+parada. PIDs e logs ficam em `~/Library/Application Support/AUTOSEG/cli`.
+
+`./autoseg update` apenas reinicia processos; não faz pull, merge nem altera
+código. Como MAIN e DEV usam o mesmo checkout, use `./autoseg update main` para
+validar a MAIN primeiro e `./autoseg update dev` depois, quando a mudança já
+estiver pronta para os dois.
+
 macOS desktop (local, sem servidor):
 
 ```bash

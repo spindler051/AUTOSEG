@@ -15,8 +15,15 @@ fases posteriores. O foco de produção continua sendo o AUTOSEG.
 - `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md` — visão multicliente.
 - `docs/planning/PLANO_MODO_LOCAL_SYNC.md` — sync por mudanças, outbox e conflitos.
 - `docs/planning/CONDO_SHARING_AND_TENANCY.md` — organizações, usuários, papéis e grants.
+- `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` — site único, identidade e política por objeto; inclui a auditoria do estado atual.
+- `docs/planning/OFFICINA_WEB_AND_GTK.md` — evolução do site/GTK atuais para Officina Web/GTK.
 - `docs/planning/MULTI_PLATFORM_GUI_GUIDELINE.md` — mesma hierarquia, controles nativos.
 - `docs/REVIEW_WITHOUT_DEVELOPER.md` — auth e permissões são N3/N4.
+
+**Vocabulário:** neste documento, “organização/tenant” significa a
+**prestadora de serviço** (quem executa e é dona dos dados operacionais), não
+uma loja. O AUTOSEG é a primeira prestadora do ecossistema Officina. Uma
+organização cliente (condomínio/empresa) é outra coisa e tem papéis próprios.
 
 ---
 

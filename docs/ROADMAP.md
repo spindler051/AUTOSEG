@@ -1,8 +1,16 @@
 # Roadmap vigente
 
-**Atualizado:** 2026-11-07
+**Atualizado:** 2026-11-10
 **Foco:** produção do AUTOSEG. Arquitetura genérica e outros toolkits ficam
 para depois.
+
+> **Direção registrada em 2026-11-10:** o AUTOSEG terá **um site, um link e um
+> login**, com conta/vínculo/contexto e política por objeto. A implementação
+> começa por identidade e permissões, não pela interface. O AUTOSEG é a primeira
+> prestadora de serviço do ecossistema Officina; Officina Web/GTK são extrações
+> posteriores. Ver
+> [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
+> e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
 ## Agora
 

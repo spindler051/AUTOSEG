@@ -59,7 +59,7 @@ Abas do editor:
 | Aba | Conteúdo |
 |---|---|
 | Identificação | modelo, cliente, pagamento, valores, descrição e notas |
-| Situação e relatório | diagnóstico, execução, testes, relato interno, situação, destinatários, rateio e fechamento |
+| Situação e relatório | solicitação original (somente admin), diagnóstico, execução, testes, relato interno, situação, destinatários, rateio e fechamento |
 | Materiais | linhas de material, autocomplete do estoque e total previsto |
 | Mídias | fotos existentes, novas fotos, legendas com salvamento automático, Fechamento e nota fiscal |
 
@@ -67,6 +67,13 @@ O fechamento (NF ou “não precisa de nota fiscal”) fica em Situação, junto
 conclusão. Para quem não é responsável, ações de salvar/concluir ficam ocultas
 e o formulário de colaboração de fotos permanece. Cancelar exige apenas o
 motivo e o número da OS; deixar pendente não exige destinatários.
+
+A **solicitação original** aparece em dois lugares: no bloco “Chamado de
+origem” e, para administradores, como campo editável acima de Diagnóstico. O
+texto é o mesmo do PDF. Para não administradores, o bloco continua marcado
+como “somente leitura” e o campo editável não é exibido. Ao corrigir o texto,
+a OS, o chamado de origem e o PDF passam a mostrar a versão corrigida; a
+alteração fica registrada no histórico.
 
 A situação não fica aberta no formulário: **Confirmar situação da OS** abre um
 popup com Aberta, Em rota, Iniciada, Pendente e Concluída. O botão

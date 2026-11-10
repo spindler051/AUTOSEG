@@ -151,6 +151,9 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
     try: cliente_id=int(d['cliente_id'])
     except (KeyError,ValueError,TypeError): raise ValueError('Selecione o cliente.')
     descricao=texto(d,'descricao')
+    solicitacao_original=texto(d,'solicitacao_original',5000)
+    if not descricao and solicitacao_original:
+        descricao=solicitacao_original
     if not descricao: raise ValueError('Preencha a descrição do serviço.')
     tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
     forma=texto(d,'forma_pagamento',60)
@@ -232,6 +235,8 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
             campos[chave]=int(round(numero(valor,'Campo')*100))
         except (ValueError,TypeError):
             continue
+    cobrar_visita=str(d.get('cobrar_visita','1')).strip().lower() not in (
+        '0','nao','não','false','off')
     comp_yaml=d.get('composicao_yaml')
     if comp_yaml:
         import json as _json_comp
@@ -244,12 +249,25 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
         comp=composicao.declarativa(
             total_centavos=int(round(total*100)),blocos=comp_yaml)
     elif aplicar_comp:
-        comp=composicao.calcular_os(
-            total_centavos=(None if total_negociado is None
-                            else int(round(total_negociado*100))),
-            materiais_centavos=int(round(total_mat*100)),
-            mao_obra_centavos=int(round(mao_obra*100)),
-            horas=tempo_horas, base_percentuais=base_nome, campos=campos)
+        # The service value is authoritative. Without an explicit final total,
+        # the composition only distributes labor + materials; it must never
+        # add visit, percentages or costs on top of what the user entered.
+        total_base=total_negociado if total_negociado is not None else soma
+        if cobrar_visita:
+            comp=composicao.calcular_os(
+                total_centavos=int(round(total_base*100)),
+                materiais_centavos=int(round(total_mat*100)),
+                mao_obra_centavos=int(round(mao_obra*100)),
+                horas=tempo_horas, base_percentuais=base_nome, campos=campos)
+        else:
+            # A visita não é cobrada nesta OS. Os percentuais continuam
+            # incidindo sobre o total e a mão de obra recebe o restante.
+            base_nome='total'
+            comp=composicao.calcular_os_sem_visita(
+                total_centavos=int(round(total_base*100)),
+                materiais_centavos=int(round(total_mat*100)),
+                mao_obra_centavos=int(round(mao_obra*100)),
+                horas=tempo_horas, campos=campos)
         total=comp['total_centavos']/100
         componente_hora=next((x for x in comp['componentes']
                               if x.get('modo')=='hora'),None)
@@ -260,6 +278,11 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
         comp=composicao.calcular(
             total_centavos=int(round(total*100)),materiais_centavos=int(round(total_mat*100)),
             horas=tempo_horas, mao_obra_centavos=int(round(mao_obra*100)))
+        comp['simplificada']=True
+    if total_negociado is not None:
+        # Persist the explicit negotiated total so reopening the form does not
+        # discard it or mistake a modular composition for a frozen total.
+        comp['valor_total_override']=round(float(total_negociado),2)
     comp_json=composicao.para_json(comp)
     composicao.instalar_banco(banco)
     # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.
@@ -288,6 +311,13 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
         else:
             old=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone()
             if not old: raise ValueError('OS não existe.')
+            if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                         "AND name='produtividade_rateios'").fetchone():
+                rateado=c.execute('''SELECT COALESCE(SUM(valor_centavos),0)
+                    FROM produtividade_rateios WHERE os_id=?''',(oid,)).fetchone()[0]
+                if int(rateado or 0)>int(round(total*100)):
+                    raise ValueError('O total da OS não pode ser menor que o valor já '
+                                     'rateado entre os colaboradores.')
             if cancelar:
                 confirmacao=texto(d,'confirmar_numero_os',40).strip()
                 if confirmacao != str(old['numero_os'] or '').strip():
@@ -318,6 +348,24 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
             if (acao in ('Pendente','Concluída','Cancelada','Não realizada')
                     and atual not in (None,pid) and not admin):
                 raise PermissionError('Para mudar o status, assuma uma OS pendente ou solicite transferência de responsabilidade.')
+            # Only administrators may correct the original request. It is the
+            # same text shown in the origin ticket and in the client PDF, so a
+            # change must update both records with an audit trail.
+            if solicitacao_original and admin:
+                descricao_anterior=(str(original['descricao_original'] or '')
+                                    if original else '')
+                if original is None:
+                    aten.registrar_solicitacao(
+                        c, oid, cliente_id, solicitacao_original,
+                        old['observacoes'] or '', old['origem'] or 'App')
+                if solicitacao_original != descricao_anterior:
+                    c.execute('UPDATE os_solicitacoes SET descricao_original=? '
+                              'WHERE os_id=?', (solicitacao_original, oid))
+                    if not silent:
+                        ext.evento(c, oid, 'Solicitação original editada',
+                                   f'De: {descricao_anterior} | Para: '
+                                   f'{solicitacao_original}'[:4000], pid, 'Prestador')
+                descricao=solicitacao_original
             if comprimir_fotos is None:
                 comprimir_fotos=(int(old['comprimir_fotos_pdf'])
                                  if 'comprimir_fotos_pdf' in old.keys() else 1)
@@ -394,13 +442,17 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
             visivel=str(anexo_visiveis[indice])!='0' if indice<len(anexo_visiveis) else True
             ext.definir_legenda_anexo_c(c,oid,anexo_id,legenda,visivel)
         if acao in fluxo.FIM:
+            # O encerramento financeiro pertence ao responsável atual, não ao
+            # administrador que clicou em concluir por ele. O ator continua
+            # registrado separadamente para auditoria.
+            finalizador_id=ext.responsavel_atual(c,oid) or pid
             fluxo.aplicar_encerramento(c,oid,acao,relato,motivo,
-                 prestador_id=pid,ator=f'Prestador ID {pid}')
+                 prestador_id=finalizador_id,ator=f'Prestador ID {pid}')
             if acao=='Concluída':
                 # Rateio validado e persistido na MESMA transação do encerramento.
                 # Se a distribuição for inválida, toda conclusão é revertida.
                 from officina.core import produtividade_os as prod
-                prod.registrar_rateios_na_transacao(c,oid,pid,total,d)
+                prod.registrar_rateios_na_transacao(c,oid,finalizador_id,total,d)
             audit(c,pid,'OS encerrada',oid,acao+(' | Motivo: '+motivo if motivo else ''))
         # Estoque: lançamento/estorno transacional e idempotente, sem expor administração na web.
         estoque.reconciliar_os_conexao(c,oid,f'Prestador #{pid}')
