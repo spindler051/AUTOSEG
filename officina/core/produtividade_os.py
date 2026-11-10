@@ -306,8 +306,8 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
             raise ValueError('Esta OS já possui rateio definido. Ajuste em '
                              'Rateio e colaboradores antes de concluir.')
         # Um responsável transferido pode carregar uma parcela antiga de
-        # secundário. O finalizador recebe o restante automaticamente; a
-        # parcela antiga precisa ser absorvida, nunca somada duas vezes.
+        # secundário. O finalizador recebe o restante automaticamente; a soma
+        # da parcela antiga com o restante duplicaria o valor.
         propria=next((x for x in existentes
                       if int(x['tecnico_id'])==int(finalizador_id)),None)
         if propria:
