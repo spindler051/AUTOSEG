@@ -3,6 +3,12 @@
 **Uso:** colar este arquivo no ChatGPT. Ele trabalha sobre uma cópia do
 repositório, **não faz commit**, e devolve um ZIP com os arquivos alterados.
 
+> **Correção de contrato (revisão):** `Identity` **não** carrega `role`.
+> Papel é atributo de `Membership`. A conversão correta é
+> `to_principal(identity, membership)`. Não adicionar campo `role` em
+> `Identity`; isso misturaria identidade com vínculo e quebraria o modelo de
+> múltiplos vínculos.
+
 **Repositório:** `spindler051/AUTOSEG`
 **Base obrigatória:** commit `c8899c9` (peça 1 já integrada).
 **Branch sugerida na cópia:** `feat/identity-contract` (não precisa existir no
@@ -123,14 +129,28 @@ def memberships(banco, identity: Identity) -> tuple[Membership, ...]:
     """
 
 
-def to_principal(identity: Identity) -> Principal:
-    """Map an Identity to the existing ObjectPolicy Principal.
+def to_principal(identity: Identity, membership: Membership) -> Principal:
+    """Map one identity + one membership to the ObjectPolicy Principal.
 
-    provider -> account_id=id, provider_id=id, role admin/employee
-    client   -> account_id=id, client_id=client_id, role customer
-    organization_id stays None (tenant_unknown will be flagged by the policy).
+    The membership is the source of role/provider_id/client_id/active. The
+    identity is the source of account_id/kind/display data.
+
+    Validate before mapping:
+    - membership.identity_kind == identity.kind;
+    - membership.identity_id == identity.id;
+    - raise ValueError on mismatch.
+
+    provider -> account_id=id, provider_id=membership.provider_id,
+                role=membership.role (admin|employee)
+    client   -> account_id=id, client_id=membership.client_id,
+                role=membership.role (customer)
+    organization_id=membership.provider_org_id (None until tenant exists)
+    active=identity.active and membership.active
     """
 ```
+
+`Identity` remains pure identity data. It must not have `role`, `provider_org_id`
+or permission fields.
 
 ### 5.2 Regras de resolução
 
@@ -160,11 +180,35 @@ por delegação:
 ```python
 def principal_provider(banco, provider_id):
     ident = identity.load_identity(banco, "provider", provider_id)
-    return identity.to_principal(ident) if ident else Principal(...)
+    if not ident:
+        return Principal(account_id=provider_id, role="employee",
+                         provider_id=provider_id, active=False)
+    vinculos = identity.memberships(banco, ident)
+    vinculo = next(
+        (m for m in vinculos
+         if m.provider_id == provider_id
+         and m.role in ("admin", "employee")),
+        None,
+    )
+    if not vinculo:
+        return Principal(account_id=provider_id, role="employee",
+                         provider_id=provider_id, active=False)
+    return identity.to_principal(ident, vinculo)
+
 
 def principal_client(banco, user_id):
     ident = identity.load_identity(banco, "client", user_id)
-    return identity.to_principal(ident) if ident else Principal(...)
+    if not ident:
+        return Principal(account_id=user_id, role="customer", active=False)
+    vinculos = identity.memberships(banco, ident)
+    vinculo = next(
+        (m for m in vinculos
+         if m.client_id == ident.client_id and m.role == "customer"),
+        None,
+    )
+    if not vinculo:
+        return Principal(account_id=user_id, role="customer", active=False)
+    return identity.to_principal(ident, vinculo)
 ```
 
 Manter exatamente o comportamento atual para id inexistente/inativo:
@@ -176,17 +220,21 @@ ou a instrumentação.
 Criar `tests/test_identity.py` com banco temporário e dados fictícios:
 
 1. provider admin: `resolve_identifier` por e-mail, `load_identity`,
-   `memberships` role `admin`, `to_principal` com `provider_id`.
+   `memberships` role `admin`, `to_principal(identity, membership)` com
+   `provider_id` e `role="admin"`.
 2. provider comum: role `employee`.
 3. client: `resolve_identifier` por CPF e e-mail, `memberships` role
-   `customer`, `to_principal` com `client_id`.
-4. inativo: aparece com `active=False`.
+   `customer`, `to_principal(identity, membership)` com `client_id`.
+4. inativo: aparece com `active=False`; o `Principal` fica inativo.
 5. e-mail case-insensitive e com espaços.
 6. CPF com máscara normaliza para dígitos.
 7. identificador inexistente retorna `()`.
 8. mesmo e-mail em provider e client retorna as duas identidades.
 9. `provider_org_id is None` em todas as memberships.
 10. nenhum campo de senha/hash em `Identity`.
+11. `Identity` não tem `role`; a role vem do `Membership`.
+12. `to_principal` rejeita identidade e membership de tipos/ids diferentes
+    com `ValueError`.
 
 Rodar:
 
@@ -231,6 +279,9 @@ identity-contract/
 - Nenhuma senha/hash em `Identity`.
 - Nenhuma PII em log.
 - Resolução determinística e parametrizada.
+- `Identity` não tem campo `role`; `Membership` é a fonte do papel.
+- `to_principal(identity, membership)` valida que os dois representam o mesmo
+  vínculo e levanta `ValueError` em mismatch.
 - Diff limitado aos arquivos permitidos.
 - Se algo exigir decisão de produto, parar e anotar; não inventar.
 
@@ -238,9 +289,11 @@ identity-contract/
 
 1. O ZIP contém apenas os arquivos permitidos?
 2. `resolve_identifier` retorna todas as correspondências, sem `LIKE` inseguro?
-3. `Identity` não carrega senha/hash?
-4. `policy_shadow` mantém o comportamento e os testes?
-5. Inativo aparece com `active=False`?
-6. `provider_org_id` ficou `None`?
-7. O diff não tocou portal/login/schema?
-8. Os testes foram realmente executados?
+3. `Identity` não carrega senha/hash **nem role**?
+4. `Membership` é a fonte de role/provider_id/client_id/active?
+5. `to_principal(identity, membership)` valida o vínculo e rejeita mismatch?
+6. `policy_shadow` mantém o comportamento e os testes?
+7. Inativo aparece com `active=False`?
+8. `provider_org_id` ficou `None`?
+9. O diff não tocou portal/login/schema?
+10. Os testes foram realmente executados?
