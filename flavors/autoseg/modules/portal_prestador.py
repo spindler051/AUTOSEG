@@ -481,7 +481,9 @@ body.ui-app .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13
 body.ui-app .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
 body.ui-app .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
 body.ui-app .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
-body.ui-app .finance-item-foot .tag{margin:0}
+body.ui-app .finance-item-foot .tag{display:inline-flex;align-items:center;margin:0;padding:4px 10px;border:1px solid transparent;border-radius:999px;font:600 11px/1.2 var(--u-font)}
+body.ui-app .finance-item-foot .tag::before{display:none}
+body.ui-app .finance-item-foot .tag.good{background:rgba(124,199,162,.14);color:var(--u-good);border-color:rgba(124,199,162,.35)}
 body.ui-app .finance-item-foot .tag.bad{background:rgba(223,133,133,.12);color:var(--u-bad);border:1px solid rgba(223,133,133,.35)}
 body.ui-app .finance-item-foot .prazo input{background:var(--u-card);border:1px solid var(--u-line-2);color:var(--u-text);border-radius:8px}
 
@@ -2776,6 +2778,10 @@ class PortalPrestador:
                 pessoal=prod.financeiro_pessoal(banco,s['pid'])
                 token=self.hidden(s)
                 banco_texto=prod.obter_dados_bancarios(banco,s['pid'])
+                with ext.db(banco) as c:
+                    linha_email=c.execute('SELECT email FROM prestadores WHERE id=?',
+                                          (s['pid'],)).fetchone()
+                email_prestador=linha_email['email'] if linha_email else ''
                 hoje=time.strftime('%Y-%m-%d')
 
                 def _item_finalizador(x):
@@ -2788,7 +2794,7 @@ class PortalPrestador:
                     detalhe=(f'Bruto {dinheiro(bruto)} · Repasses {dinheiro(repasses)} · '
                              f'{x.get("forma_pagamento") or "—"} · venc. {data_curta(vencimento) or "—"}')
                     if recebido:
-                        acao='<span class="good">Recebido</span>'
+                        acao=''
                     else:
                         prazo=(f'<form method="post" action="/financeiro/{int(x["financeiro_id"])}/vencimento" class="prazo">'
                                f'{token}<label>Vencimento <input type="date" name="vencimento" value="{esc(vencimento)}"></label>'
@@ -2803,7 +2809,7 @@ class PortalPrestador:
                     return {'tipo':'Finalizei','os_id':x['os_id'],'numero_os':x['numero_os'],
                             'cliente':x.get('cliente') or '','meu':meu,
                             'status':'Atrasado' if atrasado else ('Recebido' if recebido else 'A receber'),
-                            'status_classe':'bad' if atrasado else '',
+                            'status_classe':'good' if recebido else 'bad',
                             'detalhe':detalhe,'acao':acao,'recebido':recebido}
 
                 def _item_secundario(x):
@@ -2815,7 +2821,7 @@ class PortalPrestador:
                     if recebido:
                         status='Recebido'
                         detalhe=f'Repasse · confirmado em {x.get("confirmado_em") or "—"}'
-                        acao='<span class="good">Recebido</span>'
+                        acao=''
                     else:
                         status='A receber'
                         pendente=max(0,enviado-pago)
@@ -2836,7 +2842,7 @@ class PortalPrestador:
                             acao='<span class="warn">Aguardando confirmação</span>'
                     return {'tipo':'Secundário','os_id':x['os_id'],'numero_os':x['numero_os'],
                             'cliente':x.get('cliente') or '','meu':valor,
-                            'status':status,'status_classe':'',
+                            'status':status,'status_classe':'good' if recebido else 'bad',
                             'detalhe':detalhe,'acao':acao,'recebido':recebido}
 
                 lancamentos=[_item_finalizador(x) for x in pessoal['brutos_proprios']]
@@ -2845,11 +2851,35 @@ class PortalPrestador:
                 lancamentos=[x for x in lancamentos if x['meu']>0.009]
                 a_receber=[x for x in lancamentos if not x['recebido']]
                 recebidos=[x for x in lancamentos if x['recebido']]
+                try:
+                    emprestimos_a_receber=maf_loans.loan_receivables(s['pid'],email_prestador)
+                except Exception:
+                    LOG.exception('Falha ao carregar empréstimos a receber (MAF)')
+                    emprestimos_a_receber=[]
+                for emprestimo in emprestimos_a_receber:
+                    a_receber.append({
+                        'tipo':'Empréstimo MAF','os_id':None,
+                        'numero_os':f'Empréstimo #{emprestimo["id"]}',
+                        'cliente':emprestimo.get('devedor_email') or '',
+                        'meu':float(emprestimo['pendente'] or 0)/100,
+                        'status':'A receber','status_classe':'bad',
+                        'detalhe':'Empréstimo MAF · pagamento aguardando análise do comprovante',
+                        'acao':botao('Analisar comprovante',
+                                     f'/financeiro/maf-emprestimo/{int(emprestimo["id"])}',
+                                     'secondary'),
+                        'recebido':False})
 
                 def _item_html(item):
+                    if item.get('os_id'):
+                        identificacao=(f'<a class="finance-item-os" '
+                                       f'href="{url_os(banco, item["os_id"])}">'
+                                       f'{esc(item["numero_os"])}</a>')
+                    else:
+                        identificacao=(f'<span class="finance-item-os">'
+                                       f'{esc(item["numero_os"])}</span>')
                     return ('<article class="finance-item">'
                             '<div class="finance-item-top">'
-                            f'<a class="finance-item-os" href="{url_os(banco, item["os_id"])}">{esc(item["numero_os"])}</a>'
+                            +identificacao+
                             f'<span class="finance-item-type">{esc(item["tipo"])}</span>'
                             '</div>'
                             f'<p class="finance-item-client">{esc(item["cliente"])}</p>'
@@ -2910,6 +2940,8 @@ class PortalPrestador:
                 for item in pessoal['receber_de_colegas']:
                     recebido_total+=item['pago_centavos']/100
                     a_receber_total+=(item['valor_centavos']-item['pago_centavos'])/100
+                for item in emprestimos_a_receber:
+                    a_receber_total+=float(item['pendente'] or 0)/100
                 a_receber_total=round(a_receber_total,2)
                 recebido_total=round(recebido_total,2)
                 if self.ui_app():

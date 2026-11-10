@@ -194,6 +194,24 @@ def list_loans(pid, email):
     return [dict(x) for x in rows]
 
 
+def loan_receivables(pid, email):
+    """Empréstimos em que o prestador é credor e há pagamento para analisar."""
+    if not MAF_DB.is_file():
+        return []
+    email = str(email or '').strip().lower()
+    with _conn() as c:
+        user = _usuario_por_pid(c, pid) or _usuario_por_email(c, email)
+        if not user:
+            return []
+        rows = c.execute('''SELECT e.*,
+            COALESCE((SELECT SUM(d.valor_centavos) FROM devolucoes d
+              WHERE d.emprestimo_id=e.id AND d.confirmado_em IS NULL
+              AND d.contestado_em IS NULL),0) AS pendente
+            FROM emprestimos e WHERE e.credor_id=? AND e.estado NOT IN ('cancelado','quitado')''',
+            (user['id'],)).fetchall()
+    return [dict(x) for x in rows if int(x['pendente'] or 0) > 0]
+
+
 def get_loan(pid, email, loan_id):
     if not MAF_DB.is_file():
         return None
@@ -314,7 +332,8 @@ def act(pid, email, loan_id, acao, d):
         pago = c.execute('''SELECT COALESCE(SUM(valor_centavos),0) FROM devolucoes
             WHERE emprestimo_id=? AND confirmado_em IS NOT NULL''', (e['id'],)).fetchone()[0]
         pendente = c.execute('''SELECT COALESCE(SUM(valor_centavos),0) FROM devolucoes
-            WHERE emprestimo_id=? AND confirmado_em IS NULL''', (e['id'],)).fetchone()[0]
+            WHERE emprestimo_id=? AND confirmado_em IS NULL
+            AND contestado_em IS NULL''', (e['id'],)).fetchone()[0]
         estado = e['estado'] or 'aguardando_aceite'
         if acao == 'aceitar':
             if user['id'] != e['devedor_id'] or estado != 'aguardando_aceite':
@@ -342,18 +361,19 @@ def act(pid, email, loan_id, acao, d):
             _enviar_async(outro_email, 'AUTOSEG — empréstimo para aceitar novamente',
                           f'<p>O empréstimo #{e["id"]} foi reenviado para seu aceite.</p>')
         elif acao == 'enviar':
-            if user['id'] != e['credor_id'] or estado != 'aceito':
-                raise PermissionError('Envio indisponível.')
+            if user['id'] != e['credor_id'] or estado in ('cancelado', 'quitado'):
+                raise PermissionError('Comprovante indisponível para este empréstimo.')
             nome = save_proof(d.get('comprovante'))
             if not nome:
-                raise ValueError('Anexe o comprovante de envio.')
+                raise ValueError('Anexe o comprovante.')
             venc = e['vencimento'] or (date.today() + timedelta(days=30)).isoformat()
             c.execute("""UPDATE emprestimos SET confirmado_envio_em=?,comprovante_envio=?,
-                vencimento=?,estado='enviado',atualizado_em=? WHERE id=?""",
+                vencimento=?,atualizado_em=? WHERE id=?""",
                 (_now(), nome, venc, _now(), e['id']))
-            _evento(c, e['id'], dict(user), 'Envio confirmado', 'Comprovante anexado.')
-            _enviar_async(outro_email, 'AUTOSEG — comprovante de envio',
-                          f'<p>O credor confirmou o envio do empréstimo #{e["id"]}.</p>')
+            _evento(c, e['id'], dict(user), 'Comprovante do empréstimo',
+                    'Credor anexou/atualizou o comprovante.')
+            _enviar_async(outro_email, 'AUTOSEG — comprovante do empréstimo',
+                          f'<p>O credor anexou o comprovante do empréstimo #{e["id"]}.</p>')
         elif acao == 'receber':
             if user['id'] != e['devedor_id'] or estado != 'enviado':
                 raise PermissionError('Recebimento indisponível.')
@@ -363,7 +383,8 @@ def act(pid, email, loan_id, acao, d):
             _enviar_async(outro_email, 'AUTOSEG — recebimento confirmado',
                           f'<p>O devedor confirmou o recebimento do empréstimo #{e["id"]}.</p>')
         elif acao == 'devolver':
-            if user['id'] != e['devedor_id'] or estado not in ('recebido', 'atrasado'):
+            if (user['id'] != e['devedor_id'] or not e['aceito_em']
+                    or estado in ('cancelado', 'quitado')):
                 raise PermissionError('Devolução indisponível.')
             valor = int(d.get('valor_centavos') or 0)
             if valor <= 0 or valor > int(e['valor_centavos']) - int(pago) - int(pendente):
@@ -390,9 +411,26 @@ def act(pid, email, loan_id, acao, d):
             if restante <= 0:
                 c.execute("UPDATE emprestimos SET estado='quitado',atualizado_em=? WHERE id=?",
                           (_now(), e['id']))
-            _evento(c, e['id'], dict(user), 'Devolução confirmada', _reais(dev['valor_centavos']))
-            _enviar_async(outro_email, 'AUTOSEG — devolução confirmada',
-                          f'<p>O credor confirmou {_reais(dev["valor_centavos"])}.</p>')
+            _evento(c, e['id'], dict(user), 'Pagamento aceito', _reais(dev['valor_centavos']))
+            _enviar_async(outro_email, 'AUTOSEG — pagamento aceito',
+                          f'<p>O credor aceitou o pagamento de {_reais(dev["valor_centavos"])}.</p>')
+        elif acao == 'recusar-pagamento':
+            if user['id'] != e['credor_id']:
+                raise PermissionError('Somente o credor analisa o pagamento.')
+            did = int(d.get('devolucao') or 0)
+            dev = c.execute('SELECT * FROM devolucoes WHERE id=? AND emprestimo_id=?',
+                            (did, e['id'])).fetchone()
+            if not dev or dev['confirmado_em'] or dev['contestado_em']:
+                raise ValueError('Pagamento não encontrado ou já analisado.')
+            motivo = str(d.get('motivo', '')).strip()
+            if len(motivo) < 3:
+                raise ValueError('Informe o motivo da recusa do comprovante.')
+            c.execute('''UPDATE devolucoes SET contestado_em=?,motivo_contestacao=?
+                         WHERE id=?''', (_now(), motivo[:1000], did))
+            _evento(c, e['id'], dict(user), 'Pagamento recusado', motivo)
+            _enviar_async(outro_email, 'AUTOSEG — comprovante recusado',
+                          f'<p>O credor recusou o comprovante do empréstimo #{e["id"]}.</p>'
+                          f'<p>{_esc(motivo)}</p>')
         elif acao == 'alterar':
             if estado in ('cancelado', 'quitado'):
                 raise ValueError('Empréstimo encerrado.')
@@ -576,17 +614,15 @@ def render_detail(pid, email, loan_id, csrf):
         corpo += form('recusar', '<label>Motivo da recusa</label><input name="motivo">', 'Recusar')
     if is_credor and estado == 'recusado':
         corpo += '<h3>Aceite recusado</h3>' + form('reenviar-aceite', '', 'Reenviar aceite')
-    if is_credor and estado == 'aceito':
-        corpo += '<h3>Confirmar envio</h3>' + form('enviar',
+    if is_credor and estado not in ('cancelado', 'quitado'):
+        corpo += '<h3>Comprovante do empréstimo (opcional)</h3>' + form('enviar',
             '<label>Comprovante</label><input type="file" name="comprovante" accept="application/pdf,image/jpeg,image/png" required>',
-            'Confirmar envio', True)
-    if is_devedor and estado == 'enviado':
-        corpo += '<h3>Confirmar recebimento</h3>' + form('receber', '', 'Confirmar que recebi')
-    if is_devedor and estado in ('recebido', 'atrasado') and saldo > 0:
-        corpo += '<h3>Registrar devolução</h3>' + form('devolver',
+            'Anexar/atualizar comprovante', True)
+    if is_devedor and e['aceito_em'] and estado not in ('cancelado', 'quitado') and saldo > 0:
+        corpo += '<h3>Confirmar devolução e enviar comprovante Pix</h3>' + form('devolver',
             '<label>Valor (R$)</label><input name="valor" inputmode="decimal" required>'
-            '<label>Comprovante</label><input type="file" name="comprovante" accept="application/pdf,image/jpeg,image/png" required>',
-            'Enviar comprovante', True)
+            '<label>Comprovante Pix</label><input type="file" name="comprovante" accept="application/pdf,image/jpeg,image/png" required>',
+            'Confirmar devolução', True)
     if alt:
         if str(alt['proposto_por']) != '':
             corpo += (f'<h3>Alteração pendente</h3><p>{_reais(alt["valor_centavos"] or e["valor_centavos"])} · '
@@ -615,14 +651,19 @@ def render_detail(pid, email, loan_id, csrf):
     linhas_dev = []
     for d in devs:
         acao = ''
-        if is_credor and not d['confirmado_em']:
+        if is_credor and not d['confirmado_em'] and not d['contestado_em']:
             acao = form('confirmar', f'<input type="hidden" name="devolucao" value="{d["id"]}">',
-                        'Confirmar recebimento')
+                        'Aceitar pagamento')
+            acao += form('recusar-pagamento',
+                f'<input type="hidden" name="devolucao" value="{d["id"]}">'
+                '<label>Motivo da recusa</label><input name="motivo" required>',
+                'Recusar comprovante')
         comp = (f'<a href="/financeiro/maf-comprovante/{d["id"]}">Comprovante</a>'
                 if d['comprovante'] else '—')
+        situacao = ('Confirmado' if d['confirmado_em']
+                    else 'Recusado' if d['contestado_em'] else 'Aguardando análise')
         linhas_dev.append(f'<tr><td>{_reais(d["valor_centavos"])}</td><td>{_esc(d["enviado_em"])}</td>'
-                          f'<td>{"Confirmado" if d["confirmado_em"] else "Pendente"}</td>'
-                          f'<td>{comp}{acao}</td></tr>')
+                          f'<td>{situacao}</td><td>{comp}{acao}</td></tr>')
     corpo += ('<h3>Devoluções</h3><div class="tabela"><table><thead><tr><th>Valor</th>'
               '<th>Envio</th><th>Situação</th><th>Comprovante</th></tr></thead><tbody>'
               + ''.join(linhas_dev) + '</tbody></table></div>')
