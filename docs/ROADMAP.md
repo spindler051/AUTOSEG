@@ -33,6 +33,22 @@ para depois.
    - `HttpService` usando o mesmo contrato do modo local;
    - sem fallback silencioso para o banco local.
 
+### Gate de consolidação (até fechar os P0 de autorização)
+
+Enquanto a autorização por objeto, o isolamento por prestadora e a
+consolidação da OS não estiverem aplicados no serviço, **não iniciar**:
+
+- multi-prestadora ou Officina Web multi-tenant;
+- expansão do Workaholic para novos domínios;
+- sistema de plugins;
+- novos portais ou telas duplicadas em web/GTK sem contrato compartilhado;
+- novos papéis ou funcionalidades que dependam de permissões não aplicadas.
+
+Foco do gate: autorização no serviço, uma única regra de OS, dinheiro em
+centavos/`Decimal`, portais finos, backup/restore e testes negativos. Uma
+feature que dependa de papel só entra atrás de flag e com teste provando a
+negação.
+
 ## Próximo
 
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e

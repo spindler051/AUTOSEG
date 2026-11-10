@@ -77,6 +77,21 @@ high-level vision, cost drivers and likely infeasible parts are in
 | 2026-11-10 | Treat AUTOSEG as the first service provider in the Officina ecosystem, not a store; current web/GTK are seeds of Officina Web/GTK. | Correct product vocabulary; keep AUTOSEG as the priority and avoid a big-bang rewrite. |
 | 2026-11-10 | Target one site/login for AUTOSEG, but implement identity and object policy before the UI. | Two portals and ad-hoc permission checks cannot be safely merged without a single account/tenant/policy layer. |
 
+## Migration bottlenecks
+
+These are the concrete things that make the migration slower. Fixing them is
+higher leverage than adding new abstractions.
+
+| Bottleneck | Why it slows migration | Next action |
+|---|---|---|
+| `portal_prestador.py` monolith | HTTP, HTML, auth, SQL, OS, finance and stock change together; every extraction has a large blast radius. | Extract one read-only route/service per PR; no new SQL or business rule in handlers. |
+| No single actor/permission boundary | Each surface reimplements “admin/responsible/participant”; tests cannot prove denial consistently. | Introduce `Principal` + `Resource` + `ObjectPolicy` at the service boundary; shadow mode first. |
+| Money in `float`/`REAL` | Rounding and equality differ between SQLite, contracts, API and composition. | Use integer cents at the application boundary; adapt legacy `REAL` at the edges; add round-trip tests. |
+| Parallel OS rules | GTK, portal, `os_write`, `portal_negocios` and `produtividade_os` can disagree on status, totals and finalizer. | Characterize one OS slice, then move all writers through one `OrderService` use case. |
+| Tests that codify leaks | Some characterization tests assert that any provider can read any OS/PII; they protect the wrong behavior. | Invert them when the policy lands; do not add new tests that preserve a known leak. |
+| Workaholic expansion before vertical consolidation | Generic engine work consumes time without a second real consumer and increases maintenance surface. | Freeze new generic capabilities until the AUTOSEG P0 gate is closed and a second consumer exists. |
+| Docs/code divergence | Handoff, workflows and “not implemented” claims drift from reality, causing wrong decisions. | Update the ledger/handoff in the same PR; add a release check for documented status. |
+
 ## Next recommended micro-slices
 
 1. **Authorization characterization** — inventory `s.get('admin')`,

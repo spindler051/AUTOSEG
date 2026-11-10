@@ -293,6 +293,21 @@ The proposed contract and incremental path are in
 it has two real consumers today (web and GTK) and should be adopted before
 expanding the generic engine.
 
+### 9.5 Consolidation before platform expansion
+
+**Decision (product owner):** freeze new generic-platform scope until the
+AUTOSEG P0 consolidation is closed. This is a scope decision, not a feature
+freeze: bug fixes, authorization, OS consolidation, money correctness, portal
+thinning, backup/restore and tests continue.
+
+Do not start multi-provider/Officina Web tenancy, new Workaholic domains, a
+plugin system, new portals, or new role-dependent features while authorization
+by object and tenant isolation are not enforced in the service.
+
+Exit criteria: object policy in the service, negative authorization tests,
+single OS writer, canonical money at the boundary, thin portals, backup/restore
+tested, and a second real consumer before extracting a generic capability.
+
 ## 10. Related documents
 
 - `AGENTS.md`

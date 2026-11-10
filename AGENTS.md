@@ -91,6 +91,44 @@ generic, modular, open-source platform. Read this file before changing code.
     explicitly asks for them. Destructive actions may ask for confirmation.
     See `docs/HUMAN_CENTERED_DECISIONS.md` §9.
 
+## Change gates (before coding)
+
+Every non-trivial route, service, command or screen must answer these in the
+PR/commit message. If an answer is missing, stop and fix the scope first.
+
+1. **Actor:** who is the principal (provider, admin, client, anonymous)?
+2. **Permission:** which `resource.action.scope` is required, and where is it
+   enforced in the service?
+3. **Object/tenant:** which object and provider organization own the data? How
+   is cross-tenant access denied?
+4. **Negative test:** which test proves an unauthorized actor is rejected?
+5. **Source of truth:** does this add a second copy of a business rule? If yes,
+   why is the existing service not reusable?
+6. **Money:** is the value integer cents or `Decimal` at the boundary? Which
+   rounding/equality test protects it?
+7. **UI parity:** does this change web and GTK? If both, is it in the shared
+   presentation contract, or explicitly native-only?
+8. **Platform delta:** did this reduce coupling, or add a new legacy
+   dependency? Declare it.
+
+Hard rules:
+
+- No new `if admin` outside the policy layer.
+- No new SQL or business rule inside a portal handler, GTK widget or template.
+- No new route/service without actor + permission + object/tenant + negative
+  test.
+- No new money field using `float`/`REAL` at the application boundary.
+- No new generic Workaholic/Officina capability without a second real
+  consumer.
+- No new screen duplicated in web and GTK without the shared contract or a
+  written reason why it is native-only.
+- Tests that currently codify a leak (for example, “any provider can open any
+  OS”) must be inverted when the policy lands; do not add new ones.
+
+This gate is intentionally small. It is not a redesign process; it is the
+minimum to stop adding authorization and duplication debt while the existing
+debt is paid down.
+
 ## Workaholic fit check
 
 Use this decision tree:
