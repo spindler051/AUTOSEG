@@ -146,7 +146,7 @@ def cliente_excluir(banco,cid,pid):
         c.execute('DELETE FROM clientes WHERE id=?',(cid,))
 
 
-def os_salvar(banco,d,pid,oid=None):
+def os_salvar(banco,d,pid,oid=None,silent=False):
     """Insere/edita uma OS, materiais, relatório e estado numa transação SQLite."""
     try: cliente_id=int(d['cliente_id'])
     except (KeyError,ValueError,TypeError): raise ValueError('Selecione o cliente.')
@@ -338,8 +338,9 @@ def os_salvar(banco,d,pid,oid=None):
                 (cliente_id,tecnico,descricao,mao_obra,total_mat,custo_mat,total,forma,
                  urgencia or None,observacoes,texto_adicional,
                  tempo_horas,comp_json,base_nome,comprimir_fotos,ext.agora(),oid))
-            if diffs: ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
-            if diffs: audit(c,pid,'OS alterada',oid,'; '.join(diffs))
+            if diffs and not silent:
+                ext.evento(c,oid,'OS editada via portal','; '.join(diffs)[:4000],pid,'Prestador')
+                audit(c,pid,'OS alterada',oid,'; '.join(diffs))
         old_mat=[(r['item'], None if r['quantidade'] is None else float(r['quantidade']),
                   r['unidade'] or '', float(r['valor_unitario'])) for r in
                  c.execute('SELECT item,quantidade,unidade,valor_unitario FROM materiais_os WHERE os_id=? ORDER BY id',(oid,))]
@@ -356,7 +357,8 @@ def os_salvar(banco,d,pid,oid=None):
             for m in materiais:
                 c.execute('INSERT INTO materiais_os(os_id,item,quantidade,unidade,valor_unitario,valor_total) VALUES(?,?,?,?,?,?)',
                     (oid,m['item'],m['quantidade'],m.get('unidade',''),m['valor_unitario'],m['valor_total']))
-            ext.evento(c,oid,'Materiais alterados','Antes: '+repr(old_mat)[:1200]+'; depois: '+repr(new_mat)[:1200],pid,'Prestador')
+            if not silent:
+                ext.evento(c,oid,'Materiais alterados','Antes: '+repr(old_mat)[:1200]+'; depois: '+repr(new_mat)[:1200],pid,'Prestador')
         if acao=='salvar':
             aten.salvar_rascunho(c,oid,relato,f'Prestador ID {pid}')
         elif relato:

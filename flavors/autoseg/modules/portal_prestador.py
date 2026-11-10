@@ -839,7 +839,6 @@ def _grupos_navegacao(usuario):
         grupos[1][1].extend([
             ('/prestadores', 'Prestadores', 'users'),
             ('/estoque', 'Estoque', 'wrench'),
-            ('/caixa', 'Caixa da empresa', 'wallet'),
             ('/composicao', 'Composição de valores', 'layout'),
         ])
         grupos[-1][1].append(('/feedback/recebidos', 'Feedbacks', 'message'))
@@ -907,7 +906,7 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
     menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
     if usuario and usuario.get('admin') and not cliente:
         menus.extend([('/prestadores','Prestadores'),('/estoque','Estoque'),
-                      ('/caixa','Caixa da empresa'),('/composicao','Composição de valores')])
+                      ('/composicao','Composição de valores')])
         menus.append(('/feedback/recebidos','Feedbacks'))
     nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
          +'<details class="nav-more"><summary>Mais opções</summary>'
@@ -1012,11 +1011,11 @@ class PortalPrestador:
                 LOG.info('acesso %s %s',ip,formato%args)
 
             def send_bytes(self,data,mime='text/html; charset=utf-8',filename=None,status=200,
-                           cookie=None,inline=False):
+                           cookie=None,inline=False,cache=None):
                 self.send_response(status)
                 self.send_header('Content-Type',mime)
                 self.send_header('Content-Length',str(len(data)))
-                self.send_header('Cache-Control','no-store, max-age=0')
+                self.send_header('Cache-Control',cache or 'no-store, max-age=0')
                 self.send_header('X-Content-Type-Options','nosniff')
                 self.send_header('X-Frame-Options','DENY')
                 self.send_header('Referrer-Policy','no-referrer')
@@ -1985,7 +1984,7 @@ class PortalPrestador:
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
-                    anexos=c.execute('''SELECT a.id,a.nome_original,a.criado_em,a.tipo,
+                    anexos=c.execute('''SELECT a.id,a.nome_original,a.criado_em,a.tipo,a.sha256,
                         COALESCE(v.legenda,'') legenda,COALESCE(v.visivel,1) visivel
                         FROM os_anexos a LEFT JOIN v9_anexos_visiveis v ON v.anexo_id=a.id
                         WHERE a.os_id=? ORDER BY a.ordem,a.id''',(oid,)).fetchall() if oid else []
@@ -2552,8 +2551,9 @@ class PortalPrestador:
                         for a in anexos:
                             legenda=esc(a['legenda'] or '')
                             vis=esc(str(a['visivel'] if a['visivel'] is not None else 1))
+                            versao=esc(str(a['sha256'] or a['id'])[:12])
                             corpo+=('<div class="foto-rascunho" data-anexo-id="'+str(a['id'])+'" style="display:grid;grid-template-columns:150px 1fr;gap:12px;border:1px solid #3b3b3b;padding:10px;margin:10px 0;border-radius:8px">'
-                                +'<img src="/arquivos/anexo/'+str(a['id'])+'/thumb" alt="Foto da OS" loading="lazy" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
+                                +'<img src="/arquivos/anexo/'+str(a['id'])+'/thumb?v='+versao+'" alt="Foto da OS" loading="lazy" decoding="async" width="150" height="112" style="width:150px;height:112px;object-fit:cover;border-radius:6px">'
                                 +'<div>')
                             if pode_editar_fotos:
                                 marcado=' checked' if vis=='1' else ''
@@ -2649,11 +2649,12 @@ class PortalPrestador:
                     itens=[]
                     for a in anexos:
                         vis=imagens_v9.get(a['id'],{})
+                        versao=esc(str(a['sha256'] or a['id'])[:12])
                         form=(f'<form method="post" action="{url_os(banco, oid)}/anexo/{a["id"]}/publico">{token}'
                               +campos_escuros('Legenda para o PDF','legenda',vis.get('legenda',''))
                               +select('Incluir no PDF','visivel',[('1','Sim — incluir foto (padrão)'),('0','Não — ocultar por privacidade')],str(vis.get('visivel',1)))
                               +'<button type="submit" class="secondary">Salvar visibilidade</button></form>')
-                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'/thumb" alt="Foto" loading="lazy" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
+                        itens.append('<div class="card"><img src="/arquivos/anexo/'+str(a['id'])+'/thumb?v='+versao+'" alt="Foto" loading="lazy" decoding="async" width="110" height="90" style="width:110px;height:90px;object-fit:cover;display:block"><b>'+esc(a['nome_original'])+'</b>'+form+'</div>')
                     corpo+=card('Fotos da OS','<p>As fotos anexadas entram automaticamente no PDF. Se houver informação particular, selecione Ocultar por privacidade. Após alterar uma OS encerrada, publique outra versão do relatório.</p>'+''.join(itens))
                 if oid:
                     with ext.db(banco) as c:
@@ -2675,7 +2676,7 @@ class PortalPrestador:
                 elif d['status'] in fluxo.FIM:
                     corpo+=card('Documento pendente de publicação',
                         f'<p class="warn">A OS está encerrada, mas o PDF ainda não foi publicado.</p><form method="post" action="{url_os(banco, oid)}/publicar">{token}<button>Gerar e publicar PDF</button></form>')
-                if d['status'] in ext.ATIVAS and not (d['status']=='Pendente' and publicado):
+                if d['status'] in ext.ATIVAS:
                     if app:
                         docs=('<p class="muted">Use o botão <b>Baixar preview do PDF</b> na ficha '
                               'da OS. A prévia não publica, não envia e-mail e não altera o status.</p>')
@@ -2856,18 +2857,40 @@ class PortalPrestador:
                 except Exception:
                     LOG.exception('Falha ao carregar empréstimos a receber (MAF)')
                     emprestimos_a_receber=[]
+                try:
+                    emprestimos_recebidos=maf_loans.loan_payables(s['pid'],email_prestador)
+                except Exception:
+                    LOG.exception('Falha ao carregar empréstimos recebidos (MAF)')
+                    emprestimos_recebidos=[]
                 for emprestimo in emprestimos_a_receber:
+                    pendente=float(emprestimo['pendente'] or 0)/100
+                    detalhe=('Empréstimo pessoal · comprovante de devolução aguardando sua análise'
+                             if pendente>0 else
+                             'Empréstimo pessoal a receber · não entra no caixa da empresa')
                     a_receber.append({
                         'tipo':'Empréstimo MAF','os_id':None,
                         'numero_os':f'Empréstimo #{emprestimo["id"]}',
                         'cliente':emprestimo.get('devedor_email') or '',
-                        'meu':float(emprestimo['pendente'] or 0)/100,
+                        'meu':float(emprestimo['restante'] or 0)/100,
                         'status':'A receber','status_classe':'bad',
-                        'detalhe':'Empréstimo MAF · pagamento aguardando análise do comprovante',
-                        'acao':botao('Analisar comprovante',
+                        'detalhe':detalhe,
+                        'acao':botao('Analisar comprovante' if pendente>0 else 'Abrir empréstimo',
                                      f'/financeiro/maf-emprestimo/{int(emprestimo["id"])}',
                                      'secondary'),
                         'recebido':False})
+                for emprestimo in emprestimos_recebidos:
+                    recebidos.append({
+                        'tipo':'Empréstimo MAF','os_id':None,
+                        'numero_os':f'Empréstimo #{emprestimo["id"]}',
+                        'cliente':emprestimo.get('credor_email') or '',
+                        'meu':float(emprestimo['restante'] or 0)/100,
+                        'status':'Recebido','status_classe':'good',
+                        'detalhe':('Empréstimo pessoal recebido · saldo em aberto; '
+                                   'não é receita da empresa'),
+                        'acao':botao('Abrir empréstimo',
+                                     f'/financeiro/maf-emprestimo/{int(emprestimo["id"])}',
+                                     'secondary'),
+                        'recebido':True})
 
                 def _item_html(item):
                     if item.get('os_id'):
@@ -2929,6 +2952,32 @@ class PortalPrestador:
                     'registre o envio e o colega confirma na coluna A receber do financeiro dele.</p>'
                     +tabela(['OS','Colega','Parcela','Confirmado','Aguardando confirmação',
                              'A enviar','Ação'],repasses))
+                caixa_card=''
+                if s.get('admin'):
+                    try:
+                        resumo_caixa=empresa.resumo(banco)
+                        linhas_caixa=[]
+                        for item in empresa.listar(banco)[:8]:
+                            pessoa=' · '.join(str(x) for x in
+                                              (item.get('prestador_nome'),
+                                               item.get('numero_os')) if x)
+                            linhas_caixa.append((
+                                item['data'],
+                                empresa.TIPOS.get(item['tipo'],item['tipo']),
+                                esc(pessoa or '—'),esc(item['descricao']),
+                                dinheiro(item['valor_centavos']/100)))
+                        caixa_card=card('Caixa da empresa',
+                            '<p class="muted">Controle financeiro da empresa. Empréstimos '
+                            'pessoais entre prestadores não entram neste caixa.</p>'
+                            +'<div class="kpis">'
+                            +f'<div class="kpi"><span>Capital</span><strong>{dinheiro(resumo_caixa["aportes_centavos"]/100)}</strong></div>'
+                            +f'<div class="kpi"><span>Despesas</span><strong>{dinheiro(resumo_caixa["despesas_centavos"]/100)}</strong></div>'
+                            +f'<div class="kpi"><span>Saldo do controle</span><strong>{dinheiro(resumo_caixa["saldo_centavos"]/100)}</strong></div>'
+                            +'</div>'
+                            +tabela(['Data','Tipo','Pessoa / OS','Descrição','Valor'],linhas_caixa)
+                            +botao('Abrir caixa completo','/caixa','secondary'))
+                    except Exception:
+                        LOG.exception('Falha ao carregar o caixa da empresa no financeiro')
                 a_receber_total=0.0
                 recebido_total=0.0
                 for item in pessoal['brutos_proprios']:
@@ -2941,7 +2990,9 @@ class PortalPrestador:
                     recebido_total+=item['pago_centavos']/100
                     a_receber_total+=(item['valor_centavos']-item['pago_centavos'])/100
                 for item in emprestimos_a_receber:
-                    a_receber_total+=float(item['pendente'] or 0)/100
+                    a_receber_total+=float(item['restante'] or 0)/100
+                for item in emprestimos_recebidos:
+                    recebido_total+=float(item['restante'] or 0)/100
                 a_receber_total=round(a_receber_total,2)
                 recebido_total=round(recebido_total,2)
                 if self.ui_app():
@@ -2960,7 +3011,6 @@ class PortalPrestador:
                     LOG.exception('Falha ao carregar empréstimos entre prestadores (MAF)')
                     maf_card=''
                 corpo=(cabecalho
-                    +maf_card
                     +banco_card
                     +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span><strong>{dinheiro(a_receber_total)}</strong></div>'
                     +f'<div class="kpi"><span>{rotulo_r}</span><strong>{dinheiro(recebido_total)}</strong></div></div>'
@@ -2969,7 +3019,7 @@ class PortalPrestador:
                     +'<p class="muted">A lista mostra a sua parcela nas OS em que você participou, '
                     'como finalizador ou técnico secundário. O valor bruto e os repasses aparecem no detalhe de cada item.</p>'
                     +'<h2>Lançamentos das OS em que participo</h2>'
-                    +colunas+repasses_card)
+                    +colunas+repasses_card+caixa_card+maf_card)
                 return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):
@@ -3369,7 +3419,8 @@ class PortalPrestador:
                 arq=Path(x['caminho']).resolve()
                 if not arq.is_relative_to(ext.ANEXOS.resolve()):
                     return self.erro('Anexo fora do diretório autorizado.',403,s)
-                return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg')
+                return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg',
+                                       cache='private, max-age=31536000, immutable')
 
             def _normalizar_os(self, path):
                 partes = path.strip('/').split('/')
@@ -4323,6 +4374,14 @@ class PortalPrestador:
                         prod.salvar_rascunho(banco,oid,pid,d)
                         dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
                         ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+                        # Auto-save also persists the monetary fields on the OS,
+                        # so the PDF/email reflect the values typed in the form.
+                        try:
+                            dados_os=dict(d)
+                            dados_os['acao_status']='salvar'
+                            neg.os_salvar(banco,dados_os,pid,oid,silent=True)
+                        except Exception:
+                            LOG.exception('Auto-save: falha ao aplicar valores na OS %s',oid)
                         try:
                             cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
                                                  str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))

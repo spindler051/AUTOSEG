@@ -615,6 +615,11 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
         evento(c,os_id,'Imagem anexada',Path(nome).name[:150],pid,ator)
     except Exception:
         destino.unlink(missing_ok=True);raise
+    # Warm the thumbnail cache so the first OS page load does not decode the original.
+    try:
+        thumb_imagem(destino)
+    except Exception:
+        pass
     return str(destino)
 
 

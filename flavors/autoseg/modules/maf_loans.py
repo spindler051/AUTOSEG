@@ -194,22 +194,45 @@ def list_loans(pid, email):
     return [dict(x) for x in rows]
 
 
-def loan_receivables(pid, email):
-    """Empréstimos em que o prestador é credor e há pagamento para analisar."""
-    if not MAF_DB.is_file():
+def _loans_for(pid, email, papel):
+    """Empréstimos aceitos em que o prestador é credor ou devedor.
+
+    O principal fica fora do financeiro da empresa; estas linhas alimentam
+    apenas as colunas pessoais "A receber" e "Recebidos" do prestador.
+    """
+    if papel not in ('credor', 'devedor') or not MAF_DB.is_file():
         return []
     email = str(email or '').strip().lower()
     with _conn() as c:
         user = _usuario_por_pid(c, pid) or _usuario_por_email(c, email)
         if not user:
             return []
-        rows = c.execute('''SELECT e.*,
+        rows = c.execute(f'''SELECT e.*,
+            COALESCE((SELECT SUM(d.valor_centavos) FROM devolucoes d
+              WHERE d.emprestimo_id=e.id AND d.confirmado_em IS NOT NULL),0) AS pago,
             COALESCE((SELECT SUM(d.valor_centavos) FROM devolucoes d
               WHERE d.emprestimo_id=e.id AND d.confirmado_em IS NULL
               AND d.contestado_em IS NULL),0) AS pendente
-            FROM emprestimos e WHERE e.credor_id=? AND e.estado NOT IN ('cancelado','quitado')''',
+            FROM emprestimos e WHERE e.{papel}_id=? AND e.aceito_em IS NOT NULL
+              AND e.estado NOT IN ('cancelado','quitado')''',
             (user['id'],)).fetchall()
-    return [dict(x) for x in rows if int(x['pendente'] or 0) > 0]
+    saida = []
+    for row in rows:
+        item = dict(row)
+        item['restante'] = max(0, int(item['valor_centavos'] or 0) - int(item['pago'] or 0))
+        if item['restante'] > 0:
+            saida.append(item)
+    return saida
+
+
+def loan_receivables(pid, email):
+    """Principal em aberto dos empréstimos em que o prestador é credor."""
+    return _loans_for(pid, email, 'credor')
+
+
+def loan_payables(pid, email):
+    """Principal em aberto dos empréstimos em que o prestador é devedor."""
+    return _loans_for(pid, email, 'devedor')
 
 
 def get_loan(pid, email, loan_id):
@@ -527,23 +550,37 @@ def _estado_label(e, saldo):
 
 def render_card(pid, email, csrf):
     if not MAF_DB.is_file():
-        return '<section><h2>Empréstimos entre prestadores (MAF)</h2><p class="muted">Banco do Meu Auto Financeiro não encontrado.</p></section>'
+        return '<section><h2>Empréstimos (MAF)</h2><p class="muted">Banco do Meu Auto Financeiro não encontrado.</p></section>'
     with _conn() as c:
         user = _usuario_por_pid(c, pid)
     link = link_status(pid, email)
     loans = list_loans(pid, email)
-    linhas = []
+    itens = []
     for e in loans:
         with _conn() as c:
             saldo = _saldo(c, e)
-        papel = 'Credor' if (user and user['id'] == e['credor_id']) or str(e['credor_email']).lower() == str(email).lower() else 'Devedor'
-        linhas.append(f'<tr><td><a href="/financeiro/maf-emprestimo/{e["id"]}">#{e["id"]}</a></td>'
-                      f'<td>{_esc(e["descricao"])}</td><td>{_esc(papel)}</td>'
-                      f'<td>{_reais(e["valor_centavos"])}</td><td>{_reais(saldo)}</td>'
-                      f'<td>{_esc(_estado_label(e, saldo))}</td></tr>')
-    tabela = ('<div class="tabela"><table><thead><tr><th>Registro</th><th>Descrição</th>'
-              '<th>Papel</th><th>Valor</th><th>Restante</th><th>Estado</th></tr></thead>'
-              f'<tbody>{"".join(linhas)}</tbody></table></div>') if linhas else '<p class="muted">Nenhum empréstimo.</p>'
+        papel = ('Credor' if (user and user['id'] == e['credor_id'])
+                 or str(e['credor_email']).lower() == str(email).lower() else 'Devedor')
+        estado = e['estado'] or 'aguardando_aceite'
+        classe = ('good' if estado == 'quitado' or saldo <= 0
+                  else 'bad' if estado in ('cancelado', 'recusado') else '')
+        itens.append(
+            '<article class="finance-item">'
+            '<div class="finance-item-top">'
+            f'<a class="finance-item-os" href="/financeiro/maf-emprestimo/{e["id"]}">'
+            f'Empréstimo #{e["id"]}</a>'
+            f'<span class="finance-item-type">{_esc(papel)}</span></div>'
+            f'<p class="finance-item-client">{_esc(e["descricao"] or "Empréstimo")}</p>'
+            '<div class="finance-item-values"><span>Restante</span>'
+            f'<strong>{_reais(saldo)}</strong></div>'
+            f'<p class="finance-item-detail">Principal {_reais(e["valor_centavos"])}'
+            f' · venc. {_esc(e["vencimento"] or "—")}</p>'
+            '<div class="finance-item-foot">'
+            f'<span class="tag {classe}">{_esc(_estado_label(e, saldo))}</span>'
+            f'<a class="btn secondary" href="/financeiro/maf-emprestimo/{e["id"]}">Abrir</a>'
+            '</div></article>')
+    lista = (f'<div class="finance-list">{"".join(itens)}</div>'
+             if itens else '<p class="muted">Nenhum empréstimo.</p>')
     if not link.get('linked'):
         aviso = ('<p class="aviso">Confirme o vínculo com o Meu Auto Financeiro para '
                  'aceitar, enviar comprovantes e confirmar devoluções.</p>'
@@ -557,8 +594,7 @@ def render_card(pid, email, csrf):
                  '<button type="submit" class="secondary">Confirmar vínculo</button></form>')
     else:
         aviso = ('<p class="good">Integração com o Meu Auto Financeiro ativa.</p>'
-                 '<p class="muted">O AUTOSEG usa seu e-mail como identidade. '
-                 'Você não precisa criar outra conta MAF.</p>')
+                 '<p class="muted">Seu e-mail é a identidade. Não precisa criar outra conta MAF.</p>')
     novo = ('<details><summary>Novo empréstimo</summary>'
             '<form method="post" action="/financeiro/maf-emprestimo/criar">'
             f'<input type="hidden" name="csrf" value="{_esc(csrf)}">'
@@ -567,9 +603,9 @@ def render_card(pid, email, csrf):
             '<label>Valor (R$)</label><input name="valor" inputmode="decimal" required>'
             '<label>Vencimento (opcional)</label><input type="date" name="vencimento">'
             '<button type="submit">Registrar empréstimo</button></form></details>')
-    return ('<section><h2>Empréstimos entre prestadores (MAF)</h2>'
+    return ('<section><h2>Empréstimos (MAF)</h2>'
             '<p class="muted">Valores pessoais entre prestadores. Não entram no total da empresa.</p>'
-            + aviso + tabela + novo + '</section>')
+            + aviso + lista + novo + '</section>')
 
 
 def render_detail(pid, email, loan_id, csrf):

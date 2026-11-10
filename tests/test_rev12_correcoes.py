@@ -22,10 +22,12 @@ from officina.core import cadastros_v9 as cad
 from officina.core import catalogo_servicos as cat
 from officina.core import completude
 from officina.core import composicao
+from officina.core import empresa_financeiro as empresa
 from officina.core import estoque_materiais as estoque
 from officina.core import fluxo_os as fluxo
 from flavors.autoseg.modules import gmail_service
 from flavors.autoseg.modules import importacao_yaml
+from flavors.autoseg.modules import maf_loans
 from flavors.autoseg.modules import pdf_cliente_v9
 from officina.core import portal_negocios as neg
 from officina.core import pdf_identidade as identidade
@@ -100,8 +102,11 @@ class CorrecoesRev12(unittest.TestCase):
         ext.NOTAS = self.dir / 'notas_fiscais'
         for pasta in (ext.ANEXOS, ext.RELATORIOS, ext.RASCUNHOS, ext.NOTAS):
             pasta.mkdir(parents=True, exist_ok=True)
+        self._maf_db_original = maf_loans.MAF_DB
+        maf_loans.MAF_DB = self.dir / 'sem_maf.db'
 
     def tearDown(self):
+        maf_loans.MAF_DB = self._maf_db_original
         self.tmp.cleanup()
 
     def _prestador(self, nome='Prestador Teste', email=None, documento=''):
@@ -263,6 +268,64 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Rascunho automático', html)
         self.assertNotIn('Ativar app', html)
         self.assertNotIn('Desativar app', html)
+
+    def test_auto_save_persiste_valores_da_os_no_preview(self):
+        pid = self._prestador('Técnico Valores', email='valores@exemplo.com.br')
+        cid = self._cliente(pid, 'Condomínio Valores')
+        dados = {'cliente_id': str(cid), 'descricao': 'Revisão de DVR',
+                 'tecnico': 'T', 'forma_pagamento': 'Transferência',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, pid)
+        ext.atribuir(self.db, oid, pid)
+        _, base = self._servidor()
+        cliente = self._login(base, 'valores@exemplo.com.br')
+        token = self._csrf(base, cliente, oid)
+        status, _ = req(cliente, base, f'/os/{oid}/rascunho/auto', {
+            'csrf': token, 'cliente_id': str(cid), 'descricao': 'Revisão de DVR',
+            'tecnico': 'T', 'forma_pagamento': 'Transferência',
+            'valor_mao_obra': '200', 'valor_materiais_manual': '0',
+            'valor_total_override': '1300', 'materiais_presentes': '1',
+        })
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            os_ = c.execute('''SELECT valor_mao_obra,valor_materiais,valor_total
+                FROM ordens_servico WHERE id=?''', (oid,)).fetchone()
+        self.assertEqual(float(os_['valor_total']), 1300.0)
+        self.assertEqual(float(os_['valor_materiais']), 0.0)
+        self.assertGreater(float(os_['valor_mao_obra']), 0.0)
+        pedido = urllib.request.Request(base + f'/os/{oid}/pdf-preview')
+        with cliente.open(pedido, timeout=60) as resposta:
+            self.assertEqual(resposta.status, 200)
+            pdf = self.dir / 'preview-valores.pdf'
+            pdf.write_bytes(resposta.read())
+        texto = ' '.join(texto_pdf(pdf).split())
+        self.assertIn('COMPOSIÇÃO DO VALOR', texto)
+        self.assertIn('R$ 1.300,00', texto)
+        self.assertIn('Mão de obra', texto)
+
+    def test_financeiro_unifica_caixa_e_deixa_emprestimos_por_ultimo(self):
+        admin = self._prestador('Admin Financeiro', email='admin.fin@exemplo.com.br')
+        funcionario = self._prestador('Funcionário Financeiro', email='func.fin@exemplo.com.br')
+        cad.definir_admin(self.db, admin, True)
+        empresa.instalar(self.db)
+        empresa.registrar(self.db, 'aporte', 'Aporte de teste', '1000',
+                          prestador_id=admin)
+        _, base = self._servidor()
+        with mock.patch.object(maf_loans, 'MAF_DB', self.dir / 'sem_maf.db'):
+            cliente = self._login(base, 'admin.fin@exemplo.com.br')
+            _, html = req(cliente, base, '/financeiro')
+            self.assertIn('Caixa da empresa', html)
+            self.assertIn('Empréstimos (MAF)', html)
+            self.assertGreater(html.find('Empréstimos (MAF)'),
+                               html.find('Caixa da empresa'))
+            self.assertEqual(html.count('href="/caixa"'), 1)
+            outro = self._login(base, 'func.fin@exemplo.com.br')
+            _, html_func = req(outro, base, '/financeiro')
+            self.assertNotIn('Caixa da empresa', html_func)
+            self.assertIn('Empréstimos (MAF)', html_func)
+            status, _ = req(outro, base, '/caixa')
+            self.assertEqual(status, 403)
 
     def test_material_unidade_livre_quantidade_opcional_e_composicao(self):
         pid = self._prestador('Técnico Unidades', email='unidades@exemplo.com.br')
@@ -441,6 +504,14 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('Documento anterior', html)
         self.assertNotIn(f'href="/os/{self._numero(oid)}/pdf"', html)
         self.assertNotIn('Baixar PDF publicado', html)
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Pendente' WHERE id=?",
+                      (oid,))
+        _, html = req(cliente, base, f'/os/{oid}')
+        self.assertIn('Documento anterior', html)
+        self.assertIn('Baixar preview do PDF', html)
+        self.assertNotIn(f'href="/os/{self._numero(oid)}/pdf"', html)
+        self.assertNotIn('Baixar PDF publicado', html)
 
     def test_preview_pdf_os_ativa_sem_publicar(self):
         a = self._prestador('Técnico Preview A', email='preview.a@exemplo.com.br')
@@ -515,10 +586,12 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertIn('name="anexo_incluir[]"', html)
         self.assertIn(f'data-mover="/os/{self._numero(oid)}/anexo/{foto["id"]}/mover"', html)
+        self.assertIn(f'/arquivos/anexo/{foto["id"]}/thumb?v=', html)
         with cliente_b.open(urllib.request.Request(
                 base + f'/arquivos/anexo/{foto["id"]}/thumb'), timeout=30) as resposta:
             self.assertEqual(resposta.status, 200)
             self.assertEqual(resposta.headers.get_content_type(), 'image/jpeg')
+            self.assertIn('max-age=31536000', resposta.headers.get('Cache-Control', ''))
             self.assertGreater(len(resposta.read()), 0)
 
         # O mesmo técnico não responsável pode alterar a legenda depois.

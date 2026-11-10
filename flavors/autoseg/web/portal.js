@@ -516,6 +516,8 @@
   // Busca em todas as tabelas exibidas no Portal do Prestador.
   // Não promete pesquisar registros além da página carregada.
   document.querySelectorAll('.table-scroll').forEach((area,indice) => {
+    // A página que já tem busca no servidor não ganha um segundo filtro.
+    if (document.querySelector('form[data-auto-submit] input[type="search"]')) return;
     const tabela = area.querySelector('table');
     if (!tabela) return;
     const linhas = Array.from(tabela.querySelectorAll('tbody tr'));
