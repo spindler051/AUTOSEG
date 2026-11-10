@@ -19,6 +19,8 @@ from officina.application.policy import Policy, load_policy
 ACTIONS = frozenset({
     "view", "read", "create", "edit", "delete", "assign", "conclude",
     "cancel", "approve", "export", "manage", "publish", "respond",
+    "start", "assume", "archive", "reopen", "attach", "download",
+    "confirm", "send", "merge", "impersonate",
 })
 SCOPES = ("own", "involved", "all")
 
@@ -60,6 +62,10 @@ class Decision:
     reason: str
     permission: str | None = None
     relationship: str = "other"
+    # True when the current schema does not provide an organization boundary
+    # for one side. The decision is still measured, but it must not pretend
+    # that tenant isolation was verified.
+    tenant_unknown: bool = False
 
 
 def _matches(patterns: Iterable[str], candidates: Iterable[str]) -> str | None:
@@ -87,15 +93,17 @@ class ObjectPolicy:
             return "other"
         if principal.role == "admin":
             return "all"
-        if resource.owner_id is not None and resource.owner_id == principal.account_id:
-            return "own"
-        if resource.owner_id is not None and resource.owner_id == principal.provider_id:
+        # ``owner_id`` and ``participant_ids`` use provider ids in the AUTOSEG
+        # adapter. Never compare them with a client account id: integer ids
+        # from different tables can collide and falsely grant access.
+        if (resource.owner_id is not None
+                and principal.provider_id is not None
+                and resource.owner_id == principal.provider_id):
             return "own"
         if resource.client_id is not None and resource.client_id == principal.client_id:
             return "own"
-        if principal.provider_id is not None and principal.provider_id in resource.participant_ids:
-            return "involved"
-        if principal.account_id in resource.participant_ids:
+        if (principal.provider_id is not None
+                and principal.provider_id in resource.participant_ids):
             return "involved"
         return "other"
 
@@ -107,7 +115,10 @@ class ObjectPolicy:
             return Decision(False, "Conta inativa.", relationship="inactive")
         if (principal.organization_id and resource.organization_id
                 and principal.organization_id != resource.organization_id):
-            return Decision(False, "Recurso de outra organização.", relationship="other")
+            return Decision(False, "Recurso de outra organização.",
+                            relationship="other")
+        tenant_unknown = (principal.organization_id is None
+                          or resource.organization_id is None)
         relationship = self.relationship(principal, resource)
         base = f"{resource.kind}.{action}"
         candidates = [base, f"{base}.all"]
@@ -117,20 +128,29 @@ class ObjectPolicy:
             candidates.append(f"{base}.request")
             if relationship in SCOPES:
                 candidates.append(f"{base}.{relationship}.request")
-        if principal.role == "admin":
-            return Decision(True, "Administrador da organização.", base, relationship)
+        # An explicit deny is stronger than the admin bypass. This keeps the
+        # policy auditable even for administrators.
         denied = _matches(principal.denies, candidates)
         if denied:
-            return Decision(False, "Permissão negada explicitamente.", denied, relationship)
+            return Decision(False, "Permissão negada explicitamente.", denied,
+                            relationship, tenant_unknown)
+        if principal.role == "admin":
+            return Decision(True, "Administrador da organização.", base,
+                            relationship, tenant_unknown)
         granted = _matches(principal.grants, candidates)
         if granted:
-            return Decision(True, "Permissão concedida ao usuário.", granted, relationship)
+            return Decision(True, "Permissão concedida ao usuário.", granted,
+                            relationship, tenant_unknown)
         if relationship == "other":
-            return Decision(False, "Sem vínculo com o recurso.", relationship=relationship)
+            return Decision(False, "Sem vínculo com o recurso.",
+                            relationship=relationship,
+                            tenant_unknown=tenant_unknown)
         for candidate in candidates:
             if self.policy.allows(principal.role, candidate):
-                return Decision(True, "Permissão do papel.", candidate, relationship)
-        return Decision(False, "Sem permissão para a ação.", candidates[-1], relationship)
+                return Decision(True, "Permissão do papel.", candidate,
+                                relationship, tenant_unknown)
+        return Decision(False, "Sem permissão para a ação.", candidates[-1],
+                        relationship, tenant_unknown)
 
     def require(self, principal: Principal, action: str, resource: Resource) -> Decision:
         decision = self.can(principal, action, resource)
@@ -145,7 +165,11 @@ class ObjectPolicy:
             return Decision(False, "Conta inativa.", relationship="inactive")
         if (principal.organization_id and resource.organization_id
                 and principal.organization_id != resource.organization_id):
-            return Decision(False, "Recurso de outra organização.", relationship="other")
+            return Decision(False, "Recurso de outra organização.",
+                            relationship="other")
+        tenant_unknown = (principal.organization_id is None
+                          or resource.organization_id is None)
         if not self.policy.can_view_field(principal.role, field_name, relationship):
-            return Decision(False, "Campo restrito.", field_name, relationship)
+            return Decision(False, "Campo restrito.", field_name, relationship,
+                            tenant_unknown)
         return self.can(principal, "view", resource)

@@ -27,6 +27,35 @@ class ObjectPolicyTest(unittest.TestCase):
         self.assertFalse(decision.allowed)
         self.assertIn("outra organização", decision.reason)
 
+    def test_admin_explicit_deny_wins(self):
+        admin = Principal(
+            1, "admin", organization_id="org-a",
+            denies=frozenset({"work_item.edit"}))
+        decision = self.policy.can(admin, "edit", self._os())
+        self.assertFalse(decision.allowed)
+        self.assertIn("negada", decision.reason)
+
+    def test_tenant_unknown_is_flagged(self):
+        provider = Principal(10, "employee", provider_id=10)
+        decision = self.policy.can(
+            provider, "view", self._os(owner=10, participants=(10,), org=None))
+        self.assertTrue(decision.allowed)
+        self.assertTrue(decision.tenant_unknown)
+
+    def test_known_tenant_is_not_flagged(self):
+        provider = Principal(10, "employee", organization_id="org-a",
+                             provider_id=10)
+        decision = self.policy.can(
+            provider, "view", self._os(owner=10, participants=(10,)))
+        self.assertFalse(decision.tenant_unknown)
+
+    def test_new_work_item_actions_are_accepted(self):
+        admin = Principal(1, "admin", organization_id="org-a")
+        for action in ("start", "assume", "archive", "reopen", "attach",
+                       "download", "publish", "confirm"):
+            self.assertTrue(
+                self.policy.can(admin, action, self._os()).allowed, action)
+
     def test_provider_only_edits_own_or_involved(self):
         provider = Principal(10, "employee", organization_id="org-a",
                              provider_id=10)

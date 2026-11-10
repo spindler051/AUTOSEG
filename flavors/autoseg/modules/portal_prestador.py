@@ -38,6 +38,7 @@ from officina.core import empresa_financeiro as empresa
 from officina.core import estoque_materiais as estoque
 from flavors.autoseg.modules import portal_v9 as v9
 from flavors.autoseg.modules import links_publicos as links9
+from flavors.autoseg.modules import policy_shadow
 from officina.core import produtividade_os as prod
 from flavors.autoseg.modules import solicitacoes_pj as pj_publico
 import socket
@@ -2007,6 +2008,13 @@ class PortalPrestador:
                                             (oid,)).fetchall() if oid else []
                     contatos_os=prod.contatos_email_os(banco,oid) if oid else None
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
+                if oid:
+                    # Shadow measurement only; the route still opens the OS for
+                    # any authenticated provider until enforcement lands.
+                    policy_shadow.evaluate_os(
+                        banco,s['pid'],oid,'view',True,'os_form')
+                    policy_shadow.evaluate_os(
+                        banco,s['pid'],oid,'read',True,'os_form')
                 d=dict(o) if o else {}
                 arquivada=bool(d.get('arquivada'))
                 # A pending OS is not "started" even if an older start remains
@@ -3556,6 +3564,11 @@ class PortalPrestador:
                 with ext.db(banco) as c:
                     o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
                     if not o: return self.erro('OS inexistente.',404,s)
+                policy_shadow.evaluate_os(
+                    banco,s['pid'],oid,
+                    'download' if kind in ('pdf','pdf-preview') else (
+                        'export' if kind in ('email','nota') else 'read'),
+                    True,f'documentos:{kind}')
                 if kind=='pdf-preview':
                     # Preview is deliberately unpublished: no os_documentos row,
                     # no e-mail, no status change. Any authenticated provider who
@@ -3593,6 +3606,8 @@ class PortalPrestador:
                     if x and not prod.participou(c,x['os_id'],s['pid']):
                         raise PermissionError('Anexo restrito aos técnicos participantes.')
                 if not x:return self.erro('Anexo não encontrado.',404,s)
+                policy_shadow.evaluate_os(
+                    banco,s['pid'],x['os_id'],'download',True,'anexo')
                 arq=Path(x['caminho']).resolve()
                 if not arq.is_relative_to(ext.ANEXOS.resolve()):
                     return self.erro('Anexo fora do diretório autorizado.',403,s)
@@ -3606,6 +3621,8 @@ class PortalPrestador:
                     if x and not prod.participou(c,x['os_id'],s['pid']):
                         raise PermissionError('Anexo restrito aos técnicos participantes.')
                 if not x:return self.erro('Anexo não encontrado.',404,s)
+                policy_shadow.evaluate_os(
+                    banco,s['pid'],x['os_id'],'view',True,'anexo_thumb')
                 arq=Path(x['caminho']).resolve()
                 if not arq.is_relative_to(ext.ANEXOS.resolve()):
                     return self.erro('Anexo fora do diretório autorizado.',403,s)

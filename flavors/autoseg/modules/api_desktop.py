@@ -31,6 +31,7 @@ from officina.application.contracts import (
     ValidacaoError,
 )
 from officina.application.local_service import LocalService
+from flavors.autoseg.modules import policy_shadow
 from flavors.autoseg.modules import prestador_auth
 LOG = logging.getLogger('autoseg.api_desktop')
 PREFIX = '/api/v1/desktop'
@@ -206,7 +207,7 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
     if recurso == 'clientes':
         return _rota_clientes(handler, partes, query, servico, metodo, info)
     if recurso == 'os':
-        return _rota_os(handler, partes, query, servico, metodo)
+        return _rota_os(handler, partes, query, servico, metodo, banco, info)
     if recurso == 'prestadores':
         return _rota_prestadores(handler, partes, servico, metodo)
     if recurso == 'organizacoes':
@@ -300,7 +301,7 @@ def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None):
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_os(handler, partes, query, servico, metodo):
+def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None):
     if partes == ['os'] and metodo == 'POST':
         return _enviar(handler, 200,
                        servico.salvar_os(_os_input(_corpo(handler))))
@@ -322,11 +323,26 @@ def _rota_os(handler, partes, query, servico, metodo):
         os_id = _int(partes[1])
         if os_id is None:
             raise NaoEncontradoError('OS não encontrada.')
-        return _rota_os_id(handler, os_id, partes[2:], servico, metodo)
+        return _rota_os_id(handler, os_id, partes[2:], servico, metodo,
+                           banco, info)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_os_id(handler, os_id, resto, servico, metodo):
+def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None):
+    if banco and info and info.get('id') is not None:
+        acao = 'view'
+        if metodo == 'GET':
+            acao = 'download' if resto == ['pdf', 'arquivo'] else 'view'
+        elif resto in (['atribuir'], ['desatribuir']):
+            acao = 'assign'
+        elif resto == ['iniciar']:
+            acao = 'start'
+        elif resto == ['pdf', 'publicar']:
+            acao = 'publish'
+        # The desktop API currently performs no object/role check on these
+        # routes; record that actual behavior without changing it.
+        policy_shadow.evaluate_os(
+            banco, int(info['id']), os_id, acao, True, 'api_desktop')
     if resto == ['contexto'] and metodo == 'GET':
         return _enviar(handler, 200, servico.contexto_os(os_id))
     if resto == ['anexos', 'contar'] and metodo == 'GET':
