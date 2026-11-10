@@ -22,6 +22,7 @@ from typing import Any
 from officina.application.object_policy import ObjectPolicy, Principal, Resource
 from officina.core import prestadores_ext as ext
 from officina.core import runtime_config
+from flavors.autoseg.modules import identity
 
 LOG_LOCK = threading.Lock()
 _EXTRA_KEYS = frozenset({
@@ -45,63 +46,35 @@ def _table_exists(conexao, nome: str) -> bool:
         return False
 
 
-def _admin(conexao, provider_id: int) -> bool:
-    if not _table_exists(conexao, "v9_admin_prestadores"):
-        return False
-    try:
-        return bool(conexao.execute(
-            "SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?",
-            (int(provider_id),),
-        ).fetchone())
-    except Exception:
-        return False
-
-
 def principal_provider(banco, provider_id: int) -> Principal:
-    """Build a provider principal from the current legacy tables."""
+    """Delegate legacy provider mapping to the identity contract."""
     try:
-        with ext.db(banco) as c:
-            row = c.execute(
-                "SELECT id,ativo FROM prestadores WHERE id=?",
-                (int(provider_id),),
-            ).fetchone()
-            if not row:
-                return Principal(account_id=int(provider_id), role="employee",
-                                 provider_id=int(provider_id), active=False)
-            return Principal(
-                account_id=int(row["id"]),
-                role="admin" if _admin(c, int(provider_id)) else "employee",
-                provider_id=int(row["id"]),
-                active=bool(row["ativo"]),
-            )
+        ident = identity.load_identity(banco, "provider", provider_id)
+        if ident:
+            vinculo = next((m for m in identity.memberships(banco, ident)
+                            if m.provider_id == int(provider_id)
+                            and m.role in ("admin", "employee")), None)
+            if vinculo:
+                return identity.to_principal(ident, vinculo)
     except Exception:
-        return Principal(account_id=int(provider_id), role="employee",
-                         provider_id=int(provider_id), active=False)
+        pass
+    return Principal(account_id=int(provider_id), role="employee",
+                     provider_id=int(provider_id), active=False)
 
 
 def principal_client(banco, user_id: int) -> Principal:
-    """Build a client principal from ``v9_usuarios`` when available."""
+    """Delegate legacy client mapping to the identity contract."""
     try:
-        with ext.db(banco) as c:
-            if not _table_exists(c, "v9_usuarios"):
-                return Principal(account_id=int(user_id), role="customer",
-                                 active=False)
-            row = c.execute(
-                "SELECT id,ativo,cliente_pf_id FROM v9_usuarios WHERE id=?",
-                (int(user_id),),
-            ).fetchone()
-            if not row:
-                return Principal(account_id=int(user_id), role="customer",
-                                 active=False)
-            return Principal(
-                account_id=int(row["id"]),
-                role="customer",
-                client_id=(int(row["cliente_pf_id"])
-                           if row["cliente_pf_id"] is not None else None),
-                active=bool(row["ativo"]),
-            )
+        ident = identity.load_identity(banco, "client", user_id)
+        if ident:
+            vinculo = next((m for m in identity.memberships(banco, ident)
+                            if m.client_id == ident.client_id
+                            and m.role == "customer"), None)
+            if vinculo:
+                return identity.to_principal(ident, vinculo)
     except Exception:
-        return Principal(account_id=int(user_id), role="customer", active=False)
+        pass
+    return Principal(account_id=int(user_id), role="customer", active=False)
 
 
 def resource_work_item(banco, os_id: int) -> Resource:
