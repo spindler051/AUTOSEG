@@ -39,6 +39,8 @@ from officina.core import estoque_materiais as estoque
 from flavors.autoseg.modules import portal_v9 as v9
 from flavors.autoseg.modules import links_publicos as links9
 from flavors.autoseg.modules import policy_shadow
+from flavors.autoseg.modules import auth, login_flags, login_web
+from flavors.autoseg.modules import web_cookie, web_session
 from officina.core import produtividade_os as prod
 from flavors.autoseg.modules import solicitacoes_pj as pj_publico
 import socket
@@ -1067,6 +1069,9 @@ class PortalPrestador:
                 self.end_headers()
 
             def sessao(self):
+                unified = login_web.provider_session(self, banco)
+                if unified:
+                    return unified
                 try:
                     cookie=SimpleCookie();cookie.load(self.headers.get('Cookie',''))
                     tok=cookie['autosseg_session'].value
@@ -1102,6 +1107,21 @@ class PortalPrestador:
                 if not host or not alvo.netloc:
                     return False
                 return alvo.scheme in ('http','https') and alvo.netloc.lower()==host
+
+            def _login_attempt_state(self):
+                ip=feedback.ip_requisicao(self.client_address[0],self.headers)
+                agora=time.time()
+                with LOCK_LOGIN:
+                    recentes=[t for t in TENTATIVAS.get(ip,[]) if agora-t<600]
+                return ip,recentes,agora,len(recentes)>=10
+
+            def _login_failed(self,ip,recentes,agora):
+                with LOCK_LOGIN:
+                    TENTATIVAS[ip]=recentes+[agora]
+
+            def _login_succeeded(self,ip):
+                with LOCK_LOGIN:
+                    TENTATIVAS.pop(ip,None)
 
             def form(self, limite=MAX_POST):
                 try:t=int(self.headers.get('Content-Length','0'))
@@ -3665,6 +3685,10 @@ class PortalPrestador:
                     return self.redir(redirecionar + (('?' + query) if query else ''))
                 path = self._normalizar_os(path)
                 try:
+                    if path=='/entrar':
+                        if not login_flags.unified_login_enabled(banco):
+                            return self.redir('/login')
+                        return login_web.render_login(self)
                     if path=='/api/versao':
                         dados=json.dumps({'app':'Gestão de Serviços — AUTOSEG','versao':VERSAO_PORTAL,
                                           'site':'portal do prestador',
@@ -3928,29 +3952,44 @@ class PortalPrestador:
                 if not self.origem_permitida():
                     return self.erro('Origem da requisição inválida.',403,self.sessao())
                 try:
+                    if path=='/entrar':
+                        if not login_flags.unified_login_enabled(banco):
+                            return self.redir('/login')
+                        d=self.form(PREAUTH_MAX)
+                        ip,tent,agora,limitado=self._login_attempt_state()
+                        if limitado:
+                            return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
+                        try:
+                            token, _session = login_web.authenticate_and_create(
+                                banco, str(d.get('identificador','')),
+                                str(d.get('senha','')))
+                        except auth.LoginError as exc:
+                            self._login_failed(ip,tent,agora)
+                            return login_web.render_login(
+                                self, str(exc), str(d.get('identificador','')))
+                        self._login_succeeded(ip)
+                        return self.redir('/',web_cookie.set_cookie(
+                            token, secure=web_cookie.secure_request(self.headers)))
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
                     s_inicial=self.sessao()
                     d=self.form(PREAUTH_MAX if not s_inicial else MAX_POST)
                     if path=='/login':
-                        ip=feedback.ip_requisicao(self.client_address[0],self.headers)
-                        agora=time.time()
-                        with LOCK_LOGIN:
-                            tent=[t for t in TENTATIVAS.get(ip,[]) if agora-t<600]
-                            if len(tent)>=10:
-                                if quer_json:
-                                    return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
-                                return self.login(erro_login='Muitas tentativas. Aguarde dez minutos.',
-                                                  email_login=str(d.get('email','')))
+                        ip,tent,agora,limitado=self._login_attempt_state()
+                        if limitado:
+                            if quer_json:
+                                return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
+                            return self.login(erro_login='Muitas tentativas. Aguarde dez minutos.',
+                                              email_login=str(d.get('email','')))
                         email_login=str(d.get('email',''))
                         p=ext.autenticar(banco,email_login,str(d.get('senha','')))
                         if not p:
-                            with LOCK_LOGIN:TENTATIVAS[ip]=tent+[agora]
+                            self._login_failed(ip,tent,agora)
                             if quer_json:
                                 return self.erro('Usuário ou senha incorretos.',401)
                             return self.login(erro_login='Usuário ou senha incorretos.',
                                               email_login=email_login)
-                        with LOCK_LOGIN:TENTATIVAS.pop(ip,None)
+                        self._login_succeeded(ip)
                         tok=secrets.token_urlsafe(36)
                         SESSOES[tok]={'pid':p['id'],'nome':p['nome'],'cred':p['senha_hash'],
                                       'csrf':secrets.token_urlsafe(32),
