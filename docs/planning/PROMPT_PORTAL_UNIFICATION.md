@@ -73,6 +73,72 @@ Se a flag desligada impedir o login do cliente, o comportamento deve ser
 explícito e documentado (mensagem/erro de indisponibilidade), nunca um
 redirecionamento para `servidor_web` ou 8765.
 
+### 2.4 Decisões de produto confirmadas (2026-11-11)
+
+Estas decisões fecham os bloqueios B1–B4 do `BLOCKED.md`. São **provisórias e
+revisáveis com uso/feedback**; não transforme a solução atual em regra
+permanente além do necessário.
+
+- **B1 — `/legado` (ID+senha): encerrar o login legado nesta peça.**
+  - `GET/POST /legado*` não autentica mais; responder `410 Gone` com mensagem
+    clara e caminho de suporte.
+  - Não migrar cookie `autosseg_legado`, não criar segundo login e não manter
+    a árvore de relatórios legados na origem unificada.
+  - O resgate de histórico fica para uma peça futura: uma única verificação
+    com ID+senha (ou outro proof) + CPF/e-mail, criando/vinculando
+    `accounts/account_links`. Não implementar agora.
+  - Comunicação/retirada: registrar no `NOTES.md` e docs operacionais.
+
+- **B2 — `/pj-rapido` anônimo: retirar da unificação.**
+  - `GET/POST /pj-rapido*` e `/cliente/pj-rapido*` respondem `410 Gone` ou
+    `404`, sem formulário público, sem honeypot legado e sem criar chamado.
+  - Se o negócio quiser atendimento sem login depois, será uma peça própria
+    de intake público com anti-abuso, token de acompanhamento, privacidade e
+    rate limit. Não implementar agora.
+
+- **B3 — autocadastro de cliente: suspender nesta peça.**
+  - `GET/POST /cliente/cadastro*`, `/cliente/cadastrar` e variantes PJ não
+    criam `v9_usuarios` nem conta parcial; responder `410 Gone`/`404` com
+    orientação de contato.
+  - A criação de novos clientes fica com admin/prestador ou com uma peça
+    futura de provisionamento `accounts/account_links`.
+  - Direção futura registrada para feedback: criar a conta com senha gerada
+    automaticamente **sem entregar a senha ao cliente**; o acesso inicial
+    pode usar links tokenizados de autologin, com validade/uso único, e os
+    detalhes serão ajustados com uso real. Não implementar esse fluxo agora.
+
+- **B4 — aliases: lista fechada e explícita.**
+  - Não usar `_rel()`/prefixo automático de `/cliente`.
+  - O `ROUTE_MAP.md` deve listar as URLs públicas que ganham `308`; todas as
+    demais respondem `404`/`410`.
+  - Allowlist inicial obrigatória (se a rota existir na base):
+    - `/cliente`, `/cliente/painel` → `/`
+    - `/cliente/os`, `/cliente/os/<id>` → `/os`, `/os/<id>`
+    - `/cliente/chamado/<id>` → `/chamado/<id>`
+    - `/cliente/documentos` → `/documentos`
+    - `/cliente/solicitar`, `/cliente/nova` → `/solicitar`
+    - `/cliente/em-rota` → `/em-rota`
+    - `/cliente/entrar-pf` → `/login`
+    - `/cliente/sair-pf` → `/sair`
+  - As rotas abaixo **não são aliases**; são funcionalidades atuais e devem
+    ser migradas para a origem única, preservando comportamento e testes:
+    - `/cliente/perfil`, `/cliente/senha`;
+    - `/cliente/os/nova`, `/cliente/os/<id>/pdf`;
+    - `/cliente/nota/<id>`, `/cliente/chamado/<id>/pdf`;
+    - `/cliente/organizacao/<org>/os/<id>/pdf`;
+    - `/cliente/organizacoes`, `/cliente/nova-organizacao`,
+      `/cliente/administrar-organizacao`, `/cliente/vinculo/novo`;
+    - `/cliente/chamado/novo`, `/cliente/sindico`;
+    - `/cliente/orcamento`, `/cliente/orcamento/pdf`.
+  - Só são remoções nesta peça: `B1 /legado*`, `B2 /pj-rapido*` e
+    `B3 /cliente/cadastro*`, `/cliente/cadastrar`, `/cliente/cadastro-pj`.
+  - `_rel()` e qualquer alias implícito não são contrato; caminhos fora da
+    allowlist respondem `404`/`410`. Se uma URL externa real não estiver na
+    lista, pare e documente; não invente alias.
+  - Se uma rota `MIGRAR` não tiver serviço/equivalente, implemente o serviço
+    mínimo no lugar correto (`client_service`/domínio), não um handler legado.
+    Se exigir decisão de produto nova, pare.
+
 ## 3. Estado atual que será removido
 
 - `flavors/autoseg/modules/servidor_web.py` — servidor do portal antigo do
@@ -100,10 +166,11 @@ O que **não** será removido nesta peça:
 
 ## 4. Inventário obrigatório de rotas
 
-Antes de codar, gere `ROUTE_MAP.md` com **todas** as rotas encontradas em
-`servidor_web.py`, `portal_cliente_v94.py` e `cliente_fluxo_v94.py` (inclua
-métodos GET/POST). Procure também por strings de rota em `portal.js` e
-launchers.
+Use o `ROUTE_MAP.md` revisado (44 entradas) como ponto de partida, mas
+**confirme tudo no checkout**. Antes de codar, gere/atualize `ROUTE_MAP.md` com
+**todas** as rotas encontradas em `servidor_web.py`, `portal_cliente_v94.py` e
+`cliente_fluxo_v94.py` (inclua métodos GET/POST). Procure também por strings de
+rota em `portal.js` e launchers.
 
 Colunas obrigatórias:
 
@@ -273,9 +340,11 @@ git diff --check
 
 ## 8. Condições de parada
 
-Pare e devolva `BLOCKED.md` se:
+As decisões **B1–B4 estão fechadas** na seção 2.4; não pare por elas. Pare e
+devolva `BLOCKED.md` se:
 
-- uma rota não puder ser classificada sem decisão de produto;
+- uma rota `MIGRAR` não puder ser implementada sem uma decisão de produto
+  nova;
 - a migração exigir regra de negócio nova ou alteração de dados;
 - for necessário tocar na MAIN/8765/8766 ou em dados reais;
 - o teste de caracterização não puder ser escrito;
