@@ -910,6 +910,36 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
     return base
 
 
+def login_shell_markup(*, form_html, lede, note='', links='', kicker='Officina Web',
+                       headline='A OS, o relatório e o recebimento do prestador no mesmo lugar',
+                       description='Prestadores registram o serviço; clientes acompanham as ordens, '
+                                   'documentos e o que já foi recebido.',
+                       facts=(('clipboard', 'Ordens e relatórios'),
+                              ('wallet', 'Financeiro e repasses'),
+                              ('file', 'Notas fiscais e documentos')),
+                       title='Entrar'):
+    """Render the AUTOSEG split-screen login used by both login modes."""
+    fact_html = ''.join(f'<div class="login-fact">{icone(nome)}'
+                        f'<span>{esc(texto)}</span></div>' for nome, texto in facts)
+    note_html = f'<p class="login-note">{esc(note)}</p>' if note else ''
+    links_html = f'<div class="login-links">{links}</div>' if links else ''
+    return (f'<div class="login-shell">'
+            f'<section class="login-brand">'
+            f'<div><img src="/logo.png" alt="AUTOSEG">'
+            f'<div class="login-brand-copy">'
+            f'<p class="os-kicker">{esc(kicker)}</p>'
+            f'<p class="login-headline">{esc(headline)}</p>'
+            f'<p>{esc(description)}</p>'
+            f'<div class="login-facts">{fact_html}</div></div></div>'
+            f'<p class="login-brand-foot">AUTOSEG {VERSAO_PORTAL}</p>'
+            f'</section>'
+            f'<section class="login-panel">'
+            f'<h2>{esc(title)}</h2>'
+            f'<p class="login-lede">{esc(lede)}</p>'
+            f'{form_html}{note_html}{links_html}'
+            f'</section></div>')
+
+
 def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None,
            navigation=None,page_context=None):
     # NavItem is defined once in the AUTOSEG flavor. Both surfaces consume
@@ -1184,34 +1214,21 @@ class PortalPrestador:
                            f'{esc(erro_login)}</p>' if erro_login else
                            '<p class="bad login-erro" id="login-erro" role="alert" hidden></p>')
                 if ativo:
-                    troca=''
-                    fatos=(''.join(f'<div class="login-fact">{icone(nome)}<span>{esc(texto)}</span></div>'
-                                   for nome,texto in (('clipboard','Ordens e relatórios'),
-                                                      ('wallet','Financeiro e repasses'),
-                                                      ('file','Notas fiscais e documentos'))))
-                    corpo=(f'<div class="login-shell">'
-                           f'<section class="login-brand">'
-                           f'<div><img src="/logo.png" alt="AUTOSEG">'
-                           f'<div class="login-brand-copy">'
-                           f'<p class="os-kicker">Portal do prestador</p>'
-                           f'<p class="login-headline">A OS, o relatório e o recebimento do prestador no mesmo lugar</p>'
-                           f'<p>Acompanhe as ordens atribuídas, registre o serviço e consulte o que já foi recebido.</p>'
-                           f'<div class="login-facts">{fatos}</div></div></div>'
-                           f'<p class="login-brand-foot">AUTOSEG {VERSAO_PORTAL}</p>'
-                           f'</section>'
-                           f'<section class="login-panel">{troca}'
-                           f'<h2>Entrar</h2>'
-                           f'<p class="login-lede">Use seu e-mail e senha de prestador.</p>'
-                           f'<form class="login-form" method="post" action="/login" data-login-form="1">'
-                           +erro_html
-                           +campos_escuros('E-mail','email',email_login,kind='email',required=True)
-                           +campos_escuros('Senha','senha',kind='password',required=True)
-                           +'<button type="submit">Entrar</button></form>'
-                           f'<p class="login-note">O cadastro de prestadores é realizado somente pelo aplicativo desktop.</p>'
-                           f'<div class="login-links">{v9.barra_links("prestador")}</div>'
-                           f'</section></div>')
+                    form_html=('<form class="login-form" method="post" action="/login" data-login-form="1">'
+                               +erro_html
+                               +campos_escuros('E-mail','email',email_login,kind='email',required=True)
+                               +campos_escuros('Senha','senha',kind='password',required=True)
+                               +'<button type="submit">Entrar</button></form>')
+                    corpo=login_shell_markup(
+                        form_html=form_html,
+                        lede='Use seu e-mail e senha de prestador.',
+                        note='O cadastro de prestadores é realizado somente pelo aplicativo desktop.',
+                        links=v9.barra_links('prestador'),
+                        kicker='Portal do prestador',
+                        description='Acompanhe as ordens atribuídas, registre o serviço e '
+                                    'consulte o que já foi recebido.')
                     return self.pagina('Acesso do prestador',corpo)
-                return self.pagina('Acesso do prestador',troca+card('Entrar',
+                return self.pagina('Acesso do prestador',card('Entrar',
                     '<form method="post" action="/login" data-login-form="1">'
                     +erro_html
                     +campos_escuros('E-mail','email',email_login,kind='email',required=True)

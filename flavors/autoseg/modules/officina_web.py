@@ -71,16 +71,23 @@ def login_page(handler, error: str = '', identifier: str = '') -> None:
         message = 'Credenciais inválidas.'
     else:
         message = ''
-    alert = f'<p class="bad" role="alert">{message}</p>' if message else ''
-    body = ('<section class="card" aria-labelledby="access-title">'
-            '<p class="muted">Officina Web</p>'
-            '<h2 id="access-title">Acesso à plataforma</h2>' + alert +
-            '<form method="post" action="/login">'
-            '<label for="unified_identifier">Identificador</label>'
-            f'<input id="unified_identifier" name="identificador" '
-            f'autocomplete="username" value="{identifier}" required>'
-            '<label for="unified_password">Senha</label>'
-            '<input id="unified_password" type="password" name="senha" '
-            'autocomplete="current-password" required>'
-            '<button type="submit">Entrar</button></form></section>')
+    alert = (f'<p class="bad login-erro" id="login-erro" role="alert">{message}</p>'
+             if message else
+             '<p class="bad login-erro" id="login-erro" role="alert" hidden></p>')
+    form_html = ('<form class="login-form" method="post" action="/login" data-login-form="1">'
+                 + alert +
+                 '<label for="c_identificador">E-mail, CPF ou telefone</label>'
+                 f'<input id="c_identificador" type="text" name="identificador" '
+                 f'value="{identifier}" autocomplete="username" required>'
+                 '<label for="c_senha">Senha</label>'
+                 '<input id="c_senha" type="password" name="senha" '
+                 'autocomplete="current-password" required>'
+                 '<button type="submit">Entrar</button></form>')
+    from flavors.autoseg.modules.portal_prestador import login_shell_markup
+    body = login_shell_markup(
+        form_html=form_html,
+        lede='Use seu e-mail, CPF ou telefone e senha.',
+        note='Prestadores e clientes usam a mesma entrada. O cadastro de prestadores '
+             'é feito pelo aplicativo desktop.',
+    )
     return page(handler, 'Entrar', body)

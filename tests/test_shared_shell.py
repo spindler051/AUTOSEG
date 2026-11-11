@@ -85,8 +85,9 @@ class SharedShellContractTest(unittest.TestCase):
                 self.title, self.body, self.session = title, body, session
         handler = Handler()
         officina_web.login_page(handler, error='internal secret', identifier='<user>')
-        self.assertIn('Officina Web', handler.body)
-        self.assertIn('Acesso à plataforma', handler.body)
+        self.assertIn('login-shell', handler.body)
+        self.assertIn('login-brand', handler.body)
+        self.assertIn('AUTOSEG', handler.body)
         self.assertIn('action="/login"', handler.body)
         self.assertNotIn('Usar login antigo', handler.body)
         self.assertNotIn('internal secret', handler.body)

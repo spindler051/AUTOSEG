@@ -233,6 +233,8 @@ class OfficinaWebHttpTest(unittest.TestCase):
             status, _, page = self.req(browser, '/login')
             self.assertEqual(status, 200)
             self.assertIn(b'action="/login"', page)
+            self.assertIn(b'login-shell', page)
+            self.assertIn(b'login-brand', page)
             self.assertNotIn(b'name="identificador"', page)
             denied, _, page = self.req(browser, '/')
             self.assertEqual(denied, 200)

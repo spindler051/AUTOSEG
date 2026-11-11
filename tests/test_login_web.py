@@ -270,6 +270,9 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         self.assertIn('name="identificador"', body)
         self.assertIn('name="senha"', body)
         self.assertIn('action="/login"', body)
+        self.assertIn('login-shell', body)
+        self.assertIn('login-brand', body)
+        self.assertIn('login-headline', body)
         self.assertNotIn('Usar login antigo', body)
 
     def test_provider_login_opens_portal(self):
