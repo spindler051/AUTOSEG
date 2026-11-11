@@ -7,6 +7,10 @@ commit**, devolve ZIP.
 **Dependências:** 6.1 (shell/login/cliente) e 6.2 (papéis/permissões).
 **Entrega:** ZIP com arquivos completos, patch, testes e notas.
 
+A 6.2 entrou com `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`. Esta peça não deve
+ligar essa flag, alterar a matriz de papéis nem mexer na fronteira de comandos
+de OS; ela só troca a sessão por SQLite e expõe o contexto compartilhado.
+
 ## 1. Missão
 
 Fechar a base de sessão e contexto:
@@ -170,6 +174,8 @@ class SessionContext:
 
 ## 4. O que não fazer
 
+- Não ligar `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`; a 6.2 permanece atrás da flag
+  desligada até a decisão sobre o TOCTOU.
 - Não migrar `desktop_sessoes`, `api_tokens` ou `cliente_acessos` para a nova
   tabela nesta peça.
 - Não criar modo cliente no GTK.
