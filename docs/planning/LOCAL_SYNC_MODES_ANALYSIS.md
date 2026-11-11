@@ -57,6 +57,29 @@ Em vez de portais/modos separados, a recomendação é um motor com três eixos:
 oferece presets. O servidor é um peer com papéis extras: hub, autoridade e
 relay.
 
+### 2.1 Seis modos de UX
+
+O número depende do recorte. A arquitetura tem **quatro presets**; o produto
+se desdobra em **seis modos de UX** quando separamos prestador/cliente e
+LAN/WAN:
+
+| # | Modo de UX | Storage | Transporte | Autoridade | Offline |
+|---|---|---|---|---|---|
+| 1 | Local prestador | local | nenhum | próprio dispositivo | sim |
+| 2 | Local cliente | local + fila | nenhum/exportação | próprio dispositivo; envio posterior ao prestador | sim |
+| 3 | Local + Sync (hub) | local | HTTP hub quando houver rede | servidor; senão dispositivo designado | sim |
+| 4 | Servidor (thin client) | remoto | HTTP | servidor | não |
+| 5 | Sync LAN | local | mDNS/HTTPS entre peers | dispositivo designado ou política por entidade | sim |
+| 6 | Sync WAN/P2P | local | relay/Tailscale/WAN P2P | dispositivo designado ou política por entidade | sim |
+
+“Híbrido” não é um sétimo modo: é o modo 3 com peers LAN/WAN opcionais. Se o
+produto não oferecer o modo 2 no primeiro corte, ele continua existindo como
+taxonomia futura; a implementação pode começar com 1, 3 e 4.
+
+O importante é não transformar a taxonomia de UX em seis implementações
+diferentes: por baixo são os mesmos eixos `storage`, `transports` e
+`authority`.
+
 ## 3. Autoridade por entidade
 
 O plano base tratava o servidor como autoridade de numeração, financeiro e
