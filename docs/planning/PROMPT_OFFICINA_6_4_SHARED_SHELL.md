@@ -142,6 +142,33 @@ Regras:
   apresentação.
 - Não implementar todos os edge cases nesta peça; um exemplo bem feito basta.
 
+### 3.6 Correção única e matriz de impacto
+
+A shell compartilhada existe para que um problema comum tenha **uma correção
+só**. Toda correção de bug/feedback deve ser classificada antes de codar:
+
+- **Comum aos dois contextos:** o componente, rota ou comportamento é
+  compartilhado. Corrigir uma vez no código compartilhado e provar com teste
+  nos dois contextos (provider e client). Não criar duas correções.
+- **Específico de um contexto:** o problema só existe no módulo/rota daquele
+  contexto. Corrigir no módulo certo e adicionar teste apenas para ele. Não
+  copiar a correção para o outro lado.
+- **Diferença de permissão/dados:** a tela é a mesma, mas o conteúdo muda por
+  escopo. A correção é na política/serviço ou no dado, não em dois templates.
+
+Regras práticas:
+
+- não usar `if client`/`if provider` para forkar HTML de um componente
+  compartilhado; usar contexto, permissão ou módulo;
+- um bug no header, navegação, tabela, formulário, login ou rodapé é comum por
+  definição e deve ser corrigido uma vez;
+- um bug no painel “Em rota” do cliente, se for exclusivo dele, fica no módulo
+  client-only;
+- se o mesmo feedback aparece para os dois papéis, o teste de regressão deve
+  cobrir os dois; se aparece em um só, o teste cobre o contexto afetado;
+- o revisor deve poder olhar o diff e dizer “isto é shared” ou “isto é
+  client-only” sem encontrar a mesma lógica duplicada.
+
 ## 4. O que não fazer
 
 - Não criar um segundo site, uma segunda shell ou um “layout de cliente”.
@@ -175,7 +202,12 @@ Cobrir, no mínimo:
 11. contextos errados são negados;
 12. nenhuma tela cliente renderiza uma segunda chrome;
 13. login usa o design existente, sem novo framework;
-14. suítes 6.1/6.2/6.3 e regressão do portal continuam passando.
+14. um bug comum de chrome/componente tem uma única correção e regressão nos
+    dois contextos;
+15. um módulo client-only não aparece para provider e sua correção não altera
+    o provider;
+16. o diff não contém duas versões da mesma lógica de apresentação;
+17. suítes 6.1/6.2/6.3 e regressão do portal continuam passando.
 
 Rodar:
 
@@ -228,6 +260,8 @@ Sem `.git`, banco, anexos, PDFs, logs, tokens ou PII.
 - Provider com a mesma experiência visual e rotas.
 - Client com o mesmo site, navegação reduzida e módulo client-only real.
 - `/cliente` como alias/redirect, não site paralelo.
+- Um bug/feedback comum tem uma única correção e testes nos dois contextos; um
+  bug exclusivo fica no módulo do contexto afetado.
 - Nenhuma regra de negócio nova no handler.
 - Flags 6.2/6.3 intocadas e desligadas.
 - Testes e regressões passando, ou erro exato registrado.
