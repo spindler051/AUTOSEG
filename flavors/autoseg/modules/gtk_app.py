@@ -297,7 +297,9 @@ class Janela(Adw.ApplicationWindow):
         return pagina
 
     def _sair(self):
-        self.aplicativo.sair(self)
+        aplicativo = self.get_application()
+        if aplicativo is not None:
+            aplicativo.sair(self)
 
     def _sobre(self):
         sobre = Adw.AboutDialog(
