@@ -4,25 +4,42 @@ AUTOSEG is a work-management application for security and automation
 professionals: clients, service orders, maintenance, budgets, technical reports,
 finance, stock and client/provider portals.
 
-The desktop application uses **GTK4 + libadwaita** (`flavors/autoseg/modules/gtk_app.py`). Client and
-provider portals run on the same local SQLite database. The Tkinter frontend
-was removed in `9.6.0-dev.12`.
+The desktop application uses **GTK4 + libadwaita**
+(`flavors/autoseg/modules/gtk_app.py`). Officina Web serves providers and
+clients from one site and one login; the legacy client portal remains on port
+8765 during the migration. The Tkinter frontend was removed in
+`9.6.0-dev.12`.
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.73` (`develop`).
+Versão de desenvolvimento: `9.6.0-dev.73` (`main`).
 
 - Working vertical application for security/automation.
-- GTK4 desktop application with provider login (local or server), identity and logout.
-- Two local web portals.
+- GTK4 desktop application with provider login (local or server), identity and
+  real logout. Client login in the GTK app is not implemented yet; it is
+  planned as piece 6.5, remote-only.
+- Single Officina Web site with `/login` for provider and client when
+  `AUTOSEG_UNIFIED_LOGIN=1`; `/entrar` has been removed. With the flag off,
+  `/login` keeps the legacy provider form as the rollback path.
+- The AUTOSEG split-screen login screen is preserved; the unified form uses a
+  single “E-mail, CPF ou telefone” field.
+- Legacy client portal on port 8765 remains available during migration.
 - SQLite storage outside the repository, in local or server mode.
-- Suíte não visual: **343 testes, 0 falhas, 1 skip**.
+- Focused suite: **256 tests OK**; portal regression: **65 OK, 1 skip**; legacy
+  client portal: **3 OK**; comment audit: **0/0**.
+- `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` and `AUTOSEG_WEB_SESSION_DURABLE` remain
+  opt-in. Production activation is pending the TOCTOU/security review.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,
   not yet isolated as locale modules.
 - **Workaholic** is the generic engine project under `workaholic/`. It is a
   prototype (`0.1.0`) and is currently integrated only for the `cliente`
   slice. It has not been abandoned; making it the engine of the whole platform
   is a planned architectural phase.
+
+Next: close the object-policy gate (TOCTOU), then implement the remote-only
+client GTK slice (6.5). The ordered plan is in
+[`docs/ROADMAP.md`](docs/ROADMAP.md); the client-mode analysis is in
+[`docs/planning/GTK_CLIENT_MODE.md`](docs/planning/GTK_CLIENT_MODE.md).
 
 ## Long-term direction
 
@@ -168,6 +185,7 @@ grave CNPJ ou telefone real no código.
 - [Documentation index](docs/README.md) — ponto de entrada canônico.
 - [Current handoff](docs/HANDOFF.md) — estado e próximos passos.
 - [Roadmap](docs/ROADMAP.md)
+- [Client GTK plan — 6.5](docs/planning/GTK_CLIENT_MODE.md)
 - [Product vision](docs/PRODUCT_VISION.md)
 - [Tests](TESTES.md)
 - [Data locations](docs/operations/DATA_STORAGE.md)
