@@ -198,8 +198,11 @@ grave CNPJ ou telefone real no código.
 
 ```text
 flavors/autoseg/modules/gtk_app.py           GTK desktop frontend
-flavors/autoseg/modules/portal_prestador.py  provider portal
-flavors/autoseg/modules/servidor_web.py      client portal
+flavors/autoseg/modules/portal_prestador.py  Officina Web origin (provider + client dispatch)
+flavors/autoseg/modules/client_web.py        client routes inside the unified site
+flavors/autoseg/modules/autoseg_web_navigation.py  AUTOSEG navigation and routes
+flavors/autoseg/modules/servidor_web.py      legacy client portal (port 8765)
+officina/web/                                generic shell and presentation contracts
 officina/core/portal_negocios.py, fluxo_os.py  business rules
 officina/core/runtime_config.py               runtime paths, bind and ports
 workaholic/                                 generic engine prototype
@@ -207,6 +210,10 @@ officina/integration/                       adapters to Workaholic
 docs/                                       current docs; features/, operations/, planning/
 docs/archive/                               historical docs, not current
 ```
+
+The unified site still runs through `portal_prestador.py` for historical
+reasons; its name is a migration artifact. `servidor_web.py` is the old client
+portal kept on 8765, not a second client implementation of Officina Web.
 
 The codebase is gradually being migrated to English. Legacy Portuguese module
 and database names remain behind compatibility layers until a tested migration
