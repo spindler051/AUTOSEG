@@ -1185,8 +1185,7 @@ class DialogoSenhaCliente(Adw.Dialog):
             return
         ui.info(self.janela, "Acesso configurado",
                 f"Senha atualizada para {self.nome}.\n\n"
-                f"Login antigo: ID {self.cliente_id} e senha escolhida.\n"
-                "Login novo: CPF e senha no Portal do Cliente.")
+                "Login: CPF ou e-mail e senha em /login da Officina Web.")
         self.close()
 
 

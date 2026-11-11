@@ -59,7 +59,7 @@ Precedência: variável específica > `AUTOSEG_BASE` > padrão do modo.
 | `GESTAO_BANCO` | caminho exato do arquivo SQLite |
 | `AUTOSEG_COMPANY_CNPJ` | CNPJ exibido em PDFs e orçamentos; o padrão público é fictício |
 | `AUTOSEG_WHATSAPP` | número comercial dos links `wa.me`; o padrão público é fictício |
-| `AUTOSEG_DEV=1` | portas 8865/8866 e banco `dados_teste/autoseg_teste.db` |
+| `AUTOSEG_DEV=1` | portas 8866 e banco `dados_teste/autoseg_teste.db` |
 
 Exemplo para um servidor de teste rodando com o usuário comum:
 

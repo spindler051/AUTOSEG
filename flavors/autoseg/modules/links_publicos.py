@@ -6,7 +6,8 @@ import json,os,re,subprocess
 from officina.core import runtime_config
 BASE=runtime_config.base_dir()
 DEV=os.environ.get('AUTOSEG_DEV')=='1'
-PORTAS=('8865','8866') if DEV else ('8765','8766')
+PORTA_SITE='8866' if DEV else '8766'
+PORTAS=(PORTA_SITE,)
 TUNEIS=BASE/('tuneis_dev' if DEV else 'tuneis')
 ARQUIVO=TUNEIS/'estado.json'
 URL_RE=re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com',re.I)
@@ -48,7 +49,7 @@ def estado():
 def quadro_html():
     import html
     s=estado_com_manuais();parts=[]
-    for porta,nome in [(PORTAS[0],'Portal do Cliente'),(PORTAS[1],'Portal do Prestador')]:
+    for porta,nome in [(PORTA_SITE,'Officina Web')]:
         url=s.get(porta,{}).get('url','')
         link=(f'<a href="{html.escape(url,quote=True)}" rel="noopener noreferrer" target="_blank">{html.escape(url)}</a>'
               if url else '<span class="muted">Sem link público verificado</span>')

@@ -10,9 +10,8 @@ Data never lives inside the repository:
   Support/AUTOSEG`` on macOS or ``%LOCALAPPDATA%/AUTOSEG`` on Windows.
 
 ``AUTOSEG_BASE`` overrides the data directory and ``GESTAO_BANCO`` overrides
-the SQLite file, preserving deployment compatibility. The portal defaults are
-unchanged: 8865/8866 in DEV, 8765/8766 otherwise, bound to 127.0.0.1 unless
-explicitly configured. The module is dependency free so every entry point can
+the SQLite file, preserving deployment compatibility. The Officina Web site defaults to 8866 in DEV and 8766 otherwise,
+bound to 127.0.0.1 unless explicitly configured. The module is dependency free so every entry point can
 import it without cycles.
 """
 from __future__ import annotations
@@ -170,39 +169,11 @@ def provider_https() -> bool:
     return os.environ.get('PRESTADOR_HTTPS') == '1'
 
 
-def client_server(port: int | None = None, host: str | None = None) -> ServerConfig:
-    """Client portal settings.
-
-    Precedence matches the headless/GTK entry points: explicit ``host`` first,
-    then ``CLIENTE_BIND``; ``CLIENTE_PORT`` overrides the argument; otherwise
-    the argument or the DEV/MAIN default.
-    """
-    default_port = 8865 if is_dev() else 8765
-    final_host = host or os.environ.get('CLIENTE_BIND') or '127.0.0.1'
-    if 'CLIENTE_PORT' in os.environ and str(os.environ.get('CLIENTE_PORT')).strip() != '':
-        final_port = _env_port('CLIENTE_PORT', default_port)
-    elif port is not None:
-        final_port = int(port)
-    else:
-        final_port = default_port
-    return ServerConfig(final_host, final_port, False)
-
-
 def web_access_enabled() -> bool:
-    """Whether the GTK app should start local web portals.
+    """Whether the GTK app should start the Officina Web site.
 
     Default is on, preserving current behavior. ``AUTOSEG_WEB_ACCESS=0`` or
     the ``--no-web`` flag makes the desktop app run fully local, without
-    opening ports 8765/8766.
+    opening the site port.
     """
     return os.environ.get('AUTOSEG_WEB_ACCESS', '1') != '0'
-
-
-def client_port(default: int = 8765) -> int:
-    """Port used in links between the provider portal and the client portal.
-
-    ``portal_prestador`` historically used 8765 as its fallback even in DEV,
-    so the caller can pass that default explicitly while still honoring
-    ``CLIENTE_PORT``.
-    """
-    return _env_port('CLIENTE_PORT', default)

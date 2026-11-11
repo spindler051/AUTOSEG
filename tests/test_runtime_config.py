@@ -10,7 +10,7 @@ KEYS = (
     'AUTOSEG_BASE', 'GESTAO_BANCO', 'AUTOSEG_DEV',
     'AUTOSEG_USER_DATA', 'AUTOSEG_SERVER_DATA', 'AUTOSEG_LOCAL_DATA',
     'PRESTADOR_PORT', 'PRESTADOR_BIND', 'PRESTADOR_HTTPS',
-    'CLIENTE_PORT', 'CLIENTE_BIND', 'AUTOSEG_WEB_ACCESS',
+    'AUTOSEG_WEB_ACCESS',
 )
 
 
@@ -24,13 +24,12 @@ class RuntimeConfigTest(unittest.TestCase):
     def tearDown(self):
         self.patch.stop()
 
-    def test_defaults_preserve_main_ports_and_paths(self):
+    def test_single_site_main_port_and_paths(self):
         provider = runtime_config.provider_server()
-        client = runtime_config.client_server()
         self.assertEqual((provider.host, provider.port, provider.https),
                          ('127.0.0.1', 8766, False))
-        self.assertEqual((client.host, client.port), ('127.0.0.1', 8765))
-        self.assertEqual(runtime_config.client_port(), 8765)
+        self.assertFalse(hasattr(runtime_config, 'client_server'))
+        self.assertFalse(hasattr(runtime_config, 'client_port'))
         repo = Path(runtime_config.__file__).resolve().parents[2]
         self.assertEqual(runtime_config.base_dir(), runtime_config.local_data_dir())
         self.assertEqual(runtime_config.database_path(),
@@ -38,33 +37,25 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertNotEqual(runtime_config.base_dir(), repo)
         self.assertNotEqual(runtime_config.database_path().parent, repo)
 
-    def test_dev_defaults_use_alt_ports(self):
+    def test_dev_site_uses_alt_port(self):
         os.environ['AUTOSEG_DEV'] = '1'
         self.assertEqual(runtime_config.provider_server().port, 8866)
-        self.assertEqual(runtime_config.client_server().port, 8865)
 
-    def test_environment_overrides_match_legacy_precedence(self):
+    def test_provider_environment_override_precedence(self):
         os.environ.update({
             'PRESTADOR_PORT': '9999',
             'PRESTADOR_BIND': '0.0.0.0',
             'PRESTADOR_HTTPS': '1',
-            'CLIENTE_PORT': '9998',
-            'CLIENTE_BIND': '0.0.0.0',
         })
         provider = runtime_config.provider_server(port=1234, host='192.0.2.1')
-        client = runtime_config.client_server(port=1234, host='192.0.2.1')
         # Explicit host wins; env port wins, exactly like the previous code.
         self.assertEqual((provider.host, provider.port, provider.https),
                          ('192.0.2.1', 9999, True))
-        self.assertEqual((client.host, client.port), ('192.0.2.1', 9998))
-        self.assertEqual(runtime_config.client_port(), 9998)
         self.assertTrue(runtime_config.provider_https())
 
     def test_explicit_ephemeral_ports_are_preserved_without_env(self):
         provider = runtime_config.provider_server(port=0)
-        client = runtime_config.client_server(port=0)
         self.assertEqual(provider.port, 0)
-        self.assertEqual(client.port, 0)
 
     def test_web_access_is_on_by_default_and_can_be_disabled(self):
         self.assertTrue(runtime_config.web_access_enabled())

@@ -6,8 +6,7 @@ finance, stock and client/provider portals.
 
 The desktop application uses **GTK4 + libadwaita**
 (`flavors/autoseg/modules/gtk_app.py`). Officina Web serves providers and
-clients from one site and one login; the legacy client portal remains on port
-8765 during the migration. The Tkinter frontend was removed in
+clients from one site and one login. The old client portal has been retired. The Tkinter frontend was removed in
 `9.6.0-dev.12`.
 
 ## Current status
@@ -23,7 +22,7 @@ Versão de desenvolvimento: `9.6.0-dev.73` (`main`).
   `/login` keeps the legacy provider form as the rollback path.
 - The AUTOSEG split-screen login screen is preserved; the unified form uses a
   single “E-mail, CPF ou telefone” field.
-- Legacy client portal on port 8765 remains available during migration.
+- The retired ID+senha history, anonymous PJ intake and customer self-registration return 410 Gone.
 - SQLite storage outside the repository, in local or server mode.
 - Focused suite: **256 tests OK**; portal regression: **65 OK, 1 skip**; legacy
   client portal: **3 OK**; comment audit: **0/0**.
@@ -88,14 +87,14 @@ Operação resumida MAIN/DEV:
 
 ```bash
 # MAIN
-./autoseg start site      # site 8765/8766; a API vai embutida
-./autoseg start tunnel    # túneis 8765/8766
+./autoseg start site      # site 8766; a API vai embutida
+./autoseg start tunnel    # túneis 8766
 ./autoseg status
 ./autoseg stop all
 
 # DEV
-./autoseg-dev start site      # site 8865/8866
-./autoseg-dev start tunnel    # túneis 8865/8866
+./autoseg-dev start site      # site 8866
+./autoseg-dev start tunnel    # túneis 8866
 ./autoseg-dev status
 ./autoseg-dev stop all
 ```
@@ -155,14 +154,13 @@ Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
 GUI do site no terminal:
 
 ```bash
-./autoseg site-prod       # produção: 8765/8766
-./autoseg site   # DEV: cliente 8865, prestador 8866
+./autoseg site-prod       # produção: 8766
+./autoseg site            # DEV: Officina Web na porta única 8866
 ```
 
 Hoje a GUI do site ainda compartilha o processo com a API embutida; a separação
 completa entre servidor e site é uma fase posterior. O servidor de dados do GTK
-é o `./autoseg server` (porta 8766). O site DEV usa o mesmo banco de
-teste, mas em processo e portas separados.
+é o `./autoseg server` (porta 8766). O site DEV usa somente banco fictício e porta 8866, em processo separado da MAIN.
 
 O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
 `./autoseg app-web` somente se quiser que o próprio GTK suba os
@@ -201,7 +199,8 @@ flavors/autoseg/modules/gtk_app.py           GTK desktop frontend
 flavors/autoseg/modules/portal_prestador.py  Officina Web origin (provider + client dispatch)
 flavors/autoseg/modules/client_web.py        client routes inside the unified site
 flavors/autoseg/modules/autoseg_web_navigation.py  AUTOSEG navigation and routes
-flavors/autoseg/modules/servidor_web.py      legacy client portal (port 8765)
+flavors/autoseg/modules/client_extended_web.py   client-only modules in shared shell
+flavors/autoseg/modules/client_features.py       authenticated client services
 officina/web/                                generic shell and presentation contracts
 officina/core/portal_negocios.py, fluxo_os.py  business rules
 officina/core/runtime_config.py               runtime paths, bind and ports
@@ -212,8 +211,8 @@ docs/archive/                               historical docs, not current
 ```
 
 The unified site still runs through `portal_prestador.py` for historical
-reasons; its name is a migration artifact. `servidor_web.py` is the old client
-portal kept on 8765, not a second client implementation of Officina Web.
+reasons; its name is a migration artifact. The former `servidor_web.py` and `portal_cliente_v94.py` were deleted;
+all retained customer flows now run inside the unified origin.
 
 The codebase is gradually being migrated to English. Legacy Portuguese module
 and database names remain behind compatibility layers until a tested migration

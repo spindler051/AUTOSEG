@@ -203,7 +203,11 @@ def en_route(handler, banco, session) -> None:
 
 
 def dispatch_get(handler, banco, session, path: str) -> None:
-    """One root; role/permission checks happen in client_service, not URLs."""
+    """One origin and shell; authorization stays in the service layer."""
+    from flavors.autoseg.modules.autoseg_web_navigation import MIGRATED_GET
+    if path in MIGRATED_GET or path.startswith('/cliente/nota/') or path.startswith('/cliente/os/') or path.startswith('/cliente/chamado/') or path.startswith('/cliente/organizacao/'):
+        from flavors.autoseg.modules import client_extended_web
+        return client_extended_web.dispatch_get(handler,banco,session,path)
     from flavors.autoseg.modules.autoseg_web_navigation import client_routes
     from officina.web.navigation import _allows
     routes = client_routes(home=home, list_items=list_items, documents=documents,
@@ -234,6 +238,10 @@ def dispatch_get(handler, banco, session, path: str) -> None:
 
 
 def dispatch_post(handler, banco, session, path: str, data: dict) -> None:
+    from flavors.autoseg.modules.autoseg_web_navigation import MIGRATED_POST
+    if path in MIGRATED_POST:
+        from flavors.autoseg.modules import client_extended_web
+        return client_extended_web.dispatch_post(handler,banco,session,path,data)
     if path in ('/solicitar', '/cliente/solicitar'):
         return request_submit(handler, banco, session, data)
     return handler.erro('Página indisponível.', 404)

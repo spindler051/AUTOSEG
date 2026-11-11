@@ -1053,6 +1053,22 @@ class PortalPrestador:
                     ip=self.address_string()
                 LOG.info('acesso %s %s',ip,formato%args)
 
+            def redirect_alias(self, destination):
+                """Contractual 308 redirect preserving POST method and query."""
+                if not destination.startswith('/') or destination.startswith('//'):
+                    return self.erro('Página indisponível.',404)
+                self.send_response(308)
+                self.send_header('Location',destination)
+                self.send_header('Cache-Control','no-store')
+                self.send_header('Content-Length','0')
+                self.end_headers()
+
+            def retired_route(self):
+                return self.send_bytes(
+                    ('<h1>Funcionalidade indisponível</h1><p>Este acesso foi encerrado. '
+                     'Para solicitar atendimento ou recuperar histórico, entre em contato com a AUTOSEG '
+                     'pelo canal de suporte.</p>').encode('utf-8'),status=410)
+
             def send_bytes(self,data,mime='text/html; charset=utf-8',filename=None,status=200,
                            cookie=None,inline=False,cache=None):
                 self.send_response(status)
@@ -3511,12 +3527,9 @@ class PortalPrestador:
                 return self.pagina('Configurações',card('Aparência do site',form),s)
 
             def portal_cliente(self,s):
-                porta_cliente=runtime_config.client_port(8765)
-                url_cliente=f'http://127.0.0.1:{porta_cliente}/'
-                info=botao(f'Abrir Portal do Cliente ({porta_cliente})',url_cliente)
-                info+=('<p class="muted">O Portal do Cliente é um site separado, na porta 8765. '
-                       'O login dele é por CPF e senha e não se mistura com o login do prestador. '
-                       'As solicitações registradas lá aparecem nesta lista e no desktop.</p>')
+                info=botao('Abrir Officina Web','/')
+                info+=('<p class="muted">Prestadores e clientes acessam a mesma origem Officina Web. '
+                       'O cliente entra por /login e acompanha os pedidos no próprio site.</p>')
                 web=ordens_repo.listar_origem_portal(banco)
                 registros=[(f'<a href="{url_os(banco, o["id"])}">{esc(o["numero_os"])}</a>',esc(o['status']),esc(o['data_abertura'])) for o in web]
                 return self.pagina('Portal do cliente',info+card('Solicitações recebidas pelo portal',tabela(['OS','Situação','Abertura'],registros)),s)
@@ -3556,15 +3569,36 @@ class PortalPrestador:
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 if path == '/entrar':
                     return self.erro('Página não encontrada.', 404)
+                from flavors.autoseg.modules.autoseg_web_navigation import (
+                    canonical_client_path, retired_client_path)
+                if retired_client_path(path):
+                    return self.retired_route()
+                alias=canonical_client_path(path)
+                if alias is not None:
+                    query=urlparse(self.path).query
+                    return self.redirect_alias(alias+(('?' + query) if query else ''))
+                # Shared public assets and diagnostics live on this one origin.
+                if path == '/static/cliente_whatsapp.js':
+                    asset=Path(__file__).resolve().parent.parent/'web'/'site'/'cliente_whatsapp.js'
+                    if not asset.is_file():
+                        return self.erro('Recurso não encontrado.',404)
+                    return self.send_bytes(asset.read_bytes(),'application/javascript; charset=utf-8')
+                if path == '/api/health':
+                    return self.send_bytes(b'{"ok":true,"site":"officina"}',
+                                           'application/json; charset=utf-8')
+                if path == '/api/info':
+                    payload=json.dumps({'site':'officina','versao':VERSAO_PORTAL,
+                           'porta':getattr(self.server,'server_port',None)}).encode('utf-8')
+                    return self.send_bytes(payload,'application/json; charset=utf-8')
+                if path == '/manifest.webmanifest':
+                    payload=json.dumps({'name':'Officina Web · Gestão de Serviços',
+                          'short_name':'Officina Web','start_url':'/','display':'standalone',
+                          'background_color':'#0A0A0A','theme_color':'#FFD400'}).encode('utf-8')
+                    return self.send_bytes(payload,'application/manifest+json')
                 customer = login_web.client_session(self, banco)
                 if customer is not None:
                     if path == '/login':
                         return self.redir('/')
-                    from flavors.autoseg.modules.autoseg_web_navigation import canonical_client_path
-                    alias=canonical_client_path(path)
-                    if alias is not None:
-                        return self.redir(alias + (('?' + urlparse(self.path).query)
-                                                  if urlparse(self.path).query else ''))
                     try:
                         if officina_web.client_path_allowed(path):
                             return client_web.dispatch_get(self,banco,customer,path)
@@ -3575,6 +3609,8 @@ class PortalPrestador:
                     except Exception:
                         LOG.warning('Falha no serviço do cliente.')
                         return self.erro('Falha interna.',500)
+                    if path == '/cliente' or path.startswith('/cliente/'):
+                        return self.erro('Página indisponível.',404)
                     if path not in ('/logo.png','/icone.png','/favicon.ico',
                                     '/static/portal.js','/login'):
                         return self.erro('Acesso não autorizado.',403)
@@ -3628,12 +3664,9 @@ class PortalPrestador:
                             return self.send_bytes(arquivo.read_bytes(),'image/png')
                         return self.erro('Imagem não encontrada.',404,self.sessao())
                     if path == '/cliente' or path.startswith('/cliente/'):
-                        if login_flags.unified_login_enabled(banco):
-                            return self.redir('/' if self.sessao() else '/login')
-                        return self.erro('Página não encontrada.', 404)
+                        return self.erro('Página indisponível.',404)
                     if path == '/pj' or path.startswith('/pj/'):
-                        return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
-                                         'Este endereço é o Portal do Prestador.',404,self.sessao())
+                        return self.erro('Página indisponível.',404)
                     s=self.sessao()
                     if not s:return self.login()
                     if path=='/contas':
@@ -3871,6 +3904,13 @@ class PortalPrestador:
                 path = self._normalizar_os(path)
                 if path == '/entrar':
                     return self.erro('Página não encontrada.', 404)
+                from flavors.autoseg.modules.autoseg_web_navigation import (
+                    canonical_client_path, retired_client_path, MIGRATED_POST)
+                if retired_client_path(path):
+                    return self.retired_route()
+                alias=canonical_client_path(path)
+                if alias is not None:
+                    return self.redirect_alias(alias)
                 quer_json = ('application/json' in self.headers.get('Accept','')
                              or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                 if not self.origem_permitida():
@@ -3895,14 +3935,12 @@ class PortalPrestador:
                                 web_cookie.clear_cookie(secure=web_cookie.secure_request(self.headers)),
                                 self.cookie('', True),
                             ))
-                        if path in ('/solicitar','/cliente/solicitar'):
+                        if path == '/solicitar' or path in MIGRATED_POST:
                             return client_web.dispatch_post(self, banco, customer, path,
                                                             self.form(PREAUTH_MAX))
                         return self.erro('Acesso não autorizado.', 403)
                     if path.startswith('/cliente/') or path == '/cliente':
-                        if login_flags.unified_login_enabled(banco):
-                            return self.redir('/' if self.sessao() else '/login')
-                        return self.erro('Página não encontrada.', 404)
+                        return self.erro('Página indisponível.',404)
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
                     s_inicial=self.sessao()
@@ -3918,7 +3956,7 @@ class PortalPrestador:
                             return self.login(erro_login='Muitas tentativas. Aguarde dez minutos.',
                                               email_login=str(d.get('email','')))
                         if unified_login:
-                            identifier=str(d.get('identificador') or d.get('email') or '')
+                            identifier=str(d.get('identificador') or d.get('email') or d.get('cpf') or '')
                             try:
                                 token, _session = login_web.authenticate_and_create(
                                     banco, identifier, str(d.get('senha','')))

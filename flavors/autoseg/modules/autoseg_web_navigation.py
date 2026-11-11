@@ -25,6 +25,9 @@ ITEMS = (
     NavItem("client-documents", "Documentos", "/documentos", permission="document.view", contexts=("client",), group="Minha conta", icon="file", top=True, top_order=2),
     NavItem("client-request", "Solicitar serviço", "/solicitar", permission="work_item.create.request", contexts=("client",), group="Minha conta", icon="plus", top=True, top_order=3),
     NavItem("client-route", "Em rota", "/em-rota", permission="work_item.view", contexts=("client",), group="Minha conta", icon="arrow-right", top=True, top_order=4),
+    NavItem("client-profile", "Meu perfil", "/cliente/perfil", contexts=("client",), group="Minha conta", icon="user"),
+    NavItem("client-organizations", "Organizações", "/cliente/organizacoes", contexts=("client",), group="Minha conta", icon="building"),
+    NavItem("client-quote", "Orçamento", "/cliente/orcamento", contexts=("client",), group="Minha conta", icon="receipt"),
 )
 
 def navigation_for(context):
@@ -53,31 +56,68 @@ def client_routes(*, home, list_items, documents, request_form, en_route):
     )
 
 
-ALIASES = {'/cliente': '/', '/cliente/painel': '/',
-           '/cliente/os': '/os', '/cliente/documentos': '/documentos',
-           '/cliente/solicitar': '/solicitar', '/cliente/nova': '/solicitar',
-           '/cliente/em-rota': '/em-rota'}
+# Public contractual redirects only. Never infer aliases by prefix.
+ALIASES = {
+    '/cliente': '/', '/cliente/painel': '/', '/cliente/os': '/os',
+    '/cliente/documentos': '/documentos',
+    '/cliente/solicitar': '/solicitar', '/cliente/nova': '/solicitar',
+    '/cliente/em-rota': '/em-rota',
+    '/cliente/entrar-pf': '/login', '/cliente/sair-pf': '/sair',
+}
+
+# These are actual customer-only features, not URL aliases or a second portal.
+MIGRATED_GET = frozenset({
+    '/cliente/perfil', '/cliente/senha', '/cliente/os/nova', '/cliente/organizacoes',
+    '/cliente/nova-organizacao', '/cliente/administrar-organizacao',
+    '/cliente/vinculo/novo', '/cliente/chamado/novo', '/cliente/orcamento',
+    '/cliente/sindico',
+})
+MIGRATED_POST = frozenset({
+    '/cliente/perfil', '/cliente/senha', '/cliente/os/nova',
+    '/cliente/nova-organizacao', '/cliente/vinculo/novo',
+    '/cliente/administrar-organizacao', '/cliente/chamado/novo',
+    '/cliente/orcamento/pdf',
+})
+
 
 def canonical_client_path(path: str) -> str | None:
+    """Closed allowlist; an arbitrary /cliente/<path> is NEVER a redirect."""
     if path in ALIASES:
         return ALIASES[path]
-    if path.startswith('/cliente/os/'):
-        return path[len('/cliente'):]
-    if path.startswith('/cliente/chamado/'):
-        return path[len('/cliente'):]
+    segments=path.strip('/').split('/')
+    if len(segments)==3 and segments[:2]==['cliente','os'] and segments[2].isdigit():
+        return '/os/'+segments[2]
+    if len(segments)==3 and segments[:2]==['cliente','chamado'] and segments[2].isdigit():
+        return '/chamado/'+segments[2]
     return None
 
 
-# Canonical client route allowlist; neither SQL nor authorization is here.
+def retired_client_path(path: str) -> bool:
+    """Explicit product withdrawals B1/B2/B3 (410 Gone)."""
+    return (path in ('/legado','/pj-rapido','/cliente/pj-rapido',
+                    '/cliente/cadastro','/cliente/cadastrar','/cliente/cadastro-pj')
+            or path.startswith('/legado/')
+            or path.startswith('/pj-rapido/')
+            or path.startswith('/cliente/pj-rapido/')
+            or path.startswith('/cliente/cadastro/'))
+
+
 CLIENT_PATHS = frozenset(('/', '/os', '/documentos', '/solicitar', '/em-rota'))
 
 
 def client_path_allowed(path: str) -> bool:
-    if path in CLIENT_PATHS:
+    if path in CLIENT_PATHS or path in MIGRATED_GET:
         return True
-    parts = path.strip('/').split('/')
-    return ((len(parts) == 2 and parts[0] in ('os', 'chamado')
-             and parts[1].isdigit()) or
-            (len(parts) == 4 and parts[0] in ('os', 'chamado')
-             and parts[1].isdigit() and parts[2] == 'documento'
-             and parts[3].lstrip('-').isdigit()))
+    parts=path.strip('/').split('/')
+    return ((len(parts)==2 and parts[0] in ('os','chamado') and parts[1].isdigit())
+            or (len(parts)==4 and parts[0] in ('os','chamado')
+                and parts[1].isdigit() and parts[2]=='documento'
+                and parts[3].lstrip('-').isdigit())
+            or (len(parts)==4 and parts[:2]==['cliente','os']
+                and parts[2].isdigit() and parts[3]=='pdf')
+            or (len(parts)==3 and parts[:2]==['cliente','nota'] and parts[2].isdigit())
+            or (len(parts)==4 and parts[:2]==['cliente','chamado']
+                and parts[2].isdigit() and parts[3]=='pdf')
+            or (len(parts)==6 and parts[:2]==['cliente','organizacao']
+                and parts[2].isdigit() and parts[3]=='os'
+                and parts[4].isdigit() and parts[5]=='pdf'))

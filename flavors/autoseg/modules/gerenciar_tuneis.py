@@ -17,7 +17,7 @@ def iniciar():
     atual=links.estado()
     try:d=json.loads(links.ARQUIVO.read_text())
     except (OSError,ValueError):d={}
-    for porta in ('8765','8766'):
+    for porta in ('8766',):
         if porta in atual:
             print(f'Porta {porta}: túnel v9 já conectado: {atual[porta]["url"]}');continue
         arquivo=DIR/f'{porta}.log'
@@ -30,7 +30,7 @@ def iniciar():
     # Não inventar link; lê somente aquele efetivamente emitido pelo cloudflared.
     for _ in range(30):
         e=links.estado()
-        if len(e)==2:break
+        if len(e)==1:break
         time.sleep(0.5)
     print('Links detectados:')
     for porta,inf in links.estado().items():print(porta,inf['url'])
@@ -52,11 +52,11 @@ if __name__=='__main__':
     if args.acao=='iniciar':iniciar()
     elif args.acao=='parar':parar()
     elif args.acao=='registrar':
-        for porta in ('8765','8766'):
+        for porta in ('8766',):
             u=input('Link HTTPS ativo da porta '+porta+' (deixe vazio para ignorar): ').strip()
             if u:
                 try:links.registrar_manual(porta,u);print('Verificado e registrado:',u)
                 except ValueError as ex:print('Não registrado:',ex)
     else:
         e=links.estado_com_manuais()
-        for porta in ('8765','8766'):print(porta,e.get(porta,{}).get('url','sem túnel gerenciado ativo'))
+        for porta in ('8766',):print(porta,e.get(porta,{}).get('url','sem túnel gerenciado ativo'))

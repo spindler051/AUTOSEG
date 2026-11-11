@@ -77,7 +77,6 @@ def dev_env():
          "print(runtime_config.server_data_dir())"],
         cwd=ROOT, env=env, text=True).strip()
     env["AUTOSEG_SERVER_DATA"] = server_data
-    env["CLIENTE_PORT"] = "8865"
     env["PRESTADOR_PORT"] = "8866"
     env["AUTOSEG_WEB_ACCESS"] = "0"
     return env
@@ -88,17 +87,8 @@ def environment(context):
 
 
 def ports(context, service):
-    if context == "dev":
-        if service == "site":
-            return (8865, 8866)
-        if service == "server":
-            return (8766,)
-        return (8865, 8866)
-    if service == "site":
-        return (8765, 8766)
-    if service == "server":
-        return (8766,)
-    return (8765, 8766)
+    """Only the Officina Web provider origin is started by the site command."""
+    return (8866,) if context == 'dev' and service == 'site' else (8766,)
 
 
 def pid_path(context, service):
@@ -185,7 +175,7 @@ def start_service(context, service):
     env = environment(context)
     port_list = ports(context, service)
     in_use = all_port_pids(port_list)
-    if service == "server" and context == "main" and port_pids(8765):
+    if service == "server" and context == "main" and port_pids(8766):
         say("A MAIN sobe site + API no mesmo processo. Use `./autoseg stop site` "
             "antes de iniciar um server separado.")
         return 1
@@ -225,7 +215,7 @@ def start_service(context, service):
 
 
 def stop_service(context, service):
-    if context == "main" and service == "server" and port_pids(8765):
+    if context == "main" and service == "server" and port_pids(8766):
         say("A API da MAIN está embutida no site. Use `./autoseg stop site`.")
         return 0
     if context == "dev" and service == "server":
@@ -313,7 +303,7 @@ def start_tunnel(context):
         say("cloudflared não encontrado.")
         return 1
     started = []
-    for port in (8765, 8766):
+    for port in (8766,):
         marker = f"cloudflared tunnel --url http://127.0.0.1:{port}"
         try:
             current = subprocess.run(
@@ -362,7 +352,7 @@ def stop_tunnel(context):
     pid = read_pid(context, "tunnel")
     if pid and running(pid):
         pids.append(pid)
-    for port in (8765, 8766):
+    for port in (8766,):
         marker = f"cloudflared tunnel --url http://127.0.0.1:{port}"
         try:
             found = subprocess.run(
@@ -451,8 +441,8 @@ def help_text():
   ./autoseg-dev update
   ./autoseg-dev status
 
-MAIN: site em 8765/8766 (a API vai embutida no site).
-DEV:  site em 8865/8866; server/API em 8766 (só com a MAIN parada).
+MAIN: site em 8766 (a API vai embutida no site).
+DEV:  site em 8866; server/API em 8766 (só com a MAIN parada).
 Atualização: `./autoseg update main`, `update dev` ou `update` (MAIN → DEV).
 Atualizações isoladas são permitidas.
 

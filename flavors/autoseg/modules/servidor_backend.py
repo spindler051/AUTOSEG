@@ -12,9 +12,8 @@ proxy reverso com domínio próprio.
 
 Variáveis:
   GESTAO_BANCO / AUTOSEG_BASE   banco e pastas de dados
-  CLIENTE_PORT / CLIENTE_BIND   portal do cliente (modo --web)
   PRESTADOR_PORT / PRESTADOR_BIND
-  AUTOSEG_DEV=1                 portas 8865/8866 por padrão
+  AUTOSEG_DEV=1                 porta única 8866 por padrão
 """
 from __future__ import annotations
 import sys as _sys
@@ -71,45 +70,23 @@ def _esperar():
 
 
 def run_site():
-    from flavors.autoseg.modules.servidor_web import ServidorPortal
+    """Officina Web has one HTTP origin for both client and provider."""
     from flavors.autoseg.modules.portal_prestador import PortalPrestador
 
     _instalar_base()
-    cliente_cfg = runtime_config.client_server()
-    prestador_cfg = runtime_config.provider_server()
-    cliente = ServidorPortal(
-        BANCO, PASTA_APP,
-        porta=cliente_cfg.port,
-        host=cliente_cfg.host)
-    prestador = PortalPrestador(
-        BANCO,
-        host=prestador_cfg.host,
-        porta=prestador_cfg.port)
+    cfg = runtime_config.provider_server()
+    portal = PortalPrestador(BANCO, host=cfg.host, porta=cfg.port)
     try:
-        cliente.iniciar()
-        prestador.iniciar()
-        info = cliente.info()
-        print("Officina Web — GUI do site")
-        print("Banco:", BANCO)
-        host_prestador = ("127.0.0.1" if prestador.host in ("0.0.0.0", "::")
-                          else prestador.host)
-        print("Cliente:", info.get("url_local"))
-        print("Prestador:", f"http://{host_prestador}:{prestador.porta}")
-        print("API embutida no mesmo processo (temporário):",
-              f"http://{host_prestador}:{prestador.porta}/api/v1")
-        print("Para servidor separado, use --api.")
-        print("Cloudflare: opcional, iniciado separadamente.")
-        print("Ctrl+C para encerrar.")
+        portal.iniciar()
+        host = '127.0.0.1' if portal.host in ('0.0.0.0', '::') else portal.host
+        print('Officina Web — origem única')
+        print('Banco:', BANCO)
+        print('Site:', f'http://{host}:{portal.porta}')
+        print('API:', f'http://{host}:{portal.porta}/api/v1')
+        print('Ctrl+C para encerrar.')
         _esperar()
     finally:
-        try:
-            prestador.parar()
-        except Exception:
-            pass
-        try:
-            cliente.parar()
-        except Exception:
-            pass
+        portal.parar()
 
 
 def run_api(host='127.0.0.1', port=None):

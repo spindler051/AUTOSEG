@@ -191,8 +191,8 @@ class OfficinaWebHttpTest(unittest.TestCase):
     def test_provider_denied_client_routes(self):
         browser, _, _, _ = self.login('provider@example.test', self.provider_pass)
         status, headers, _ = self.req(browser, '/cliente/os')
-        self.assertEqual(status, 303)
-        self.assertEqual(headers['Location'], '/')
+        self.assertEqual(status, 308)
+        self.assertEqual(headers['Location'], '/os')
 
     def test_customer_can_request_work_and_see_it(self):
         import re

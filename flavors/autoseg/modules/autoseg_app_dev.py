@@ -1,7 +1,7 @@
 """Bootstrap do AUTOSEG DEV.app (GTK4/libadwaita).
 
 Aponta para a pasta local de DEV (<dados do usuário>/local/dev), com banco
-próprio e portas locais 8865/8866, isolado do MAIN.
+próprio e porta local 8866, isolado do MAIN.
 """
 import sys as _sys
 from pathlib import Path as _Path
@@ -16,9 +16,7 @@ BASE = runtime_config.local_data_dir() / 'dev'
 os.environ['AUTOSEG_BASE'] = str(BASE)
 os.environ['GESTAO_BANCO'] = str(BASE / 'dados.db')
 os.environ['AUTOSEG_DEV'] = '1'
-os.environ['CLIENTE_PORT'] = '8865'
 os.environ['PRESTADOR_PORT'] = '8866'
-os.environ['CLIENTE_BIND'] = '127.0.0.1'
 os.environ['PRESTADOR_BIND'] = '127.0.0.1'
 
 from . import autoseg_app  # noqa: E402

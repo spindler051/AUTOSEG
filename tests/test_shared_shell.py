@@ -68,11 +68,11 @@ class SharedShellContractTest(unittest.TestCase):
     def test_aliases_cover_nested_work_and_call_documents(self):
         for old, new in [('/cliente', '/'), ('/cliente/painel', '/'),
                          ('/cliente/os', '/os'), ('/cliente/os/10', '/os/10'),
-                         ('/cliente/os/10/documento/-2', '/os/10/documento/-2'),
                          ('/cliente/chamado/4', '/chamado/4'),
-                         ('/cliente/chamado/4/documento/5', '/chamado/4/documento/5'),
                          ('/cliente/solicitar', '/solicitar')]:
             self.assertEqual(canonical_client_path(old), new)
+        self.assertIsNone(canonical_client_path('/cliente/os/10/documento/-2'))
+        self.assertIsNone(canonical_client_path('/cliente/chamado/4/documento/5'))
 
     def test_unknown_alias_is_not_invented(self):
         self.assertIsNone(canonical_client_path('/cliente/admin'))
@@ -157,7 +157,7 @@ class SharedShellHttpTest(unittest.TestCase):
         for old, target in (('/cliente', '/'), ('/cliente/os', '/os'),
                             ('/cliente/solicitar', '/solicitar')):
             status, headers, _ = self.req(client, old)
-            self.assertEqual(303, status)
+            self.assertEqual(308, status)
             self.assertEqual(target, headers['Location'])
         self.assertEqual(200, self.req(client, '/em-rota')[0])
         self.assertEqual(403, self.req(client, '/financeiro')[0])

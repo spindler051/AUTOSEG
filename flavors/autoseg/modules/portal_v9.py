@@ -37,7 +37,7 @@ def cookie(h,tok,delete=False):
 def barra_links(pagina='cliente'):
     card,layout,campos,textarea,select,esc,botao,tabela=ui()
     d=links.estado_com_manuais()
-    porta = links.PORTAS[0] if pagina == 'cliente' else links.PORTAS[1]
+    porta = links.PORTA_SITE
     url=d.get(porta,{}).get('url','')
     return '<details class="card" style="margin-top:30px"><summary style="cursor:pointer;color:#bbb">Link público deste portal</summary>'+(
         '<p><a rel="noopener noreferrer" href="'+esc(url)+'">'+esc(url)+'</a></p><small>Link registrado pelo gerenciador de túneis, ativo enquanto o túnel funcionar.</small>'

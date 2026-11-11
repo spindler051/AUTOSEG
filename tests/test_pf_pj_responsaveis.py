@@ -9,7 +9,6 @@ from officina.core import fluxo_os
 from officina.core import cadastros_v9 as cad
 from officina.core import prestadores_ext as ext
 from flavors.autoseg.modules import portal_v9
-from flavors.autoseg.modules import portal_cliente_v94
 from flavors.autoseg.scripts.CRIAR_CADASTROS_FICTICIOS_DEV import cpf_ficticio, cnpj_ficticio
 
 
