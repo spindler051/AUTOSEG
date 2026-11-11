@@ -30,9 +30,9 @@ def change_role(banco, principal, account_id: int, role: str):
         f"{previous.client_role} -> {role}"))
     # In-memory revocation cannot be part of SQLite transaction; it occurs
     # immediately after commit, before an HTTP response is emitted.
-    web_session.revoke_account(account_id)
+    web_session.revoke_account(banco, account_id)
     if result.client_user_id is not None:
-        web_session.revoke_identity("client", int(result.client_user_id))
+        web_session.revoke_identity(banco, "client", int(result.client_user_id))
     return result
 
 

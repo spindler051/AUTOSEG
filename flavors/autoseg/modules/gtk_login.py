@@ -275,10 +275,25 @@ class LoginWindow(Adw.ApplicationWindow):
     def _entrar_local_info(self, info):
         self._salvar_settings(ConnectionMode.LOCAL, self.settings.server_url,
                               info['email'])
+        from flavors.autoseg.modules import identity
+        from officina.application.contracts import SessionContext
+        ident = identity.load_identity(BANCO, 'provider', info['id'])
+        memberships = identity.memberships(BANCO, ident) if ident else ()
+        if len(memberships) != 1:
+            self._erro_local('Contexto do prestador indisponível.')
+            return
+        principal = identity.to_principal(ident, memberships[0])
+        context = SessionContext.from_identity(ident, memberships[0], principal)
+        info = {**info, 'role':context.role,
+                'context_label':context.context_label,
+                'permissions':context.permissions}
         sessao = Sessao(
             mode=ConnectionMode.LOCAL.value,
             prestador_id=info['id'], nome=info['nome'],
-            email=info['email'], admin=bool(info.get('admin')))
+            email=info['email'], admin=bool(info.get('admin')),
+            role=str(info.get('role') or ('admin' if info.get('admin') else 'employee')),
+            context_label=str(info.get('context_label') or 'Portal do prestador'),
+            permissions=frozenset(info.get('permissions') or ()))
         limpar_sessao()
         self.ao_entrar(sessao)
 
@@ -302,6 +317,9 @@ class LoginWindow(Adw.ApplicationWindow):
             try:
                 servico = HttpService(url, timeout=6)
                 resultado = servico.login(email, senha, lembrar)
+                # Fetch the shared context with the same desktop token.
+                resultado['prestador'] = {**resultado.get('prestador', {}),
+                                         **servico.me()}
                 GLib.idle_add(self._fim_login_servidor,
                               resultado, url, email, None)
             except (AppError, OSError, ValueError) as erro:
@@ -333,7 +351,10 @@ class LoginWindow(Adw.ApplicationWindow):
             admin=bool(pessoa.get('admin')),
             server_url=url,
             token=str(resultado.get('token') or ''),
-            expira_em=str(resultado.get('expira_em') or ''))
+            expira_em=str(resultado.get('expira_em') or ''),
+            role=str(pessoa.get('role') or ('admin' if pessoa.get('admin') else 'employee')),
+            context_label=str(pessoa.get('context_label') or 'Portal do prestador'),
+            permissions=frozenset(pessoa.get('permissions') or ()))
         if self.lembrar.get_active():
             salvar_sessao(sessao)
         else:

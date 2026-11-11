@@ -123,8 +123,8 @@ class RolesDatabaseTest(unittest.TestCase):
               patch.object(web_session,'revoke_identity') as revoke_identity):
             result=account_roles.change_role(self.db,actor,self.account,'sindico')
         self.assertEqual(result.client_role,'sindico')
-        revoke_account.assert_called_once_with(self.account)
-        revoke_identity.assert_called_once_with('client',self.uid)
+        revoke_account.assert_called_once_with(self.db,self.account)
+        revoke_identity.assert_called_once_with(self.db,'client',self.uid)
         with ext.db(self.db) as c:
             row=c.execute('SELECT acao,referencia FROM portal_auditoria ORDER BY id DESC LIMIT 1').fetchone()
         self.assertEqual(row['referencia'],str(self.account))

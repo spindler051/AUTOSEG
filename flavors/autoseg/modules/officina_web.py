@@ -33,9 +33,12 @@ def context_for(session, csrf: str = "") -> PageContext:
         role = "admin" if session.get("admin") else "employee"
         csrf = csrf or session.get("csrf", "")
     else:
-        kind = session.identity.kind
-        name = session.identity.display_name
-        role = session.principal.role
+        # Unified sessions provide the same DTO consumed by the desktop API.
+        # Older presentation mocks and legacy contexts retain their shape.
+        shared = getattr(session, 'context', None)
+        kind = shared.identity_kind if shared is not None else session.identity.kind
+        name = shared.display_name if shared is not None else session.identity.display_name
+        role = shared.role if shared is not None else session.principal.role
         csrf = csrf or session.csrf
     if kind == "client":
         return PageContext(BRAND, "client", name, BRAND.client_label,

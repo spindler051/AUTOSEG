@@ -192,6 +192,9 @@ class Janela(Adw.ApplicationWindow):
             ("estoque", "Materiais e estoque", "package-x-generic-symbolic"),
             ("conexao", "Conexões", "network-wired-symbolic"),
         ])
+        # A single shared helper projects the policy context for GTK navigation.
+        from officina.application.session import navigation_for_session
+        self.nav_itens = navigation_for_session(self.nav_itens, self.sessao)
         for _nome, titulo_texto, icone in self.nav_itens:
             linha = Adw.ActionRow(title=titulo_texto, icon_name=icone)
             linha.set_activatable(True)
@@ -2600,7 +2603,10 @@ class Aplicativo(Adw.Application):
             admin=bool(pessoa.get('admin')),
             server_url=sessao.server_url,
             token=sessao.token,
-            expira_em=str(pessoa.get('expira_em') or ''))
+            expira_em=str(pessoa.get('expira_em') or ''),
+            role=str(pessoa.get('role') or ('admin' if pessoa.get('admin') else 'employee')),
+            context_label=str(pessoa.get('context_label') or 'Portal do prestador'),
+            permissions=frozenset(pessoa.get('permissions') or ()))
         self._entrar(self.sessao)
         return True
 

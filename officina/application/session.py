@@ -24,13 +24,23 @@ class Sessao:
     server_url: str = ''
     token: str = ''
     expira_em: str = ''
+    role: str = ''
+    context_label: str = ''
+    permissions: frozenset[str] = frozenset()
+
+    def can(self, permission: str) -> bool:
+        return ('*' in self.permissions or permission in self.permissions
+                or any(p.endswith('.*') and permission.startswith(p[:-1])
+                       for p in self.permissions))
 
     @property
     def remote(self) -> bool:
         return self.mode == ConnectionMode.REMOTE.value
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        data['permissions'] = sorted(self.permissions)
+        return data
 
     @classmethod
     def from_dict(cls, dados: dict) -> 'Sessao | None':
@@ -48,9 +58,20 @@ class Sessao:
                 server_url=str(dados.get('server_url') or '').strip(),
                 token=str(dados.get('token') or ''),
                 expira_em=str(dados.get('expira_em') or ''),
+                role=str(dados.get('role') or ('admin' if dados.get('admin') else 'employee')),
+                context_label=str(dados.get('context_label') or 'Portal do prestador'),
+                permissions=frozenset(str(p) for p in (dados.get('permissions') or ())),
             )
         except (TypeError, ValueError):
             return None
+
+
+def navigation_for_session(items, sessao: Sessao | None):
+    """GTK navigation projection; requires explicit policy permission, never bool(admin)."""
+    if sessao is None:
+        return list(items)
+    return [item for item in items if item[0] != 'prestadores'
+            or sessao.can('provider.manage.all')]
 
 
 def session_path() -> Path:

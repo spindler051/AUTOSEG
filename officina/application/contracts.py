@@ -11,6 +11,56 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
 
+@dataclass(frozen=True, repr=False)
+class SessionContext:
+    """Non-secret identity and policy snapshot for web and desktop rendering."""
+
+    account_id: int | None
+    identity_kind: str
+    identity_id: int
+    display_name: str
+    role: str
+    provider_org_id: str | None
+    provider_id: int | None
+    client_id: int | None
+    client_org_ids: frozenset[int]
+    permissions: frozenset[str]
+    context_label: str
+
+    def __repr__(self) -> str:
+        # Display name and account associations do not belong in logs.
+        return 'SessionContext(<redacted>)'
+
+    @classmethod
+    def from_identity(cls, identity_record, membership, principal, *, account_id=None,
+                      policy=None):
+        from officina.application.policy import load_policy
+        policy = policy or load_policy()
+        if not principal.active or not membership.active:
+            raise PermissionError('Sessão inativa.')
+        return cls(
+            account_id=account_id,
+            identity_kind=identity_record.kind,
+            identity_id=identity_record.id,
+            display_name=identity_record.display_name,
+            role=principal.role,
+            provider_org_id=principal.organization_id,
+            provider_id=principal.provider_id,
+            client_id=principal.client_id,
+            client_org_ids=principal.client_org_ids,
+            permissions=frozenset(policy.roles.get(principal.role, ())),
+            context_label=('Portal do prestador' if identity_record.kind == 'provider'
+                           else 'Portal do cliente'),
+        )
+
+    def has(self, permission: str) -> bool:
+        """UI convenience only; services must enforce independently."""
+        if '*' in self.permissions or permission in self.permissions:
+            return True
+        return any(p.endswith('.*') and permission.startswith(p[:-1])
+                   for p in self.permissions)
+
+
 @dataclass(frozen=True)
 class Health:
     """Small readiness payload shared by local and remote transports."""

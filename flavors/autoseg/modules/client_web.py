@@ -131,7 +131,7 @@ def _refresh_session_cookie(handler, banco, session) -> str | None:
 
     old = web_cookie.token_from_headers(handler.headers)
     if old:
-        web_session.revoke(old)
+        web_session.revoke(banco, old)
     return web_cookie.set_cookie(
         token, secure=web_cookie.secure_request(handler.headers))
 
@@ -231,7 +231,7 @@ def dispatch_post(handler, banco, session, path: str, data: dict) -> None:
         from flavors.autoseg.modules import web_session
         token = web_cookie.token_from_headers(handler.headers)
         if token:
-            web_session.revoke(token)
+            web_session.revoke(banco, token)
         return handler.redir("/entrar", (
             web_cookie.clear_cookie(secure=web_cookie.secure_request(handler.headers)),
             handler.cookie("", True),

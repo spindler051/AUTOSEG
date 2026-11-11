@@ -32,7 +32,8 @@ from officina.application.contracts import (
 )
 from officina.application.local_service import LocalService
 from flavors.autoseg.modules import policy_shadow
-from flavors.autoseg.modules import prestador_auth
+from flavors.autoseg.modules import prestador_auth, identity
+from officina.application.contracts import SessionContext
 LOG = logging.getLogger('autoseg.api_desktop')
 PREFIX = '/api/v1/desktop'
 MAX_BODY = 32 * 1024 * 1024
@@ -717,6 +718,33 @@ def _login(handler, banco) -> bool:
     return True
 
 
+def _desktop_session_context(banco, info):
+    """Shared service mapping; desktop_sessoes authentication is unchanged."""
+    ident = identity.load_identity(banco, 'provider', int(info['id']))
+    memberships = identity.memberships(banco, ident) if ident else ()
+    if len(memberships) != 1:
+        raise PermissionError('Contexto do prestador indisponível.')
+    membership = memberships[0]
+    principal = identity.to_principal(ident, membership)
+    return SessionContext.from_identity(ident, membership, principal)
+
+
+def _context_api(context):
+    return {
+        'role': context.role,
+        'context_label': context.context_label,
+        'permissions': sorted(context.permissions),
+        'account_id': context.account_id,
+        'identity_kind': context.identity_kind,
+        'identity_id': context.identity_id,
+        'display_name': context.display_name,
+        'provider_org_id': context.provider_org_id,
+        'provider_id': context.provider_id,
+        'client_id': context.client_id,
+        'client_org_ids': sorted(context.client_org_ids),
+    }
+
+
 def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
     """Handle desktop API requests. Returns True when the prefix matched."""
     if path != PREFIX and not path.startswith(PREFIX + '/'):
@@ -744,7 +772,8 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
                   'Sessão expirada ou não autenticada.')
             return True
         if caminho == PREFIX + '/me' and method == 'GET':
-            _enviar(handler, 200, info)
+            context = _desktop_session_context(banco, info)
+            _enviar(handler, 200, {**info, **_context_api(context)})
             return True
         if caminho == PREFIX + '/logout' and method == 'POST':
             prestador_auth.revogar_sessao(
