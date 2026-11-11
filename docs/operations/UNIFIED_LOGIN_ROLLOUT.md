@@ -2,8 +2,8 @@
 
 **Scope:** the shared Officina Web origin used by providers and clients. `/login`
 is the only login route; `/entrar` was removed and returns `404`. With the flag
-off, `/login` serves the legacy provider login as the rollback path. The legacy
-client portal on port 8765 and the client login routes remain available.
+off, `/login` serves the legacy provider login as the rollback path. The retired client server is removed. With the flag off, client login is
+explicitly unavailable; no second origin or fallback is started.
 This is a staged, opt-in rollout and is **not** authorization to enable production
 without the security review and integration test suite.
 
@@ -13,8 +13,7 @@ without the security review and integration test suite.
    patch before applying the 5.5 compatibility patch. Confirm the actual
    `portal_prestador.py` diff and execute all relevant test suites.
 2. Take a verified backup of the current AUTOSEG SQLite database and relevant
-   configuration; confirm restore procedures on an isolated copy. Keep the
-   existing client login routes and the legacy client portal available.
+   configuration; confirm restore procedures on an isolated copy. Do not start any retired client server; rollback uses deploy/git only.
 3. On an isolated copy of the database, run `accounts.install(banco)` and
    `accounts.migrate_legacy(banco, dry_run=True)`. Review the migration report,
    especially identifier collisions, before any actual migration. No migration
@@ -47,10 +46,9 @@ without the security review and integration test suite.
    `SameSite=Strict`, and `Secure` for HTTPS/proxy traffic. Verify each identity
    sees only its authorized areas in the shared shell.
 4. Check `/entrar` returns `404` for `GET` and `POST`; no legacy form is served
-   from that address. Check `/entrar-pf` and the separate client portal are
-   unchanged.
-5. Check logout clears **both** browser cookies and invalidates both server
-   sessions. Confirm that replaying either old cookie does not authenticate.
+   from that address. Check `/cliente/entrar-pf` redirects to `/login` and retired routes return 410.
+5. Check logout clears the active unified cookie and revokes the session.
+   Replaying the cookie must not authenticate.
 6. Test provider password reset, deactivate, archive, and administrative-role
    change: each action must revoke all unified sessions for the affected
    provider. Verify the legacy password-hash and active-state protections still
@@ -65,15 +63,14 @@ without the security review and integration test suite.
 
 1. Set `AUTOSEG_UNIFIED_LOGIN=0` (or remove the variable) and restart the
    provider server. `/login` serves the legacy provider login and unified
-   cookies are ignored. `/entrar` remains removed (`404`); the legacy client
-   login routes and portal remain available.
+   cookies are ignored. `/entrar` remains removed (`404`); client login is unavailable
+   until unified login is re-enabled. No retired portal is started.
 2. The in-memory unified session map disappears on restart; clear browser
    cookies by using the logout flow or normal browser cookie controls.
 3. **Do not delete** `accounts` or other tables and **do not revert a database
    migration** as part of this flag-only rollback. The legacy login data stays
    available, and rollback does not rewrite financial or historical records.
-4. Verify provider login at `/login`, client portal, OS, PDFs, and finance after
-   rollback. Escalate any discrepancy for an authorized restore from the
+4. Verify provider login at `/login`, OS, PDFs and finance after rollback. Escalate any discrepancy for an authorized restore from the
    verified backup.
 
 ## Operational constraints
@@ -86,8 +83,7 @@ without the security review and integration test suite.
 - When the flag is off, `/login` serves the legacy provider form and the legacy
   `autosseg_session` cookie. When it is on, `/login` issues only
   `autosseg_unified`. Both browser cookies may coexist during migration, but
-  only the cookie for the active mode authenticates. The legacy client portal
-  on port 8765 is still a separate origin.
+  only the cookie for the active mode authenticates. No separate client-origin or client cookie is supported.
 - For migrated accounts, the legacy provider/client row remains the source of
   truth for password, role and activation. The `accounts` row is the account
   identifier/ownership record; native accounts use the account store. Unified

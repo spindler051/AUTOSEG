@@ -1,7 +1,7 @@
 # Interface do Portal do Prestador
 
 **Status:** interface padrão do Portal do Prestador no `develop`.
-**Escopo:** site do prestador. O Portal do Cliente mantém a interface antiga.
+**Escopo:** site do prestador. A visão cliente usa a mesma shell, com módulos e permissões próprios.
 **Não há mais alternância** entre interface clássica e experimental; a antiga
 foi removida.
 
@@ -147,7 +147,7 @@ As páginas de **Prestadores**, **Estoque**, **Caixa da empresa** e
 
 - Sem migração de schema ou dados.
 - Sem alteração de comportamento de OS, financeiro, estoque, feedback ou API.
-- O Portal do Cliente continua com a interface antiga.
+- A visão cliente usa a mesma shell com navegação reduzida.
 - A interface antiga do Portal do Prestador foi removida; não há rollback por
   cookie.
 

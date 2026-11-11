@@ -7,33 +7,71 @@
 ./autoseg check   # suíte + compilação + portal.js
 ```
 
-Estado em 2026-11-08: **343 testes, 0 falhas, 1 skip**.
-
 O comando cria uma pasta temporária e aponta `AUTOSEG_BASE`,
 `GESTAO_BANCO`, `AUTOSEG_USER_DATA`, `AUTOSEG_SERVER_DATA` e
 `AUTOSEG_LOCAL_DATA` para ela. Assim, um teste não abre o banco local nem o
 banco de produção.
 
-## Scripts de aceitação
+Para executar o discovery completo manualmente, sem tocar na MAIN:
 
 ```bash
-./autoseg test
-PYTHONPATH=. ./.venv/bin/python tests/test_portal_v4.py
-PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v5.py
-PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v6.py
-PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_v7.py
-PYTHONPATH=. ./.venv/bin/python tests/test_fluxo_cliente_v94.py
-PYTHONPATH=. ./.venv/bin/python tests/test_rev09_fluxo_os.py
-PYTHONPATH=. ./.venv/bin/python tests/test_importacao_yaml.py
+TMP=$(mktemp -d)
+AUTOSEG_DEV=1 AUTOSEG_SERVER_DATA="$TMP" AUTOSEG_USER_DATA="$TMP" \
+AUTOSEG_LOCAL_DATA="$TMP" PYTHONPATH=.:tests \
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Todos usam banco, arquivos e portas temporárias; não gravam nos bancos reais.
+**Estado em 2026-11-11:** 667 testes descobertos: 665 aprovados, 1 skip e
+1 falha **pré-existente** (`test_numero_publico.test_non_admin_cannot_reopen_pending_os`).
+O mesmo teste falha na base `e2cfec1`; não declare a suíte integralmente verde
+até essa negativa de autorização ser tratada em uma peça própria.
 
-## Testes históricos
+## P0 — uma origem, um login, uma shell
 
-`test_v9.py`, `test_v91.py`, `test_v92.py` e `test_v94_correcoes.py` descrevem
-a arquitetura anterior à separação dos portais e não devem ser usados como
-sinal de regressão. Eles ficam preservados como referência.
+Testes novos:
+
+- `tests/test_portal_unification.py` — origem única, aliases `308`, fluxos
+  retirados `410`, rotas migradas e negativas cliente × cliente/prestador.
+- `tests/test_p0_legacy_migrations.py` — comportamentos vigentes que antes
+  dependiam do portal removido: perfil, OS PF, chamados, organizações,
+  orçamento, links de origem e `410` sem escrita.
+- `tests/test_p0_review_documents.py` — relatório, nota fiscal e PDF de
+  chamado da própria OS; síndico/zelador, organização alheia e responsável
+  histórico sem papel convertido.
+
+Focada:
+
+```bash
+PYTHONPATH=.:tests .venv/bin/python -m unittest \
+  tests.test_portal_unification tests.test_officina_web tests.test_client_web \
+  tests.test_client_roles_http tests.test_login_web tests.test_login_compat \
+  tests.test_shared_shell tests.test_web_access tests.test_runtime_config \
+  tests.test_pf_pj_responsaveis tests.test_rev05_seguro -v
+```
+
+Regressão:
+
+```bash
+PYTHONPATH=.:tests .venv/bin/python -m unittest \
+  tests.test_rev12_correcoes tests.test_admin_parity tests.test_portal_v4 -v
+```
+
+## Testes legados
+
+Os scripts antigos que dependiam de `ServidorPortal`/`portal_cliente_v94` ou
+do autocadastro removido saíram do discovery. A cobertura vigente foi migrada
+para os testes P0 acima; os fluxos B1–B3 não são restaurados.
+
+Saíram: `test_autoseg_http_novo.py`, `test_cadastro_v951.py`,
+`test_fluxo_cliente_v94.py`, `test_fluxo_v5.py`, `test_fluxo_v6.py`,
+`test_fluxo_v7.py`, `test_links_cliente_952.py`, `test_pf_pj_http.py`,
+`test_rev03_http.py`, `test_rev09_fluxo_os.py`, `test_v94_correcoes.py` e
+`test_v953_http.py`. A decisão de cada um está no `NOTES.md` da entrega da
+revisão.
+
+Continuam válidos: `test_pf_pj_responsaveis.py` (regras de responsável e
+histórico organizacional) e `test_rev05_seguro.py` (túneis DEV na porta
+`8866`).
 
 ## Auditores
 
@@ -46,6 +84,6 @@ sinal de regressão. Eles ficam preservados como referência.
 
 - backup do banco e dos anexos;
 - smoke manual no macOS;
-- portais do cliente e do prestador;
+- login de prestador e cliente na origem única;
 - PDF e e-mail de uma OS de teste;
 - rollback descrito quando houver mudança de schema ou dados.

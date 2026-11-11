@@ -387,33 +387,38 @@ def listar_os_organizacao(banco, organizacao_id, usuario_id):
     with ext.db(banco) as c:
         if not responsavel_ativo(c,usuario_id,organizacao_id):
             raise PermissionError('Apenas o responsável nomeado pela AUTOSEG pode consultar as OS do local.')
-        org=c.execute('SELECT id,cliente_id,nome,tipo FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
-        if not org:raise ValueError('Organização não encontrada.')
-        n=0
-        compat=True
-        if org['cliente_id'] is not None:
-            n=c.execute('''SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=? AND mesclado_em IS NULL''',
-                        (org['cliente_id'],)).fetchone()[0]
-            cliente=c.execute('SELECT tipo_pessoa,nome,documento FROM clientes WHERE id=?',
-                              (org['cliente_id'],)).fetchone()
-            doc_org=digitos(c.execute('SELECT cnpj FROM v9_organizacoes WHERE id=?',
-                                     (organizacao_id,)).fetchone()['cnpj'])
-            doc_cliente=digitos(cliente['documento']) if cliente else ''
-            compat=bool(cliente and cliente['tipo_pessoa']=='Jurídica' and (
-                (len(doc_org)==14 and len(doc_cliente)==14 and doc_org==doc_cliente) or
-                (not doc_org and not doc_cliente and
-                 org['nome'].strip().casefold()==cliente['nome'].strip().casefold())))
-        usar_cliente=bool(org['cliente_id'] is not None and n==1 and compat)
-        registros=c.execute('''SELECT os.id,os.numero_os,os.status,os.descricao,os.data_abertura,
-            ch.id chamado_id,ch.usuario_id,u.nome solicitante
-            FROM ordens_servico os
-            LEFT JOIN v9_chamados ch ON ch.os_id=os.id AND ch.organizacao_id=?
-            LEFT JOIN v9_usuarios u ON u.id=ch.usuario_id
-            WHERE ch.id IS NOT NULL OR (?=1 AND os.cliente_id=?)
-            ORDER BY os.id DESC''',
-            (organizacao_id,int(usar_cliente),org['cliente_id'] if org['cliente_id'] is not None else -1)).fetchall()
-        return {'organizacao':dict(org),'os':[dict(r) for r in registros],
-                'cadastro_ambiguo':bool(org['cliente_id'] is not None and (n>1 or not compat))}
+        return _os_organizacao_rows(c, organizacao_id)
+
+
+def _os_organizacao_rows(c, organizacao_id):
+    """Unrestricted *query*; caller must authorize the organization before use."""
+    org=c.execute('SELECT id,cliente_id,nome,tipo FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
+    if not org:raise ValueError('Organização não encontrada.')
+    n=0
+    compat=True
+    if org['cliente_id'] is not None:
+        n=c.execute('''SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=? AND mesclado_em IS NULL''',
+                    (org['cliente_id'],)).fetchone()[0]
+        cliente=c.execute('SELECT tipo_pessoa,nome,documento FROM clientes WHERE id=?',
+                          (org['cliente_id'],)).fetchone()
+        doc_org=digitos(c.execute('SELECT cnpj FROM v9_organizacoes WHERE id=?',
+                                 (organizacao_id,)).fetchone()['cnpj'])
+        doc_cliente=digitos(cliente['documento']) if cliente else ''
+        compat=bool(cliente and cliente['tipo_pessoa']=='Jurídica' and (
+            (len(doc_org)==14 and len(doc_cliente)==14 and doc_org==doc_cliente) or
+            (not doc_org and not doc_cliente and
+             org['nome'].strip().casefold()==cliente['nome'].strip().casefold())))
+    usar_cliente=bool(org['cliente_id'] is not None and n==1 and compat)
+    registros=c.execute('''SELECT os.id,os.numero_os,os.status,os.descricao,os.data_abertura,
+        ch.id chamado_id,ch.usuario_id,u.nome solicitante
+        FROM ordens_servico os
+        LEFT JOIN v9_chamados ch ON ch.os_id=os.id AND ch.organizacao_id=?
+        LEFT JOIN v9_usuarios u ON u.id=ch.usuario_id
+        WHERE ch.id IS NOT NULL OR (?=1 AND os.cliente_id=?)
+        ORDER BY os.id DESC''',
+        (organizacao_id,int(usar_cliente),org['cliente_id'] if org['cliente_id'] is not None else -1)).fetchall()
+    return {'organizacao':dict(org),'os':[dict(r) for r in registros],
+            'cadastro_ambiguo':bool(org['cliente_id'] is not None and (n>1 or not compat))}
 
 
 def autorizar_pdf_os_organizacao(banco, organizacao_id, usuario_id, os_id):

@@ -84,77 +84,83 @@ class MelhoriasRev12(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    # ---------------------------------------------------------------- 1
-    def test_alteracao_de_senha_http(self):
-        from flavors.autoseg.modules.servidor_web import ServidorPortal
-        servidor = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
+    def _client_portal(self, document='52998224725', password='Senha-Boa-123456'):
+        """Provision converted identity and use only the unified HTTP origin."""
+        from unittest.mock import patch
+        from flavors.autoseg.modules import accounts
+        from flavors.autoseg.modules.portal_prestador import PortalPrestador
+        uid = cad.cadastrar_usuario(self.db, 'Cliente de teste', document,
+                                    '51999998888', password, 'cliente-rev12@example.test')
+        accounts.install(self.db)
+        accounts.migrate_legacy(self.db, dry_run=False)
+        flag = patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '1'})
+        flag.start()
+        self.addCleanup(flag.stop)
+        servidor = PortalPrestador(self.db, '127.0.0.1', 0)
         servidor.iniciar()
         self.addCleanup(servidor.parar)
         base = f'http://127.0.0.1:{servidor.porta}'
         cliente = browser()
-        documento = cpf(345678901)
-        status, html = req(cliente, base, '/cliente/cadastrar', {
-            'cpf': documento, 'senha': 'Senha-Antiga-123', 'confirmar_senha': 'Senha-Antiga-123'})
+        status, html = req(cliente, base, '/login',
+                           {'identificador': document, 'senha': password})
         self.assertEqual(status, 200)
+        self.assertIn('Minhas ordens de serviço', html)
+        return uid, cliente, base
+
+    # ---------------------------------------------------------------- 1
+    def test_alteracao_de_senha_http(self):
+        document, old, new = '52998224725', 'Senha-Antiga-123', 'Senha-Nova-456'
+        _, cliente, base = self._client_portal(document, old)
         status, html = req(cliente, base, '/cliente/senha')
         self.assertEqual(status, 200)
         token = csrf(html)
         status, html = req(cliente, base, '/cliente/senha', {
-            'csrf': token, 'senha_atual': 'errada', 'nova_senha': 'Senha-Nova-456',
-            'confirmar_senha': 'Senha-Nova-456'})
-        self.assertEqual(status, 200)
+            'csrf': token, 'senha_atual': 'errada', 'nova_senha': new,
+            'confirmar_senha': new})
+        self.assertEqual(status, 409)
         self.assertIn('Senha atual incorreta', html)
         status, html = req(cliente, base, '/cliente/senha', {
-            'csrf': token, 'senha_atual': 'Senha-Antiga-123', 'nova_senha': 'Senha-Nova-456',
-            'confirmar_senha': 'Senha-Nova-456'})
+            'csrf': token, 'senha_atual': old, 'nova_senha': new,
+            'confirmar_senha': new})
         self.assertEqual(status, 200)
-        self.assertIn('Senha alterada', html)
+        self.assertIn('Officina Web', html)
         outro = browser()
-        status, html = req(outro, base, '/cliente/entrar-pf',
-                           {'cpf': documento, 'senha': 'Senha-Antiga-123'})
-        self.assertIn('incorretos', html)
-        status, html = req(outro, base, '/cliente/entrar-pf',
-                           {'cpf': documento, 'senha': 'Senha-Nova-456'})
-        self.assertEqual(status, 200)
-        self.assertIn('Meu painel', html)
+        _, html = req(outro, base, '/login', {'identificador': document, 'senha': old})
+        self.assertNotIn('Minhas ordens de serviço', html)
+        _, html = req(outro, base, '/login', {'identificador': document, 'senha': new})
+        self.assertIn('Minhas ordens de serviço', html)
 
     # ---------------------------------------------------------------- 2
     def test_chamado_condominio_exige_nome_e_telefone(self):
-        from flavors.autoseg.modules.servidor_web import ServidorPortal
-        servidor = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
-        servidor.iniciar()
-        self.addCleanup(servidor.parar)
-        base = f'http://127.0.0.1:{servidor.porta}'
-        cliente = browser()
-        documento = cpf(445678901)
-        req(cliente, base, '/cliente/cadastrar', {
-            'cpf': documento, 'senha': 'Senha-Boa-123456', 'confirmar_senha': 'Senha-Boa-123456'})
+        _, cliente, base = self._client_portal()
         dados_cli = {k: '' for k in neg.CLIENTE_CAMPOS}
-        dados_cli.update(nome='Condomínio Teste', tipo_pessoa='Jurídica', status='Ativo',
-                         documento='12345678000195')
+        dados_cli.update(nome='Condomínio Teste', tipo_pessoa='Jurídica',
+                         status='Ativo', documento='12345678000195')
         cid = neg.cliente_salvar(self.db, dados_cli, 0)
         with ext.db(self.db) as c:
-            org = c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?', (cid,)).fetchone()['id']
+            org = c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',
+                            (cid,)).fetchone()['id']
         status, html = req(cliente, base, f'/cliente/chamado/novo?org={org}')
+        self.assertEqual(status, 200)
         token = csrf(html)
         self.assertIn('solicitante_telefone', html)
-        base_form = {'csrf': token, 'org_id': str(org), 'papel': 'Morador', 'unidade': 'Apto 101',
-                     'urgencia': 'Normal', 'solicitante_nome': 'Cliente Teste',
-                     'descricao': 'Portão da garagem não abre corretamente.'}
-        status, html = req(cliente, base, '/cliente/chamado/novo', base_form)
-        self.assertEqual(status, 400)
+        form = {'csrf': token, 'org_id': str(org), 'papel': 'Morador',
+                'unidade': 'Apto 101', 'urgencia': 'Normal',
+                'solicitante_nome': 'Cliente Teste',
+                'descricao': 'Portão da garagem não abre corretamente.'}
+        status, html = req(cliente, base, '/cliente/chamado/novo', form)
+        self.assertEqual(status, 409)
         self.assertIn('telefone', html.lower())
-        base_form.update(solicitante_nome='Cliente Teste', solicitante_telefone='51999998888')
-        status, html = req(cliente, base, '/cliente/chamado/novo', base_form)
+        form['solicitante_telefone'] = '51999998888'
+        status, html = req(cliente, base, '/cliente/chamado/novo', form)
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             chamado = c.execute('SELECT * FROM v9_chamados ORDER BY id DESC LIMIT 1').fetchone()
             self.assertEqual(chamado['solicitante_nome'], 'Cliente Teste')
             self.assertEqual(chamado['solicitante_telefone'], '51999998888')
-            os_row = c.execute('SELECT observacoes FROM ordens_servico WHERE id=?',
-                               (chamado['os_id'],)).fetchone()
-            self.assertIn('Cliente Teste', os_row['observacoes'])
-            self.assertIn('51999998888', os_row['observacoes'])
+            obs = c.execute('SELECT observacoes FROM ordens_servico WHERE id=?',
+                            (chamado['os_id'],)).fetchone()['observacoes']
+            self.assertIn('51999998888', obs)
 
     # ---------------------------------------------------------------- 3/6
     def test_multiplos_destinatarios_e_bcc(self):
@@ -310,24 +316,16 @@ class MelhoriasRev12(unittest.TestCase):
             self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                        (row['id'],)).fetchone()['status'], 'Aberta')
 
-    def test_logo_e_icone_nos_dois_portais(self):
+    def test_logo_e_icone_na_origem_unica(self):
         from flavors.autoseg.modules.portal_prestador import PortalPrestador
-        from flavors.autoseg.modules.servidor_web import ServidorPortal
-        pid = ext.cadastrar(self.db, 'Prestador Logo', 'logo@example.org', 'senha-bem-segura-2026')
-        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
-        dados.update(nome='Cliente Logo', tipo_pessoa='Física', status='Ativo')
-        neg.cliente_salvar(self.db, dados, pid)
-        cs = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
-        cs.iniciar(); self.addCleanup(cs.parar)
-        ps = PortalPrestador(self.db, '127.0.0.1', 0)
-        ps.iniciar(); self.addCleanup(ps.parar)
-        for base in (f'http://127.0.0.1:{cs.porta}', f'http://127.0.0.1:{ps.servidor.server_port}'):
-            status, logo = req(browser(), base, '/logo.png', binary=True)
+        servidor = PortalPrestador(self.db, '127.0.0.1', 0)
+        servidor.iniciar()
+        self.addCleanup(servidor.parar)
+        base = f'http://127.0.0.1:{servidor.porta}'
+        for rota in ('/logo.png', '/icone.png'):
+            status, image = req(browser(), base, rota, binary=True)
             self.assertEqual(status, 200)
-            self.assertTrue(logo.startswith(b'\x89PNG'))
-            status, icone = req(browser(), base, '/icone.png', binary=True)
-            self.assertEqual(status, 200)
-            self.assertTrue(icone.startswith(b'\x89PNG'))
+            self.assertTrue(image.startswith(b'\x89PNG'))
 
     def test_yaml_modelo_com_instrucoes_e_saida_estrita(self):
         from flavors.autoseg.modules import importacao_yaml as iy
@@ -339,68 +337,6 @@ class MelhoriasRev12(unittest.TestCase):
         self.assertEqual(dados['v9_diagnostico'], 'Diagnóstico X')
         with self.assertRaises(ValueError):
             iy.relatorio('ruim.yaml', b'versao: 1\ninstrucoes: {}\nos: {}\n')
-
-    def test_pj_publico_sem_login_aceitar_e_recusar(self):
-        from flavors.autoseg.modules.portal_prestador import PortalPrestador
-        from flavors.autoseg.modules.servidor_web import ServidorPortal
-        pid = ext.cadastrar(self.db, 'Prestador PJ', 'pj@example.org', 'senha-bem-segura-2026')
-        dados = {k: '' for k in neg.CLIENTE_CAMPOS}
-        dados.update(nome='Condomínio Público', tipo_pessoa='Jurídica', status='Ativo',
-                     documento='12345678000195')
-        cid = neg.cliente_salvar(self.db, dados, pid)
-        with ext.db(self.db) as c:
-            org = c.execute('SELECT id,nome,tipo FROM v9_organizacoes WHERE cliente_id=?', (cid,)).fetchone()
-        cliente_srv = ServidorPortal(caminho_banco=self.db, porta=0, host='127.0.0.1')
-        cliente_srv.iniciar(); self.addCleanup(cliente_srv.parar)
-        prestador_srv = PortalPrestador(self.db, '127.0.0.1', 0)
-        prestador_srv.iniciar(); self.addCleanup(prestador_srv.parar)
-        base_cli = f'http://127.0.0.1:{cliente_srv.porta}'
-        base_pre = f'http://127.0.0.1:{prestador_srv.servidor.server_port}'
-        visitante = browser()
-        status, html = req(visitante, base_cli, '/pj-rapido')
-        self.assertEqual(status, 200)
-        self.assertIn('Condomínio Público', html)
-        status, html = req(visitante, base_cli, '/pj-rapido/enviar', {
-            'organizacao_texto': f'{org["id"]} — {org["nome"]} ({org["tipo"]})',
-            'nome': 'Visitante Público', 'telefone': '51999998888',
-            'descricao': 'Solicitação pública de teste para o condomínio.',
-            'urgencia': 'Normal', 'website': ''})
-        self.assertEqual(status, 200)
-        self.assertIn('PJ-', html)
-        self.assertIn('wa.me', html)
-        with ext.db(self.db) as c:
-            req_row = c.execute('SELECT * FROM pj_solicitacoes_publicas ORDER BY id DESC LIMIT 1').fetchone()
-            self.assertEqual(req_row['status'], 'Aguardando verificação')
-            self.assertEqual(req_row['telefone'], '51999998888')
-            sid = req_row['id']
-        prestador = browser()
-        status, html = req(prestador, base_pre, '/login',
-                           {'email': 'pj@example.org', 'senha': 'senha-bem-segura-2026'})
-        token = csrf(html)
-        status, html = req(prestador, base_pre, '/pj-publicas')
-        self.assertEqual(status, 200)
-        self.assertIn('Visitante Público', html)
-        status, html = req(prestador, base_pre, f'/pj-publicas/{sid}/aceitar', {'csrf': token})
-        self.assertEqual(status, 200)
-        with ext.db(self.db) as c:
-            req_row = c.execute('SELECT * FROM pj_solicitacoes_publicas WHERE id=?', (sid,)).fetchone()
-            self.assertEqual(req_row['status'], 'Aceito')
-            self.assertTrue(req_row['os_id'])
-            os_row = c.execute('SELECT status,origem FROM ordens_servico WHERE id=?', (req_row['os_id'],)).fetchone()
-            self.assertEqual(os_row['status'], 'Aberta')
-            self.assertIn('público', os_row['origem'].lower())
-        status, html = req(visitante, base_cli, '/pj-rapido/enviar', {
-            'organizacao_texto': f'{org["id"]} — {org["nome"]} ({org["tipo"]})',
-            'nome': 'Outro Visitante', 'telefone': '51999997777',
-            'descricao': 'Segunda solicitação pública para recusa.', 'urgencia': 'Normal', 'website': ''})
-        with ext.db(self.db) as c:
-            sid2 = c.execute('SELECT id FROM pj_solicitacoes_publicas ORDER BY id DESC LIMIT 1').fetchone()['id']
-        status, html = req(prestador, base_pre, f'/pj-publicas/{sid2}/recusar',
-                           {'csrf': token, 'motivo': 'Pedido sem detalhes suficientes'})
-        self.assertEqual(status, 200)
-        with ext.db(self.db) as c:
-            self.assertEqual(c.execute('SELECT status FROM pj_solicitacoes_publicas WHERE id=?',
-                                       (sid2,)).fetchone()['status'], 'Recusado')
 
     def test_form_os_um_rascunho_e_nota_apos_fotos(self):
         from flavors.autoseg.modules.portal_prestador import PortalPrestador

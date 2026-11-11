@@ -4,8 +4,7 @@
 
 ## Regra
 
-Permissão pertence ao **papel**, não à superfície. GTK, Portal do Prestador e
-Portal do Cliente não devem conceder poderes diferentes para o mesmo papel.
+Permissão pertence ao **papel**, não à superfície. GTK e Officina Web (visões prestador e cliente) não devem conceder poderes diferentes para o mesmo papel.
 
 **Paridade não é duplicação:** a mesma tela deve compartilhar contrato de
 campos, ações, permissões, validações e textos, mas renderizar com widgets
@@ -18,7 +17,7 @@ Papéis atuais:
 |---|---|---|
 | **Admin** | GTK e Portal do Prestador | administrar a organização, prestadores, estoque, caixa, configuração e OS |
 | **Funcionário/prestador** | GTK e Portal do Prestador | trabalhar nas OS próprias ou em que participa; sem administração |
-| **Cliente** | Portal do Cliente e `/login` do site (flag) | próprias solicitações/OS, documentos e dados |
+| **Cliente** | Officina Web `/login` (flag) | próprias solicitações/OS, documentos e dados |
 
 Admin e funcionário usam a mesma tabela `prestadores`; a diferença é o vínculo
 em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
@@ -31,23 +30,23 @@ em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
 - clientes, OS, histórico, financeiro, PJ;
 - prestadores, catálogo, composição, estoque, caixa da empresa;
 - notas fiscais e e-mails (lista e preparação);
-- conexão/servidor e controles dos portais locais.
+- conexão/servidor e controle do site único.
 
 **Site único (Officina Web, flag ligada)**
 
 - login `/login` para prestador e cliente;
 - mesma shell e navegação filtrada por contexto/permissão;
 - cliente vê as próprias OS, documentos/PDF e pedido de serviço;
-- o portal antigo do cliente na 8765 continua disponível.
+- o portal antigo do cliente foi removido na P0.
 
-**Portal do Prestador**
+**Visão prestador do Officina Web**
 
 - login de prestador;
 - clientes, OS, catálogo, financeiro, PJ, notas fiscais, e-mails e histórico;
 - prestadores, estoque, caixa da empresa e composição de valores (admin);
 - sem conexão/servidor, que é configuração do cliente desktop.
 
-**Portal do Cliente**
+**Visão cliente do Officina Web**
 
 - login por CPF;
 - solicitações, acompanhamento e documentos do próprio cliente;
@@ -61,7 +60,7 @@ espelhado. A exceção é **Conexões**, que é configuração do cliente deskto
 uma função de negócio do servidor.
 
 O GTK continua sem login de cliente; o site já aceita cliente com a flag e o
-Portal do Cliente antigo segue separado na 8765.
+Não existe segunda origem do cliente.
 
 ## Lacunas atuais
 

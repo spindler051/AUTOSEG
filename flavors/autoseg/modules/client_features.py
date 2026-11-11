@@ -9,6 +9,7 @@ from flavors.autoseg.modules import cliente_fluxo_v94 as pf, client_service
 from officina.core import cadastros_v9 as cad, catalogo_servicos as catalogo
 from officina.core import prestadores_ext as ext, fluxo_os as fluxo
 from officina.application import work_item_access as access
+from officina.application.object_policy import ObjectPolicy, Resource
 from pathlib import Path
 
 
@@ -118,11 +119,36 @@ def create_call(banco, session, data):
     return pf.registrar_chamado_org(banco, uid(session), data)
 
 
+def _organization_grant(banco, session, org_id):
+    """Role-derived relationship and current policy are the only authority."""
+    uid(session)
+    org_id = int(org_id)
+    principal = session.principal
+    if (principal.role not in ('sindico', 'zelador')
+            or org_id not in principal.client_org_ids):
+        raise PermissionError('Organização indisponível.')
+    ObjectPolicy().require(principal, 'view', Resource(
+        'work_item', organization_id='autoseg', client_org_id=org_id))
+    return org_id
+
+
 def organization_history(banco, session, org_id):
-    user_id = uid(session)
-    # This service validates the explicit responsible appointment, not a
-    # free-text role supplied through the UI.
-    return cad.listar_os_organizacao(banco, int(org_id), user_id)
+    org_id = _organization_grant(banco, session, org_id)
+    # A single domain query supplies the list; every visible OS is checked by
+    # the same object policy used by its PDF endpoint. No v9_responsaveis-only grant.
+    with ext.db(banco) as connection:
+        data = cad._os_organizacao_rows(connection, org_id)
+    visible = []
+    for item in data['os']:
+        try:
+            resource = access.resource_for_work_item(banco, int(item['id']))
+            if resource.client_org_id != org_id:
+                continue
+            access.require_work_item(banco, session.principal, int(item['id']), 'view')
+        except PermissionError:
+            continue
+        visible.append(item)
+    return dict(data, os=visible)
 
 
 def linked_organizations(banco, session):
@@ -136,13 +162,27 @@ def linked_organizations(banco, session):
 
 
 def approved_organizations(banco, session):
-    user_id = uid(session)
+    # A historical appointment is not a grant: only the converted role and its
+    # current organization memberships authorize the organization-wide link.
+    uid(session)
+    if session.principal.role not in ('sindico', 'zelador'):
+        return ()
+    allowed = sorted(session.principal.client_org_ids)
+    if not allowed:
+        return ()
     with ext.db(banco) as c:
-        rows = c.execute('''SELECT o.id,o.nome,o.tipo,r.papel FROM v9_responsaveis r
-            JOIN v9_organizacoes o ON o.id=r.organizacao_id
-            WHERE r.usuario_id=? AND o.mesclado_em IS NULL ORDER BY o.nome''',
-            (user_id,)).fetchall()
-    return tuple(dict(r) for r in rows)
+        marks = ','.join('?' for _ in allowed)
+        rows = c.execute('SELECT id,nome,tipo FROM v9_organizacoes '
+                         f'WHERE id IN ({marks}) AND mesclado_em IS NULL ORDER BY nome',
+                         allowed).fetchall()
+    result = []
+    for row in rows:
+        try:
+            _organization_grant(banco, session, int(row['id']))
+        except PermissionError:
+            continue
+        result.append(dict(row))
+    return tuple(result)
 
 
 def quote_services(banco, session):
@@ -190,12 +230,11 @@ def report_for_call(banco, session, call_id):
 
 
 def report_for_organization(banco, session, org_id, work_id):
-    # Verify actual role/tenant against the current policy before metadata.
-    uid(session)
-    org_id, work_id = int(org_id), int(work_id)
-    if org_id not in session.principal.client_org_ids:
-        raise PermissionError('Documento indisponível.')
-    resource = access.resource_for_work_item(banco, work_id)
-    if resource.client_org_id != org_id:
+    org_id = _organization_grant(banco, session, org_id)
+    work_id = int(work_id)
+    # Require both the same scoped list relationship and document-level
+    # authorization. A responsible customer is never promoted silently.
+    history = organization_history(banco, session, org_id)
+    if not any(int(item['id']) == work_id for item in history['os']):
         raise PermissionError('Documento indisponível.')
     return report_for_work(banco, session, work_id)

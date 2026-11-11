@@ -200,7 +200,7 @@ officina-server --api
   sem HTML, sem GUI
 
 officina-web
-  GUI do site: Portal do Prestador + Portal do Cliente
+  GUI do site: Officina Web único com visões prestador e cliente
   hoje ainda compartilha o processo com a API; separação futura
 ```
 

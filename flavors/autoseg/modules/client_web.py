@@ -27,6 +27,8 @@ def home(handler, banco, session) -> None:
             + '</ul><a href="/solicitar">Solicitar serviço</a></section>'
             '<section class="card"><h2>Meus chamados</h2><ul>'
             + ''.join(_call_link(call) for call in calls) + '</ul></section>')
+    from flavors.autoseg.modules import client_extended_web
+    body += client_extended_web.extra_home(banco, session)
     officina_web.page(handler, "Painel do cliente", body, session)
 
 

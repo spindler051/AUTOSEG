@@ -1,7 +1,7 @@
 # Provider portal feedback channel — DEV design
 
 **Status:** implemented as `9.6.0-dev.26` and promoted to MAIN after validation.
-**Scope:** Portal do Prestador only. The Portal do Cliente must not show the
+**Scope:** Portal do Prestador only. The client view of Officina Web must not show the
 button, the dialog or the routes.
 **Product goal:** give providers a direct, low-friction channel to report
 confusion, bugs and improvement ideas, optionally ask the configured AI provider

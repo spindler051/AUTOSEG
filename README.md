@@ -2,7 +2,7 @@
 
 AUTOSEG is a work-management application for security and automation
 professionals: clients, service orders, maintenance, budgets, technical reports,
-finance, stock and client/provider portals.
+finance, stock and one shared Officina Web site.
 
 The desktop application uses **GTK4 + libadwaita**
 (`flavors/autoseg/modules/gtk_app.py`). Officina Web serves providers and
@@ -24,8 +24,9 @@ Versão de desenvolvimento: `9.6.0-dev.73` (`main`).
   single “E-mail, CPF ou telefone” field.
 - The retired ID+senha history, anonymous PJ intake and customer self-registration return 410 Gone.
 - SQLite storage outside the repository, in local or server mode.
-- Focused suite: **256 tests OK**; portal regression: **65 OK, 1 skip**; legacy
-  client portal: **3 OK**; comment audit: **0/0**.
+- The active suite includes P0 migration and role-scoped PDF regressions.
+  Run the isolated discovery command in `TESTES.md` for current results;
+  historical counts from the retired two-origin portal are not applicable.
 - `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` and `AUTOSEG_WEB_SESSION_DURABLE` remain
   opt-in. Production activation is pending the TOCTOU/security review.
 - Brazilian fiscal/payment features are still part of the AUTOSEG application,

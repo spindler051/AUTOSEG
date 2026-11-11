@@ -126,7 +126,7 @@ slice migration. One module at a time.
 | `produtividade_os.py` | `productivity.py` | commissions/rateios |
 | `portal_negocios.py` | `business_rules.py` or `portal_business.py` | high coupling |
 | `portal_prestador.py` | `provider_portal.py` | public routes unchanged |
-| `servidor_web.py` | `client_portal_server.py` | public routes unchanged |
+| `servidor_web.py` (retired in P0) | removed | client routes moved to `client_web.py` |
 | `portal_cliente_v94.py` | `client_portal_v94.py` | public routes unchanged |
 | `cliente_fluxo_v94.py` | `client_flow_v94.py` | public routes unchanged |
 | `pdf_cliente_v9.py` | `client_pdf_v9.py` | PDF output unchanged |

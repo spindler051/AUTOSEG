@@ -26,7 +26,7 @@ Antes de `main`:
 
 1. suíte não visual verde;
 2. scripts de aceitação verdes;
-3. smoke manual no macOS e nos dois portais;
+3. smoke manual no macOS e nas duas visões do Officina Web;
 4. backup e rollback descritos;
 5. revisão humana externa quando a mudança for N3/N4;
 6. `CHANGELOG.md` atualizado.

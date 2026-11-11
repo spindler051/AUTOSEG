@@ -21,8 +21,7 @@ Este é o ponto de retomada. O índice completo fica em
 ## O que está funcionando
 
 - App desktop GTK4/libadwaita em macOS e Linux.
-- Site único do Officina Web para prestador e cliente; o portal antigo do
-  cliente continua em processo separado na 8765.
+- Site único do Officina Web para prestador e cliente; sem segundo processo web.
 - Banco SQLite fora do repositório; API headless e GUI do site em comandos separados.
 - Cadastros, OS, materiais, fotos, relatórios, PDF, financeiro, estoque,
   orçamento, notas fiscais e e-mails em rascunho.
@@ -139,7 +138,7 @@ Este é o ponto de retomada. O índice completo fica em
 ./autoseg dev        # app DEV
 ./autoseg app-local  # local-only, sem portas
 ./autoseg server     # servidor de dados DEV (8766)
-./autoseg site       # GUI do site DEV (8865/8866)
+./autoseg site       # GUI do site DEV (8866)
 ./autoseg api        # servidor headless de produção
 ./autoseg paths      # onde ficam banco e dados
 ```
