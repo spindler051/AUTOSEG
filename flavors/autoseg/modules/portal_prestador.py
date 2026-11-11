@@ -3537,8 +3537,12 @@ class PortalPrestador:
 
             def do_GET(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
+                if path == '/entrar':
+                    return self.erro('Página não encontrada.', 404)
                 customer = login_web.client_session(self, banco)
                 if customer is not None:
+                    if path == '/login':
+                        return self.redir('/')
                     from flavors.autoseg.modules.autoseg_web_navigation import canonical_client_path
                     alias=canonical_client_path(path)
                     if alias is not None:
@@ -3555,7 +3559,7 @@ class PortalPrestador:
                         LOG.warning('Falha no serviço do cliente.')
                         return self.erro('Falha interna.',500)
                     if path not in ('/logo.png','/icone.png','/favicon.ico',
-                                    '/static/portal.js','/entrar'):
+                                    '/static/portal.js','/login'):
                         return self.erro('Acesso não autorizado.',403)
                 if path.startswith('/os/'):
                     try:
@@ -3575,10 +3579,12 @@ class PortalPrestador:
                     return self.redir(redirecionar + (('?' + query) if query else ''))
                 path = self._normalizar_os(path)
                 try:
-                    if path=='/entrar':
-                        if not login_flags.unified_login_enabled(banco):
-                            return self.redir('/login')
-                        return login_web.render_login(self)
+                    if path=='/login':
+                        if self.sessao():
+                            return self.redir('/')
+                        if login_flags.unified_login_enabled(banco):
+                            return login_web.render_login(self)
+                        return self.login()
                     if path=='/api/versao':
                         dados=json.dumps({'app':'Gestão de Serviços — AUTOSEG','versao':VERSAO_PORTAL,
                                           'site':'portal do prestador',
@@ -3606,7 +3612,7 @@ class PortalPrestador:
                         return self.erro('Imagem não encontrada.',404,self.sessao())
                     if path == '/cliente' or path.startswith('/cliente/'):
                         if login_flags.unified_login_enabled(banco):
-                            return self.redir('/' if self.sessao() else '/entrar')
+                            return self.redir('/' if self.sessao() else '/login')
                         return self.erro('Página não encontrada.', 404)
                     if path == '/pj' or path.startswith('/pj/'):
                         return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
@@ -3846,13 +3852,17 @@ class PortalPrestador:
             def do_POST(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 path = self._normalizar_os(path)
+                if path == '/entrar':
+                    return self.erro('Página não encontrada.', 404)
                 quer_json = ('application/json' in self.headers.get('Accept','')
                              or self.headers.get('X-Requested-With') == 'XMLHttpRequest')
                 if not self.origem_permitida():
                     return self.erro('Origem da requisição inválida.',403,self.sessao())
                 try:
                     customer = login_web.client_session(self, banco)
-                    if customer is not None and path != '/entrar':
+                    if customer is not None:
+                        if path == '/login':
+                            return self.redir('/')
                         if path in ('/cliente/sair', '/sair'):
                             d = self.form(PREAUTH_MAX)
                             if not web_cookie.csrf_valid(customer, str(d.get('csrf', ''))):
@@ -3864,7 +3874,7 @@ class PortalPrestador:
                             cookies.load(self.headers.get('Cookie', ''))
                             if 'autosseg_session' in cookies:
                                 SESSOES.pop(cookies['autosseg_session'].value, None)
-                            return self.redir('/entrar', (
+                            return self.redir('/login', (
                                 web_cookie.clear_cookie(secure=web_cookie.secure_request(self.headers)),
                                 self.cookie('', True),
                             ))
@@ -3874,38 +3884,33 @@ class PortalPrestador:
                         return self.erro('Acesso não autorizado.', 403)
                     if path.startswith('/cliente/') or path == '/cliente':
                         if login_flags.unified_login_enabled(banco):
-                            return self.redir('/' if self.sessao() else '/entrar')
+                            return self.redir('/' if self.sessao() else '/login')
                         return self.erro('Página não encontrada.', 404)
-                    if path=='/entrar':
-                        if not login_flags.unified_login_enabled(banco):
-                            return self.redir('/login')
-                        d=self.form(PREAUTH_MAX)
-                        ip,tent,agora,limitado=self._login_attempt_state()
-                        if limitado:
-                            return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
-                        try:
-                            token, _session = login_web.authenticate_and_create(
-                                banco, str(d.get('identificador','')),
-                                str(d.get('senha','')))
-                        except auth.LoginError as exc:
-                            self._login_failed(ip,tent,agora)
-                            return login_web.render_login(
-                                self, str(exc), str(d.get('identificador','')))
-                        self._login_succeeded(ip)
-                        destination = '/'
-                        return self.redir(destination,web_cookie.set_cookie(
-                            token, secure=web_cookie.secure_request(self.headers)))
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')
                     s_inicial=self.sessao()
                     d=self.form(PREAUTH_MAX if not s_inicial else MAX_POST)
                     if path=='/login':
                         ip,tent,agora,limitado=self._login_attempt_state()
+                        unified_login = login_flags.unified_login_enabled(banco)
                         if limitado:
+                            if unified_login:
+                                return self.erro('Muitas tentativas. Aguarde dez minutos.', 429)
                             if quer_json:
                                 return self.erro('Muitas tentativas. Aguarde dez minutos.',429)
                             return self.login(erro_login='Muitas tentativas. Aguarde dez minutos.',
                                               email_login=str(d.get('email','')))
+                        if unified_login:
+                            identifier=str(d.get('identificador') or d.get('email') or '')
+                            try:
+                                token, _session = login_web.authenticate_and_create(
+                                    banco, identifier, str(d.get('senha','')))
+                            except auth.LoginError:
+                                self._login_failed(ip,tent,agora)
+                                return login_web.render_login(self, 'invalid', identifier)
+                            self._login_succeeded(ip)
+                            return self.redir('/', web_cookie.set_cookie(
+                                token, secure=web_cookie.secure_request(self.headers)))
                         email_login=str(d.get('email',''))
                         p=ext.autenticar(banco,email_login,str(d.get('senha','')))
                         if not p:

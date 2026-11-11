@@ -36,12 +36,18 @@ class LoginWebTest(unittest.TestCase):
     def test_render_form(self):
         self.assertEqual('sent', login_web.render_login(self.handler))
         self.assertEqual('Entrar', self.handler.title)
-        self.assertIn('action="/entrar"', self.handler.body)
+        self.assertIn('action="/login"', self.handler.body)
         self.assertIn('name="identificador"', self.handler.body)
         self.assertIn('name="senha"', self.handler.body)
         self.assertIn('autocomplete="username"', self.handler.body)
         self.assertIn('autocomplete="current-password"', self.handler.body)
-        self.assertIn('href="/login"', self.handler.body)
+        self.assertNotIn('Usar login antigo', self.handler.body)
+        self.assertEqual(1, self.handler.body.count('<form'))
+
+    def test_render_rate_limit_message(self):
+        login_web.render_login(self.handler, error='rate')
+        self.assertIn('Muitas tentativas', self.handler.body)
+        self.assertNotIn('Credenciais inválidas', self.handler.body)
 
     def test_html_escaping(self):
         login_web.render_login(self.handler, '<tag>', '<script>')
@@ -215,33 +221,61 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         with portal_module.LOCK_LOGIN:
             portal_module.TENTATIVAS.clear()
 
-    def test_flag_off_redirects_both_methods(self):
+    def test_flag_off_serves_provider_login_at_login(self):
         with _flag(''):
-            client = _browser(follow=False)
-            status, headers, _body = _request(client, self.base, '/entrar')
-            self.assertEqual(303, status)
-            self.assertEqual('/login', headers['Location'])
+            status, _headers, body = _request(_browser(), self.base, '/login')
+            self.assertEqual(200, status)
+            self.assertIn('action="/login"', body)
+            self.assertIn('name="email"', body)
+            self.assertNotIn('name="identificador"', body)
+
+            jar = http.cookiejar.CookieJar()
+            client = urllib.request.build_opener(
+                _NoRedirect(), urllib.request.HTTPCookieProcessor(jar))
             status, headers, _body = _request(
-                client, self.base, '/entrar',
+                client, self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': self.provider_password})
-            self.assertEqual(303, status)
-            self.assertEqual('/login', headers['Location'])
+            self.assertEqual(200, status)
             self.assertIsNone(_unified_cookie(headers))
+            self.assertNotIn('autosseg_session', {cookie.name for cookie in jar})
+
+            status, headers, _body = _request(
+                client, self.base, '/login',
+                {'email': 'provider@example.test',
+                 'senha': self.provider_password})
+            self.assertEqual(303, status)
+            self.assertEqual('/', headers['Location'])
+            self.assertIn('autosseg_session', {cookie.name for cookie in jar})
+
+    def test_entrar_is_removed(self):
+        for flag in ('1', ''):
+            with _flag(flag):
+                status, _headers, body = _request(
+                    _browser(follow=False), self.base, '/entrar')
+                self.assertEqual(404, status)
+                self.assertNotIn('name="identificador"', body)
+                self.assertNotIn('name="email"', body)
+                status, _headers, body = _request(
+                    _browser(follow=False), self.base, '/entrar',
+                    {'identificador': 'provider@example.test',
+                     'senha': self.provider_password})
+                self.assertEqual(404, status)
+                self.assertNotIn('name="identificador"', body)
 
     def test_flag_on_renders_unified_form(self):
         with _flag('1'):
-            status, _headers, body = _request(_browser(), self.base, '/entrar')
+            status, _headers, body = _request(_browser(), self.base, '/login')
         self.assertEqual(200, status)
         self.assertIn('name="identificador"', body)
         self.assertIn('name="senha"', body)
-        self.assertIn('action="/entrar"', body)
-        self.assertIn('href="/login"', body)
+        self.assertIn('action="/login"', body)
+        self.assertNotIn('Usar login antigo', body)
 
     def test_provider_login_opens_portal(self):
         with _flag('1'):
             status, headers, _body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': self.provider_password})
             self.assertEqual(303, status)
@@ -260,7 +294,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
     def test_proxy_header_marks_cookie_secure(self):
         with _flag('1'):
             status, headers, _body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': self.provider_password},
                 headers={'CF-Ray': 'test'})
@@ -270,7 +304,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
     def test_wrong_password_is_generic_and_sets_no_cookie(self):
         with _flag('1'):
             status, headers, body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': 'WrongPassword123'})
         self.assertEqual(200, status)
@@ -287,7 +321,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
     def test_client_allowed_and_inactive_provider_rejected(self):
         with _flag('1'):
             status, headers, _body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'client@example.test',
                  'senha': self.client_password})
             self.assertEqual(303, status)
@@ -295,7 +329,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
             self.assertIsNotNone(_unified_cookie(headers))
             self._set_provider_active(False)
             status, headers, body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': self.provider_password})
             self.assertEqual(200, status)
@@ -305,7 +339,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
     def test_client_wrong_password_is_generic(self):
         with _flag('1'):
             status, headers, body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': 'client@example.test',
                  'senha': 'WrongPassword123'})
         self.assertEqual(200, status)
@@ -314,21 +348,42 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         self.assertNotIn(self.client_password, body)
         self.assertNotIn('Client Example', body)
 
-    def test_old_login_still_works_with_flag_on(self):
+    def test_legacy_email_field_uses_unified_login(self):
         jar = http.cookiejar.CookieJar()
         client = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(jar))
+            _NoRedirect(), urllib.request.HTTPCookieProcessor(jar))
         with _flag('1'):
-            status, _headers, body = _request(
+            status, headers, _body = _request(
                 client, self.base, '/login',
                 {'email': 'provider@example.test',
                  'senha': self.provider_password})
-            self.assertEqual(200, status)
-            self.assertIn('Visão geral', body)
-            self.assertIn('autosseg_session', {cookie.name for cookie in jar})
+            self.assertEqual(303, status)
+            self.assertEqual('/', headers['Location'])
+            self.assertIsNotNone(_unified_cookie(headers))
+            self.assertNotIn('autosseg_session', {cookie.name for cookie in jar})
             status, _headers, body = _request(client, self.base, '/')
             self.assertEqual(200, status)
             self.assertIn('Visão geral', body)
+
+    def test_logged_in_client_is_redirected_away_from_login(self):
+        jar = http.cookiejar.CookieJar()
+        client = urllib.request.build_opener(
+            _NoRedirect(), urllib.request.HTTPCookieProcessor(jar))
+        with _flag('1'):
+            status, _headers, _body = _request(
+                client, self.base, '/login',
+                {'identificador': 'client@example.test',
+                 'senha': self.client_password})
+            self.assertEqual(303, status)
+            status, headers, _body = _request(client, self.base, '/login')
+            self.assertEqual(303, status)
+            self.assertEqual('/', headers['Location'])
+            status, headers, _body = _request(
+                client, self.base, '/login',
+                {'identificador': 'client@example.test',
+                 'senha': self.client_password})
+            self.assertEqual(303, status)
+            self.assertEqual('/', headers['Location'])
 
     def test_flag_off_ignores_existing_unified_cookie(self):
         token = self._token('provider@example.test', self.provider_password)
@@ -358,20 +413,20 @@ class UnifiedLoginHttpTest(unittest.TestCase):
             client = _browser(follow=False)
             for _attempt in range(10):
                 status, _headers, _body = _request(
-                    client, self.base, '/entrar',
+                    client, self.base, '/login',
                     {'identificador': 'provider@example.test',
                      'senha': 'WrongPassword123'})
                 self.assertEqual(200, status)
             status, _headers, body = _request(
-                client, self.base, '/entrar',
+                client, self.base, '/login',
                 {'identificador': 'provider@example.test',
                  'senha': self.provider_password})
         self.assertEqual(429, status)
         self.assertIn('Muitas tentativas', body)
         self.assertNotIn('autosseg_unified=', body)
 
-    def test_old_login_rate_limiter_still_works(self):
-        with _flag('1'):
+    def test_flag_off_rate_limiter_uses_provider_page(self):
+        with _flag(''):
             client = _browser(follow=False)
             for _attempt in range(10):
                 status, _headers, _body = _request(
@@ -379,12 +434,13 @@ class UnifiedLoginHttpTest(unittest.TestCase):
                     {'email': 'provider@example.test',
                      'senha': 'WrongPassword123'})
                 self.assertEqual(200, status)
-            status, _headers, body = _request(
+            status, headers, body = _request(
                 client, self.base, '/login',
                 {'email': 'provider@example.test',
                  'senha': self.provider_password})
         self.assertEqual(200, status)
         self.assertIn('Muitas tentativas', body)
+        self.assertIsNone(_unified_cookie(headers))
 
 
 if __name__ == '__main__':

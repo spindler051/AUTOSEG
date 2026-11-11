@@ -71,7 +71,7 @@ class RolesHttpTest(unittest.TestCase):
 
     def login(self,email):
         browser=self.browser()
-        code,headers,_=self.req(browser,'/entrar',
+        code,headers,_=self.req(browser,'/login',
                                {'identificador':email,'senha':'Password12345'})
         self.assertEqual(303,code)
         return browser

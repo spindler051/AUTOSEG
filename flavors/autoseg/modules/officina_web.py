@@ -65,17 +65,22 @@ def page(handler, title: str, body: str, session=None, status: int = 200) -> Non
 
 def login_page(handler, error: str = '', identifier: str = '') -> None:
     identifier = escape(str(identifier or '')[:180], quote=True)
-    alert = '<p class="bad" role="alert">Credenciais inválidas.</p>' if error else ''
+    if error == 'rate':
+        message = 'Muitas tentativas. Aguarde dez minutos.'
+    elif error:
+        message = 'Credenciais inválidas.'
+    else:
+        message = ''
+    alert = f'<p class="bad" role="alert">{message}</p>' if message else ''
     body = ('<section class="card" aria-labelledby="access-title">'
             '<p class="muted">Officina Web</p>'
             '<h2 id="access-title">Acesso à plataforma</h2>' + alert +
-            '<form method="post" action="/entrar">'
+            '<form method="post" action="/login">'
             '<label for="unified_identifier">Identificador</label>'
             f'<input id="unified_identifier" name="identificador" '
             f'autocomplete="username" value="{identifier}" required>'
             '<label for="unified_password">Senha</label>'
             '<input id="unified_password" type="password" name="senha" '
             'autocomplete="current-password" required>'
-            '<button type="submit">Entrar</button></form>'
-            '<p class="muted"><a href="/login">Usar login antigo</a></p></section>')
+            '<button type="submit">Entrar</button></form></section>')
     return page(handler, 'Entrar', body)

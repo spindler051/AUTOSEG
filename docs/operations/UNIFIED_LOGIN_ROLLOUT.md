@@ -1,6 +1,9 @@
 # AUTOSEG — Unified login rollout and rollback
 
-**Scope:** provider portal only. The client portal and legacy provider login remain available.
+**Scope:** the shared Officina Web origin used by providers and clients. `/login`
+is the only login route; `/entrar` was removed and returns `404`. With the flag
+off, `/login` serves the legacy provider login as the rollback path. The legacy
+client portal on port 8765 and the client login routes remain available.
 This is a staged, opt-in rollout and is **not** authorization to enable production
 without the security review and integration test suite.
 
@@ -11,7 +14,7 @@ without the security review and integration test suite.
    `portal_prestador.py` diff and execute all relevant test suites.
 2. Take a verified backup of the current AUTOSEG SQLite database and relevant
    configuration; confirm restore procedures on an isolated copy. Keep the
-   existing provider and client login routes available.
+   existing client login routes and the legacy client portal available.
 3. On an isolated copy of the database, run `accounts.install(banco)` and
    `accounts.migrate_legacy(banco, dry_run=True)`. Review the migration report,
    especially identifier collisions, before any actual migration. No migration
@@ -39,12 +42,13 @@ without the security review and integration test suite.
 
 1. Keep `AUTOSEG_UNIFIED_LOGIN` unset or set to `0` until ready. Its default is off.
 2. Set `AUTOSEG_UNIFIED_LOGIN=1` for the provider-portal process and restart it.
-3. Open `/entrar` and authenticate as a test provider. Check the browser gets
-   the `autosseg_unified` cookie with `HttpOnly`, `SameSite=Strict`, and `Secure`
-   for HTTPS/proxy traffic. Verify the authenticated provider sees only their
-   authorized areas.
-4. Check `/login` still authenticates with the old `autosseg_session` cookie,
-   and `/entrar-pf` plus the separate client portal are unchanged.
+3. Open `/login` and authenticate as a test provider and as a test client.
+   Check the browser gets the `autosseg_unified` cookie with `HttpOnly`,
+   `SameSite=Strict`, and `Secure` for HTTPS/proxy traffic. Verify each identity
+   sees only its authorized areas in the shared shell.
+4. Check `/entrar` returns `404` for `GET` and `POST`; no legacy form is served
+   from that address. Check `/entrar-pf` and the separate client portal are
+   unchanged.
 5. Check logout clears **both** browser cookies and invalidates both server
    sessions. Confirm that replaying either old cookie does not authenticate.
 6. Test provider password reset, deactivate, archive, and administrative-role
@@ -53,39 +57,47 @@ without the security review and integration test suite.
    apply as before.
 7. Smoke-test representative OS read/edit, documents/PDF, and financial pages
    with approved test accounts. Check CSRF protection and a rejected request
-   with an invalid origin. `/entrar` shares the existing 10-attempts/10-minutes
-   per-IP limiter with `/login`; confirm the rollout still behaves as expected
-   behind the proxy.
+   with an invalid origin. `/login` shares the existing 10-attempts/10-minutes
+   per-IP limiter across provider and client attempts; confirm the rollout still
+   behaves as expected behind the proxy.
 
 ## Rollback
 
 1. Set `AUTOSEG_UNIFIED_LOGIN=0` (or remove the variable) and restart the
-   provider server. `/entrar` redirects to `/login` and unified cookies are
-   ignored. Legacy provider and client login remain available.
+   provider server. `/login` serves the legacy provider login and unified
+   cookies are ignored. `/entrar` remains removed (`404`); the legacy client
+   login routes and portal remain available.
 2. The in-memory unified session map disappears on restart; clear browser
    cookies by using the logout flow or normal browser cookie controls.
 3. **Do not delete** `accounts` or other tables and **do not revert a database
    migration** as part of this flag-only rollback. The legacy login data stays
    available, and rollback does not rewrite financial or historical records.
-4. Verify provider `/login`, client portal, OS, PDFs, and finance after rollback.
-   Escalate any discrepancy for an authorized restore from the verified backup.
+4. Verify provider login at `/login`, client portal, OS, PDFs, and finance after
+   rollback. Escalate any discrepancy for an authorized restore from the
+   verified backup.
 
 ## Operational constraints
 
-- Unified sessions are process-local and last at most eight hours; they do not
-  survive a restart, support multi-process sharing, or provide persistent
-  revocation across independent processes.
-- Legacy and unified cookies coexist only during migration; the new cookie
-  does not make the client portal part of a common site.
+- Unified sessions last at most eight hours. By default they are process-local;
+  the optional `AUTOSEG_WEB_SESSION_DURABLE` flag stores only hashes in SQLite
+  and shares sessions across processes and restarts. Do not enable the durable
+  flag in production before the decision recorded in
+  `docs/operations/WEB_SESSION_DURABLE.md`.
+- When the flag is off, `/login` serves the legacy provider form and the legacy
+  `autosseg_session` cookie. When it is on, `/login` issues only
+  `autosseg_unified`. Both browser cookies may coexist during migration, but
+  only the cookie for the active mode authenticates. The legacy client portal
+  on port 8765 is still a separate origin.
 - For migrated accounts, the legacy provider/client row remains the source of
   truth for password, role and activation. The `accounts` row is the account
   identifier/ownership record; native accounts use the account store. Unified
   sessions are revoked when those legacy values change.
 - The imported identifiers are a snapshot. Re-run the dry-run and migration
   after legacy identity changes; stale identifiers are not deleted.
-- The new `/entrar` implementation uses the existing pre-auth origin check and
+- The `/login` implementation uses the existing pre-auth origin check and
   `SameSite=Strict`, not an authenticated-session CSRF token. It shares the
-  legacy per-IP rate limiter. A separate review should still assess the legacy
-  origin-check behavior before production activation.
+  legacy per-IP rate limiter across provider and client attempts. A separate
+  review should still assess the legacy origin-check behavior before production
+  activation.
 - The `activation_report` reflects database readiness, not a penetration test
   or approval to deploy. Human review of authentication/permissions is required.

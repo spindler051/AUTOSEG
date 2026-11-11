@@ -773,7 +773,7 @@ política e os testes de isolamento existirem.
 https://autoseg.exemplo/
 ├── /                         início público + abrir OS
 ├── /acompanhar/<token>       acompanhamento anônimo
-├── /entrar                   login único
+├── /login                    login único
 ├── /cadastro                 criar conta cliente
 ├── /conta                    conta, segurança, vínculos
 ├── /contexto                 trocar cliente/prestador/admin
@@ -812,7 +812,7 @@ Manter durante a migração:
 
 - `/cliente/*` e `/pj/*` → novas rotas;
 - `/legado` → login legado ou aviso de migração;
-- `/portal-cliente` → `/entrar`;
+- `/portal-cliente` → `/login`;
 - `/os/<numero>` → `/app/os/<numero>` quando autenticado; acompanhamento
   público quando anônimo e permitido;
 - links antigos de PDF/relatório continuam válidos até a retirada.

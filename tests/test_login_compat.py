@@ -120,7 +120,7 @@ class LoginCompatHttpTest(unittest.TestCase):
     def _unified_cookie(self, identifier, password):
         with _flag('1'):
             status, headers, _body = _request(
-                _browser(follow=False), self.base, '/entrar',
+                _browser(follow=False), self.base, '/login',
                 {'identificador': identifier, 'senha': password})
         self.assertEqual(303, status)
         cookie = _cookie(headers, 'autosseg_unified')
@@ -263,14 +263,15 @@ class LoginCompatHttpTest(unittest.TestCase):
         self.assertIsNotNone(session)
         self.assertEqual('admin', session.principal.role)
 
-    def test_flag_off_redirects_and_ignores_unified_cookie(self):
+    def test_flag_off_ignores_unified_cookie(self):
         cookie = self._unified_cookie(
             'provider@example.test', self.provider_password)
         with _flag(''):
-            status, headers, _body = _request(
-                _browser(follow=False), self.base, '/entrar')
-            self.assertEqual(303, status)
-            self.assertEqual('/login', headers['Location'])
+            status, _headers, body = _request(
+                _browser(follow=False), self.base, '/login')
+            self.assertEqual(200, status)
+            self.assertIn('action="/login"', body)
+            self.assertIn('name="email"', body)
             status, _headers, body = _request(
                 _browser(), self.base, '/',
                 headers={'Cookie': cookie})

@@ -143,7 +143,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
 
     def login(self, identifier, password):
         browser = self.browser()
-        status, headers, body = self.req(browser, '/entrar',
+        status, headers, body = self.req(browser, '/login',
                  {'identificador': identifier, 'senha': password})
         return browser, status, headers, body
 
@@ -230,9 +230,10 @@ class OfficinaWebHttpTest(unittest.TestCase):
         from unittest.mock import patch
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         with patch.dict('os.environ', {'AUTOSEG_UNIFIED_LOGIN': '0'}):
-            status, headers, _ = self.req(browser, '/entrar')
-            self.assertEqual(status, 303)
-            self.assertEqual(headers['Location'], '/login')
+            status, _, page = self.req(browser, '/login')
+            self.assertEqual(status, 200)
+            self.assertIn(b'action="/login"', page)
+            self.assertNotIn(b'name="identificador"', page)
             denied, _, page = self.req(browser, '/')
             self.assertEqual(denied, 200)
             self.assertIn(b'login', page.lower())
@@ -257,7 +258,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
         status, headers, _ = self.req(browser, '/sair',
                                       {'csrf': csrf.group(1).decode()})
         self.assertEqual(status, 303)
-        self.assertEqual(headers['Location'], '/entrar')
+        self.assertEqual(headers['Location'], '/login')
         self.assertTrue(any('Max-Age=0' in x for x in headers.get_all('Set-Cookie') or ()))
         status, _, page = self.req(browser, '/')
         self.assertEqual(status, 200)
