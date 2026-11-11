@@ -6,7 +6,9 @@
 **Uso:** colar no ChatGPT. Ele trabalha sobre uma cópia do repositório, **não
 faz commit**, não faz push e devolve ZIP.
 
-**Base:** `main` após `a635115` (5.1–5.5 + 6.1–6.4 + login final em `/login`).
+**Base:** o ZIP `autoseg-base-<commit>.zip` entregue junto; código equivalente
+a `a635115` (5.1–5.5 + 6.1–6.4 + login final em `/login`) mais as decisões
+B1–B4 registradas neste prompt.
 **Dependências:** 6.1–6.4 integradas, shell única, `client_web`,
 `SessionContext` e `client_service`.
 **Entrega:** ZIP com arquivos completos, patch, testes, mapa de rotas e notas.
