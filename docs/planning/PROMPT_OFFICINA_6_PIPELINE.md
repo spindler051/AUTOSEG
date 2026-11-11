@@ -8,6 +8,9 @@ integra.
 
 ## Ordem
 
+**Próxima peça, antes da 6.5:** [P0 — Unificação real dos portais](PROMPT_PORTAL_UNIFICATION.md).
+Ela remove `servidor_web.py`/8765, deixa uma origem só e não é uma peça 6.x.
+
 | Ordem | Peça | Depende de | Entrega | Status |
 |---|---|---|---|---|
 | 1 | [6.1 Shell, login e cliente](PROMPT_OFFICINA_6_1_SHELL.md) | 5.1–5.5 | `officina/web`, login para os dois papéis, home do cliente | Integrada |

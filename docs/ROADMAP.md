@@ -70,6 +70,7 @@ decisões abaixo, não apenas do código integrado:
 ## Agora — P0
 
 1. **Unificação real dos portais, sem fallback**
+   - prompt: [`planning/PROMPT_PORTAL_UNIFICATION.md`](planning/PROMPT_PORTAL_UNIFICATION.md);
    - inventariar rotas e responsabilidades de `servidor_web.py`/8765;
    - migrar para a origem única o que ainda for contrato público atual;
    - remover o que for obsoleto e atualizar links, launchers e docs;
