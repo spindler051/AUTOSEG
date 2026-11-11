@@ -88,6 +88,12 @@ def navigation_for(context: SessionContext) -> tuple[NavItem, ...]
 - Cliente vê o subconjunto permitido e os módulos client-only.
 - Não criar `provider_navigation()` e `client_navigation()` que duplicam
   itens. Uma única tabela de itens, filtrada por permissão/contexto.
+- A navegação superior (top nav) e a lateral/sidebar devem sair da **mesma**
+  tabela. Se uma precisa de um subconjunto, marque isso no próprio `NavItem`
+  (por exemplo `top=True`); não mantenha uma segunda lista de menus no
+  `layout`.
+- A decisão de mostrar item administrativo deve vir das permissões já
+  filtradas, nunca de um `usuario.get('admin')` paralelo.
 - O item ativo é calculado pela rota, não por `if portal == ...`.
 
 ### 3.3 Rotas
@@ -204,10 +210,14 @@ Cobrir, no mínimo:
 13. login usa o design existente, sem novo framework;
 14. um bug comum de chrome/componente tem uma única correção e regressão nos
     dois contextos;
-15. um módulo client-only não aparece para provider e sua correção não altera
+15. top nav e sidebar do provider saem da mesma tabela de navegação; mudar um
+    item/flag nela reflete nos dois;
+16. top nav e sidebar do cliente saem da mesma tabela, com o mesmo filtro de
+    permissões;
+17. um módulo client-only não aparece para provider e sua correção não altera
     o provider;
-16. o diff não contém duas versões da mesma lógica de apresentação;
-17. suítes 6.1/6.2/6.3 e regressão do portal continuam passando.
+18. o diff não contém duas versões da mesma lógica de apresentação;
+19. suítes 6.1/6.2/6.3 e regressão do portal continuam passando.
 
 Rodar:
 
@@ -262,6 +272,7 @@ Sem `.git`, banco, anexos, PDFs, logs, tokens ou PII.
 - `/cliente` como alias/redirect, não site paralelo.
 - Um bug/feedback comum tem uma única correção e testes nos dois contextos; um
   bug exclusivo fica no módulo do contexto afetado.
+- Top nav e sidebar não mantêm listas de menu duplicadas.
 - Nenhuma regra de negócio nova no handler.
 - Flags 6.2/6.3 intocadas e desligadas.
 - Testes e regressões passando, ou erro exato registrado.
