@@ -141,6 +141,38 @@ permanente além do necessário.
     mínimo no lugar correto (`client_service`/domínio), não um handler legado.
     Se exigir decisão de produto nova, pare.
 
+### 2.5 Decisão B5 — plumbing de porta no GTK (autorizado)
+
+A unificação pode exigir mudanças **cirúrgicas** no GTK apenas para refletir a
+origem única. Isto não é redesign nem mudança de login/auth/negócio.
+
+Autorizado:
+
+- `links_publicos.py`: expor uma porta única nomeada (`PORTA_SITE`) e manter
+  `PORTAS` com um elemento, se ainda for necessário para `estado()`. Atualizar
+  `quadro_html()` para um único link “Officina Web”.
+- `gtk_app.py`: trocar somente a consulta `links9.PORTAS[1]` por
+  `links9.PORTA_SITE` (ou accessor equivalente) e ajustar as chamadas de
+  status/controle do portal para a origem única. Não alterar layout, login,
+  autenticação, regras, textos não relacionados ou outros fluxos.
+- `web_access.py`: manter **um** portal/site; remover o ciclo de vida do
+  `ServidorPortal`/cliente e o segundo listener. Ajustar os métodos e as
+  chamadas do GTK; não manter método vazio/alias chamado `client_*` se o
+  portal do cliente não existe.
+- `portal_v9.py`: consumidor legado de `PORTAS[1]`; ajustar para a porta única
+  ou remover junto com o legado.
+- `tests/test_web_access.py`: atualizar para um portal; remover expectativas de
+  dois servidores/factories de cliente.
+
+Proibido mesmo em B5:
+
+- redesenhar o GTK, mudar login/auth/permissões/regras de negócio;
+- manter `PORTAS[1]`, segundo listener, shim, alias ou objeto de
+  compatibilidade para o índice antigo;
+- manter controles “Portal do Cliente” separados se o portal separado não
+  existe. Reproponha-os como “Site”/origem única ou remova o controle, sem
+  deixar código morto.
+
 ## 3. Estado atual que será removido
 
 - `flavors/autoseg/modules/servidor_web.py` — servidor do portal antigo do
@@ -279,7 +311,8 @@ Não reescreva documentação histórica/arquivo.
 - Ligar `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` ou
   `AUTOSEG_WEB_SESSION_DURABLE`.
 - Resolver o TOCTOU nesta peça.
-- Mexer no GTK, no cliente GTK ou no login do GTK.
+- Mexer no GTK além do plumbing de porta autorizado em §2.5; não redesenhar
+  UI, não mudar login/auth/negócio, não criar cliente GTK.
 - Tocar em `~/gestaoservicos_MAIN`, nas portas 8765/8766, no processo MAIN
   rodando ou em dados reais.
 - Usar o banco de produção/MAIN nos testes.
@@ -312,18 +345,28 @@ Cobrir no mínimo:
 12. Prestador continua funcionando e nenhuma rota/label de prestador mudou.
 13. Testes usam banco temporário e porta efêmera; não tocam 8765/8766 nem a
     MAIN.
+14. `links_publicos.PORTA_SITE` é a única porta; `PORTAS` não tem índice 1;
+    `gtk_app.py` não usa `PORTAS[1]`; `WebAccessManager` inicia um portal só;
+    `gtk_app.py` e `web_access.py` compilam sem `IndexError` de contrato.
 
 Rodar:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m unittest \
   tests.test_portal_unification \
+  tests.test_web_access \
   tests.test_officina_web \
   tests.test_client_web \
   tests.test_client_roles_http \
   tests.test_login_web \
   tests.test_login_compat \
   tests.test_shared_shell -v
+```
+
+Compilação do GTK (não abre janela):
+
+```bash
+.venv/bin/python -m py_compile flavors/autoseg/modules/gtk_app.py
 ```
 
 Regressão:
@@ -342,8 +385,8 @@ git diff --check
 
 ## 8. Condições de parada
 
-As decisões **B1–B4 estão fechadas** na seção 2.4; não pare por elas. Pare e
-devolva `BLOCKED.md` se:
+As decisões **B1–B5 estão fechadas** nas seções 2.4 e 2.5; não pare por elas.
+Pare e devolva `BLOCKED.md` se:
 
 - uma rota `MIGRAR` não puder ser implementada sem uma decisão de produto
   nova;
@@ -380,6 +423,8 @@ Sem `.git`, banco, anexos, PDFs, logs, tokens, credenciais ou dados reais.
 - [ ] Nenhuma regra de negócio nova no handler/template.
 - [ ] Testes negativos de cliente × cliente e cliente × prestador.
 - [ ] Prestador sem regressão.
+- [ ] `PORTA_SITE` única; nenhum `PORTAS[1]`; `gtk_app.py` compila; `web_access` inicia um portal só; `tests/test_web_access.py` atualizado.
+- [ ] GTK alterado só no plumbing de porta, sem redesign/login/auth/negócio.
 - [ ] Docs/launchers sem 8765 como portal do cliente.
 - [ ] Suíte focada + regressão + audit + diff check verdes.
 - [ ] MAIN intocada; nenhum dado real usado.
