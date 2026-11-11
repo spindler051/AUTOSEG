@@ -172,3 +172,63 @@ ZIP com:
 
 Sem `.git`, banco, anexos, PDFs de produção, logs, tokens ou credenciais.
 Nenhum commit/push.
+
+## 8. Autorização de schema — outbox de efeitos externos
+
+**Autorizado em 2026-11-11 para DEV/branch, não para produção.**
+
+Sim, autorizo uma migração **aditiva e idempotente** em SQLite para uma outbox
+transacional dos efeitos externos da OS, limitada a esta peça.
+
+Condições obrigatórias:
+
+- criar apenas a tabela nova `os_effect_outbox` e índices; **não** alterar
+  tabelas existentes, colunas, dados, triggers ou semântica de OS;
+- migração idempotente (`CREATE TABLE IF NOT EXISTS`/versão registrada), com
+  backup verificado e rollback documentado (drenar/cancelar pendentes e então
+  remover a tabela, ou mantê-la dormente);
+- `operation_key` determinística e única por comando/revisão/ação;
+- estados explícitos `pending/processing/done/failed/unknown`, lease
+  `claimed_at`, tentativas, `last_error` e resultado mínimo;
+- a intenção é gravada na **mesma transação `BEGIN IMMEDIATE`** da mutação de
+  OS, status, vínculo, eventos e auditoria; o efeito externo só executa depois
+  do commit;
+- worker/reconciliador após restart recupera `processing` vencido, respeita
+  lease e não duplica efeitos;
+- payload mínimo: IDs, hashes, tipo e referência da operação; **sem** corpo de
+  e-mail, anexos, credenciais, tokens ou PII desnecessária. Destinatários são
+  resolvidos no momento da execução a partir do banco;
+- PDF/arquivo: staging + hash + versão reservada na transação; publicação
+  idempotente por `operation_key`/hash; arquivo órfão detectável e reconciliável;
+- nenhuma publicação/entrega confirma no banco antes de existir a intenção
+  persistida.
+
+### Política de e-mail
+
+Não prometer exactly-once com SQLite + provedor externo. A regra é:
+
+1. se o provedor suportar idempotency key/message id, use-o e registre o
+   identificador;
+2. se o resultado do envio for **incerto** (queda após enviar e antes do ACK),
+   marcar `unknown` e **não reenviar automaticamente**; exigir reconciliação
+   manual/consulta ao provedor e registrar auditoria;
+3. reenvio manual é permitido com `operation_key` novo e aviso explícito de
+   possível duplicata;
+4. falha comprovada antes do envio pode ser retentada.
+
+Esse limite deve aparecer no `NOTES.md` e na UI/operação, sem esconder que a
+garantia é at-most-once para resultado incerto.
+
+### Testes da outbox
+
+- commit da intenção + execução; queda entre commit e efeito; reinício;
+- dois workers concorrentes com o mesmo `operation_key`;
+- falha de arquivo/PDF/e-mail antes/depois do efeito;
+- reexecução sem duplicar versão/arquivo/entrega;
+- mudança de vínculo/status entre pré-autorização e transação: nenhuma
+  intenção/escrita;
+- rollback/downgrade da tabela sem afetar OS existentes.
+
+Se a implementação concluir que a outbox não é suficiente para alguma garantia,
+não invente exactly-once: registre o limite no `BLOCKED.md` e mantenha a flag
+desligada.
