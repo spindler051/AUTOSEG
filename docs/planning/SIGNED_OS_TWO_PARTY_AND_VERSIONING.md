@@ -266,7 +266,7 @@ ser respondidas aos poucos, com uso real, e registradas como ADR/decisão:
   hardware ou a senha de login no modo de conveniência? O modo de conveniência
   é opt-in, de menor garantia, e a senha passa a ser um fator de assinatura;
   ver [`PGP_MULTISIGNATURE_ARCHITECTURE.md`](PGP_MULTISIGNATURE_ARCHITECTURE.md)
-  §3.2.
+  §3.2 e §3.4.
 
 Formato de registro sugerido:
 
