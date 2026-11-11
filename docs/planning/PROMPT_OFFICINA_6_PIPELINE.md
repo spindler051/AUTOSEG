@@ -1,6 +1,6 @@
-# Pipeline — Officina Web 6.1–6.3
+# Pipeline — Officina Web 6.1–6.4
 
-**Base de código:** `c76fbe4` (main após login unificado 5.1–5.5, Officina Web 6.1 e papéis/permissões 6.2).
+**Base de código:** `4304ef7` (main após login unificado 5.1–5.5, Officina Web 6.1, papéis/permissões 6.2 e sessão durável 6.3).
 **Formato:** cada peça é um prompt independente; o ChatGPT trabalha numa cópia
 do repositório, **não faz commit** e devolve ZIP. O revisor aplica, testa e
 integra.
@@ -12,11 +12,12 @@ integra.
 | 1 | [6.1 Shell, login e cliente](PROMPT_OFFICINA_6_1_SHELL.md) | 5.1–5.5 | `officina/web`, `/entrar` para os dois papéis, home do cliente |
 | 2 | [6.2 Papéis e permissões](PROMPT_OFFICINA_6_2_ROLES.md) | 6.1 | papéis de cliente, matriz, `ObjectPolicy` no serviço |
 | 3 | [6.3 Sessão durável e GTK](PROMPT_OFFICINA_6_3_SESSION_GTK.md) | 6.1–6.2 | SQLite de sessões, contexto compartilhado, GTK |
+| 4 | [6.4 Shell web unificado](PROMPT_OFFICINA_6_4_SHARED_SHELL.md) | 6.1–6.3 | a mesma shell para provider e client; `/cliente` como alias, módulo client-only |
 
 A 6.1 pode ser gerada sem a 6.2; a 6.2 assume a 6.1 aplicada; a 6.3 assume as
-duas. Se o ChatGPT não tiver a peça anterior no checkout, deve assumir a
-interface congelada e registrar em `NOTES.md` que a integração será validada
-pelo revisor.
+duas; a 6.4 corrige a apresentação e assume 6.1–6.3. Se o ChatGPT não tiver a
+peça anterior no checkout, deve assumir a interface congelada e registrar em
+`NOTES.md` que a integração será validada pelo revisor.
 
 ## Decisões já tomadas
 
@@ -26,6 +27,10 @@ pelo revisor.
   o nome do produto para Officina Web e o rótulo de contexto.
 - **Cliente no primeiro corte**: próprias OS, documentos/PDF e pedido de
   serviço. Sem financeiro, sem OS anônima, sem papéis nesta primeira peça.
+- **Shell única:** provider e client usam a mesma chrome, o mesmo login e a
+  mesma raiz; “Portal do prestador”/“Portal do cliente” são rótulos de
+  contexto. A 6.4 corrige a home separada da 6.1 e transforma `/cliente` em
+  alias, não em site paralelo.
 - **Papéis**: customer, porteiro, zelador e síndico; um papel por conta nesta
   fase; escopo organizacional via `v9_responsaveis`/`v9_vinculos`.
 - **Matriz provisória**: fica em `policy.yaml`/`PADRAO` e será ajustada com uso
@@ -43,7 +48,9 @@ pelo revisor.
 2. Enquanto a 6.1 é revisada, a 6.2 pode ser gerada; ela assume a interface da
    6.1.
 3. Repita para a 6.3.
-4. Só depois de 6.1–6.3 integradas e revisadas se discute ativação em produção
+4. A 6.4 corrige a apresentação: uma shell para os dois contextos, `/cliente`
+   como alias e um módulo client-only real.
+5. Só depois de 6.1–6.4 integradas e revisadas se discute ativação em produção
    e os blocos seguintes (OS anônima, financeiro do cliente, migração de
    escrita para accounts, shell GTK completo).
 
