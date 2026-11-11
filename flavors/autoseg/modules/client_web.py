@@ -1,4 +1,4 @@
-"""Customer-only HTTP presentation backed by owner-scoped service calls."""
+"""Client module fragments rendered through the one Officina Web shell."""
 from __future__ import annotations
 
 from html import escape
@@ -11,11 +11,11 @@ def _e(value) -> str:
 
 
 def _item_link(item) -> str:
-    return f'<li><a href="/cliente/os/{item.id}">{_e(item.number)}</a> — {_e(item.status)}</li>'
+    return f'<li><a href="/os/{item.id}">{_e(item.number)}</a> — {_e(item.status)}</li>'
 
 
 def _call_link(call) -> str:
-    return (f'<li><a href="/cliente/chamado/{call.id}">Chamado #{call.id}</a>'
+    return (f'<li><a href="/chamado/{call.id}">Chamado #{call.id}</a>'
             f' — {_e(call.status)}</li>')
 
 
@@ -24,7 +24,7 @@ def home(handler, banco, session) -> None:
     calls = client_service.list_calls(banco, session)
     body = ('<section class="card"><h2>Minhas ordens de serviço</h2><ul>'
             + ''.join(_item_link(item) for item in items)
-            + '</ul><a href="/cliente/solicitar">Solicitar serviço</a></section>'
+            + '</ul><a href="/solicitar">Solicitar serviço</a></section>'
             '<section class="card"><h2>Meus chamados</h2><ul>'
             + ''.join(_call_link(call) for call in calls) + '</ul></section>')
     officina_web.page(handler, "Painel do cliente", body, session)
@@ -49,7 +49,7 @@ def item_detail(handler, banco, session, work_id: int) -> None:
     docs = client_service.list_documents(banco, session, work_id)
     if docs:
         body += '<section class="card"><h2>Documentos</h2>' + ''.join(
-            f'<a href="/cliente/os/{item.id}/documento/{d.id}">{_e(d.name)}</a> '
+            f'<a href="/os/{item.id}/documento/{d.id}">{_e(d.name)}</a> '
             for d in docs) + '</section>'
     officina_web.page(handler, "Detalhes da OS", body, session)
 
@@ -59,7 +59,7 @@ def documents(handler, banco, session) -> None:
     for item in client_service.list_work_items(banco, session):
         docs = client_service.list_documents(banco, session, item.id)
         links = ''.join(
-            f'<li><a href="/cliente/os/{item.id}/documento/{doc.id}">{_e(doc.name)}</a></li>'
+            f'<li><a href="/os/{item.id}/documento/{doc.id}">{_e(doc.name)}</a></li>'
             for doc in docs
         )
         if links:
@@ -69,7 +69,7 @@ def documents(handler, banco, session) -> None:
             continue
         docs = client_service.list_call_documents(banco, session, call.id)
         links = ''.join(
-            f'<li><a href="/cliente/chamado/{call.id}/documento/{doc.id}">{_e(doc.name)}</a></li>'
+            f'<li><a href="/chamado/{call.id}/documento/{doc.id}">{_e(doc.name)}</a></li>'
             for doc in docs)
         if links:
             groups.append(f'<section class="card"><h2>Chamado #{call.id}</h2><ul>{links}</ul></section>')
@@ -84,7 +84,7 @@ def request_form(handler, banco, session, error: str = "",
     options = ''.join(f'<option value="{v}" {"selected" if urgency == v else ""}>{v}</option>'
                       for v in ("Normal", "Alta", "Baixa"))
     body = ('<section class="card">' + msg +
-            '<form method="post" action="/cliente/solicitar">'
+            '<form method="post" action="/solicitar">'
             f'{web_cookie.csrf_input(session)}'
             '<label for="description">Descrição</label>'
             f'<textarea id="description" name="descricao" minlength="10" maxlength="2000" required>{_e(description)}</textarea>'
@@ -148,14 +148,14 @@ def request_submit(handler, banco, session, data) -> None:
         # operation failed. Rotate even on failure to avoid a stale session.
         cookie = _refresh_session_cookie(handler, banco, session)
         if cookie is not None:
-            return handler.redir('/cliente/solicitar?erro=1', cookie)
+            return handler.redir('/solicitar?erro=1', cookie)
         if isinstance(exc, PermissionError):
             raise
         return request_form(handler, banco, session, error='invalid',
                             description=str(data.get('descricao', ''))[:2000],
                             urgency=str(data.get('urgencia', '')))
     cookie = _refresh_session_cookie(handler, banco, session)
-    return handler.redir(f'/cliente/os/{item.id}', cookie)
+    return handler.redir(f'/os/{item.id}', cookie)
 
 
 def download(handler, banco, session, work_id: int, document_id: int) -> None:
@@ -178,7 +178,7 @@ def call_detail(handler, banco, session, call_id: int) -> None:
         body += f'<p>OS vinculada: {_e(call.work_number or call.work_id)}</p>'
         docs = client_service.list_call_documents(banco, session, call_id)
         body += '<section class="card"><h2>Documentos do chamado</h2>' + ''.join(
-            f'<a href="/cliente/chamado/{call.id}/documento/{d.id}">{_e(d.name)}</a> '
+            f'<a href="/chamado/{call.id}/documento/{d.id}">{_e(d.name)}</a> '
             for d in docs) + '</section>'
     officina_web.page(handler, "Detalhe do chamado", body, session)
 
@@ -192,48 +192,48 @@ def download_call(handler, banco, session, call_id: int, document_id: int) -> No
     return handler.send_bytes(contents, mime, filename=filename)
 
 
+def en_route(handler, banco, session) -> None:
+    """Client-only progress module: display only service-authorized own/organization OS."""
+    items = client_service.list_work_items(banco, session)
+    selected = [item for item in items if item.status in ('Em rota', 'Iniciada', 'Pendente')]
+    content = ('<section class="card"><h2>Acompanhamento de atendimentos</h2>'
+               '<p class="muted">Situação dos atendimentos disponíveis para sua conta.</p>'
+               '<ul>' + ''.join(_item_link(item) for item in selected) + '</ul></section>')
+    officina_web.page(handler, 'Em rota', content, session)
+
+
 def dispatch_get(handler, banco, session, path: str) -> None:
-    """Dispatch only allowlisted customer URLs; unknown URLs fail closed."""
-    if path in ("/cliente", "/cliente/painel"):
-        return home(handler, banco, session)
-    if path == "/cliente/os":
-        return list_items(handler, banco, session)
-    if path == "/cliente/documentos":
-        return documents(handler, banco, session)
-    if path == "/cliente/solicitar":
-        from urllib.parse import parse_qs, urlparse
-        failed = parse_qs(urlparse(handler.path).query).get("erro") == ["1"]
-        return request_form(handler, banco, session, error="invalid" if failed else "")
-    if path == "/cliente/nova":
-        return handler.redir("/cliente/solicitar")
-    parts = path.strip("/").split("/")
-    if len(parts) == 3 and parts[:2] == ["cliente", "chamado"] and parts[2].isdigit():
-        return call_detail(handler, banco, session, int(parts[2]))
-    if (len(parts) == 5 and parts[:2] == ["cliente", "chamado"]
-            and parts[2].isdigit() and parts[3] == "documento"
-            and parts[4].lstrip("-").isdigit()):
-        return download_call(handler, banco, session, int(parts[2]), int(parts[4]))
-    if len(parts) == 3 and parts[:2] == ["cliente", "os"] and parts[2].isdigit():
-        return item_detail(handler, banco, session, int(parts[2]))
-    if (len(parts) == 5 and parts[:2] == ["cliente", "os"]
-            and parts[2].isdigit() and parts[3] == "documento"
-            and parts[4].lstrip("-").isdigit()):
-        return download(handler, banco, session, int(parts[2]), int(parts[4]))
-    return handler.erro("Página indisponível.", 404)
+    """One root; role/permission checks happen in client_service, not URLs."""
+    from flavors.autoseg.modules.autoseg_web_navigation import client_routes
+    from officina.web.navigation import _allows
+    routes = client_routes(home=home, list_items=list_items, documents=documents,
+                           request_form=request_form, en_route=en_route)
+    for route in routes:
+        if route.path == path and 'client' in route.contexts:
+            if route.permission:
+                permissions = getattr(getattr(session, 'context', None), 'permissions', None)
+                if permissions is not None and not _allows(frozenset(permissions), route.permission):
+                    raise PermissionError('Unavailable.')
+            if path == '/solicitar':
+                from urllib.parse import parse_qs, urlparse
+                failed = parse_qs(urlparse(handler.path).query).get('erro') == ['1']
+                return request_form(handler, banco, session, error='invalid' if failed else '')
+            return route.handler(handler, banco, session)
+    parts = path.strip('/').split('/')
+    if len(parts) == 2 and parts[0] == 'chamado' and parts[1].isdigit():
+        return call_detail(handler, banco, session, int(parts[1]))
+    if (len(parts) == 4 and parts[0] == 'chamado' and parts[1].isdigit()
+            and parts[2] == 'documento' and parts[3].lstrip('-').isdigit()):
+        return download_call(handler, banco, session, int(parts[1]), int(parts[3]))
+    if len(parts) == 2 and parts[0] == 'os' and parts[1].isdigit():
+        return item_detail(handler, banco, session, int(parts[1]))
+    if (len(parts) == 4 and parts[0] == 'os' and parts[1].isdigit()
+            and parts[2] == 'documento' and parts[3].lstrip('-').isdigit()):
+        return download(handler, banco, session, int(parts[1]), int(parts[3]))
+    return handler.erro('Página indisponível.', 404)
 
 
 def dispatch_post(handler, banco, session, path: str, data: dict) -> None:
-    if path == "/cliente/solicitar":
+    if path in ('/solicitar', '/cliente/solicitar'):
         return request_submit(handler, banco, session, data)
-    if path == "/cliente/sair":
-        if not isinstance(data, dict) or not web_cookie.csrf_valid(session, data.get("csrf", "")):
-            return handler.erro("Formulário expirado ou sessão inválida.", 403)
-        from flavors.autoseg.modules import web_session
-        token = web_cookie.token_from_headers(handler.headers)
-        if token:
-            web_session.revoke(banco, token)
-        return handler.redir("/entrar", (
-            web_cookie.clear_cookie(secure=web_cookie.secure_request(handler.headers)),
-            handler.cookie("", True),
-        ))
-    return handler.erro("Página indisponível.", 404)
+    return handler.erro('Página indisponível.', 404)

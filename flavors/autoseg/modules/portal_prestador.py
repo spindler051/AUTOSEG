@@ -835,31 +835,23 @@ def chip_status(status):
             f'{esc(status)}</span>')
 
 
-def _grupos_navegacao(usuario):
-    grupos=[
-        ('Operação', [('/', 'Início', 'home'), ('/os', 'Ordens de serviço', 'clipboard'),
-                      ('/clientes', 'Clientes', 'users')]),
-        ('Gestão', [('/servicos', 'Serviços e valores', 'wrench'),
-                    ('/financeiro', 'Financeiro', 'wallet'),
-                    ('/notas', 'Notas fiscais', 'receipt'),
-                    ('/emails', 'E-mails', 'mail')]),
-        ('Registros', [('/historico', 'Histórico e relatórios', 'history'),
-                       ('/pj-publicas', 'Solicitações PJ', 'building'),
-                       ('/configuracoes', 'Configurações', 'settings')]),
-    ]
-    if usuario.get('admin'):
-        grupos[1][1].extend([
-            ('/prestadores', 'Prestadores', 'users'),
-            ('/estoque', 'Estoque', 'wrench'),
-            ('/composicao', 'Composição de valores', 'layout'),
-        ])
-        grupos[-1][1].append(('/feedback/recebidos', 'Feedbacks', 'message'))
-    return grupos
+def _grupos_navegacao(usuario, navigation=None):
+    """Group data from the ONE Officina Web navigation table."""
+    from flavors.autoseg.modules import officina_web
+    navigation = navigation if navigation is not None else officina_web.context_for(usuario).navigation
+    groups = []
+    for item in navigation:
+        if not groups or groups[-1][0] != item.group:
+            groups.append((item.group, []))
+        groups[-1][1].append((item.href, item.label, item.icon))
+    return groups
 
 
-def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None):
+def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco=None,
+               page_context=None,navigation=None):
     """Experimental interface: a quiet work-order shell around the same flow."""
-    base=layout(titulo,corpo,usuario,nonce,cliente,banco)
+    base=layout(titulo,corpo,usuario,nonce,cliente,banco, navigation=navigation,
+                page_context=page_context)
     prefs={'tema':'auto','acento':'ambar'}
     if usuario and not cliente and banco:
         try:
@@ -870,13 +862,15 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
                       f'<html lang="pt-BR" data-tema="{esc(prefs["tema"])}" '
                       f'data-preferencia-tema="{esc(prefs["tema"])}" '
                       f'data-acento="{esc(prefs["acento"])}">',1)
-    login=not usuario or cliente
+    login=not usuario
     body_class='ui-app'+(' ui-login' if login else '')
     base=base.replace('<body>',f'<body class="{body_class}">',1)
     base=base.replace('</style>',CSS_APP+'</style>',1)
     sidebar=''
-    if usuario and not cliente:
-        grupos=_grupos_navegacao(usuario)
+    if usuario:
+        grupos=_grupos_navegacao(usuario, navigation)
+        context_label = page_context.context_label if page_context else 'Portal do prestador'
+        audience = 'Cliente' if page_context and page_context.kind == 'client' else 'Prestador'
         def ativo(url):
             return path==url or (url!='/' and path.startswith(url+'/'))
         blocos=''
@@ -887,22 +881,24 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
                 for url,nome,nome_icone in itens)
             blocos+=f'<div class="side-group"><p class="side-label">{esc(rotulo)}</p>{links}</div>'
         csrf=esc(usuario.get('csrf',''))
+        feedback_side = ('' if page_context and page_context.kind == 'client' else
+                         '<button type="button" class="side-tool" id="abrir-feedback-side">'
+                         + icone('message') + '<span>Feedback</span></button>')
         sidebar=(f'<aside class="app-side">'
                  '<a class="side-brand" href="/"><img src="/logo.png" alt="AUTOSEG">'
-                 '<span>Portal do prestador</span></a>'
+                 f'<span>{esc(context_label)}</span></a>'
                  '<button type="button" class="side-menu-toggle" id="toggle-side-nav" '
                  'aria-expanded="false" aria-controls="side-nav">☰ Menu</button>'
                  f'<nav class="side-nav" id="side-nav" aria-label="Navegação principal">'
                  f'<div class="side-mobile-head"><div><strong>{esc(usuario.get("nome",""))}</strong>'
-                 '<span>Prestador</span></div>'
+                 f'<span>{esc(audience)}</span></div>'
                  '<button type="button" id="fechar-side-nav" aria-label="Fechar menu">×</button></div>'
                  f'{blocos}</nav>'
                  '<div class="side-foot">'
                  f'<div class="side-user"><strong>{esc(usuario.get("nome",""))}</strong>'
-                 '<span>Prestador</span></div>'
+                 f'<span>{esc(audience)}</span></div>'
                  '<div class="side-tools">'
-                 '<button type="button" class="side-tool" id="abrir-feedback-side">'
-                 f'{icone("message")}<span>Feedback</span></button>'
+                 f'{feedback_side}'
                  f'<form method="post" action="/sair" class="side-tool-form">'
                  f'<input type="hidden" name="csrf" value="{csrf}">'
                  f'<button class="side-tool" type="submit">{icone("logout")}<span>Sair</span></button></form>'
@@ -914,31 +910,34 @@ def layout_app(titulo,corpo,usuario=None,nonce=None,path='/',cliente=False,banco
     return base
 
 
-def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None):
-    menus=[('/','Início'),('/clientes','Clientes'),('/os','Ordens de serviço'),('/servicos','Serviços e valores'),('/financeiro','Financeiro'),('/pj-publicas','Solicitações PJ'),('/notas','Notas fiscais'),('/emails','E-mails'),('/historico','Histórico e relatórios')]
-    if usuario and usuario.get('admin') and not cliente:
-        menus.extend([('/prestadores','Prestadores'),('/estoque','Estoque'),
-                      ('/composicao','Composição de valores')])
-        menus.append(('/feedback/recebidos','Feedbacks'))
-    nav=(''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[:4])
-         +'<details class="nav-more"><summary>Mais opções</summary>'
-         +''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in menus[4:])+'</details>') if usuario else ''
-    us=f'<span class="usuario">{esc(usuario["nome"])} · Prestador</span>' if usuario else ''
+def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None,
+           navigation=None,page_context=None):
+    # NavItem is defined once in the AUTOSEG flavor. Both surfaces consume
+    # the exact same filtered navigation snapshot; never re-check admin here.
+    if usuario:
+        from flavors.autoseg.modules import officina_web
+        from flavors.autoseg.modules.autoseg_web_navigation import top_navigation_for
+        visible = navigation if navigation is not None else officina_web.context_for(usuario).navigation
+        top_items = top_navigation_for(page_context, visible)
+        links = tuple((item.href, item.label) for item in top_items)
+        nav = (''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in links[:4])
+               + '<details class="nav-more"><summary>Mais opções</summary>'
+               + ''.join(f'<a href="{url}">{esc(nome)}</a>' for url,nome in links[4:])
+               + '</details>')
+    else:
+        nav = ''
+    audience = 'Cliente' if page_context and page_context.kind == 'client' else 'Prestador'
+    us=f'<span class="usuario">{esc(usuario["nome"])} · {audience}</span>' if usuario else ''
     ambiente='DEV (testes)' if os.environ.get('AUTOSEG_DEV')=='1' else 'produção'
     footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
     feedback_html=_dialogo_feedback(None if cliente else usuario, banco)
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
             '<button class="subtle">Sair</button></form>') if usuario else ''
-    if cliente:
-        # Portal do Cliente: apenas a logo, grande, sem textos auxiliares.
-        topo=('<a class="brand" href="/cliente" style="display:flex;align-items:center">'
-              '<img src="/logo.png" alt="AUTOSEG" style="height:88px;max-width:380px;object-fit:contain;display:block">'
-              '</a>')
-    else:
-        topo=('<a class="brand" href="/" style="display:flex;align-items:center;gap:10px">'
-              '<img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block">'
-              '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
-              '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
+    # Identical brand/topbar in both contexts; context controls text only.
+    topo=('<a class="brand" href="/" style="display:flex;align-items:center;gap:10px">'
+          '<img src="/logo.png" alt="AUTOSEG" style="height:34px;max-width:150px;object-fit:contain;display:block">'
+          '<span style="font-size:13px;color:#ddd;font-weight:600">Gestão de Serviços</span></a>'
+          '<span class="tagline">AUTOMAÇÃO E SEGURANÇA · Portal de Serviços</span>')
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(titulo)} · AUTOSEG</title><link rel="icon" href="/icone.png" type="image/png"><style>
 :root{{--yellow:#ffd400;--bg:#080808;--card:#191919;--border:#424242;--muted:#bababa;--green:#52edb2;--red:#ff7d7d}}
@@ -1050,17 +1049,15 @@ class PortalPrestador:
                 return True
 
             def pagina(self,titulo,conteudo,s=None,status=200,cliente=False):
-                pagina=layout_app(titulo,conteudo,s,
-                                     path=urlparse(self.path).path,
-                                     cliente=cliente,banco=banco)
-                pagina=pagina.replace(' · AUTOSEG</title>', ' · Officina Web</title>', 1)
-                if not cliente:
-                    pagina=pagina.replace('>Gestão de Serviços</span>', '>Officina Web</span>', 1)
-                    pagina=pagina.replace('AUTOMAÇÃO E SEGURANÇA · Portal de Serviços',
-                                          'Officina Web · Portal do prestador', 1)
+                from officina.web import ShellPage, active_for
+                from flavors.autoseg.modules import officina_web
+                context=officina_web.context_for(s)
+                path=urlparse(self.path).path
+                page=ShellPage(titulo,conteudo,context,context.navigation,
+                               active=active_for(path,context.navigation),
+                               path=path,banco=banco,user=s)
+                pagina=officina_web.render_page(page)
                 if titulo=='Ordens de serviço ativas':
-                    # Inert marker: portal.js owns the timer and pauses it while
-                    # the feedback dialog is open or a form control is in use.
                     pagina=pagina.replace('</head>','<meta name="autoseg-auto-refresh" content="20"></head>')
                 return self.responder(pagina,status)
 
@@ -3542,21 +3539,24 @@ class PortalPrestador:
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 customer = login_web.client_session(self, banco)
                 if customer is not None:
+                    from flavors.autoseg.modules.autoseg_web_navigation import canonical_client_path
+                    alias=canonical_client_path(path)
+                    if alias is not None:
+                        return self.redir(alias + (('?' + urlparse(self.path).query)
+                                                  if urlparse(self.path).query else ''))
                     try:
-                        if path == '/':
-                            return client_web.home(self, banco, customer)
-                        if path == '/cliente' or path.startswith('/cliente/'):
-                            return client_web.dispatch_get(self, banco, customer, path)
+                        if officina_web.client_path_allowed(path):
+                            return client_web.dispatch_get(self,banco,customer,path)
                     except PermissionError:
-                        return self.erro('Recurso indisponível.', 404)
+                        return self.erro('Recurso indisponível.',404)
                     except ValueError:
-                        return self.erro('Recurso indisponível.', 400)
+                        return self.erro('Recurso indisponível.',400)
                     except Exception:
                         LOG.warning('Falha no serviço do cliente.')
-                        return self.erro('Falha interna.', 500)
+                        return self.erro('Falha interna.',500)
                     if path not in ('/logo.png','/icone.png','/favicon.ico',
-                                    '/static/portal.js'):
-                        return self.erro('Acesso não autorizado.', 403)
+                                    '/static/portal.js','/entrar'):
+                        return self.erro('Acesso não autorizado.',403)
                 if path.startswith('/os/'):
                     try:
                         normalized=self._normalizar_os(path)
@@ -3864,11 +3864,11 @@ class PortalPrestador:
                             cookies.load(self.headers.get('Cookie', ''))
                             if 'autosseg_session' in cookies:
                                 SESSOES.pop(cookies['autosseg_session'].value, None)
-                            return self.redir('/login', (
+                            return self.redir('/entrar', (
                                 web_cookie.clear_cookie(secure=web_cookie.secure_request(self.headers)),
                                 self.cookie('', True),
                             ))
-                        if path == '/cliente/solicitar':
+                        if path in ('/solicitar','/cliente/solicitar'):
                             return client_web.dispatch_post(self, banco, customer, path,
                                                             self.form(PREAUTH_MAX))
                         return self.erro('Acesso não autorizado.', 403)
@@ -3892,7 +3892,7 @@ class PortalPrestador:
                             return login_web.render_login(
                                 self, str(exc), str(d.get('identificador','')))
                         self._login_succeeded(ip)
-                        destination = '/cliente' if _session.identity.kind == 'client' else '/'
+                        destination = '/'
                         return self.redir(destination,web_cookie.set_cookie(
                             token, secure=web_cookie.secure_request(self.headers)))
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):

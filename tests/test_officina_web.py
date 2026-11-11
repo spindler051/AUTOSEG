@@ -8,20 +8,18 @@ from flavors.autoseg.modules import officina_web
 
 
 class ShellTest(unittest.TestCase):
-    def test_client_page_escapes_context_and_uses_portal_layout(self):
+    def test_client_page_uses_real_shared_chrome(self):
+        from officina.web import ShellPage
         session = SimpleNamespace(identity=SimpleNamespace(kind='client', display_name='<script>'),
                                   principal=SimpleNamespace(role='customer'), csrf='session-csrf')
-        class Handler:
-            sent = None
-            def pagina(self, title, body, legacy, status=200, cliente=False):
-                self.sent = (title, body, legacy, status, cliente)
-        handler = Handler()
-        officina_web.page(handler, 'Customer', '<p>Trusted body</p>', session)
-        self.assertTrue(handler.sent[4])
-        self.assertIn('Officina Web', handler.sent[1])
-        self.assertIn('&lt;script&gt;', handler.sent[1])
-        self.assertNotIn('<script>', handler.sent[1])
-        self.assertNotIn('href="/financeiro"', handler.sent[1])
+        context = officina_web.context_for(session)
+        rendered = officina_web.render_page(ShellPage('Customer', '<p>Trusted body</p>',
+                                          context, context.navigation))
+        self.assertEqual(rendered.count('<aside class="app-side">'), 1)
+        self.assertIn('Officina Web', rendered)
+        self.assertIn('&lt;script&gt;', rendered)
+        self.assertNotIn('<script>', rendered)
+        self.assertNotIn('href="/financeiro"', rendered)
 
     def test_login_uses_portal_layout_and_generic_error(self):
         class Handler:
@@ -39,7 +37,7 @@ class ShellTest(unittest.TestCase):
                                   principal=SimpleNamespace(role='customer'),csrf='csrf')
         ctx = officina_web.context_for(session)
         links = [n.href for n in ctx.navigation]
-        self.assertIn('/cliente/os', links)
+        self.assertIn('/os', links)
         for forbidden in ('/financeiro','/clientes','/estoque','/prestadores'):
             self.assertNotIn(forbidden, links)
 
@@ -173,10 +171,10 @@ class OfficinaWebHttpTest(unittest.TestCase):
     def test_customer_gets_own_home_same_origin_cookie(self):
         browser, status, headers, _ = self.login('customer@example.test', self.client_pass)
         self.assertEqual(status, 303)
-        self.assertEqual(headers['Location'], '/cliente')
+        self.assertEqual(headers['Location'], '/')
         cookie = headers.get_all('Set-Cookie') or ()
         self.assertTrue(any('autosseg_unified=' in c and 'SameSite=Strict' in c for c in cookie))
-        status, _, page = self.req(browser, '/cliente')
+        status, _, page = self.req(browser, '/')
         self.assertEqual(status, 200)
         self.assertIn(b'Portal do cliente', page)
         self.assertNotIn(b'href="/financeiro"', page)
@@ -187,7 +185,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         for route in ('/financeiro', '/clientes', '/os/1', '/prestadores'):
             status, _, body = self.req(browser, route)
-            self.assertEqual(status, 403, route)
+            self.assertIn(status, (403, 404), route)
             self.assertNotIn(b'Vis\xc3\xa3o geral', body)
 
     def test_provider_denied_client_routes(self):
@@ -199,30 +197,30 @@ class OfficinaWebHttpTest(unittest.TestCase):
     def test_customer_can_request_work_and_see_it(self):
         import re
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        status, _, form = self.req(browser, '/cliente/solicitar')
+        status, _, form = self.req(browser, '/solicitar')
         self.assertEqual(status, 200)
         csrf = re.search(rb'name="csrf" value="([^"]+)"', form)
         self.assertIsNotNone(csrf)
-        status, headers, _ = self.req(browser, '/cliente/solicitar', {
+        status, headers, _ = self.req(browser, '/solicitar', {
             'csrf': csrf.group(1).decode(), 'descricao': 'Teste de atendimento particular',
             'urgencia': 'Normal'})
         self.assertEqual(status, 303)
-        self.assertTrue(headers['Location'].startswith('/cliente/os/'))
-        status, _, body = self.req(browser, '/cliente/os')
+        self.assertTrue(headers['Location'].startswith('/os/'))
+        status, _, body = self.req(browser, '/os')
         self.assertEqual(status, 200)
-        self.assertIn(b'/cliente/os/', body)
+        self.assertIn(b'/os/', body)
 
     def test_cross_customer_item_is_not_visible(self):
         from flavors.autoseg.modules import cliente_fluxo_v94 as fluxo_pf
         work = self._create_owned_work(self.client_id, 'Teste de cliente A')
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        status, _, body = self.req(other, f'/cliente/os/{work}')
+        status, _, body = self.req(other, f'/os/{work}')
         self.assertIn(status, (403, 404))
         self.assertNotIn(b'Teste de cliente A', body)
 
     def test_csrf_is_required_for_customer_post(self):
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        status, _, body = self.req(browser, '/cliente/solicitar', {
+        status, _, body = self.req(browser, '/solicitar', {
             'csrf': 'wrong', 'descricao': 'Teste de pedido de servico valido',
             'urgencia': 'Normal'})
         self.assertEqual(status, 403)
@@ -235,8 +233,10 @@ class OfficinaWebHttpTest(unittest.TestCase):
             status, headers, _ = self.req(browser, '/entrar')
             self.assertEqual(status, 303)
             self.assertEqual(headers['Location'], '/login')
-            denied, _, _ = self.req(browser, '/cliente')
-            self.assertNotEqual(denied, 200)
+            denied, _, page = self.req(browser, '/')
+            self.assertEqual(denied, 200)
+            self.assertIn(b'login', page.lower())
+            self.assertNotIn(b'Minhas ordens de servi', page)
 
     def test_legacy_provider_login_still_works(self):
         browser = self.browser()
@@ -251,16 +251,18 @@ class OfficinaWebHttpTest(unittest.TestCase):
     def test_customer_logout_revokes_cookie(self):
         import re
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        status, _, html = self.req(browser, '/cliente')
+        status, _, html = self.req(browser, '/')
         csrf = re.search(rb'name="csrf" value="([^"]+)"', html)
         self.assertIsNotNone(csrf)
-        status, headers, _ = self.req(browser, '/cliente/sair',
+        status, headers, _ = self.req(browser, '/sair',
                                       {'csrf': csrf.group(1).decode()})
         self.assertEqual(status, 303)
-        self.assertEqual(headers['Location'], '/login')
+        self.assertEqual(headers['Location'], '/entrar')
         self.assertTrue(any('Max-Age=0' in x for x in headers.get_all('Set-Cookie') or ()))
-        status, _, _ = self.req(browser, '/cliente')
-        self.assertEqual(status, 303)
+        status, _, page = self.req(browser, '/')
+        self.assertEqual(status, 200)
+        self.assertIn(b'Entrar', page)
+        self.assertNotIn(b'Minhas ordens de servi', page)
     def _make_published_report(self):
         import hashlib
         from pathlib import Path
@@ -292,7 +294,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
         work, document = self._make_published_report()
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        route = f'/cliente/os/{work}/documento/{-document}'
+        route = f'/os/{work}/documento/{-document}'
         status, headers, content = self.req(browser, route)
         self.assertEqual(status, 200)
         self.assertEqual(headers.get_content_type(), 'application/pdf')
@@ -306,12 +308,12 @@ class OfficinaWebHttpTest(unittest.TestCase):
         work, document = self._make_published_report()
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        status, _, body = self.req(browser, '/cliente/documentos')
+        status, _, body = self.req(browser, '/documentos')
         self.assertEqual(status, 200)
-        self.assertIn(f'/cliente/os/{work}/documento/{-document}'.encode(), body)
-        status, _, body = self.req(other, '/cliente/documentos')
+        self.assertIn(f'/os/{work}/documento/{-document}'.encode(), body)
+        status, _, body = self.req(other, '/documentos')
         self.assertEqual(status, 200)
-        self.assertNotIn(f'/cliente/os/{work}/documento/'.encode(), body)
+        self.assertNotIn(f'/os/{work}/documento/'.encode(), body)
 
     def test_invoice_download_and_cross_customer_denial(self):
         import hashlib
@@ -335,7 +337,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
                  hashlib.sha256(payload).hexdigest(), ext.agora())).lastrowid
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        route = f'/cliente/os/{work}/documento/{invoice}'
+        route = f'/os/{work}/documento/{invoice}'
         status, headers, content = self.req(browser, route)
         self.assertEqual(status, 200)
         self.assertEqual(headers.get_content_type(), 'application/pdf')
@@ -356,7 +358,7 @@ class OfficinaWebHttpTest(unittest.TestCase):
             call_id = c.execute("""INSERT INTO v9_chamados
                 (organizacao_id,usuario_id,descricao,urgencia,criado_em,os_id)
                 VALUES(?,?,?,?,?,?)""", (org,self.client_id,'Owner call', 'Normal',ext.agora(),work)).lastrowid
-        route = f'/cliente/chamado/{call_id}/documento/{-document}'
+        route = f'/chamado/{call_id}/documento/{-document}'
         owner, _, _, _ = self.login('customer@example.test', self.client_pass)
         outsider, _, _, _ = self.login('other@example.test', self.client_pass)
         status, _, data = self.req(owner, route)
@@ -377,10 +379,10 @@ class OfficinaWebHttpTest(unittest.TestCase):
             self.assertIsNone(c.execute("SELECT client_id FROM account_links WHERE account_id=?",
                                         (account_id,)).fetchone()[0])
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        status, _, form = self.req(browser, '/cliente/solicitar')
+        status, _, form = self.req(browser, '/solicitar')
         self.assertEqual(200, status)
         csrf = re.search(rb'name="csrf" value="([^"]+)"', form).group(1).decode()
-        status, headers, _ = self.req(browser, '/cliente/solicitar', {
+        status, headers, _ = self.req(browser, '/solicitar', {
             'csrf': csrf, 'descricao': 'Primeira solicitação com vínculo PF novo', 'urgencia': 'Normal'})
         self.assertEqual(303, status)
         self.assertTrue(any('autosseg_unified=' in v for v in headers.get_all('Set-Cookie') or ()))
@@ -389,19 +391,19 @@ class OfficinaWebHttpTest(unittest.TestCase):
             self.assertIsNotNone(link[0])
             self.assertEqual(link[0], c.execute("SELECT cliente_pf_id FROM v9_usuarios WHERE id=?",
                                                  (self.client_id,)).fetchone()[0])
-        status, _, page = self.req(browser, '/cliente/os')
+        status, _, page = self.req(browser, '/os')
         self.assertEqual(200, status)
         work_path = headers['Location']
-        self.assertTrue(work_path.startswith('/cliente/os/'))
+        self.assertTrue(work_path.startswith('/os/'))
         self.assertIn(work_path.encode(), page)
         status, _, detail = self.req(browser, work_path)
         self.assertEqual(200, status)
         self.assertIn(b'Primeira solicita', detail)
         fresh, st, hd, _ = self.login('customer@example.test', self.client_pass)
         self.assertEqual(303, st)
-        self.assertEqual(200, self.req(fresh, '/cliente')[0])
+        self.assertEqual(200, self.req(fresh, '/')[0])
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        self.assertNotIn(b'Primeira solicita', self.req(other, '/cliente/os')[2])
+        self.assertNotIn(b'Primeira solicita', self.req(other, '/os')[2])
         self.assertEqual(link[0], accounts.sync_client_pf_link(self.db, account_id, self.client_id))
 
     def test_unconverted_client_login_is_explicitly_denied(self):
@@ -412,8 +414,9 @@ class OfficinaWebHttpTest(unittest.TestCase):
             self.assertIn(b'Credenciais inv',body)
             self.assertFalse(any('autosseg_unified=' in c for c in
                                  headers.get_all('Set-Cookie') or ()))
-            status,_,_=self.req(browser,'/cliente/solicitar')
-            self.assertEqual(303,status)
+            status,_,page=self.req(browser,'/solicitar')
+            self.assertEqual(200,status)
+            self.assertIn(b'Entrar',page)
 
     def test_account_sync_then_os_failure_rotates_session(self):
         import re
@@ -421,17 +424,17 @@ class OfficinaWebHttpTest(unittest.TestCase):
         from flavors.autoseg.modules import cliente_fluxo_v94 as fluxo_pf
         from officina.core import prestadores_ext as ext
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        _, _, form = self.req(browser, '/cliente/solicitar')
+        _, _, form = self.req(browser, '/solicitar')
         csrf = re.search(rb'name="csrf" value="([^"]+)"', form).group(1).decode()
         with patch.object(fluxo_pf, 'registrar_os_pf', side_effect=ValueError('fake write failure')):
-            status, headers, _ = self.req(browser, '/cliente/solicitar', {
+            status, headers, _ = self.req(browser, '/solicitar', {
                 'csrf': csrf, 'descricao': 'Pedido que deve falhar depois do vínculo',
                 'urgencia': 'Normal'})
         self.assertEqual(303, status)
-        self.assertEqual('/cliente/solicitar?erro=1', headers['Location'])
+        self.assertEqual('/solicitar?erro=1', headers['Location'])
         self.assertTrue(any('autosseg_unified=' in c for c in
                             headers.get_all('Set-Cookie') or ()))
-        status, _, page = self.req(browser, '/cliente/os')
+        status, _, page = self.req(browser, '/os')
         self.assertEqual(200, status)
         self.assertNotIn(b'Pedido que deve falhar', page)
         with ext.db(self.db) as c:
@@ -449,7 +452,9 @@ class OfficinaWebHttpTest(unittest.TestCase):
             browser,status,headers,body=self.login('customer@example.test',self.client_pass)
             self.assertEqual(200,status)
             self.assertIn(b'Credenciais inv',body)
-            self.assertEqual(303,self.req(browser,'/cliente/solicitar')[0])
+            status, _, page = self.req(browser,'/solicitar')
+            self.assertEqual(200, status)
+            self.assertIn(b'Entrar', page)
             write.assert_not_called()
 
     def test_own_organizational_call_visible_associated_work_and_cross_client_denied(self):
@@ -463,17 +468,17 @@ class OfficinaWebHttpTest(unittest.TestCase):
             other_call = c.execute("INSERT INTO v9_chamados(organizacao_id,usuario_id,descricao,urgencia,criado_em) VALUES(?,?,?,?,?)",
                             (org,self.other_id,'Foreign call details','Normal',ext.agora())).lastrowid
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-        status, _, page = self.req(browser, '/cliente/os')
+        status, _, page = self.req(browser, '/os')
         self.assertEqual(200, status)
-        self.assertIn(f'/cliente/chamado/{own}'.encode(), page)
-        status, _, page = self.req(browser, f'/cliente/chamado/{own}')
+        self.assertIn(f'/chamado/{own}'.encode(), page)
+        status, _, page = self.req(browser, f'/chamado/{own}')
         self.assertEqual(200, status)
         self.assertIn(b'OS vinculada', page)
-        status, _, page = self.req(browser, f'/cliente/chamado/{other_call}')
+        status, _, page = self.req(browser, f'/chamado/{other_call}')
         self.assertIn(status, (403,404))
         self.assertNotIn(b'Foreign call details', page)
         other, _, _, _ = self.login('other@example.test', self.client_pass)
-        status, _, page = self.req(other, f'/cliente/chamado/{own}')
+        status, _, page = self.req(other, f'/chamado/{own}')
         self.assertIn(status, (403,404))
         self.assertNotIn(b'Own organizational call', page)
 

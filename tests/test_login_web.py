@@ -291,7 +291,7 @@ class UnifiedLoginHttpTest(unittest.TestCase):
                 {'identificador': 'client@example.test',
                  'senha': self.client_password})
             self.assertEqual(303, status)
-            self.assertEqual('/cliente', headers['Location'])
+            self.assertEqual('/', headers['Location'])
             self.assertIsNotNone(_unified_cookie(headers))
             self._set_provider_active(False)
             status, headers, body = _request(
