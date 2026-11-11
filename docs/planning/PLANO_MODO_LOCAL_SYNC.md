@@ -8,6 +8,14 @@ mudanças para o servidor quando ele voltar.
 > **Visão geral multicliente:** `docs/planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`.
 > Este documento detalha o sync; a visão descreve os modos de operação, os
 > clientes, os custos e os limites do produto.
+>
+> **Análise externa (2026-11-11):** a conversa registrada em
+> [`LOCAL_SYNC_MODES_ANALYSIS.md`](LOCAL_SYNC_MODES_ANALYSIS.md) propõe quatro
+> modos como presets de um mesmo motor (`storage`, `transports`, `authority`),
+> autoridade por entidade, version vectors em mesh, assinatura de mudanças e
+> Syncthing apenas como transporte de journal/blobs. Ela foi escrita sem ler o
+> código e sem saber da direção futura de reescrita do núcleo/protocolo em
+> Rust; confirme nomes e comportamento no checkout antes de implementar.
 
 ---
 
@@ -436,7 +444,9 @@ Riscos altos:
 
 Decisões que precisam ser tomadas antes de código:
 
-1. O servidor é **autoridade** ou apenas mais um peer?
+1. O servidor é **autoridade** ou apenas mais um peer? Qual é a autoridade
+   **por entidade** em cada modo (merge, append-only, authority-required,
+   manual)? Ver [`LOCAL_SYNC_MODES_ANALYSIS.md`](LOCAL_SYNC_MODES_ANALYSIS.md).
 2. Financeiro/estoque aceitam escrita offline? Com qual revisão?
 3. O número da OS pode ser provisório? Quem atribui o definitivo?
 4. E2E: servidor vê conteúdo ou não?
