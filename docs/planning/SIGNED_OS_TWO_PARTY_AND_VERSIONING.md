@@ -262,6 +262,11 @@ ser respondidas aos poucos, com uso real, e registradas como ADR/decisão:
 - Chave da empresa: uma chave HSM ou quórum de admins?
 - O PDF é o documento legal ou o snapshot semântico é a verdade?
 - Qual o prazo de break-glass e o quórum de recuperação?
+- Como a chave é desbloqueada no dia a dia: passphrase manual, Keychain/OS,
+  hardware ou a senha de login no modo de conveniência? O modo de conveniência
+  é opt-in, de menor garantia, e a senha passa a ser um fator de assinatura;
+  ver [`PGP_MULTISIGNATURE_ARCHITECTURE.md`](PGP_MULTISIGNATURE_ARCHITECTURE.md)
+  §3.2.
 
 Formato de registro sugerido:
 

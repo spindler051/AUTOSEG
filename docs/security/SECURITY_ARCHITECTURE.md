@@ -270,6 +270,11 @@ loopback/development only.
 - No secrets in the repository; company identity and integrations come from
   environment/configuration.
 - Tokens are stored as hashes where the design supports it.
+- Private signing keys are not stored in plaintext. The preferred modes are OS
+  keychain or hardware. If an encrypted signing key is stored server-side, the
+  convenience mode is opt-in, uses an Argon2id-derived KEK, keeps the unlocked
+  key only in memory and warns that the login password becomes a signing input.
+  See `docs/planning/PGP_MULTISIGNATURE_ARCHITECTURE.md` §3.2.
 - Never log tokens, cookies, passwords, private keys or full request bodies.
 - Rotate provider/API tokens after exposure; revoke old tokens.
 - Password reset must revoke desktop/API sessions (currently a gap for desktop

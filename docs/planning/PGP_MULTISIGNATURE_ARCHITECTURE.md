@@ -32,7 +32,9 @@ Decisões centrais:
    explícito).
 8. Chave privada **não fica no servidor em texto puro**. O padrão recomendado é
    dispositivo do administrador/hardware. Armazenar chave privada criptografada
-   no banco é um perfil de menor garantia, nunca o padrão silencioso.
+   no banco é um perfil de menor garantia, nunca o padrão silencioso. O modo de
+   conveniência que usa a senha de login como fator de desbloqueio é o perfil de
+   menor garantia; exige opt-in explícito, aviso na UI e política de senha.
 9. Assinaturas são **independentes + verificação de quórum**; não se presume
    threshold cryptography nativa no OpenPGP.
 10. O histórico local é **tamper-evident**, não imutável por si só. Checkpoints
@@ -79,7 +81,9 @@ criptografada. Isso é possível, mas **reduz a garantia**: um servidor
 comprometido que capture a senha de desbloqueio ou o processo de assinatura pode
 assinar em nome do admin.
 
-Se esse perfil for aceito, ele deve ser explícito e separado:
+Se esse perfil for aceito, ele deve ser explícito e separado. Este é o perfil
+recomendado quando a chave fica no banco; a seção 3.2 abre uma exceção
+consciente para quem aceitar usar a senha de login como desbloqueio:
 
 - Argon2id com salt individual e parâmetros calibrados;
 - AES-256-GCM com nonce único e AAD vinculando `admin_id`, `key_fingerprint` e
@@ -94,7 +98,75 @@ Se esse perfil for aceito, ele deve ser explícito e separado:
 Não aplicar hash irreversível à chave privada: ela precisa ser recuperável para
 assinar. Hash é para senha de autenticação, não para a chave em si.
 
-### 3.2 Revogação, rotação e recuperação
+### 3.2 Modo conveniência: senha de login como fator de desbloqueio
+
+O modo de conveniência existe para o usuário não precisar decorar uma passphrase
+longa. Ele é **opt-in, de menor garantia e nunca o padrão silencioso**.
+
+Desenho:
+
+1. A chave privada OpenPGP é protegida por uma passphrase aleatória de alta
+   entropia (ou por uma DEK aleatória). O usuário não precisa memorizá-la.
+2. Uma **KEK** é derivada da senha de login com **Argon2id**, salt individual,
+   parâmetros versionados e contexto de domínio
+   (`autoseg.signing-key.v1`). Não reutilizar o hash de login armazenado como
+   chave.
+3. A passphrase/DEK é envolvida com **AES-256-GCM** ou ChaCha20-Poly1305. O
+   envelope guarda ciphertext, nonce, salt, parâmetros, fingerprint da chave e
+   AAD vinculando conta/fingerprint/versão.
+4. No login, o cliente (GTK/nativo) deriva a KEK, desembrulha a passphrase, abre
+   a chave PGP e mantém a chave privada **somente em memória**.
+5. Ao sair, bloquear a tela, expirar a sessão ou após um timeout curto, o cache
+   é descartado. Assinaturas de alto risco podem exigir reautenticação.
+6. No desbloqueio da chave, o servidor não recebe a KEK, a passphrase ou a
+   chave privada em claro; a derivação e o desbloqueio acontecem no cliente. Se
+   o envelope for armazenado no banco, ele contém apenas material cifrado. A
+   senha de login ainda pode ser exposta na autenticação; ver o risco crítico
+   abaixo.
+
+**Consequência central:** neste modo, a senha de login passa a ser uma entrada
+para a capacidade de assinatura. Uma senha fraca, reutilizada ou vazada reduz a
+garantia da assinatura; um envelope vazado pode ser atacado offline.
+
+**Risco crítico do fluxo atual:** hoje a senha de login é enviada ao servidor
+para autenticação. Um servidor comprometido pode capturá-la e, se também tiver
+o envelope da chave, desbloquear a chave e assinar. Isso quebra a premissa de
+que o servidor não consegue assinar em nome do usuário. Portanto, o modo de
+conveniência com a senha de login só é aceitável se:
+
+- a autenticação não expuser a senha crua ao servidor (ex.: PAKE/OPAQUE ou
+  derivação/verificador separado no cliente), **ou**
+- o risco for aceito explicitamente e o envelope não estiver no servidor, **ou**
+- houver uma camada adicional (hardware/biometria/segundo fator) que o servidor
+  não consiga contornar.
+
+Caso contrário, a recomendação é Keychain/OS, hardware ou uma senha de
+desbloqueio separada que nunca sai do dispositivo.
+
+O sistema não controla a escolha da senha do usuário, mas controla as proteções
+ao redor:
+
+- exigir comprimento/entropia mínimos e bloquear senhas comuns/comprometidas;
+- Argon2id calibrado, salt por usuário e parâmetros versionados;
+- rate limit e auditoria de tentativas de desbloqueio;
+- aviso explícito na UI: “sua senha de login também protege sua chave de
+  assinatura; use uma senha longa e única”;
+- reautenticação/biometria para assinaturas de alto valor;
+- opção de migrar para Keychain/OS, hardware ou passphrase separada;
+- nunca ativar o modo de conveniência sem consentimento informado.
+
+**Responsabilidades:** o usuário escolhe e protege a senha; o sistema recomenda,
+impõe mínimos e informa o risco. Não é aceitável esconder que a senha virou
+fator de assinatura nem tratar esse modo como equivalente ao hardware.
+
+| Modo | Onde a chave privada fica | Fator de desbloqueio | Garantia |
+|---|---|---|---|
+| Manual | Dispositivo, protegida por passphrase | Passphrase digitada | Alta com passphrase forte; menor conveniência |
+| Keychain/OS | Keychain do sistema | Login/biometria do SO | Alta; depende do dispositivo |
+| Hardware | YubiKey/OpenPGP card/TPM/Secure Enclave | PIN/biometria | Mais alta; requer hardware |
+| Conveniência | Envelope cifrado no banco/dispositivo | Senha de login (KEK) | Menor; aceitável só com opt-in, Argon2id e aviso |
+
+### 3.3 Revogação, rotação e recuperação
 
 - Revogação é um evento assinado; vale a partir de `revoked_at`.
 - Assinaturas antigas continuam válidas para o passado; não contam para eventos
