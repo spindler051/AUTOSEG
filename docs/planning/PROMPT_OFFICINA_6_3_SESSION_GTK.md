@@ -3,7 +3,7 @@
 **Uso:** colar no ChatGPT. Trabalha sobre uma cópia do repositório, **não faz
 commit**, devolve ZIP.
 
-**Base:** `c5a836b` + peças 6.1 e 6.2 aplicadas.
+**Base:** `e9973b8` + peça 6.2 aplicada.
 **Dependências:** 6.1 (shell/login/cliente) e 6.2 (papéis/permissões).
 **Entrega:** ZIP com arquivos completos, patch, testes e notas.
 

@@ -1,6 +1,6 @@
 # Pipeline — Officina Web 6.1–6.3
 
-**Base de código:** `c5a836b` (main após login unificado 5.1–5.5).
+**Base de código:** `e9973b8` (main após login unificado 5.1–5.5 e Officina Web 6.1).
 **Formato:** cada peça é um prompt independente; o ChatGPT trabalha numa cópia
 do repositório, **não faz commit** e devolve ZIP. O revisor aplica, testa e
 integra.
