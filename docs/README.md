@@ -36,8 +36,9 @@ histórico ou rascunho — em especial o conteúdo de `docs/archive/`.
 Não são compromissos nem autorização de implementação. A ordem prática está no
 [`ROADMAP.md`](ROADMAP.md).
 
-- [Site único, identidade e permissões por objeto](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md) — auditoria do estado atual + arquitetura-alvo; não implementado.
+- [Site único, identidade e permissões por objeto](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md) — auditoria do estado atual + arquitetura-alvo; 5.1–5.5 e 6.1–6.4 integradas atrás de flags, com ativação de produção pendente.
 - [Officina Web e Officina GTK](planning/OFFICINA_WEB_AND_GTK.md) — como o site e o GTK atuais originam os produtos genéricos; AUTOSEG como primeira prestadora.
+- [Cliente no GTK — peça 6.5](planning/GTK_CLIENT_MODE.md) — análise das lacunas, MVP remote-only e critérios de aceite; planejado, não implementado.
 - [Contrato compartilhado entre site e GTK](planning/WEB_GTK_SHARED_CONTRACT.md) — mesma tela/comando/permissão, renderização nativa em cada plataforma; documentação, não implementado.
 - [Valor negociado na OS](planning/OS_NEGOTIATED_VALUE_UX.md) — checkbox, valor final e desconto explícito no relatório; proposta, não implementado.
 - [PGP, multiassinatura e integridade criptográfica](planning/PGP_MULTISIGNATURE_ARCHITECTURE.md)

@@ -1,11 +1,11 @@
 # Site único, identidade e permissões por objeto
 
-**Status:** arquitetura-alvo e auditoria do estado atual. **Nenhuma mudança de
-código nesta fase.** Autenticação, permissões e migração de dados são N3/N4:
-precisam de revisão humana e implantação gradual, preferencialmente atrás de
-flag.
+**Status:** arquitetura-alvo e auditoria do estado atual. As peças 5.1–5.5 e
+6.1–6.4 estão integradas atrás de flags; a ativação de produção segue pendente.
+Autenticação, permissões e migração de dados são N3/N4: precisam de revisão
+humana e implantação gradual, preferencialmente atrás de flag.
 
-**Última atualização:** 2026-11-10
+**Última atualização:** 2026-11-11
 
 **Decisão de produto:** o AUTOSEG deixa de ser dois portais separados e passa a
 ter **um link, um site e um login**. Depois do login, o sistema identifica a
@@ -894,6 +894,9 @@ Nenhuma URL histórica deve quebrar sem aviso e redirecionamento.
 
 - extrair shell, auth, política e contratos para Officina;
 - manter AUTOSEG como flavor/prestadora;
+- habilitar o cliente no GTK remote-only como prova de modularidade (6.5),
+  reutilizando `auth`, `SessionContext`, `client_service` e `ObjectPolicy`;
+- deixar documentos/PDF, “Em rota”, modo local e paridade completa para a 6.6;
 - decidir banco compartilhado vs banco por prestadora;
 - só então permitir múltiplas prestadoras na mesma instalação;
 - retirar os portais antigos quando houver paridade e testes.

@@ -1,65 +1,134 @@
 # Roadmap vigente
 
-**Atualizado:** 2026-11-10
+**Atualizado:** 2026-11-11
+**Versão:** `9.6.0-dev.73`
+**Branch:** `main`
 **Foco:** produção do AUTOSEG. Arquitetura genérica e outros toolkits ficam
 para depois.
 
 > **Direção registrada em 2026-11-10:** o AUTOSEG terá **um site, um link e um
-> login**, com conta/vínculo/contexto e política por objeto. A implementação
-> começa por identidade e permissões, não pela interface. O AUTOSEG é a primeira
-> prestadora de serviço do ecossistema Officina; Officina Web/GTK são extrações
-> posteriores. Ver
+> login**, com conta/vínculo/contexto e política por objeto. O AUTOSEG é a
+> primeira prestadora de serviço do ecossistema Officina; Officina Web/GTK são
+> extrações posteriores. Ver
 > [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
 > e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
-## Agora
+## Concluído
+
+### Identidade, login e sessões (5.1–5.5)
+
+- **5.1 — accounts:** schema opt-in `accounts`, `account_identifiers`,
+  `account_links` e `login_policy`; migração legada idempotente com `dry_run`.
+- **5.2 — auth:** autenticação por e-mail, CPF, telefone ou nametag, com
+  fallback legado e mensagens sem enumeração.
+- **5.3 — sessão:** `web_session` em memória com TTL, token/CSRF, revalidação e
+  revogação; depois, SQLite durável atrás de `AUTOSEG_WEB_SESSION_DURABLE`.
+- **5.4 — rota:** primeira rota unificada, ainda provider-only; o cliente
+  entrou na 6.1 e a rota final foi consolidada em `/login`.
+- **5.5 — compatibilidade:** logout, reset de senha, desativação, arquivamento e
+  mudança de papel revogam as sessões; rollback por flag.
+- **Rota final:** `/login` é a única tela de entrada; `/entrar` foi removida e
+  responde `404`. Com a flag desligada, `/login` serve o formulário antigo do
+  prestador como rollback.
+- **Tela:** o login unificado reutiliza o split-screen do AUTOSEG, com campo
+  único “E-mail, CPF ou telefone”, e não o card genérico.
+- **GTK:** o botão/menu **Sair** agora revoga o token no servidor, limpa a
+  sessão salva e volta ao login.
+
+### Officina Web (6.1–6.4)
+
+- **6.1 — shell e cliente:** uma shell web, home do cliente e login para os dois
+  papéis.
+- **6.2 — papéis e permissões:** papéis de cliente, `work_item_access`,
+  `/contas`, extração de `os_commands` e a flag independente
+  `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`, desligada por padrão.
+- **6.3 — sessão e contexto:** `SessionContext`, `/api/v1/desktop/me` com
+  permissões, navegação do GTK por permissão e sessão durável opt-in.
+- **6.4 — shell única:** a mesma chrome, a mesma raiz e uma única tabela de
+  navegação para topo e sidebar; `/cliente` virou alias e “Em rota” é um módulo
+  client-only.
+- **Banco DEV:** 9 contas, 9 vínculos, `ready=True`; backup anterior à migração
+  preservado.
+
+### Ainda não é produção
+
+As flags continuam desligadas por padrão. A ativação em produção depende das
+decisões abaixo, não apenas do código integrado:
+
+- `AUTOSEG_UNIFIED_LOGIN`;
+- `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` — bloqueada pelo TOCTOU entre autorização
+  e writer;
+- `AUTOSEG_WEB_SESSION_DURABLE` — decisão de produção pendente.
+
+## Agora — P0
 
 1. **Fechar a numeração de OS na MAIN**
    - ensaiar a migração em cópia da MAIN;
    - backup, janela de manutenção e smoke;
    - manter aliases para links, PDFs e e-mails antigos;
    - não reescrever documentos já publicados.
-2. **Login e troca real de modo no GTK**
-   - conta local × conta do servidor com vínculo explícito;
-   - token revogável para “lembrar este dispositivo”;
-   - flag em DEV até revisão humana externa.
-3. **Permissões em runtime**
-   - ligar `policy.yaml` ao `AppService`;
-   - aplicar AUT-001 a AUT-021 no servidor, não só na interface;
-   - employee vê apenas OS próprias ou em que participa; customer vê apenas as
-     próprias.
-4. **API remota mínima**
-   - clientes e OS;
-   - `HttpService` usando o mesmo contrato do modo local;
-   - sem fallback silencioso para o banco local.
+2. **Fechar o gate de autorização por objeto**
+   - corrigir ou aceitar formalmente o TOCTOU entre autorização e writer;
+   - rodar testes negativos de isolamento entre prestadoras e entre clientes;
+   - decidir a ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção.
+3. **Decidir a sessão durável em produção**
+   - retenção, revogação entre processos, backup do SQLite de sessões;
+   - manter `AUTOSEG_WEB_SESSION_DURABLE` desligada até a decisão.
+4. **Consolidar a API/contrato do desktop**
+   - manter a paridade do prestador entre GTK, site e API;
+   - preparar os endpoints client-safe que a peça 6.5 vai consumir.
 
-### Gate de consolidação (até fechar os P0 de autorização)
+## Próximo — 6.5 Cliente no GTK (remote-only)
 
-Enquanto a autorização por objeto, o isolamento por prestadora e a
-consolidação da OS não estiverem aplicados no serviço, **não iniciar**:
+**Objetivo:** permitir que uma conta cliente entre no app GTK e veja apenas os
+próprios dados, reutilizando autenticação, sessão e política do site, sem
+duplicar regra de negócio no widget.
 
-- multi-prestadora ou Officina Web multi-tenant;
-- expansão do Workaholic para novos domínios;
-- sistema de plugins;
-- novos portais ou telas duplicadas em web/GTK sem contrato compartilhado;
-- novos papéis ou funcionalidades que dependam de permissões não aplicadas.
+**Depende de:** fechar o gate P0 de autorização por objeto. É a prova de
+modularidade do GTK, não um segundo portal.
 
-Foco do gate: autorização no serviço, uma única regra de OS, dinheiro em
-centavos/`Decimal`, portais finos, backup/restore e testes negativos. Uma
-feature que dependa de papel só entra atrás de flag e com teste provando a
-negação.
+**O que falta:**
 
-## Próximo
+1. **Login desktop de cliente** — `/api/v1/desktop/login` hoje usa
+   `prestador_auth` e devolve `prestador`. Precisa aceitar cliente via
+   `auth.authenticate` e devolver o contexto.
+2. **Sessão desktop genérica** — `desktop_sessoes` só guarda `prestador_id`, e
+   `Sessao` é provider-centric. Precisa de conta/identidade, tipo, cliente/org,
+   papel e permissões.
+3. **API desktop client-safe** — `/api/v1/desktop/me` força provider e as rotas
+   são de prestador. No MVP, faltam home e próprias OS com autorização no
+   serviço; documentos/PDF e solicitações ficam para a 6.6.
+4. **UI GTK de cliente** — o login diz “E-mail do prestador” e a `Janela` monta
+   as páginas do prestador. Falta uma projeção cliente com navegação reduzida e
+   sem financeiro/administração.
+5. **Modo local** — o modo local do GTK também é provider-only. No MVP, o
+   cliente fica **remote-only**; modo local é uma decisão posterior.
+6. **Permissões e testes negativos** — cliente só vê as próprias OS/documentos;
+   rotas de prestador devem responder `403`; testar troca de papel,
+   desativação, revogação e logout.
+7. **Rollout** — flag própria, smoke manual e rollback; nada de cliente no GTK
+   em produção antes da revisão humana.
 
+**MVP aceitável:** login remoto de cliente, `/me` com contexto cliente, home
+somente leitura com as próprias OS, logout e bloqueio total das rotas de
+prestador.
+
+**Fora do MVP:** pedido de serviço, documentos/PDF, “Em rota”, financeiro,
+modo local e paridade visual completa. Esses itens ficam para a 6.6.
+
+A análise detalhada, decisões e critérios de aceite estão em
+[`planning/GTK_CLIENT_MODE.md`](planning/GTK_CLIENT_MODE.md).
+
+## Depois
+
+- **6.6 — paridade cliente no GTK:** solicitações, documentos/PDF, “Em rota”,
+  modo local (se aprovado) e paridade com o site;
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e
   estoque;
 - backup/restauração verificados;
 - revisão externa dos módulos de dinheiro, autenticação, permissões, schema e
   migração;
-- primeiros ciclos de revisão com IA externa registrados em `docs/reviews/`.
-
-## Depois
-
+- primeiros ciclos de revisão com IA externa registrados em `docs/reviews/`;
 - protocolo de trabalho genérico: vocabulário, fluxo configurável e requisitos
   de conclusão por flavor; planejamento em
   [`planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md`](planning/WORK_PROTOCOL_TERMINOLOGY_AND_WORKFLOW.md);
@@ -77,7 +146,8 @@ negação.
 - 20 GUIs em 20 toolkits;
 - sincronizar `dados.db` como arquivo;
 - trocar SQLite por Postgres sem dor real;
-- publicar na MAIN sem revisão humana externa para mudanças N3/N4.
+- publicar na MAIN sem revisão humana externa para mudanças N3/N4;
+- criar um segundo portal de cliente dentro do GTK.
 
 ## Critério para avançar
 

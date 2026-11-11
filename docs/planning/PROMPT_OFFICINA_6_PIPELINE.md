@@ -1,31 +1,34 @@
-# Pipeline — Officina Web 6.1–6.4
+# Pipeline — Officina Web 6.1–6.5
 
-**Base de código:** `4304ef7` (main após login unificado 5.1–5.5, Officina Web 6.1, papéis/permissões 6.2 e sessão durável 6.3).
+**Base de código:** `main` após `15ddcd0`; 5.1–5.5 e 6.1–6.4 integradas,
+com a rota final de login em `/login`. A 6.5 ainda não foi iniciada.
 **Formato:** cada peça é um prompt independente; o ChatGPT trabalha numa cópia
 do repositório, **não faz commit** e devolve ZIP. O revisor aplica, testa e
 integra.
 
 ## Ordem
 
-| Ordem | Peça | Depende de | Entrega |
-|---|---|---|---|
-| 1 | [6.1 Shell, login e cliente](PROMPT_OFFICINA_6_1_SHELL.md) | 5.1–5.5 | `officina/web`, `/entrar` para os dois papéis, home do cliente |
-| 2 | [6.2 Papéis e permissões](PROMPT_OFFICINA_6_2_ROLES.md) | 6.1 | papéis de cliente, matriz, `ObjectPolicy` no serviço |
-| 3 | [6.3 Sessão durável e GTK](PROMPT_OFFICINA_6_3_SESSION_GTK.md) | 6.1–6.2 | SQLite de sessões, contexto compartilhado, GTK |
-| 4 | [6.4 Shell web unificado](PROMPT_OFFICINA_6_4_SHARED_SHELL.md) | 6.1–6.3 | a mesma shell para provider e client; `/cliente` como alias, módulo client-only |
+| Ordem | Peça | Depende de | Entrega | Status |
+|---|---|---|---|---|
+| 1 | [6.1 Shell, login e cliente](PROMPT_OFFICINA_6_1_SHELL.md) | 5.1–5.5 | `officina/web`, login para os dois papéis, home do cliente | Integrada |
+| 2 | [6.2 Papéis e permissões](PROMPT_OFFICINA_6_2_ROLES.md) | 6.1 | papéis de cliente, matriz, `ObjectPolicy` no serviço | Integrada atrás de flag |
+| 3 | [6.3 Sessão durável e GTK](PROMPT_OFFICINA_6_3_SESSION_GTK.md) | 6.1–6.2 | SQLite de sessões, contexto compartilhado, GTK | Integrada atrás de flag |
+| 4 | [6.4 Shell web unificado](PROMPT_OFFICINA_6_4_SHARED_SHELL.md) | 6.1–6.3 | a mesma shell para provider e client; `/cliente` como alias, módulo client-only | Integrada; login consolidado em `/login` |
+| 5 | [6.5 Cliente no GTK](GTK_CLIENT_MODE.md) | 6.1–6.4 + gate P0 | login cliente remote-only, `/me`, home com as próprias OS, logout, bloqueio de rotas | Planejada |
 
 A 6.1 pode ser gerada sem a 6.2; a 6.2 assume a 6.1 aplicada; a 6.3 assume as
-duas; a 6.4 corrige a apresentação e assume 6.1–6.3. Se o ChatGPT não tiver a
-peça anterior no checkout, deve assumir a interface congelada e registrar em
-`NOTES.md` que a integração será validada pelo revisor.
+duas; a 6.4 corrige a apresentação e assume 6.1–6.3. A 6.5 só começa depois de
+fechar ou aceitar formalmente o TOCTOU da autorização por objeto.
 
 ## Decisões já tomadas
 
-- **Um site, uma origem, um login**: prestador e cliente entram por `/entrar`,
-  com o mesmo cookie/sessão. O sistema decide a home pelo vínculo.
+- **Um site, uma origem, um login**: prestador e cliente entram por `/login`,
+  com o mesmo cookie/sessão. O sistema decide a home pelo vínculo. `/entrar`
+  foi removida e responde `404`.
 - **Provider UI preservada**: a experiência do prestador continua a mesma; muda
-  o nome do produto para Officina Web e o rótulo de contexto.
-- **Cliente no primeiro corte**: próprias OS, documentos/PDF e pedido de
+  o nome do produto para Officina Web e o rótulo de contexto. A tela de login
+  mantém o split-screen do AUTOSEG.
+- **Cliente no primeiro corte web**: próprias OS, documentos/PDF e pedido de
   serviço. Sem financeiro, sem OS anônima, sem papéis nesta primeira peça.
 - **Shell única:** provider e client usam a mesma chrome, o mesmo login e a
   mesma raiz; “Portal do prestador”/“Portal do cliente” são rótulos de
@@ -35,24 +38,25 @@ peça anterior no checkout, deve assumir a interface congelada e registrar em
   fase; escopo organizacional via `v9_responsaveis`/`v9_vinculos`.
 - **Matriz provisória**: fica em `policy.yaml`/`PADRAO` e será ajustada com uso
   real; não hardcode no handler.
-- **GTK**: contrato e sessão compartilhados; não criar modo cliente no GTK
-  agora. Se o GTK exigir duplicar regra, parar e documentar.
+- **GTK**: continua provider-only na 6.4; a 6.5 planeja o cliente remote-only,
+  reutilizando `auth`, `SessionContext`, `client_service` e `ObjectPolicy`, sem
+  duplicar regra no widget.
 - **Fora deste bloco**: OS anônima/anti-abuso, financeiro do cliente, editor
   granular de permissões, migração completa de escrita para `accounts`,
-  multi-prestadora, reescrita big-bang do portal.
+  multi-prestadora, reescrita big-bang do portal, modo local cliente.
 
 ## Como conduzir
 
-1. Envie a 6.1. Quando o ZIP chegar, o revisor aplica, roda a suíte, revisa
-   segurança/arquitetura e devolve o que estiver errado.
-2. Enquanto a 6.1 é revisada, a 6.2 pode ser gerada; ela assume a interface da
-   6.1.
-3. Repita para a 6.3.
-4. A 6.4 corrige a apresentação: uma shell para os dois contextos, `/cliente`
-   como alias e um módulo client-only real.
-5. Só depois de 6.1–6.4 integradas e revisadas se discute ativação em produção
-   e os blocos seguintes (OS anônima, financeiro do cliente, migração de
-   escrita para accounts, shell GTK completo).
+1. 6.1–6.4 estão integradas e revisadas; o login final é `/login`.
+2. Antes da 6.5, fechar ou aceitar o TOCTOU e decidir a ativação de
+   `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção.
+3. Enviar a 6.5 em escopo remote-only: login, `/me`, home com as próprias OS,
+   logout e bloqueio de rotas de prestador. Documento de análise em
+   [`GTK_CLIENT_MODE.md`](GTK_CLIENT_MODE.md).
+4. Só depois de 6.5 integrada se discute 6.6 (documentos/PDF, “Em rota”, modo
+   local, paridade completa) e ativação em produção.
+5. OS anônima, financeiro do cliente e migração de escrita para `accounts`
+   continuam em blocos posteriores.
 
 ## Critérios de rejeição
 

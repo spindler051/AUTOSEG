@@ -1,5 +1,8 @@
 # Peça 6.4 — shell web unificado (prestador e cliente no mesmo site)
 
+> **Status 2026-11-11:** integrada. A rota de login foi consolidada em
+> `/login`; `/entrar` foi removida. Ver [`ROADMAP.md`](../ROADMAP.md).
+
 **Uso:** colar no ChatGPT. Trabalha sobre uma cópia do repositório, **não faz
 commit**, devolve ZIP.
 

@@ -1,6 +1,6 @@
 # Paridade entre superfícies e papéis
 
-**Atualizado:** 2026-11-10
+**Atualizado:** 2026-11-11
 
 ## Regra
 
@@ -18,7 +18,7 @@ Papéis atuais:
 |---|---|---|
 | **Admin** | GTK e Portal do Prestador | administrar a organização, prestadores, estoque, caixa, configuração e OS |
 | **Funcionário/prestador** | GTK e Portal do Prestador | trabalhar nas OS próprias ou em que participa; sem administração |
-| **Cliente** | Portal do Cliente | próprias solicitações/OS, documentos e dados |
+| **Cliente** | Portal do Cliente e `/login` do site (flag) | próprias solicitações/OS, documentos e dados |
 
 Admin e funcionário usam a mesma tabela `prestadores`; a diferença é o vínculo
 em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
@@ -32,6 +32,13 @@ em `v9_admin_prestadores`. Cliente usa conta própria em `v9_usuarios`.
 - prestadores, catálogo, composição, estoque, caixa da empresa;
 - notas fiscais e e-mails (lista e preparação);
 - conexão/servidor e controles dos portais locais.
+
+**Site único (Officina Web, flag ligada)**
+
+- login `/login` para prestador e cliente;
+- mesma shell e navegação filtrada por contexto/permissão;
+- cliente vê as próprias OS, documentos/PDF e pedido de serviço;
+- o portal antigo do cliente na 8765 continua disponível.
 
 **Portal do Prestador**
 
@@ -53,11 +60,13 @@ adicionadas ao GTK, o conjunto de funções do prestador está praticamente
 espelhado. A exceção é **Conexões**, que é configuração do cliente desktop, não
 uma função de negócio do servidor.
 
-O GTK continua sem login de cliente; o Portal do Cliente segue separado.
+O GTK continua sem login de cliente; o site já aceita cliente com a flag e o
+Portal do Cliente antigo segue separado na 8765.
 
 ## Lacunas atuais
 
-- O login do GTK aceita somente prestador; login de cliente no GTK ainda não.
+- O login do GTK aceita somente prestador; login de cliente no GTK ainda não
+  (planejado na peça 6.5, remote-only).
 - A API desktop identifica o prestador, mas ainda não aplica todas as regras
   admin × funcionário em cada ação. Isso é a próxima fatia de permissões.
 - Esconder um botão na UI não é autorização; a regra precisa viver no serviço.
@@ -71,9 +80,11 @@ O GTK continua sem login de cliente; o Portal do Cliente segue separado.
 
 ## Próximo passo
 
-Ligar `policy.yaml` ao `AppService` e aplicar AUT-001 a AUT-021 no servidor.
+Ligar `policy.yaml` ao `AppService` e aplicar AUT-001 a AUT-021 no servidor,
+fechando o gate P0 de autorização por objeto.
 
-**Login de cliente no GTK:** adiado. É nicho para o momento e não entra no
-escopo atual. A decisão é manter `Sessao`, `AppService` e `HttpService` limpos
-para que esse login seja uma extensão pequena quando houver demanda real, sem
-reescrever a autenticação.
+**Login de cliente no GTK:** planejado como peça **6.5**, remote-only, depois
+desse gate. Faltam login desktop de cliente, sessão genérica, endpoints
+client-safe, navegação reduzida e testes negativos. Ver
+[`planning/GTK_CLIENT_MODE.md`](planning/GTK_CLIENT_MODE.md) e
+[`ROADMAP.md`](ROADMAP.md).

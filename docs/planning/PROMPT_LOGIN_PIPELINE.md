@@ -1,5 +1,9 @@
 # Pipeline — login unificado em 5 peças
 
+> **Status 2026-11-11:** 5.1–5.5 integradas. A rota final é `/login`;
+> `/entrar` foi removida e responde `404`. Ver [`ROADMAP.md`](../ROADMAP.md) e
+> [`operations/UNIFIED_LOGIN_ROLLOUT.md`](../operations/UNIFIED_LOGIN_ROLLOUT.md).
+
 **Base de código:** `205bd64`.
 **Formato:** cada peça é um prompt independente; o ChatGPT trabalha numa cópia
 do GitHub, **não faz commit** e devolve ZIP.

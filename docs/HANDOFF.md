@@ -1,8 +1,8 @@
 # Handoff — estado atual
 
-**Atualizado:** 2026-11-09
+**Atualizado:** 2026-11-11
 **Versão:** `9.6.0-dev.73`
-**Branch de trabalho:** `develop`
+**Branch de trabalho:** `main` (HEAD após `15ddcd0`)
 **Produção:** MAIN intocada; servidor e túneis parados.
 
 Este é o ponto de retomada. O índice completo fica em
@@ -12,22 +12,30 @@ Este é o ponto de retomada. O índice completo fica em
 > **Direção registrada em 2026-11-10:** o AUTOSEG é a primeira **prestadora de
 > serviço** do ecossistema Officina — não uma loja. O alvo é um site, um link e
 > um login, com conta/vínculo/contexto e política por objeto. O site e o GTK
-> atuais são as sementes do Officina Web/GTK. Nenhuma mudança de código foi
-> feita nesta fase. Ver
+> atuais são as sementes do Officina Web/GTK. As peças 5.1–5.5 e 6.1–6.4 estão
+> integradas atrás de flags; a rota final é `/login`; a ativação de produção
+> segue pendente. Ver
 > [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
 > e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
 ## O que está funcionando
 
 - App desktop GTK4/libadwaita em macOS e Linux.
-- Portal do prestador e portal do cliente em processos separados.
+- Site único do Officina Web para prestador e cliente; o portal antigo do
+  cliente continua em processo separado na 8765.
 - Banco SQLite fora do repositório; API headless e GUI do site em comandos separados.
 - Cadastros, OS, materiais, fotos, relatórios, PDF, financeiro, estoque,
   orçamento, notas fiscais e e-mails em rascunho.
 - Permissões e aprovações documentadas; `policy.yaml` carregado em runtime.
 - Numeração configurável de OS, com aliases para números antigos.
 - DEV abre em modo servidor por padrão; se o usuário escolher Local no login, usa o banco local em `~/Library/Application Support/AUTOSEG/local` (macOS) ou `~/.local/share/autoseg/local` (Linux).
-- Login obrigatório de prestador, local ou servidor, com identidade e logout.
+- Login único em `/login`: prestador e cliente no site, com a flag ligada;
+  `/entrar` foi removida e responde `404`. Com a flag desligada, `/login` serve
+  o formulário antigo do prestador.
+- A tela de login do site reutiliza o split-screen do AUTOSEG; o GTK continua
+  provider-only.
+- GTK com login local ou de servidor, identidade e logout real: o botão/menu
+  **Sair** revoga o token, limpa a sessão e volta ao login.
 - Sessão de servidor com token revogável; local não persiste senha.
 - Paridade de prestador: GTK tem notas/e-mails; site tem prestadores,
   estoque, caixa e composição para admin.
@@ -71,10 +79,12 @@ Este é o ponto de retomada. O índice completo fica em
 
 ## Testes
 
-- Suíte não visual: **343 testes, 0 falhas, 1 skip**.
-- Scripts de aceitação atualizados e passando: `tests/test_portal_v4.py`,
-  `tests/test_fluxo_v5.py`, `tests/test_fluxo_v6.py`, `tests/test_fluxo_v7.py`,
-  `tests/test_fluxo_cliente_v94.py` e `tests/test_rev09_fluxo_os.py`.
+- Integração 6.4 + login único: **256 testes focados OK**.
+- Regressão do portal: **65 OK, 1 skip**.
+- Portal antigo do cliente: **3 OK**.
+- `audit_comments.py --strict`: **0 achado(s) alto(s), 0 baixo(s)**.
+- GTK: smoke de inicialização e logout real validados; o token antigo foi
+  rejeitado pela API após o logout.
 - Comandos e critérios em [`TESTES.md`](../TESTES.md).
 - Scripts `test_v9.py`, `test_v91.py`, `test_v92.py` e `test_v94_correcoes.py`
   são legado da arquitetura anterior e não indicam regressão.
@@ -82,15 +92,19 @@ Este é o ponto de retomada. O índice completo fica em
 ## Pendências principais
 
 1. **MAIN:** ensaiar e executar a migração de numeração com backup e janela.
-2. **Login/auth:** básico implementado (local/servidor, identidade, logout e
-   token). Faltam Keychain/libsecret, inatividade, auditoria durável de login e
-   revisão humana externa.
-3. **Permissões:** ligar a política pura ao `AppService` e aplicar no servidor;
-   o login identifica o prestador, mas ainda não aplica AUT-001 a AUT-021.
+2. **Login/auth:** 5.1–5.5 integradas; `/login` é a rota única e o GTK tem
+   logout real. Faltam ativação de produção, Keychain/libsecret, inatividade,
+   auditoria durável de login e revisão humana externa.
+3. **Permissões:** 6.2 está no código atrás de
+   `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`; falta corrigir ou aceitar o TOCTOU,
+   rodar os testes negativos de isolamento e decidir a ativação em produção.
 4. **API remota:** clientes, OS, prestadores, financeiro, PJ, catálogo,
-   estoque, composição e PDF já passam pelo servidor; falta sync.
-5. **Login de cliente no GTK:** adiado por ser nicho; primeiro aplicar
-   permissões de admin × funcionário no serviço.
+   estoque, composição e PDF já passam pelo servidor no fluxo do prestador;
+   faltam os endpoints client-safe e a sincronização.
+5. **Login de cliente no GTK:** planejado como peça 6.5, remote-only, depois do
+   gate P0 de autorização. Faltam login desktop de cliente, sessão genérica,
+   API client-safe, navegação reduzida, testes negativos e rollout. Ver
+   [`planning/GTK_CLIENT_MODE.md`](planning/GTK_CLIENT_MODE.md).
 6. **Qualidade:** triar exceções amplas silenciosas e rodar o primeiro ciclo de
    revisão externa em dinheiro/OS/PDF.
 7. **CI:** workflows continuam modificados e não publicados por falta de token
@@ -100,18 +114,24 @@ Este é o ponto de retomada. O índice completo fica em
 
 - Não há desenvolvedor humano dedicado. Mudanças N3/N4 exigem revisor humano
   externo ou permanecem em DEV/flag.
-- MAIN não recebeu os commits N3 da `develop`.
+- A ativação de produção do enforcement por objeto está bloqueada pelo TOCTOU
+  entre autorização e writer.
+- Cliente no GTK depende desse gate; a 6.5 é remote-only e não pode duplicar
+  regra de OS/permissão no widget.
 - Modo remoto de dados ainda é incompleto; não prometer GTK contra celular.
 - Não sincronizar `dados.db` como arquivo (Syncthing/Dropbox).
 - A migração de numeração não pode usar `MAX+1` nem adivinhar datas.
 
 ## Próximas três ações
 
-1. Rodar o ensaio da migração de numeração em cópia da MAIN e trazer o relatório
-   antes/depois.
-2. Depois de aprovado, migrar a MAIN com backup, janela e smoke.
-3. Implementar a política de permissões ligada ao `AppService`, começando pelos
-   casos AUT-001 a AUT-021.
+1. Fechar o TOCTOU e decidir a ativação de
+   `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção, com testes negativos de
+   isolamento.
+2. Implementar a peça 6.5 (cliente no GTK remote-only) depois desse gate:
+   login, `/me`, home com as próprias OS, logout e bloqueio das rotas de
+   prestador.
+3. Rodar o ensaio da migração de numeração em cópia da MAIN e trazer o
+   relatório antes/depois; depois migrar com backup, janela e smoke.
 
 ## Comandos úteis
 

@@ -214,6 +214,10 @@ segurança.
 - mover shell e componentes para o produto genérico;
 - manter telas/fluxos AUTOSEG no flavor;
 - garantir paridade com o web;
+- habilitar o cliente no GTK como prova de modularidade (peça 6.5,
+  remote-only), reutilizando `auth`, `SessionContext`, `client_service` e
+  `ObjectPolicy`;
+- deixar documentos/PDF, “Em rota”, modo local e paridade completa para a 6.6;
 - não reescrever o GTK por estética.
 
 ### Etapa F — multi-prestadora
