@@ -41,6 +41,7 @@ from flavors.autoseg.modules import links_publicos as links9
 from flavors.autoseg.modules import policy_shadow
 from flavors.autoseg.modules import auth, login_flags, login_web
 from flavors.autoseg.modules import web_cookie, web_session
+from flavors.autoseg.modules import client_web, officina_web
 from officina.core import produtividade_os as prod
 from flavors.autoseg.modules import solicitacoes_pj as pj_publico
 import socket
@@ -1045,10 +1046,15 @@ class PortalPrestador:
             def ui_app(self):
                 return True
 
-            def pagina(self,titulo,conteudo,s=None,status=200):
+            def pagina(self,titulo,conteudo,s=None,status=200,cliente=False):
                 pagina=layout_app(titulo,conteudo,s,
                                      path=urlparse(self.path).path,
-                                     banco=banco)
+                                     cliente=cliente,banco=banco)
+                pagina=pagina.replace(' · AUTOSEG</title>', ' · Officina Web</title>', 1)
+                if not cliente:
+                    pagina=pagina.replace('>Gestão de Serviços</span>', '>Officina Web</span>', 1)
+                    pagina=pagina.replace('AUTOMAÇÃO E SEGURANÇA · Portal de Serviços',
+                                          'Officina Web · Portal do prestador', 1)
                 if titulo=='Ordens de serviço ativas':
                     # Inert marker: portal.js owns the timer and pauses it while
                     # the feedback dialog is open or a form control is in use.
@@ -3683,6 +3689,23 @@ class PortalPrestador:
 
             def do_GET(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
+                customer = login_web.client_session(self, banco)
+                if customer is not None:
+                    try:
+                        if path == '/':
+                            return client_web.home(self, banco, customer)
+                        if path == '/cliente' or path.startswith('/cliente/'):
+                            return client_web.dispatch_get(self, banco, customer, path)
+                    except PermissionError:
+                        return self.erro('Recurso indisponível.', 404)
+                    except ValueError:
+                        return self.erro('Recurso indisponível.', 400)
+                    except Exception:
+                        LOG.warning('Falha no serviço do cliente.')
+                        return self.erro('Falha interna.', 500)
+                    if path not in ('/logo.png','/icone.png','/favicon.ico',
+                                    '/static/portal.js'):
+                        return self.erro('Acesso não autorizado.', 403)
                 redirecionar = self._redirecionar_os(path)
                 if redirecionar:
                     query = urlparse(self.path).query
@@ -3718,7 +3741,11 @@ class PortalPrestador:
                         if arquivo and arquivo.is_file():
                             return self.send_bytes(arquivo.read_bytes(),'image/png')
                         return self.erro('Imagem não encontrada.',404,self.sessao())
-                    if path in ('/cliente','/pj') or path.startswith('/cliente/') or path.startswith('/pj/'):
+                    if path == '/cliente' or path.startswith('/cliente/'):
+                        if login_flags.unified_login_enabled(banco):
+                            return self.redir('/' if self.sessao() else '/entrar')
+                        return self.erro('Página não encontrada.', 404)
+                    if path == '/pj' or path.startswith('/pj/'):
                         return self.erro('O Portal do Cliente fica em http://127.0.0.1:8765/ (porta 8765). '
                                          'Este endereço é o Portal do Prestador.',404,self.sessao())
                     s=self.sessao()
@@ -3956,6 +3983,31 @@ class PortalPrestador:
                 if not self.origem_permitida():
                     return self.erro('Origem da requisição inválida.',403,self.sessao())
                 try:
+                    customer = login_web.client_session(self, banco)
+                    if customer is not None and path != '/entrar':
+                        if path in ('/cliente/sair', '/sair'):
+                            d = self.form(PREAUTH_MAX)
+                            if not web_cookie.csrf_valid(customer, str(d.get('csrf', ''))):
+                                return self.erro('Formulário expirado ou sessão inválida.', 403)
+                            token = web_cookie.token_from_headers(self.headers)
+                            if token:
+                                web_session.revoke(token)
+                            cookies = SimpleCookie()
+                            cookies.load(self.headers.get('Cookie', ''))
+                            if 'autosseg_session' in cookies:
+                                SESSOES.pop(cookies['autosseg_session'].value, None)
+                            return self.redir('/login', (
+                                web_cookie.clear_cookie(secure=web_cookie.secure_request(self.headers)),
+                                self.cookie('', True),
+                            ))
+                        if path == '/cliente/solicitar':
+                            return client_web.dispatch_post(self, banco, customer, path,
+                                                            self.form(PREAUTH_MAX))
+                        return self.erro('Acesso não autorizado.', 403)
+                    if path.startswith('/cliente/') or path == '/cliente':
+                        if login_flags.unified_login_enabled(banco):
+                            return self.redir('/' if self.sessao() else '/entrar')
+                        return self.erro('Página não encontrada.', 404)
                     if path=='/entrar':
                         if not login_flags.unified_login_enabled(banco):
                             return self.redir('/login')
@@ -3972,7 +4024,8 @@ class PortalPrestador:
                             return login_web.render_login(
                                 self, str(exc), str(d.get('identificador','')))
                         self._login_succeeded(ip)
-                        return self.redir('/',web_cookie.set_cookie(
+                        destination = '/cliente' if _session.identity.kind == 'client' else '/'
+                        return self.redir(destination,web_cookie.set_cookie(
                             token, secure=web_cookie.secure_request(self.headers)))
                     if path==api_fin.API_PREFIX or path.startswith(api_fin.API_PREFIX+'/'):
                         return api_fin.handle(self,path,banco,'POST')

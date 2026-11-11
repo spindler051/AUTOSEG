@@ -79,6 +79,33 @@ def listar_os_pf(banco,uid):
                             WHERE cliente_id=? ORDER BY id DESC LIMIT 100''',(p['cliente_pf_id'],)).fetchall()
 
 
+def _garantir_perfil_pf_em_transacao(c, uid):
+    p=c.execute('SELECT * FROM v9_usuarios WHERE id=? AND ativo=1',(uid,)).fetchone()
+    if not p or not perfil_pronto(p):raise ValueError('Complete nome, telefone, e-mail e endereço antes de solicitar uma OS particular.')
+    cid=p['cliente_pf_id']
+    if cid:
+        cl=c.execute("SELECT id FROM clientes WHERE id=? AND tipo_pessoa='Física' AND status!='Inativo'",(cid,)).fetchone()
+        if not cl:raise ValueError('Seu cadastro PF está indisponível. Solicite atendimento à AUTOSEG.')
+    else:
+        cols={r['name'] for r in c.execute('PRAGMA table_info(clientes)')}
+        valores={'tipo_pessoa':'Física','documento':p['cpf'],'nome':p['nome'],
+                 'telefone':p['telefone'],'email':p['email'],'endereco':p['endereco'],
+                 'numero':p['numero'],'bairro':p['bairro'],'cidade':p['cidade'],
+                 'uf':p['uf'],'cep':p['cep'],'status':'Ativo','criado_em':ext.agora()}
+        ks=[k for k in valores if k in cols]
+        cur=c.execute(f'INSERT INTO clientes({",".join(ks)}) VALUES({",".join("?" for _ in ks)})',[valores[k] for k in ks])
+        cid=cur.lastrowid
+        c.execute('UPDATE v9_usuarios SET cliente_pf_id=? WHERE id=?',(cid,uid))
+    return cid
+
+
+def garantir_perfil_pf(banco, uid):
+    """Ensure the caller's own PF profile without creating a work order."""
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        return _garantir_perfil_pf_em_transacao(c, uid)
+
+
 def registrar_os_pf(banco,uid,descricao,urgencia='Normal'):
     """Primeiro cria cliente PF próprio; nunca associa automaticamente ao cadastro antigo por CPF."""
     from officina.core import atendimento_os as aten
@@ -88,22 +115,7 @@ def registrar_os_pf(banco,uid,descricao,urgencia='Normal'):
     if urgencia not in ('Normal','Alta','Baixa'):raise ValueError('Urgência inválida.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        p=c.execute('SELECT * FROM v9_usuarios WHERE id=? AND ativo=1',(uid,)).fetchone()
-        if not p or not perfil_pronto(p):raise ValueError('Complete nome, telefone, e-mail e endereço antes de solicitar uma OS particular.')
-        cid=p['cliente_pf_id']
-        if cid:
-            cl=c.execute("SELECT id FROM clientes WHERE id=? AND tipo_pessoa='Física' AND status!='Inativo'",(cid,)).fetchone()
-            if not cl:raise ValueError('Seu cadastro PF está indisponível. Solicite atendimento à AUTOSEG.')
-        else:
-            cols={r['name'] for r in c.execute('PRAGMA table_info(clientes)')}
-            valores={'tipo_pessoa':'Física','documento':p['cpf'],'nome':p['nome'],
-                     'telefone':p['telefone'],'email':p['email'],'endereco':p['endereco'],
-                     'numero':p['numero'],'bairro':p['bairro'],'cidade':p['cidade'],
-                     'uf':p['uf'],'cep':p['cep'],'status':'Ativo','criado_em':ext.agora()}
-            ks=[k for k in valores if k in cols]
-            cur=c.execute(f'INSERT INTO clientes({",".join(ks)}) VALUES({",".join("?" for _ in ks)})',[valores[k] for k in ks])
-            cid=cur.lastrowid
-            c.execute('UPDATE v9_usuarios SET cliente_pf_id=? WHERE id=?',(cid,uid))
+        cid=_garantir_perfil_pf_em_transacao(c, uid)
         numero_os=proximo_numero_os(c.cursor())
         dados={'numero_os':numero_os,'cliente_id':cid,'data_abertura':ext.agora(),
                'descricao':descricao,'valor_mao_obra':0,'valor_materiais':0,

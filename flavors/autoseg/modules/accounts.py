@@ -433,3 +433,37 @@ def membership_for_account(banco, account_id: int) -> identity.Membership | None
                                role=role, provider_org_id=link.provider_org_id,
                                provider_id=link.provider_id, client_id=link.client_id,
                                active=bool(link.active and active))
+
+
+def sync_client_pf_link(banco, account_id: int, client_user_id: int) -> int:
+    """Synchronize exactly one client's PF ownership link, without migration."""
+    if (type(account_id) is not int or account_id <= 0
+            or type(client_user_id) is not int or client_user_id <= 0):
+        raise PermissionError("Client link unavailable.")
+    with ext.db(banco) as c:
+        c.execute("BEGIN IMMEDIATE")
+        link = c.execute(
+            """SELECT l.id, l.client_id, l.active
+               FROM account_links AS l JOIN accounts AS a ON a.id=l.account_id
+               WHERE l.account_id=? AND a.active=1 AND l.link_type='client'
+                 AND l.role='customer' AND l.client_user_id=?
+                 AND l.legacy_client_user_id=?""",
+            (account_id, client_user_id, client_user_id),
+        ).fetchone()
+        user = c.execute(
+            "SELECT cliente_pf_id, ativo FROM v9_usuarios WHERE id=?",
+            (client_user_id,),
+        ).fetchone()
+        if (not link or not link["active"] or not user or not user["ativo"]
+                or user["cliente_pf_id"] is None):
+            raise PermissionError("Client link unavailable.")
+        pf_id = int(user["cliente_pf_id"])
+        valid = c.execute(
+            "SELECT 1 FROM clientes WHERE id=? AND tipo_pessoa='Física' AND status!='Inativo'",
+            (pf_id,),
+        ).fetchone()
+        if valid is None:
+            raise PermissionError("Client link unavailable.")
+        if link["client_id"] != pf_id:
+            c.execute("UPDATE account_links SET client_id=? WHERE id=?", (pf_id, link["id"]))
+        return pf_id

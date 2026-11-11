@@ -58,17 +58,16 @@ class LoginWebTest(unittest.TestCase):
             self.assertEqual(created, login_web.authenticate_and_create('db', 'tech@example.invalid', 'pw'))
             self.assertEqual('account', create.call_args.args[6])
 
-    def test_client_rejected_before_session(self):
+    def test_client_creates_unified_session(self):
         client = identity.Identity('client', 8, 'Client', client_id=15)
         membership = identity.Membership('client', 8, 'customer', client_id=15)
         principal = Principal(8, 'customer', client_id=15)
         result = auth.LoginResult(None, client, membership, principal, 'legacy')
+        expected = ('opaque-token', SimpleNamespace(identity=client))
         with (patch.object(login_web.auth, 'authenticate', return_value=result),
-              patch.object(login_web.web_session, 'create') as create):
-            with self.assertRaises(auth.LoginError) as err:
-                login_web.authenticate_and_create('db', 'cpf', 'password')
-            self.assertEqual('invalid', err.exception.code)
-            create.assert_not_called()
+              patch.object(login_web.web_session, 'current_credential', return_value='hash'),
+              patch.object(login_web.web_session, 'create', return_value=expected)):
+            self.assertEqual(expected, login_web.authenticate_and_create('db', 'cpf', 'password'))
 
     def test_missing_credential(self):
         result = auth.LoginResult(None, self.ident, self.membership, self.principal, 'legacy')
@@ -285,15 +284,15 @@ class UnifiedLoginHttpTest(unittest.TestCase):
                 (self.provider_id,)).fetchone()['senha_hash']
         self.assertNotIn(stored, body)
 
-    def test_client_and_inactive_provider_are_rejected(self):
+    def test_client_allowed_and_inactive_provider_rejected(self):
         with _flag('1'):
-            status, headers, body = _request(
+            status, headers, _body = _request(
                 _browser(follow=False), self.base, '/entrar',
                 {'identificador': 'client@example.test',
                  'senha': self.client_password})
-            self.assertEqual(200, status)
-            self.assertIn('Credenciais inválidas.', body)
-            self.assertIsNone(_unified_cookie(headers))
+            self.assertEqual(303, status)
+            self.assertEqual('/cliente', headers['Location'])
+            self.assertIsNotNone(_unified_cookie(headers))
             self._set_provider_active(False)
             status, headers, body = _request(
                 _browser(follow=False), self.base, '/entrar',
@@ -303,19 +302,17 @@ class UnifiedLoginHttpTest(unittest.TestCase):
             self.assertIn('Credenciais inválidas.', body)
             self.assertIsNone(_unified_cookie(headers))
 
-    def test_client_password_correctness_is_not_revealed(self):
+    def test_client_wrong_password_is_generic(self):
         with _flag('1'):
-            messages = set()
-            for password in (self.client_password, 'WrongPassword123'):
-                status, headers, body = _request(
-                    _browser(follow=False), self.base, '/entrar',
-                    {'identificador': 'client@example.test',
-                     'senha': password})
-                self.assertEqual(200, status)
-                self.assertIsNone(_unified_cookie(headers))
-                messages.add(body)
-        self.assertEqual(1, len(messages))
-        self.assertIn('Credenciais inválidas.', messages.pop())
+            status, headers, body = _request(
+                _browser(follow=False), self.base, '/entrar',
+                {'identificador': 'client@example.test',
+                 'senha': 'WrongPassword123'})
+        self.assertEqual(200, status)
+        self.assertIsNone(_unified_cookie(headers))
+        self.assertIn('Credenciais inválidas.', body)
+        self.assertNotIn(self.client_password, body)
+        self.assertNotIn('Client Example', body)
 
     def test_old_login_still_works_with_flag_on(self):
         jar = http.cookiejar.CookieJar()
@@ -343,15 +340,18 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         self.assertIn('action="/login"', body)
         self.assertNotIn('Visão geral', body)
 
-    def test_client_token_cannot_open_provider_portal(self):
+    def test_client_token_opens_client_home_but_not_provider_portal(self):
         token = self._token('client@example.test', self.client_password)
+        headers = {'Cookie': f'autosseg_unified={token}'}
         with _flag('1'):
-            status, _headers, body = _request(
-                _browser(), self.base, '/',
-                headers={'Cookie': f'autosseg_unified={token}'})
+            status, _headers, body = _request(_browser(), self.base, '/', headers=headers)
+            denied, _deny_headers, private_body = _request(
+                _browser(follow=False), self.base, '/financeiro', headers=headers)
         self.assertEqual(200, status)
-        self.assertIn('action="/login"', body)
+        self.assertIn('Portal do cliente', body)
         self.assertNotIn('Visão geral', body)
+        self.assertEqual(403, denied)
+        self.assertNotIn('Financeiro', private_body)
 
     def test_repeated_failures_are_rate_limited(self):
         with _flag('1'):
