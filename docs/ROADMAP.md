@@ -13,6 +13,13 @@ para depois.
 > [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
 > e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
+> **Decisão registrada em 2026-11-11 — unificação real, sem fallback:** o
+> portal antigo do cliente na 8765 **não** será mantido como fallback. Não
+> haverá flag, shim, adaptador permanente ou caminho paralelo para preservar
+> `servidor_web.py` ou código legado. Rotas antigas que ainda forem contrato
+> público recebem redirect explícito com prazo de remoção; as obsoletas são
+> removidas. O rollback é por deploy/git, não por fallback em runtime.
+
 ## Concluído
 
 ### Identidade, login e sessões (5.1–5.5)
@@ -62,19 +69,30 @@ decisões abaixo, não apenas do código integrado:
 
 ## Agora — P0
 
-1. **Fechar a numeração de OS na MAIN**
+1. **Unificação real dos portais, sem fallback**
+   - inventariar rotas e responsabilidades de `servidor_web.py`/8765;
+   - migrar para a origem única o que ainda for contrato público atual;
+   - remover o que for obsoleto e atualizar links, launchers e docs;
+   - desligar o processo 8765 e retirar `servidor_web.py` do caminho de
+     execução; depois da migração, apagar o arquivo e seus testes/launchers
+     antigos;
+   - não criar flag, shim, adaptador permanente ou caminho paralelo para manter
+     o portal antigo;
+   - critério: uma origem, um login, uma shell e um caminho de código; testes e
+     smoke cobrindo as rotas que sobreviverem.
+2. **Fechar a numeração de OS na MAIN**
    - ensaiar a migração em cópia da MAIN;
    - backup, janela de manutenção e smoke;
    - manter aliases para links, PDFs e e-mails antigos;
    - não reescrever documentos já publicados.
-2. **Fechar o gate de autorização por objeto**
+3. **Fechar o gate de autorização por objeto**
    - corrigir ou aceitar formalmente o TOCTOU entre autorização e writer;
    - rodar testes negativos de isolamento entre prestadoras e entre clientes;
    - decidir a ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção.
-3. **Decidir a sessão durável em produção**
+4. **Decidir a sessão durável em produção**
    - retenção, revogação entre processos, backup do SQLite de sessões;
    - manter `AUTOSEG_WEB_SESSION_DURABLE` desligada até a decisão.
-4. **Consolidar a API/contrato do desktop**
+5. **Consolidar a API/contrato do desktop**
    - manter a paridade do prestador entre GTK, site e API;
    - preparar os endpoints client-safe que a peça 6.5 vai consumir.
 
@@ -84,8 +102,9 @@ decisões abaixo, não apenas do código integrado:
 próprios dados, reutilizando autenticação, sessão e política do site, sem
 duplicar regra de negócio no widget.
 
-**Depende de:** fechar o gate P0 de autorização por objeto. É a prova de
-modularidade do GTK, não um segundo portal.
+**Depende de:** unificação real dos portais e fechamento do gate P0 de
+autorização por objeto. É a prova de modularidade do GTK, não um segundo
+portal.
 
 **O que falta:**
 
@@ -147,7 +166,9 @@ A análise detalhada, decisões e critérios de aceite estão em
 - sincronizar `dados.db` como arquivo;
 - trocar SQLite por Postgres sem dor real;
 - publicar na MAIN sem revisão humana externa para mudanças N3/N4;
-- criar um segundo portal de cliente dentro do GTK.
+- criar um segundo portal de cliente dentro do GTK;
+- manter o portal antigo do cliente na 8765 como fallback, ou criar
+  flag/shim/caminho paralelo para preservar código legado.
 
 ## Critério para avançar
 
