@@ -7,7 +7,8 @@ A writer cannot be invoked by the HTTP router without the command registry.
 from __future__ import annotations
 import re
 from pathlib import Path
-from officina.application.work_item_access import require_work_item, require_create
+from officina.application.work_item_access import (require_work_item, require_create,
+    require_work_item_locked)
 from officina.application.object_policy import ObjectPolicy, Resource
 import json
 import mimetypes
@@ -59,6 +60,24 @@ def _provider_context(banco, session):
     # The current deployment has one provider tenant; legacy memberships lack
     # provider_org_id. Bind to this deployment's concrete tenant explicitly.
     return replace(principal,organization_id="autoseg")
+
+
+def _transaction_guard(banco, principal, os_id, action):
+    """Inject status and relationship checks into the writer transaction."""
+    if not object_policy_flags.enforcement_enabled(banco):
+        return None
+
+    def verify(connection):
+        row = connection.execute(
+            'SELECT status,arquivada FROM ordens_servico WHERE id=?',
+            (os_id,)).fetchone()
+        if not row or row['arquivada']:
+            raise PermissionError('OS indisponível para alteração.')
+        if action in ('start', 'assign', 'assume') and row['status'] not in ext.ATIVAS:
+            raise PermissionError('OS não está ativa.')
+        return require_work_item_locked(connection, principal, os_id, action)
+
+    return verify
 
 
 def _authorize(banco, principal, os_id, permission):
@@ -432,6 +451,12 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
         raise ValueError('Envie no máximo 10 fotos por vez.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if object_policy_flags.enforcement_enabled(banco):
+            require_work_item_locked(c, principal, oid, 'attach')
+        current = c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                            (oid,)).fetchone()
+        if not current or current['status'] not in ext.ATIVAS or current['arquivada']:
+            raise PermissionError('OS indisponível para anexos.')
         if str(d.get('comprimir_fotos_pdf_presente',''))=='1':
             comprimir_pdf=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
             c.execute('UPDATE ordens_servico SET comprimir_fotos_pdf=? WHERE id=?',
@@ -685,17 +710,48 @@ def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, que
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
-    cliente_id=business._persist_form_client(
-        d,oid,pid,f'Prestador {s["nome"]}','reopen')
-    business._exigir_cliente_os(oid,'reabrir a OS',cliente_id)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+        o=c.execute('SELECT status,arquivada,cliente_id FROM ordens_servico WHERE id=?',
                     (oid,)).fetchone()
         if not o or o['status'] not in ext.ATIVAS:
             raise ValueError('Esta OS não está ativa.')
         if 'arquivada' in o.keys() and o['arquivada']:
             raise ValueError('OS arquivada: edição bloqueada.')
+        if o['status'] == 'Pendente' or object_policy_flags.enforcement_enabled(banco):
+            require_work_item_locked(c, principal, oid,
+                                     'reopen' if o['status'] == 'Pendente' else 'edit')
+        # Client selection is part of this transaction, not an earlier write.
+        # A new provisional customer is a separate domain operation and is not
+        # implicitly created as part of a privileged reopen.
+        cliente_id = int(o['cliente_id'] or 0)
+        raw_id = str(d.get('cliente_id', '')).strip()
+        raw_name = str(d.get('cliente_busca', '')).strip()
+        if raw_id:
+            try:
+                cliente_id = int(raw_id)
+            except (ValueError, TypeError):
+                raise ValueError('Cliente selecionado inválido.') from None
+        elif raw_name and len(raw_name) >= 2:
+            known = c.execute("SELECT id FROM clientes WHERE lower(nome)=lower(?) "
+                              "AND status NOT IN ('Inativo','A definir') "
+                              "ORDER BY id LIMIT 1", (raw_name,)).fetchone()
+            if known:
+                cliente_id = int(known['id'])
+            else:
+                raise ValueError('Cadastre o novo cliente antes de reabrir a OS.')
+        customer = c.execute('SELECT nome,status FROM clientes WHERE id=?',
+                             (cliente_id,)).fetchone()
+        if not customer or customer['status'] in ('A definir','Inativo'):
+            raise ValueError('Escolha o cliente da OS antes de reabrir a OS.')
+        if cliente_id != int(o['cliente_id'] or 0):
+            c.execute('UPDATE ordens_servico SET cliente_id=?,atualizado_em=? WHERE id=?',
+                      (cliente_id, ext.agora(), oid))
+            ext.evento(c, oid, 'Cliente definido',
+                       f'{o["cliente_id"]} -> {cliente_id} ({customer["nome"]})',
+                       pid, f'Prestador {s["nome"]}')
+            neg.audit(c, pid, 'Cliente da OS alterado', oid,
+                      f'{o["cliente_id"]} -> {cliente_id} ({customer["nome"]})')
         c.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,atualizado_em=? WHERE id=?",
                   (ext.agora(),oid))
         c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
@@ -717,7 +773,8 @@ def _write_action_arquivar(banco, principal, os_id, data, *, ui, session, path, 
     oid = os_id
     acao = partes[2]
     ext.arquivar_os(banco,oid,pid,ator=s['nome'],
-                    motivo=str(d.get('motivo_arquivamento','')))
+                    motivo=str(d.get('motivo_arquivamento','')),
+                    authorize=_transaction_guard(banco,principal,oid,'archive'))
     return ui.redir('/os')
     return ui.redir(f"{url_os(banco, os_id)}")
 
@@ -733,7 +790,8 @@ def _write_action_rota(banco, principal, os_id, data, *, ui, session, path, quer
     oid = os_id
     acao = partes[2]
     prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1',
-                        admin=bool(s.get('admin')))
+                        admin=bool(s.get('admin')),
+                        authorize=_transaction_guard(banco,principal,oid,'start'))
     return ui.redir(f'{url_os(banco, oid)}')
 
 
@@ -761,6 +819,8 @@ def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, 
             raise ValueError('Esta OS não está ativa.')
         if 'arquivada' in o.keys() and o['arquivada']:
             raise ValueError('OS arquivada: edição bloqueada.')
+        if object_policy_flags.enforcement_enabled(banco):
+            require_work_item_locked(c, principal, oid, 'cancel')
         atual=ext.responsavel_atual(c,oid)
         admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
                              (pid,)).fetchone())
@@ -934,7 +994,8 @@ def _write_action_atribuir(banco, principal, os_id, data, *, ui, session, path, 
         destino=int(str(d.get('prestador_destino','')).strip())
     except (TypeError,ValueError):
         raise ValueError('Selecione o prestador de destino.') from None
-    ext.atribuir(banco,oid,destino,ator=f'Prestador {s["nome"]}')
+    ext.atribuir(banco,oid,destino,ator=f'Prestador {s["nome"]}',
+                 authorize=_transaction_guard(banco,principal,oid,'assign'))
     if quer_json:
         return ui.send_bytes(json.dumps({'ok':True}).encode(),
                                'application/json; charset=utf-8')
@@ -951,7 +1012,7 @@ def _write_action_assumir(banco, principal, os_id, data, *, ui, session, path, q
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
-    ext.assumir(banco,oid,pid)
+    ext.assumir(banco,oid,pid,authorize=_transaction_guard(banco,principal,oid,'assume'))
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -969,7 +1030,8 @@ def _write_action_em_rota(banco, principal, os_id, data, *, ui, session, path, q
         d,oid,pid,f'Prestador {s["nome"]}','route')
     business._exigir_cliente_os(oid,'colocar em rota',cliente_id)
     ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
-                       admin=bool(s.get('admin')))
+                       admin=bool(s.get('admin')),
+                       authorize=_transaction_guard(banco,principal,oid,'start'))
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -984,7 +1046,8 @@ def _write_action_cancelar_rota(banco, principal, os_id, data, *, ui, session, p
     oid = os_id
     acao = partes[2]
     ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
-                         admin=bool(s.get('admin')))
+                         admin=bool(s.get('admin')),
+                         authorize=_transaction_guard(banco,principal,oid,'start'))
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -1045,7 +1108,7 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
 # Permission for an action depends on its *effective* mutation, never the URL
 # alone. In particular /os/<id>/salvar cannot close/cancel with edit rights.
 PERMISSIONS = {
-    'abrir':'reopen', 'arquivar':'archive', 'rota':'start',
+    'abrir':'edit', 'arquivar':'archive', 'rota':'start',
     'cancelar':'cancel', 'salvar':'edit', 'publicar':'publish',
     'atribuir':'assign', 'assumir':'assume', 'em-rota':'start',
     'cancelar-rota':'start','iniciar':'start', 'reenviar-email':'send',
@@ -1136,6 +1199,14 @@ def execute_http(ui,banco,principal,path,data,session,quer_json=False):
         # Authorization and writer dispatch are indivisible relative to other
         # HTTP commands in this process. The service owns the actual writer.
         _authorize(banco, principal, os_id, _permission(action,data))
+        if action == 'abrir' and os_id is not None:
+            if principal is None:
+                principal = _provider_context(banco, session)
+            with ext.db(banco) as check:
+                row = check.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                    (os_id,)).fetchone()
+                if row and row['status'] == 'Pendente':
+                    require_work_item(banco, principal, os_id, 'reopen')
         if action=='reenviar-email':
             _authorize(banco,principal,os_id,'publish')
         if action=='salvar' and str(data.get('acao_status','')) in ('Concluída','Pendente'):

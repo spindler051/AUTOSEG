@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## P0-AUTH (DEV only) — transactional authorization, partial
+
+- Reopening a `Pendente` OS now requires `work_item.reopen` even with object
+  enforcement disabled. The writer rechecks the rule under `BEGIN IMMEDIATE`.
+- Added in-transaction guard injection to assignment, assumption, archive,
+  route and cancel operations, plus the existing photo transaction.
+- Remaining multi-transaction flows still need refactoring; enforcement stays
+  off by default and production activation is not approved.
+
+
 ## 9.6.0-dev.73 — preparação da primeira publicação pública — 2026-11-09 — develop
 
 - **Documentação — site único:** auditoria do estado atual e arquitetura-alvo de conta/vínculo, prestadora/tenant, política por objeto e OS anônima. O AUTOSEG é a primeira prestadora de serviço do ecossistema Officina; site e GTK atuais são as sementes do Officina Web/GTK. Sem mudança de código nesta fase. Ver `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` e `docs/planning/OFFICINA_WEB_AND_GTK.md`.

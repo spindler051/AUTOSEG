@@ -1,5 +1,16 @@
 # Testes
 
+## P0-AUTH (execução parcial, gate não fechado)
+
+`tests.test_p0_auth_gate` cobre reabertura com enforcement on/off e corridas
+controladas entre autorização inicial e início do writer. O teste histórico
+`test_non_admin_cannot_reopen_pending_os` não foi enfraquecido.
+
+As execuções unitárias direcionadas passaram. A execução conjunta da suíte
+focada e o discovery completo ultrapassaram o tempo do ambiente sem relatório
+final; **não** devem ser tratados como aprovados. O registro dos comandos,
+resultados e limitações está em `TEST_RESULTS.txt` da entrega P0-AUTH.
+
 ## Suíte não visual
 
 ```bash

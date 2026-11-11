@@ -310,10 +310,12 @@ def pode_assumir(c,os_id,pid):
     if not o or not p: return False
     return o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
 
-def atribuir(banco,os_id,prestador_id,ator='Administrador'):
+def atribuir(banco,os_id,prestador_id,ator='Administrador',authorize=None):
     """Atribuição administrativa define responsável; preserva participantes históricos."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(prestador_id,)).fetchone()
         if not o or not p: raise ValueError('OS ou prestador ativo não encontrado.')
@@ -331,10 +333,12 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
 
-def assumir(banco,os_id,pid):
+def assumir(banco,os_id,pid,authorize=None):
     """Assunção atômica de OS ativa desatribuída, sem iniciar execução."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not p or not o: raise PermissionError('Prestador ou OS inválida.')
@@ -357,10 +361,12 @@ def assumir(banco,os_id,pid):
                f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
         return True
 
-def arquivar_os(banco,os_id,pid,ator=None,motivo=''):
+def arquivar_os(banco,os_id,pid,ator=None,motivo='',authorize=None):
     """Arquiva uma OS ativa sem apagar dados; admin only, com evento."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         if pid is None or not c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone():
             raise PermissionError('Somente administradores podem arquivar OS.')
         o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
@@ -873,9 +879,11 @@ def administrador(c, pid):
                           (pid,)).fetchone())
 
 
-def marcar_em_rota(banco, os_id, pid, ator=None, admin=False):
+def marcar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
         if not p or not o:
@@ -933,9 +941,11 @@ def obter_rascunho_web(banco, os_id, pid=None):
         return dados
 
 
-def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False):
+def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
         if not p:
             raise PermissionError('Prestador inválido.')

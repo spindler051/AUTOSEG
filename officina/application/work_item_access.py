@@ -44,6 +44,24 @@ def _resource(c, work_id: int) -> Resource:
     )
 
 
+def require_work_item_locked(connection, principal, work_id: int, action: str):
+    """Authorize using the writer's current SQLite transaction.
+
+    The caller must acquire BEGIN IMMEDIATE before this check and must not
+    mutate the order or its relationships before it. This helper never starts
+    or commits a second transaction.
+    """
+    if type(work_id) is not int or work_id <= 0:
+        raise PermissionError("Recurso indisponível.")
+    if not connection.in_transaction:
+        raise RuntimeError("Authorization requires an active writer transaction.")
+    try:
+        resource = _resource(connection, work_id)
+        return ObjectPolicy().require(principal, action, resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError("Recurso indisponível.") from None
+
+
 def resource_for_work_item(banco, work_id: int) -> Resource:
     if type(work_id) is not int or work_id <= 0:
         raise PermissionError("Recurso indisponível.")

@@ -43,16 +43,30 @@ AUTOSEG_OBJECT_POLICY_ENFORCEMENT=1   # enable ObjectPolicy/work_item_access
 3. Check logs for authorization failures and unexpected `500`s.
 4. Only then consider production activation.
 
-## TOCTOU limitation
+## P0-AUTH: reopen gate and partial transactional checks
 
-Authorization reads `os_responsaveis`/`os_prestadores` before the legacy writer
-opens its own SQLite transaction. There is an in-process per-OS lock, but no
-cross-process atomicity between the authorization snapshot and the write.
-Enabling the flag accepts this residual race unless a later slice revalidates
-the relation inside the writer transaction. The flag must stay `0` in
-production until that risk is explicitly accepted or fixed.
+`POST /os/<id>/abrir` checks the `work_item.reopen` ObjectPolicy decision
+for a `Pendente` order with **both** `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`
+and `=1`. Only the admin role is granted reopen. The writer repeats this
+check using current relationships and current status inside its own
+`BEGIN IMMEDIATE` transaction, before any order/client/event change.
+For an `Aberta` order the existing edit action continues to apply.
 
-Disabling unified login does not remove this risk; the flags are independent.
+With enforcement enabled, additional guards run *inside their writers'*
+transactions for `atribuir`, `assumir`, `arquivar`, both route toggles,
+`cancelar` and the transactional photo writer. The guard is injected into
+legacy core writers; core does not import the policy or the flavor.
+
+**This is not complete TOCTOU closure.** `iniciar`, `salvar` (including
+conclude/cancel), `publicar`, the `em-rota` client-form update, attachment,
+invoice, rateio, and certain draft/side-effect paths still execute multiple
+transactions or filesystem operations. Some inputs to `abrir` that create a
+new provisional client also require transactional service integration.
+See the delivery's `BLOCKED.md` and `NOTES.md` before enabling enforcement.
+
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT` remains **0** by default; do not enable
+it in production until the remaining gap is fixed or explicitly accepted.
+An in-process lock is not a replacement for a single SQLite transaction.
 
 ## Rollback
 

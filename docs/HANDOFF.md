@@ -18,6 +18,16 @@ Este é o ponto de retomada. O índice completo fica em
 > [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
 > e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
+## P0-AUTH — implementação parcial em revisão
+
+- Reabertura de OS `Pendente`: permissão `work_item.reopen` exige admin
+  mesmo com a flag de enforcement desligada; rechecagem dentro de
+  `BEGIN IMMEDIATE` para o comando `abrir`.
+- Guardas adicionais de vínculo/status foram inseridas nos writers de
+  atribuição, assunção, arquivamento, rota, cancelamento e fotos.
+- **Gate não concluído:** outros writers ainda fazem escritas em transações
+  independentes. A flag deve permanecer `0`; conferir `BLOCKED.md` da peça.
+
 ## O que está funcionando
 
 - App desktop GTK4/libadwaita em macOS e Linux.

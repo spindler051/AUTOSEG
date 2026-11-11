@@ -20,6 +20,13 @@ para depois.
 > público recebem redirect explícito com prazo de remoção; as obsoletas são
 > removidas. O rollback é por deploy/git, não por fallback em runtime.
 
+## P0-AUTH — gate de autorização ainda aberto
+
+Reabertura pendente restrita a admin nas duas modalidades de flag e revalidada
+em transação; alguns writers já recebem guardas transacionais. Permanecem
+operações de OS com múltiplas transações e efeitos externos, portanto a
+ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` não foi autorizada.
+
 ## Concluído
 
 ### Identidade, login e sessões (5.1–5.5)

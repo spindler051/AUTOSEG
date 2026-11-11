@@ -20,7 +20,7 @@ RELATIONSHIPS = ('none', 'own', 'involved', 'organization', 'other', 'all')
 PADRAO = {
     'versao': 1,
     'roles': {
-        'admin': {'permissions': ['*']},
+        'admin': {'permissions': ['*', 'work_item.reopen.all']},
         'employee': {'permissions': [
             'work_item.view.own', 'work_item.view.involved',
             'work_item.create', 'work_item.edit.own',

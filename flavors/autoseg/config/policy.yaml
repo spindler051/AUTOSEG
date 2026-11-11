@@ -4,6 +4,7 @@ roles:
   admin:
     permissions:
     - '*'
+    - work_item.reopen.all
   employee:
     permissions:
     - work_item.view.own

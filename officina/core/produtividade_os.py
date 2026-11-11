@@ -100,9 +100,11 @@ def em_rota(banco,os_id):
         return dict(r) if r else {'em_rota':0,'prestador_id':None,'atualizado_em':None}
 
 
-def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False):
+def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False,authorize=None):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ext.ATIVAS:
             raise ValueError('Somente OS ativas podem estar em rota.')
