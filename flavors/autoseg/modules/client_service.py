@@ -6,6 +6,8 @@ import sqlite3
 
 from flavors.autoseg.modules import cliente_fluxo_v94 as fluxo_pf
 from flavors.autoseg.modules import accounts
+from officina.application import work_item_access as access
+from officina.application.object_policy import ObjectPolicy, Resource
 from officina.core import fluxo_os as fluxo, prestadores_ext as ext
 from pathlib import Path
 
@@ -41,15 +43,26 @@ class ClientDocument:
 
 
 def _client_id(session) -> int:
-    """Require an active authenticated legacy client identity."""
-    if (session is None or session.identity.kind != "client"
-            or not session.identity.active or not session.membership.active
-            or session.membership.identity_kind != "client"
+    """Require an active converted account and a matching authenticated principal."""
+    if (session is None or session.source != "account" or session.account_id is None
+            or session.identity.kind != "client" or not session.identity.active
+            or not session.membership.active or session.membership.identity_kind != "client"
             or session.membership.identity_id != session.identity.id
-            or session.principal.role != "customer"
-            or not session.principal.active):
+            or session.principal.role not in accounts.CLIENT_ROLES
+            or not session.principal.active
+            or session.principal.client_id != session.identity.client_id):
         raise PermissionError("Client access denied.")
     return int(session.identity.id)
+
+
+def _authorize_work(banco, session, work_id, action="view"):
+    _client_id(session)
+    return access.require_work_item(banco,session.principal,int(work_id),action)
+
+
+def _authorize_call(banco, session, call_id, action="view"):
+    _client_id(session)
+    return access.require_call(banco,session.principal,int(call_id),action)
 
 
 def _item(row, has_documents=False) -> ClientWorkItem:
@@ -68,38 +81,71 @@ def _safe(operation):
         raise PermissionError("Client resource unavailable.") from None
 
 
-def list_work_items(banco, session) -> tuple[ClientWorkItem, ...]:
+def _work_rows(banco, session):
     uid = _client_id(session)
-    return _safe(lambda: tuple(_item(r) for r in fluxo_pf.listar_os_pf(banco, uid)))
+    organizations = sorted(session.principal.client_org_ids)
+    markers = ','.join('?' for _ in organizations)
+    clause = f' OR o.id IN ({markers})' if organizations else ''
+    def query():
+        with ext.db(banco) as c:
+            rows = c.execute(f"""SELECT DISTINCT os.id,os.numero_os,os.status,
+                os.descricao,os.data_abertura FROM ordens_servico os
+                LEFT JOIN v9_usuarios u ON u.cliente_pf_id=os.cliente_id AND u.id=?
+                LEFT JOIN v9_organizacoes o ON o.cliente_id=os.cliente_id AND o.mesclado_em IS NULL
+                LEFT JOIN v9_chamados h ON h.os_id=os.id
+                WHERE u.id IS NOT NULL OR h.usuario_id=? {clause}
+                ORDER BY os.id DESC LIMIT 300""",(uid,uid,*organizations)).fetchall()
+        return rows
+    return _safe(query)
+
+
+def list_work_items(banco, session) -> tuple[ClientWorkItem, ...]:
+    result = []
+    for row in _work_rows(banco,session):
+        try:
+            _authorize_work(banco,session,int(row["id"]))
+        except PermissionError:
+            continue
+        result.append(_item(row))
+    return tuple(result)
 
 
 def get_work_item(banco, session, work_id: int) -> ClientWorkItem | None:
     try:
-        work_id = int(work_id)
-    except (ValueError, TypeError, OverflowError):
+        _authorize_work(banco,session,work_id)
+    except (PermissionError, ValueError, TypeError):
         return None
-    uid = _client_id(session)
-    return _safe(lambda: _item(row) if (row := fluxo_pf.obter_os_pf(banco, uid, work_id)) else None)
+    def query():
+        with ext.db(banco) as c:
+            return c.execute("""SELECT id,numero_os,status,descricao,data_abertura
+                FROM ordens_servico WHERE id=?""", (int(work_id),)).fetchone()
+    row = _safe(query)
+    return _item(row) if row else None
 
 
-def _owned_work(banco, session, work_id: int):
-    uid = _client_id(session)
+def _owned_work(banco, session, work_id: int, action="view"):
     try:
-        work_id = int(work_id)
-    except (ValueError, TypeError, OverflowError):
+        _authorize_work(banco,session,work_id,action)
+    except (PermissionError, TypeError, ValueError):
         raise PermissionError("Document unavailable.") from None
-    if work_id <= 0:
-        raise PermissionError("Document unavailable.")
-    # Existing legacy service scopes the query to the user's linked PF record.
-    row = _safe(lambda: fluxo_pf.obter_os_pf(banco, uid, work_id))
+    def query():
+        with ext.db(banco) as c:
+            return c.execute("SELECT id,status FROM ordens_servico WHERE id=?",
+                             (int(work_id),)).fetchone()
+    row = _safe(query)
     if row is None:
         raise PermissionError("Document unavailable.")
     return row
 
 
 def list_documents(banco, session, work_id: int) -> tuple[ClientDocument, ...]:
-    row = _owned_work(banco, session, work_id)
-    return _safe(lambda: _documents_for_os(banco, row))
+    row = _owned_work(banco,session,work_id, "view")
+    ObjectPolicy().require(session.principal,"view", Resource(
+        "document",int(work_id),organization_id="autoseg",
+        client_id=access.resource_for_work_item(banco,int(work_id)).client_id,
+        client_org_id=access.resource_for_work_item(banco,int(work_id)).client_org_id,
+        attributes=access.resource_for_work_item(banco,int(work_id)).attributes))
+    return _safe(lambda: _documents_for_os(banco,row))
 
 
 def _documents_for_os(banco, row) -> tuple[ClientDocument, ...]:
@@ -118,8 +164,10 @@ def _documents_for_os(banco, row) -> tuple[ClientDocument, ...]:
 def open_document(banco, session, work_id: int,
                   document_id: int) -> tuple[bytes, str, str]:
     # The owner check occurs before loading any document metadata or paths.
-    row = _owned_work(banco, session, work_id)
-    return _open_owned_document(banco, row, document_id)
+    _client_id(session)
+    access.require_document(banco,session.principal,int(work_id),int(document_id))
+    row = _owned_work(banco,session,work_id,"view")
+    return _open_owned_document(banco,row,document_id)
 
 
 def _open_owned_document(banco, row, document_id):
@@ -156,6 +204,7 @@ def _open_owned_document(banco, row, document_id):
 
 def create_request(banco, session, description: str, urgency: str) -> ClientWorkItem:
     uid = _client_id(session)
+    access.require_create(banco,session.principal)
     # Validate before touching the PF link; the legacy service still validates
     # again when it records the OS.
     if not 10 <= len(str(description).strip()) <= 2000 or urgency not in ("Normal", "Alta", "Baixa"):
@@ -176,10 +225,20 @@ def create_request(banco, session, description: str, urgency: str) -> ClientWork
         work_id = created
     if not isinstance(work_id, int):
         raise RuntimeError("Created request id is unavailable.")
-    item = get_work_item(banco, session, work_id)
-    if item is None:
-        raise RuntimeError("Created request is not visible to its owner.")
-    return item
+    # The PF link may have been created just now. The HTTP session is rotated
+    # immediately after this method returns; use the fresh canonical account
+    # membership to verify ownership before returning the newly-created OS.
+    from flavors.autoseg.modules import identity
+    current_identity = accounts.identity_for_account(banco, session.account_id)
+    current_membership = accounts.membership_for_account(banco, session.account_id)
+    if not current_identity or not current_membership:
+        raise PermissionError("Client resource unavailable.")
+    current_principal = identity.to_principal(current_identity, current_membership)
+    access.require_work_item(banco,current_principal,work_id,"view")
+    row = _safe(lambda: fluxo_pf.obter_os_pf(banco,uid,work_id))
+    if row is None:
+        raise PermissionError("Client resource unavailable.")
+    return _item(row)
 
 
 def _call(row) -> ClientCall:
@@ -190,48 +249,62 @@ def _call(row) -> ClientCall:
                       str(row["numero_os"] or ""))
 
 
-def list_calls(banco, session) -> tuple[ClientCall, ...]:
+def _all_calls(banco, session):
     uid = _client_id(session)
     def query():
         with ext.db(banco) as c:
-            rows = c.execute("""SELECT h.id,h.status,h.descricao,h.criado_em,h.os_id,
+            return c.execute("""SELECT h.id,h.status,h.descricao,h.criado_em,h.os_id,
                 o.nome AS organizacao,os.numero_os
-                FROM v9_chamados AS h
-                JOIN v9_organizacoes AS o ON o.id=h.organizacao_id
+                FROM v9_chamados AS h JOIN v9_organizacoes AS o
+                ON o.id=h.organizacao_id AND o.mesclado_em IS NULL
                 LEFT JOIN ordens_servico AS os ON os.id=h.os_id
-                WHERE h.usuario_id=? ORDER BY h.id DESC LIMIT 100""", (uid,)).fetchall()
-        return tuple(_call(row) for row in rows)
+                WHERE h.usuario_id=? OR h.organizacao_id IN (
+                    SELECT organizacao_id FROM v9_responsaveis WHERE usuario_id=?
+                    UNION SELECT organizacao_id FROM v9_vinculos WHERE usuario_id=?
+                ) ORDER BY h.id DESC LIMIT 300""", (uid,uid,uid)).fetchall()
     return _safe(query)
 
 
+def list_calls(banco, session) -> tuple[ClientCall, ...]:
+    result = []
+    for row in _all_calls(banco,session):
+        try:
+            _authorize_call(banco,session,int(row["id"]))
+        except PermissionError:
+            continue
+        result.append(_call(row))
+    return tuple(result)
+
+
 def get_call(banco, session, call_id: int) -> ClientCall | None:
-    uid = _client_id(session)
-    if type(call_id) is not int or call_id <= 0:
+    try:
+        _authorize_call(banco,session,call_id)
+    except (TypeError, ValueError, PermissionError):
         return None
-    return _safe(lambda: _call(row) if (row := fluxo_pf.obter_chamado(banco, uid, call_id)) else None)
-
-
-def _owned_call_work(banco, session, call_id: int):
-    call = get_call(banco, session, call_id)
-    if not call or call.work_id is None:
-        raise PermissionError("Document unavailable.")
-    # Ownership is the call's immutable requester id, not the associated
-    # organization's name or an untrusted work ID from a URL.
     def query():
         with ext.db(banco) as c:
-            return c.execute("""SELECT id,status FROM ordens_servico WHERE id=?""",
-                             (call.work_id,)).fetchone()
+            return c.execute("""SELECT h.id,h.status,h.descricao,h.criado_em,h.os_id,
+                o.nome AS organizacao,os.numero_os FROM v9_chamados h
+                JOIN v9_organizacoes o ON o.id=h.organizacao_id
+                LEFT JOIN ordens_servico os ON os.id=h.os_id WHERE h.id=?""",
+                             (int(call_id),)).fetchone()
     row = _safe(query)
-    if row is None:
+    return _call(row) if row else None
+
+
+def _owned_call_work(banco, session, call_id: int, action="view"):
+    _authorize_call(banco,session,call_id, "view")
+    call = get_call(banco,session,call_id)
+    if not call or call.work_id is None:
         raise PermissionError("Document unavailable.")
-    return row
+    return _owned_work(banco,session,call.work_id,action)
 
 
 def list_call_documents(banco, session, call_id: int) -> tuple[ClientDocument, ...]:
-    row = _owned_call_work(banco, session, call_id)
-    return _safe(lambda: _documents_for_os(banco, row))
+    row = _owned_call_work(banco,session,call_id)
+    return list_documents(banco,session,int(row["id"]))
 
 
 def open_call_document(banco, session, call_id: int, document_id: int):
-    row = _owned_call_work(banco, session, call_id)
-    return _open_owned_document(banco, row, document_id)
+    row = _owned_call_work(banco,session,call_id)
+    return open_document(banco,session,int(row["id"]),document_id)

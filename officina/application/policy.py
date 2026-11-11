@@ -14,8 +14,8 @@ from typing import Mapping
 
 PASTA_APP = Path(__file__).resolve().parents[2]
 from officina.paths import AUTOSEG_DIR
-SCOPES = ('none', 'own', 'involved', 'all')
-RELATIONSHIPS = ('none', 'own', 'involved', 'other', 'all')
+SCOPES = ('none', 'own', 'involved', 'organization', 'all')
+RELATIONSHIPS = ('none', 'own', 'involved', 'organization', 'other', 'all')
 
 PADRAO = {
     'versao': 1,
@@ -24,15 +24,38 @@ PADRAO = {
         'employee': {'permissions': [
             'work_item.view.own', 'work_item.view.involved',
             'work_item.create', 'work_item.edit.own',
-            'work_item.edit.involved', 'work_item.close.own',
-            'report.publish.own', 'finance.view.own', 'stock.view',
+            'work_item.edit.involved', 'work_item.conclude.own', 'work_item.cancel.own',
+            'report.publish.own', 'document.download.own', 'document.download.involved',
+            'work_item.archive.own', 'work_item.attach.own', 'work_item.attach.involved',
+            'work_item.start.own', 'work_item.publish.own',
+            'work_item.send.own',
+            'finance.view.own', 'stock.view',
             'customer.view.involved', 'customer.pii.view.involved',
             'customer.contact.view.involved',
         ]},
         'customer': {'permissions': [
             'work_item.create.request', 'work_item.view.own',
-            'report.view.own', 'document.view.own', 'customer.view.own',
+            'report.view.own', 'document.view.own', 'document.download.own',
+            'customer.view.own',
             'customer.pii.view.own', 'customer.contact.view.own',
+        ]},
+        'porteiro': {'permissions': [
+            'work_item.create.request', 'work_item.view.own',
+            'document.view.own', 'document.download.own', 'customer.view.own',
+        ]},
+        'zelador': {'permissions': [
+            'work_item.create.request', 'work_item.view.own', 'work_item.view.organization',
+            'document.view.own', 'document.view.organization',
+            'document.download.own', 'document.download.organization',
+            'report.view.own', 'report.view.organization',
+            'customer.contact.view.organization',
+        ]},
+        'sindico': {'permissions': [
+            'work_item.create.request', 'work_item.view.own', 'work_item.view.organization',
+            'document.view.own', 'document.view.organization',
+            'document.download.own', 'document.download.organization',
+            'report.view.own', 'report.view.organization',
+            'customer.view.organization', 'customer.contact.view.organization',
         ]},
     },
     'campos': {

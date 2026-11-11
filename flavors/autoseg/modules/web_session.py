@@ -90,7 +90,8 @@ def _account_binding(banco, account_id, identity_record: identity.Identity,
         return (current_membership.role == membership.role
                 and current_membership.provider_org_id == membership.provider_org_id
                 and current_membership.provider_id == membership.provider_id
-                and current_membership.client_id == membership.client_id)
+                and current_membership.client_id == membership.client_id
+                and current_membership.client_org_ids == membership.client_org_ids)
     except Exception:
         return False
 
@@ -119,7 +120,8 @@ def _active(banco, data: SessionData) -> bool:
             return (current_membership.role == data.membership.role
                     and current_membership.provider_org_id == data.membership.provider_org_id
                     and current_membership.provider_id == data.membership.provider_id
-                    and current_membership.client_id == data.membership.client_id)
+                    and current_membership.client_id == data.membership.client_id
+                    and current_membership.client_org_ids == data.membership.client_org_ids)
         return False
     except Exception:
         return False
@@ -151,7 +153,8 @@ def create(banco, account_id, identity_record, membership, principal,
             or principal.role != expected.role
             or principal.provider_id != expected.provider_id
             or principal.client_id != expected.client_id
-            or principal.organization_id != expected.organization_id):
+            or principal.organization_id != expected.organization_id
+            or principal.client_org_ids != expected.client_org_ids):
         raise ValueError("Invalid session principal.")
     if source == "account" and not _account_binding(
             banco, account_id, identity_record, membership):

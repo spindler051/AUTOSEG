@@ -1,0 +1,1304 @@
+"""Authorized provider OS commands.
+
+Each command runs authorization before business operations. Writers were extracted
+from the provider portal, retaining their responses through an explicit UI port.
+A writer cannot be invoked by the HTTP router without the command registry.
+"""
+from __future__ import annotations
+import re
+from pathlib import Path
+from officina.application.work_item_access import require_work_item, require_create
+from officina.application.object_policy import ObjectPolicy, Resource
+import json
+import mimetypes
+import os
+import secrets
+import time
+from datetime import datetime, timedelta
+from decimal import Decimal
+from urllib.parse import urlencode as urllib_parse_urlencode
+import logging
+from officina.core import (prestadores_ext as ext, portal_negocios as neg,
+    fluxo_os as fluxo, atendimento_os as aten, cadastros_v9 as cad9,
+    produtividade_os as prod, catalogo_servicos as catalogo)
+from flavors.autoseg.modules import object_policy_flags
+from flavors.autoseg.modules import (importacao_yaml as yaml_import,
+    solicitacoes_pj as pj_publico, policy_shadow)
+from officina.integration import clientes as clientes_core
+from officina.repositories import ordens as ordens_repo
+LOG=logging.getLogger('autosseg.portal')
+from threading import RLock
+from contextlib import contextmanager
+
+_LOCK_POOL: dict[int, RLock] = {}
+_POOL_GUARD = RLock()
+
+@contextmanager
+def _serialized(os_id):
+    key = int(os_id or 0)
+    with _POOL_GUARD:
+        lock = _LOCK_POOL.setdefault(key,RLock())
+    with lock:
+        yield
+
+
+def _provider_context(banco, session):
+    from flavors.autoseg.modules import identity, accounts, web_session
+    from officina.core import prestadores_ext as ext
+    pid = session.get('pid')
+    if not isinstance(pid,int):
+        raise PermissionError('Operação indisponível.')
+    user = identity.load_identity(banco,'provider',pid)
+    if not user or not user.active:
+        raise PermissionError('Operação indisponível.')
+    memberships = identity.memberships(banco,user)
+    if len(memberships)!=1:
+        raise PermissionError('Operação indisponível.')
+    from dataclasses import replace
+    principal = identity.to_principal(user,memberships[0])
+    # The current deployment has one provider tenant; legacy memberships lack
+    # provider_org_id. Bind to this deployment's concrete tenant explicitly.
+    return replace(principal,organization_id="autoseg")
+
+
+def _authorize(banco, principal, os_id, permission):
+    if not object_policy_flags.enforcement_enabled(banco):
+        return None
+    if permission == 'create':
+        return require_create(banco, principal)
+    return require_work_item(banco, principal, os_id, permission)
+
+
+from officina.core import prestadores_ext as ext, cadastros_v9 as cad9, portal_negocios as neg
+from officina.integration import clientes as clientes_core
+class OsBusinessSupport:
+    """Business-side compatibility helpers moved out of HTTP Handler."""
+    def __init__(self,banco):
+        self.banco=banco
+    def _cliente_por_nome(self, nome):
+        banco = self.banco
+        return clientes_core.criar_provisorio(nome, banco=banco)
+
+
+    def _resolver_cliente_os(self, d, oid=None):
+        banco = self.banco
+        """Existing selected id, new client typed by name, or current OS client."""
+        bruto = str(d.get('cliente_id', '')).strip()
+        if bruto:
+            try:
+                cliente_id = int(bruto)
+            except (TypeError, ValueError):
+                raise ValueError('Cliente selecionado inválido.') from None
+            if clientes_core.obter_resumo_ativo(cliente_id, banco=banco):
+                return cliente_id
+            # "Cliente a definir" is intentionally allowed on an OS.
+            with ext.db(banco) as c:
+                linha = c.execute('SELECT status FROM clientes WHERE id=?',
+                                  (cliente_id,)).fetchone()
+            if linha and linha['status'] == 'A definir':
+                return cliente_id
+            raise ValueError('Cliente selecionado não encontrado ou inativo.')
+        nome = str(d.get('cliente_busca', '')).strip()
+        if len(nome) >= 2:
+            return self._cliente_por_nome(nome)
+        if oid is not None:
+            with ext.db(banco) as c:
+                atual = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
+                                  (oid,)).fetchone()
+            if atual and atual['cliente_id']:
+                return int(atual['cliente_id'])
+        raise ValueError('Selecione um cliente existente ou digite o nome de um novo cliente.')
+
+
+    def _cliente_a_definir(self):
+        banco = self.banco
+        """Cadastro provisório para OS aberta antes de escolher o cliente."""
+        with ext.db(banco) as c:
+            linha=c.execute("SELECT id FROM clientes WHERE status='A definir' "
+                            "ORDER BY id LIMIT 1").fetchone()
+            if linha:
+                return int(linha['id'])
+            cur=c.execute("""INSERT INTO clientes
+                (tipo_pessoa,documento,nome,bairro,cidade,observacoes,status,criado_em)
+                VALUES('Física','','Cliente a definir','','',
+                'Criado automaticamente para uma OS aberta sem cliente. Associe o cliente depois.',
+                'A definir',?)""",(ext.agora(),))
+            return int(cur.lastrowid)
+
+
+    def _exigir_cliente_os(self, oid, acao, cliente_id=None):
+        banco = self.banco
+        with ext.db(banco) as c:
+            if cliente_id:
+                linha=c.execute("SELECT nome,status FROM clientes WHERE id=?",
+                                (int(cliente_id),)).fetchone()
+            else:
+                linha=c.execute("""SELECT c.nome,c.status FROM ordens_servico o
+                    JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?""",(oid,)).fetchone()
+        if not linha or linha['status'] in ('A definir','Inativo'):
+            raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
+
+
+    def _persist_form_client(self, d, oid, pid, actor, rule):
+        banco = self.banco
+        """Persist the client chosen in a workflow form before its action.
+
+        Workflow buttons submit the whole OS form, but only the regular
+        save route used to persist the client. Without this, selecting
+        a client and clicking "Iniciar OS" still validated the previous
+        client stored on the OS. ``rule`` mirrors the authorization of
+        each action so a denied action never changes the client.
+        """
+        if 'cliente_id' not in d and 'cliente_busca' not in d:
+            return None
+        with ext.db(banco) as c:
+            linha=c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+            if not linha:
+                raise ValueError('OS não encontrada.')
+            if linha['status'] not in ext.ATIVAS:
+                raise ValueError('Esta OS não está ativa.')
+            responsavel=ext.responsavel_atual(c,oid)
+        if rule=='route' and responsavel is None:
+            raise ValueError('Atribua um técnico antes de marcar Em rota.')
+        # ObjectPolicy already checked the exact command before this helper.
+        cliente_id=int(self._resolver_cliente_os(d,oid))
+        with ext.db(banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            atual=c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+            anterior=int(atual['cliente_id'] or 0) if atual else 0
+            if anterior!=cliente_id:
+                c.execute('UPDATE ordens_servico SET cliente_id=?,atualizado_em=? WHERE id=?',
+                          (cliente_id,ext.agora(),oid))
+                nome=c.execute('SELECT nome FROM clientes WHERE id=?',(cliente_id,)).fetchone()
+                rotulo=nome['nome'] if nome else str(cliente_id)
+                ext.evento(c,oid,'Cliente definido',
+                           f'{anterior} -> {cliente_id} ({rotulo})',pid,actor)
+                neg.audit(c,pid,'Cliente da OS alterado',oid,
+                          f'{anterior} -> {cliente_id} ({rotulo})')
+            c.commit()
+        return cliente_id
+
+
+def _write_import_yaml_existing(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);arq=d.get('yaml')
+    if not isinstance(arq,tuple):raise ValueError('Selecione um arquivo YAML.')
+    with ext.db(banco) as c:
+        os_atual=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+    if not os_atual or os_atual['status'] not in ext.ATIVAS:
+        raise ValueError('Somente OS ativas podem importar relatório.')
+    try:pre=yaml_import.relatorio(arq[0],arq[1])
+    except ValueError as erro:return ui.os_form(s,oid,erro=str(erro))
+    if not pre:
+        return ui.os_form(s,oid,erro='O YAML está em branco. Preencha a seção "os" antes de importar.')
+    pre['_substituir']=str(d.get('substituir',''))=='1'
+    return ui.os_form(s,oid,preenchimento=pre)
+
+
+def _write_create_quick(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    card = portal.card
+    botao = portal.botao
+    esc = portal.esc
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    cliente_texto=str(d.get('cliente_id','')).strip()
+    cliente_nome=str(d.get('cliente_nome','')).strip()[:250]
+    if cliente_texto:
+        try:
+            cliente_id=int(cliente_texto)
+        except (ValueError,TypeError):
+            return ui.os_rapida_form(
+                s,erro='Cliente inválido. Digite o nome novamente.',
+                dados_form=d)
+        if not clientes_core.obter_resumo_ativo(cliente_id,banco=banco):
+            return ui.os_rapida_form(
+                s,erro='Cliente não encontrado ou inativo.',
+                dados_form=d)
+    elif cliente_nome:
+        try:
+            cliente_id=business._cliente_por_nome(cliente_nome)
+        except ValueError as exc:
+            return ui.os_rapida_form(s,erro=str(exc),dados_form=d)
+    else:
+        cliente_id=business._cliente_a_definir()
+    descricao=str(d.get('descricao','')).strip()
+    if len(descricao)<5:
+        return ui.os_rapida_form(
+            s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
+            dados_form=d,cliente_id=cliente_id)
+    urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
+    if urgencia not in ('Baixa','Normal','Alta'):
+        return ui.os_rapida_form(
+            s,erro='Escolha a urgência.',
+            dados_form=d,cliente_id=cliente_id)
+    duplicada=ui._os_duplicada_recente(cliente_id)
+    if duplicada and not str(d.get('confirmar_duplicidade',''))=='1':
+        return ui.os_rapida_form(
+            s,dados_form=d,cliente_id=cliente_id,
+            duplicada=duplicada)
+    dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
+           'forma_pagamento':'','forma_pagamento_opcional':'1',
+           'urgencia':urgencia,
+           'valor_mao_obra':'0','valor_materiais_manual':'0',
+           'materiais_presentes':'1','acao_status':'salvar'}
+    oid=neg.os_salvar(banco,dados,pid)
+    ext.assumir(banco,oid,pid)
+    if str(d.get('confirmar_duplicidade',''))=='1':
+        with ext.db(banco) as c:
+            ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
+                       f'OS recente do mesmo cliente: {duplicada["numero_os"]} '
+                       f'({duplicada["criado_em"]}).',pid,f'Prestador {s["nome"]}')
+    with ext.db(banco) as c:
+        numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                          (oid,)).fetchone() or {'numero_os': oid})['numero_os']
+        cliente=(c.execute('SELECT status,dados_incompletos FROM clientes WHERE id=?',
+                           (cliente_id,)).fetchone() or {'status':'','dados_incompletos':0})
+    aviso_cliente=''
+    if cliente['status']=='A definir':
+        aviso_cliente=('<p class="notice">A OS está com <b>Cliente a definir</b>. '
+                       'Abra a OS e escolha o cliente quando souber.</p>')
+    elif cliente['dados_incompletos']:
+        aviso_cliente=('<p class="notice">O cliente foi criado com <b>dados incompletos</b>. '
+                       'Complete CPF/CNPJ, e-mail e endereço quando puder.</p>')
+    extra_cliente=(''
+        if not cliente['dados_incompletos'] else
+        botao('Completar cadastro do cliente',f'/clientes/{cliente_id}','secondary'))
+    return ui.pagina('OS aberta com sucesso',
+        card('OS aberta com sucesso',
+            f'<p class="good">A OS <b>{esc(numero)}</b> foi criada como <b>Aberta</b>.</p>'
+            +aviso_cliente+
+            '<p class="muted">Você não precisa preencher o atendimento agora. '
+            'Abra a OS quando for executar o serviço ou anexar fotos.</p>'
+            +botao('Abrir OS',f'{url_os(banco, oid)}')
+            +extra_cliente
+            +botao('Abrir outra OS','/os/rapida','secondary')
+            +botao('Voltar às OS','/os','secondary')),s)
+
+
+def _write_import_yaml_new(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    arquivo=d.get('yaml')
+    if not isinstance(arquivo,tuple) or not arquivo[0]:
+        raise ValueError('Selecione um arquivo YAML.')
+    try:
+        preenchimento=yaml_import.relatorio(arquivo[0],arquivo[1])
+    except ValueError as erro:
+        return ui.os_form(s,None,erro=str(erro))
+    if not preenchimento:
+        return ui.os_form(s,None,erro='O YAML está em branco. Preencha a seção "os" antes de importar.')
+    cliente_id=str(d.get('cliente_id','')).strip()
+    if cliente_id:
+        try:
+            preenchimento['cliente_id']=int(cliente_id)
+        except ValueError:
+            pass
+    return ui.os_form(s,None,preenchimento=preenchimento)
+
+
+def _write_create_full(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    d = dict(d)
+    d['cliente_id'] = business._resolver_cliente_os(d)
+    oid=neg.os_salvar(banco,d,pid)
+    ext.assumir(banco,oid,pid)
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_move_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);aid=int(partes[3])
+    movido=ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
+    if quer_json:
+        return ui.send_bytes(json.dumps({'ok':True,'movido':bool(movido)}).encode(),
+                               'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_remove_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);aid=int(partes[3])
+    ext.remover_anexo(banco,oid,aid,pid,ator=f'Prestador {s["nome"]}')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_rotate_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);aid=int(partes[3])
+    with ext.db(banco) as c:
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+        if ext.responsavel_atual(c,oid)!=pid and not admin:
+            raise PermissionError('Somente o responsável ou administrador edita fotos.')
+    ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
+    if quer_json:
+        return ui.send_bytes(json.dumps({
+            'ok':True,'anexo_id':aid}).encode(),
+            'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_publish_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);aid=int(partes[3])
+    with ext.db(banco) as c:
+        ok=c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',(aid,oid)).fetchone()
+    if not ok:raise ValueError('Anexo não pertence à OS.')
+    with ext.db(banco) as c:
+        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+            raise PermissionError('Somente o técnico responsável ou administrador edita a legenda do anexo.')
+    cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1])
+    with ext.db(banco) as c:
+        os_atual=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                           (oid,)).fetchone()
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
+        if ext.responsavel_atual(c,oid)!=pid and not admin:
+            raise PermissionError('Somente o responsável ou administrador edita fotos e legendas.')
+    if not os_atual or os_atual['status'] not in ext.ATIVAS:
+        raise ValueError('Somente OS ativas podem receber fotos.')
+    if 'arquivada' in os_atual.keys() and os_atual['arquivada']:
+        raise ValueError('OS arquivada: edição bloqueada.')
+    def _lista(valor):
+        if valor is None:return []
+        return valor if isinstance(valor,list) else [valor]
+    imagens=_lista(d.get('imagens_encerramento[]'))
+    legendas=_lista(d.get('foto_legenda[]'))
+    chaves=_lista(d.get('foto_chave[]'))
+    visiveis=_lista(d.get('foto_visivel[]'))
+    anexo_ids=_lista(d.get('anexo_id[]'))
+    anexo_legendas=_lista(d.get('anexo_legenda[]'))
+    anexo_visiveis=_lista(d.get('anexo_visivel[]'))
+    anexo_incluidos={str(x).strip() for x in _lista(d.get('anexo_incluir[]')) if str(x).strip()}
+    modo_checkbox=str(d.get('anexo_incluir_modo',''))=='1'
+    imagens=[x for x in imagens if isinstance(x,tuple) and x[1]]
+    if not imagens and not anexo_ids and not d.get('comprimir_fotos_pdf_presente'):
+        raise ValueError('Selecione uma foto ou altere uma legenda.')
+    if len(imagens)>10:
+        raise ValueError('Envie no máximo 10 fotos por vez.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        if str(d.get('comprimir_fotos_pdf_presente',''))=='1':
+            comprimir_pdf=1 if str(d.get('comprimir_fotos_pdf','')) in ('1','on','true','sim') else 0
+            c.execute('UPDATE ordens_servico SET comprimir_fotos_pdf=? WHERE id=?',
+                      (comprimir_pdf,oid))
+        for i,(nome,conteudo) in enumerate(imagens):
+            ext.registrar_imagem_transacao(
+                c,oid,pid,nome,conteudo,
+                permitir_colaboracao=admin,
+                chave=chaves[i] if i<len(chaves) else None,
+                legenda=legendas[i] if i<len(legendas) else '',
+                visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1)
+        for i,anexo_id in enumerate(anexo_ids):
+            try:
+                anexo_id=int(anexo_id)
+            except (TypeError,ValueError):
+                continue
+            if modo_checkbox:
+                visivel=1 if str(anexo_id) in anexo_incluidos else 0
+            else:
+                visivel=(str(anexo_visiveis[i])!='0'
+                         if i<len(anexo_visiveis) else 1)
+            ext.definir_legenda_anexo_c(
+                c,oid,anexo_id,
+                anexo_legendas[i] if i<len(anexo_legendas) else '',
+                visivel)
+    if quer_json:
+        return ui.send_bytes(json.dumps({
+            'ok': True,
+            'fotos': len(imagens),
+            'legendas': len(anexo_ids),
+        }).encode(), 'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_autosave_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1])
+    prod.salvar_rascunho(banco,oid,pid,d)
+    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+    ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+    # Auto-save also persists the monetary fields on the OS,
+    # so the PDF/email reflect the values typed in the form.
+    versao_os=None
+    aviso_os=''
+    try:
+        dados_os=dict(d)
+        dados_os['acao_status']='salvar'
+        neg.os_salvar(banco,dados_os,pid,oid,silent=True)
+        with ext.db(banco) as c:
+            linha_versao=c.execute(
+                'SELECT atualizado_em FROM ordens_servico WHERE id=?',
+                (oid,)).fetchone()
+        versao_os=linha_versao['atualizado_em'] if linha_versao else None
+    except Exception as exc:
+        LOG.exception('Auto-save: falha ao aplicar valores na OS %s',oid)
+        aviso_os=('Rascunho salvo, mas os valores da OS não foram '
+                  'aplicados.')
+        if isinstance(exc,(ValueError,PermissionError)) and str(exc):
+            aviso_os+=f' {exc}'
+        else:
+            aviso_os+=(' Recarregue a página e confira os campos '
+                       'obrigatórios.')
+    try:
+        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+                             str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+    except Exception:
+        pass
+    if str(d.get('relatorio_tecnico','')).strip():
+        with ext.db(banco) as c:
+            aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+    if quer_json:
+        resposta={'ok':True}
+        if versao_os:
+            resposta['versao_os']=versao_os
+        if aviso_os:
+            resposta['aviso']=aviso_os
+        return ui.send_bytes(json.dumps(resposta).encode(),
+                               'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_save_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    card = portal.card
+    botao = portal.botao
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1])
+    prod.salvar_rascunho(banco,oid,pid,d)
+    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+    ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+    sem_fechar = dict(d)
+    sem_fechar['acao_status'] = 'salvar'
+    neg.os_salvar(banco,sem_fechar,pid,oid)
+    try:
+        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+    except Exception:
+        pass
+    if str(d.get('relatorio_tecnico','')).strip():
+        with ext.db(banco) as c:
+            aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+    # A nota fiscal anexada no mesmo envio é gravada junto com o rascunho.
+    arquivo=d.get('nota_fiscal')
+    if isinstance(arquivo,tuple) and arquivo[0]:
+        try:
+            ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+        except Exception as falha:
+            LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
+    return ui.pagina('Rascunho salvo',card('Rascunho',
+        '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
+        +botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
+
+
+def _write_rateio(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1])
+    try:
+        tecnico=int(str(d.get('rateio_manual_tecnico','')).strip())
+    except (TypeError,ValueError):
+        erro='Selecione o técnico secundário.'
+        if quer_json:
+            return ui.send_bytes(json.dumps(
+                {'ok':False,'error':erro}).encode(),
+                'application/json; charset=utf-8',status=400)
+        raise ValueError(erro)
+    try:
+        prod.definir_rateio_manual(banco,oid,pid,tecnico,
+                                   str(d.get('rateio_manual_valor','0')))
+    except Exception as exc:
+        if quer_json:
+            status=403 if isinstance(exc,PermissionError) else 400
+            return ui.send_bytes(json.dumps(
+                {'ok':False,'error':str(exc)}).encode(),
+                'application/json; charset=utf-8',status=status)
+        raise
+    if quer_json:
+        with ext.db(banco) as c:
+            o=c.execute('SELECT valor_total FROM ordens_servico WHERE id=?',
+                        (oid,)).fetchone()
+            rows=c.execute('''SELECT r.tecnico_id,p.nome,r.valor_centavos,
+                COALESCE(rep.pago_centavos,0) pago_centavos,
+                COALESCE(rep.enviado_centavos,0) enviado_centavos
+                FROM produtividade_rateios r
+                JOIN prestadores p ON p.id=r.tecnico_id
+                LEFT JOIN produtividade_repasses rep
+                  ON rep.os_id=r.os_id AND rep.tecnico_id=r.tecnico_id
+                WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()
+        rateios=[]
+        for x in rows:
+            valor_x=int(x['valor_centavos'] or 0)
+            pago_x=int(x['pago_centavos'] or 0)
+            enviado_x=int(x['enviado_centavos'] or 0)
+            situacao=('Repasse confirmado' if pago_x>=valor_x
+                      else 'Repasse enviado' if enviado_x>0
+                      else 'Aguardando repasse')
+            rateios.append({'tecnico_id':int(x['tecnico_id']),
+                            'nome':x['nome'],
+                            'valor_centavos':valor_x,
+                            'situacao':situacao})
+        total_centavos=int(round(float(
+            (o['valor_total'] if o else 0) or 0)*100))
+        rateado_centavos=sum(x['valor_centavos'] for x in rateios)
+        return ui.send_bytes(json.dumps({
+            'ok':True,'rateios':rateios,
+            'total_centavos':total_centavos,
+            'rateado_centavos':rateado_centavos,
+            'restante_centavos':max(0,total_centavos-rateado_centavos)
+        }).encode(),'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_remove_invoice(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1]);nid=int(partes[3])
+    with ext.db(banco) as c:
+        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+            raise PermissionError('Somente o responsável ou administrador pode remover nota fiscal.')
+    ext.remover_nota_fiscal(banco,oid,nid,pid,ator=s['nome'])
+    if quer_json:
+        return ui.send_bytes(json.dumps({'ok':True}).encode(),
+                               'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_attach_invoice(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid=int(partes[1])
+    arquivo=d.get('nota_fiscal')
+    if not isinstance(arquivo,tuple) or not arquivo[0]:
+        raise ValueError('Selecione um arquivo PDF de nota fiscal.')
+    with ext.db(banco) as c:
+        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+            raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
+    # Preserva os campos já preenchidos ao anexar a NF.
+    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
+    if dados_rasc:
+        try:
+            ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
+            try:
+                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+                                     str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+            except Exception:
+                pass
+            if str(d.get('relatorio_tecnico','')).strip():
+                with ext.db(banco) as c:
+                    aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
+        except Exception as falha:
+            LOG.exception('Falha ao preservar rascunho ao anexar NF na OS %s', oid)
+    nota_id=ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+    if quer_json:
+        return ui.send_bytes(json.dumps({'ok':True,'nota_id':nota_id}).encode(),
+                               'application/json; charset=utf-8')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    cliente_id=business._persist_form_client(
+        d,oid,pid,f'Prestador {s["nome"]}','reopen')
+    business._exigir_cliente_os(oid,'reabrir a OS',cliente_id)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                    (oid,)).fetchone()
+        if not o or o['status'] not in ext.ATIVAS:
+            raise ValueError('Esta OS não está ativa.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
+        c.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,atualizado_em=? WHERE id=?",
+                  (ext.agora(),oid))
+        c.execute('''UPDATE os_atendimentos SET iniciado_em=NULL,iniciado_por=NULL,
+                     ator_inicio='',atualizado_em=? WHERE os_id=?''',
+                  (ext.agora(),oid))
+        c.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',(oid,))
+        ext.evento(c,oid,'OS reaberta','Situação alterada para Aberta.',pid,'Prestador')
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_action_arquivar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    ext.arquivar_os(banco,oid,pid,ator=s['nome'],
+                    motivo=str(d.get('motivo_arquivamento','')))
+    return ui.redir('/os')
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_rota(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    prod.marcar_em_rota(banco,oid,pid,str(d.get('ativo','0'))=='1',
+                        admin=bool(s.get('admin')))
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    card = portal.card
+    botao = portal.botao
+    esc = portal.esc
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    motivo=str(d.get('motivo_encerramento','')).strip()[:2000]
+    if not motivo:
+        raise ValueError('Informe o motivo do cancelamento.')
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',
+                    (oid,)).fetchone()
+        if not o or o['status'] not in ext.ATIVAS:
+            raise ValueError('Esta OS não está ativa.')
+        if 'arquivada' in o.keys() and o['arquivada']:
+            raise ValueError('OS arquivada: edição bloqueada.')
+        atual=ext.responsavel_atual(c,oid)
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone())
+        if atual not in (None,pid) and not admin:
+            raise PermissionError('Somente o responsável ou administrador pode cancelar.')
+        if str(d.get('confirmar_numero_os','')).strip()!=str(o['numero_os']).strip():
+            raise ValueError('O número da OS digitado não confere.')
+        fluxo.aplicar_encerramento(
+            c,oid,'Cancelada','',motivo,prestador_id=pid,
+            ator=f'Prestador {s["nome"]}')
+        neg.audit(c,pid,'OS cancelada',oid,f'Motivo: {motivo}')
+    try:
+        fluxo.publicar_relatorio(banco,oid)
+    except (ValueError,OSError) as falha:
+        LOG.exception('OS %s cancelada, mas falhou a publicação do PDF',oid)
+        return ui.pagina('OS cancelada — PDF pendente',card('Cancelamento salvo',
+            '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
+            f'<p class="bad">{esc(str(falha)[:400])}</p>'
+            +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
+    return ui.redir(f'{url_os(banco, oid)}')
+
+
+def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    card = portal.card
+    botao = portal.botao
+    esc = portal.esc
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    if d.get('modo_envio') in ('rascunho','salvar'):
+        try:
+            dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio')}
+            ext.salvar_rascunho_web(banco, oid, pid, dados_rasc)
+            d2 = dict(d)
+            d2['acao_status'] = 'salvar'
+            try:
+                neg.os_salvar(banco,d2,pid,oid)
+            except Exception:
+                LOG.exception('Falha ao salvar OS %s no rascunho', oid)
+            try:
+                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+            except Exception:
+                pass
+            if d.get('relatorio_tecnico'):
+                try:
+                    with ext.db(banco) as c:
+                        aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')) or '', f'Prestador {s["nome"]}')
+                except Exception:
+                    pass
+            arquivo=d.get('nota_fiscal')
+            if isinstance(arquivo,tuple) and arquivo[0]:
+                try:
+                    ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+                except Exception as falha:
+                    LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
+            return ui.pagina('Rascunho salvo',card('Rascunho',
+                '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
+        except Exception as e:
+            LOG.exception('Falha ao salvar rascunho da OS %s', oid)
+            return ui.erro(str(e),400,s)
+    cancelar_os = str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
+    acao_status = 'Cancelada' if cancelar_os else str(d.get('acao_status',''))
+    d = dict(d)
+    d['acao_status'] = acao_status
+    if cad9.prestador_admin(banco, pid):
+        d['_permitir_trocar_cliente'] = '1'
+    if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
+        d = dict(d); d['modo_envio'] = 'encerrar'
+    if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
+    if acao_status not in ('Pendente','Concluída','Cancelada'):
+        raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
+    d['cliente_id'] = business._resolver_cliente_os(d, oid)
+    if acao_status=='Concluída':
+        business._exigir_cliente_os(oid,'concluir a OS', d['cliente_id'])
+    # Só o botão de encerramento aplica o status escolhido.
+    # O relato técnico é histórico interno: não bloqueia
+    # cancelar nem deixar pendente. Para concluir, basta
+    # o serviço executado (ou um relato legado já preenchido).
+    if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
+        raise ValueError('Preencha Serviço executado antes de concluir.')
+    # Exige nota fiscal (ou a opção "não precisa") para concluir a OS.
+    if (d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída'
+            and not d.get('sem_nota_fiscal')
+            and not ext.listar_notas_fiscais(banco, oid)):
+        raise ValueError('Anexe a nota fiscal ou marque "Não precisa de nota fiscal" antes de concluir.')
+    if not str(d.get('relatorio_tecnico','')).strip():
+        d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
+    with ext.db(banco) as c:
+        if not (str(d.get('acao_status',''))=='Cancelada'
+                and cad9.prestador_admin(banco,pid)):
+            prod._os_ativa_responsavel(c,oid,pid)
+    if (acao_status=='Concluída'
+            and not str(d.get('forma_pagamento','')).strip()):
+        raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
+    # Pendente e Concluída publicam relatório e podem
+    # enviar o e-mail automático aos destinatários.
+    sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
+    destinatarios=None
+    if str(d.get('acao_status',''))=='Concluída' and not sem_destinatario:
+        destinatarios=prod.destinatarios_para_os(
+            banco,oid,d.get('destinatario_sel[]'),
+            str(d.get('emails_adicionais','')))
+    elif str(d.get('acao_status',''))=='Pendente' and not sem_destinatario:
+        try:
+            destinatarios=prod.destinatarios_para_os(
+                banco,oid,d.get('destinatario_sel[]'),
+                str(d.get('emails_adicionais','')))
+        except ValueError as erro:
+            if 'Selecione ao menos um destinatário' not in str(erro):
+                raise
+            # Pendência sem contato cadastrado não bloqueia.
+            destinatarios=None
+    neg.os_salvar(banco,d,pid,oid)
+    prod.limpar_rota_ao_iniciar(banco,oid)
+    if d.get('acao_status') in ('Pendente','Concluída'):
+        prod.registrar_etapa(banco,oid,pid,str(d.get('acao_status')),d)
+    if destinatarios:
+        prod.registrar_envio(banco,oid,destinatarios)
+    cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
+    if str(d.get('acao_status','')) in fluxo.PUBLICAVEIS:
+        try: fluxo.publicar_relatorio(banco,oid)
+        except Exception as falha:
+            LOG.exception('Encerrada OS %s, mas falhou a publicação do PDF',oid)
+            return ui.pagina('OS encerrada — PDF pendente',card('Encerramento salvo',
+                '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
+                +f'<p class="bad">{esc(str(falha)[:400])}</p>'
+                +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
+        if destinatarios:
+            # Disparo automático do e-mail em segundo plano:
+            # Não bloqueia a resposta da conclusão da OS.
+            try:
+                from flavors.autoseg.modules import gmail_service
+                gmail_service.enviar_relatorio_os_concluida(banco, oid, destinatarios)
+            except Exception as falha:
+                LOG.exception('Gmail: OS %s — falha ao agendar envio', oid)
+                prod.registrar_envio(banco, oid, destinatarios, 'falhou', erro=str(falha))
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_publicar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    fluxo.publicar_relatorio(banco,oid)
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_atribuir(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    try:
+        destino=int(str(d.get('prestador_destino','')).strip())
+    except (TypeError,ValueError):
+        raise ValueError('Selecione o prestador de destino.') from None
+    ext.atribuir(banco,oid,destino,ator=f'Prestador {s["nome"]}')
+    if quer_json:
+        return ui.send_bytes(json.dumps({'ok':True}).encode(),
+                               'application/json; charset=utf-8')
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_assumir(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    ext.assumir(banco,oid,pid)
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_em_rota(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    cliente_id=business._persist_form_client(
+        d,oid,pid,f'Prestador {s["nome"]}','route')
+    business._exigir_cliente_os(oid,'colocar em rota',cliente_id)
+    ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
+                       admin=bool(s.get('admin')))
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_cancelar_rota(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    ext.cancelar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
+                         admin=bool(s.get('admin')))
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_iniciar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    cliente_id=business._persist_form_client(
+        d,oid,pid,f'Prestador {s["nome"]}','start')
+    business._exigir_cliente_os(oid,'iniciar o atendimento',cliente_id)
+    aten.iniciar_assumindo(banco,oid,pid,admin=bool(s.get('admin')))
+    prod.limpar_rota_ao_iniciar(banco,oid)
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    from flavors.autoseg.modules import portal_prestador as portal
+    url_os = portal.url_os
+    business = OsBusinessSupport(banco)
+    s = session
+    pid = s["pid"]
+    d = data
+    partes = path.strip('/').split('/')
+    oid = os_id
+    acao = partes[2]
+    with ext.db(banco) as c:
+        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+            raise PermissionError('Somente o responsável ou administrador pode reenviar o e-mail.')
+        registro=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
+    if 'destinatario_sel[]' in d or 'emails_adicionais' in d:
+        selecionados=d.get('destinatario_sel[]')
+        if isinstance(selecionados,str): selecionados=[selecionados]
+        if selecionados is None: selecionados=[]
+        destinatarios=prod.destinatarios_para_os(
+            banco,oid,selecionados,str(d.get('emails_adicionais','')))
+    else:
+        destinatarios=None
+        if registro and registro['destinatarios_json']:
+            try:destinatarios=json.loads(registro['destinatarios_json'])
+            except Exception:destinatarios=None
+    # Republica o PDF com as imagens/legendas atuais antes de reenviar.
+    try:
+        fluxo.publicar_relatorio(banco,oid)
+    except Exception:
+        pass
+    from flavors.autoseg.modules import gmail_service
+    gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
+    return ui.redir(f"{url_os(banco, os_id)}")
+
+
+
+# Permission for an action depends on its *effective* mutation, never the URL
+# alone. In particular /os/<id>/salvar cannot close/cancel with edit rights.
+PERMISSIONS = {
+    'abrir':'reopen', 'arquivar':'archive', 'rota':'start',
+    'cancelar':'cancel', 'salvar':'edit', 'publicar':'publish',
+    'atribuir':'assign', 'assumir':'assume', 'em-rota':'start',
+    'cancelar-rota':'start','iniciar':'start', 'reenviar-email':'send',
+}
+BRANCH_PERMISSIONS = {
+    'import_yaml_existing':'edit', 'create_quick':'create', 'import_yaml_new':'create', 'create_full':'create',
+    'move_attachment':'attach', 'remove_attachment':'attach','rotate_attachment':'attach','publish_attachment':'attach',
+    'photos':'attach','autosave_draft':'edit','save_draft':'edit',
+    'rateio':'edit','remove_invoice':'attach','attach_invoice':'attach',
+}
+
+
+def _command(path, data):
+    parts=path.strip('/').split('/')
+    if len(parts)>=2 and parts[0]=='os' and parts[1] in ('rapida','nova','yaml'):
+        if path=='/os/rapida/salvar':return 'create_quick',None
+        if path=='/os/yaml':return 'import_yaml_new',None
+        if path=='/os/nova/salvar':return 'create_full',None
+        raise PermissionError('Operação indisponível.')
+    if len(parts)<3 or parts[0]!='os' or not parts[1].isdigit():
+        raise PermissionError('Operação indisponível.')
+    os_id=int(parts[1]); tail=parts[2:]
+    if tail==['yaml']:return 'import_yaml_existing',os_id
+    if len(tail)==1 and tail[0] in PERMISSIONS:
+        return tail[0],os_id
+    if len(tail)==3 and tail[0]=='anexo' and tail[1].isdigit():
+        return {'mover':'move_attachment','remover':'remove_attachment','girar':'rotate_attachment',
+                'publico':'publish_attachment'}.get(tail[2]),os_id
+    if tail==['fotos']:return 'photos',os_id
+    if tail==['rascunho','auto']:return 'autosave_draft',os_id
+    if tail==['rascunho','salvar']:return 'save_draft',os_id
+    if tail==['rateio']:return 'rateio',os_id
+    if tail==['nota-fiscal']:return 'attach_invoice',os_id
+    if len(tail)==3 and tail[0]=='nota-fiscal' and tail[1].isdigit() and tail[2]=='remover':
+        return 'remove_invoice',os_id
+    raise PermissionError('Operação indisponível.')
+
+
+def _permission(action, data):
+    permission = PERMISSIONS.get(action) or BRANCH_PERMISSIONS.get(action)
+    if permission is None:
+        raise PermissionError('Operação indisponível.')
+    if action=='salvar':
+        # Status transitions are a distinct privilege from ordinary editing.
+        status=str(data.get('acao_status','')).strip()
+        if str(data.get('cancelar_os','')).lower() in ('1','on','true','sim'):
+            return 'cancel'
+        if status=='Concluída':return 'conclude'
+        if status=='Cancelada':return 'cancel'
+    return permission
+
+
+WRITERS = {
+    'import_yaml_existing': _write_import_yaml_existing,
+    'create_quick': _write_create_quick,
+    'import_yaml_new': _write_import_yaml_new,
+    'create_full': _write_create_full,
+    'move_attachment': _write_move_attachment,
+    'remove_attachment': _write_remove_attachment,
+    'rotate_attachment': _write_rotate_attachment,
+    'publish_attachment': _write_publish_attachment,
+    'photos': _write_photos,
+    'autosave_draft': _write_autosave_draft,
+    'save_draft': _write_save_draft,
+    'rateio': _write_rateio,
+    'remove_invoice': _write_remove_invoice,
+    'attach_invoice': _write_attach_invoice,
+    'abrir': _write_action_abrir,
+    'arquivar': _write_action_arquivar,
+    'rota': _write_action_rota,
+    'cancelar': _write_action_cancelar,
+    'salvar': _write_action_salvar,
+    'publicar': _write_action_publicar,
+    'atribuir': _write_action_atribuir,
+    'assumir': _write_action_assumir,
+    'em-rota': _write_action_em_rota,
+    'cancelar-rota': _write_action_cancelar_rota,
+    'iniciar': _write_action_iniciar,
+    'reenviar-email': _write_action_reenviar_email,
+}
+
+def execute_http(ui,banco,principal,path,data,session,quer_json=False):
+    """Resolve command, authorize, *then* invoke the extracted writer."""
+    action,os_id=_command(path,data)
+    if action is None:
+        raise PermissionError('Operação indisponível.')
+    with _serialized(os_id):
+        # Authorization and writer dispatch are indivisible relative to other
+        # HTTP commands in this process. The service owns the actual writer.
+        _authorize(banco, principal, os_id, _permission(action,data))
+        if action=='reenviar-email':
+            _authorize(banco,principal,os_id,'publish')
+        if action=='salvar' and str(data.get('acao_status','')) in ('Concluída','Pendente'):
+            _authorize(banco,principal,os_id,'publish')
+        writer=WRITERS[action]
+        return writer(banco,principal,os_id,data,ui=ui,session=session,path=path,
+                      quer_json=quer_json)
+
+
+def authorize_get(banco, principal, path):
+    """Authorize provider reads before redirect or UI reveals object metadata."""
+    from officina.application.work_item_access import resource_for_work_item,require_document
+    if not object_policy_flags.enforcement_enabled(banco):
+        return None
+    parts=path.strip('/').split('/')
+    if len(parts)<2 or parts[0]!='os' or not parts[1].isdigit():
+        raise PermissionError('Recurso indisponível.')
+    oid=int(parts[1])
+    tail=parts[2:]
+    if not tail:
+        return require_work_item(banco,principal,oid,'view')
+    if tail==['relatorio.yaml']:
+        return require_work_item(banco,principal,oid,'view')
+    if tail==['rascunho']:
+        return require_work_item(banco,principal,oid,'edit')
+    if tail in (['pdf'],['pdf-preview'],['email'],['nota']):
+        if tail==['pdf']:
+            resource=resource_for_work_item(banco,oid)
+            doc=Resource('document',oid,resource.organization_id,resource.owner_id,
+                         resource.client_id,resource.participant_ids,
+                         resource.attributes,resource.client_org_id)
+            return ObjectPolicy().require(principal,'download',doc)
+        action = 'publish' if tail==['pdf-preview'] else 'send'
+        return require_work_item(banco,principal,oid,action)
+    if len(tail)>=2 and tail[0]=='nota-fiscal' and tail[1].isdigit():
+        return require_document(banco,principal,oid,int(tail[1]),'download')
+    raise PermissionError('Recurso indisponível.')
+
+
+
+def document_get(banco,principal,os_id,*,ui,session,kind):
+    """Document writer, authorization and business logic on the service side."""
+    authorize_get(banco,principal,f'/os/{os_id}/{kind}')
+    from flavors.autoseg.modules import portal_prestador as portal
+    ext=portal.ext
+    neg=portal.neg
+    prod=portal.prod
+    fluxo=portal.fluxo
+    policy_shadow=portal.policy_shadow
+    LOCK_DOCS=portal.LOCK_DOCS
+    LOG=portal.LOG
+    Path=portal.Path
+    botao=portal.botao
+    card=portal.card
+    esc=portal.esc
+    url_os=portal.url_os
+    self=ui
+    s=session
+    oid=os_id
+    with ext.db(banco) as c:
+        o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
+        if not o: return self.erro('OS inexistente.',404,s)
+    policy_shadow.evaluate_os(
+        banco,s['pid'],oid,
+        'download' if kind in ('pdf','pdf-preview') else (
+            'export' if kind in ('email','nota') else 'read'),
+        True,f'documentos:{kind}')
+    if kind=='pdf-preview':
+        # Preview is deliberately unpublished: no os_documentos row,
+        # no e-mail, no status change. Any authenticated provider who
+        # can open the OS may download the current draft.
+        with LOCK_DOCS:
+            arq=ext.gerar_pdf(banco,oid)
+            with ext.db(banco) as c:
+                neg.audit(c,s['pid'],'Preview de PDF gerado',oid,'pdf-preview')
+            nome=f'{Path(arq).stem}_preview.pdf'
+            return self.send_bytes(Path(arq).read_bytes(),
+                                   'application/pdf',filename=nome)
+    prod.controlar_pdf(banco,oid,s['pid'])
+    with LOCK_DOCS:
+        if kind in ('pdf','email'):
+            if o['status'] not in fluxo.FIM:
+                return self.erro('PDF disponível somente após o encerramento da OS.',409,s)
+            publicado=fluxo.ultimo_documento(banco,oid)
+            if not publicado:
+                return self.erro('PDF ainda não publicado. Abra esta OS e use Republicar PDF.',409,s)
+            pdf=fluxo.validar_pdf_publicado(publicado)
+        if kind=='pdf':
+            arq=pdf;mime='application/pdf'
+        elif kind=='email':
+            arq=ext.criar_email_rascunho(banco,oid,pdf,prestador_id=s['pid']);mime='message/rfc822'
+        elif kind=='nota':
+            arq=ext.criar_rascunho_fiscal(banco,oid);mime='application/json; charset=utf-8'
+        else:return self.erro('Arquivo inválido.',404,s)
+        with ext.db(banco) as c:
+            neg.audit(c,s['pid'],'Documento gerado',oid,kind)
+        return self.send_bytes(Path(arq).read_bytes(),mime,filename=Path(arq).name)
+
+
+def read_anexo(banco,principal,aid,*,ui,session):
+    from flavors.autoseg.modules import portal_prestador as portal
+    from officina.core import prestadores_ext as ext
+    import mimetypes
+    from pathlib import Path
+    from flavors.autoseg.modules import policy_shadow
+    prod=portal.prod
+    self=ui
+    s=session
+    with ext.db(banco) as c:
+        row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
+    if row is None:
+        raise PermissionError('Recurso indisponível.')
+    if object_policy_flags.enforcement_enabled(banco):
+        from officina.application.work_item_access import resource_for_work_item
+        resource=resource_for_work_item(banco,int(row['os_id']))
+        document=Resource('document',aid,resource.organization_id,resource.owner_id,
+                          resource.client_id,resource.participant_ids,
+                          resource.attributes,resource.client_org_id)
+        ObjectPolicy().require(principal,'download',document)
+    with ext.db(banco) as c:
+        x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+        if x and not prod.participou(c,x['os_id'],s['pid']):
+            raise PermissionError('Anexo restrito aos técnicos participantes.')
+    if not x:return self.erro('Anexo não encontrado.',404,s)
+    policy_shadow.evaluate_os(
+        banco,s['pid'],x['os_id'],'download',True,'anexo')
+    arq=Path(x['caminho']).resolve()
+    if not arq.is_relative_to(ext.ANEXOS.resolve()):
+        return self.erro('Anexo fora do diretório autorizado.',403,s)
+    if not arq.is_file():return self.erro('Arquivo de imagem não encontrado.',404,s)
+    mime=mimetypes.guess_type(arq.name)[0] or 'application/octet-stream'
+    return self.send_bytes(arq.read_bytes(),mime,filename=x['nome_original'])
+
+
+def read_anexo_thumb(banco,principal,aid,*,ui,session):
+    from flavors.autoseg.modules import portal_prestador as portal
+    from officina.core import prestadores_ext as ext
+    import mimetypes
+    from pathlib import Path
+    from flavors.autoseg.modules import policy_shadow
+    prod=portal.prod
+    self=ui
+    s=session
+    with ext.db(banco) as c:
+        row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
+    if row is None:
+        raise PermissionError('Recurso indisponível.')
+    if object_policy_flags.enforcement_enabled(banco):
+        from officina.application.work_item_access import resource_for_work_item
+        resource=resource_for_work_item(banco,int(row['os_id']))
+        document=Resource('document',aid,resource.organization_id,resource.owner_id,
+                          resource.client_id,resource.participant_ids,
+                          resource.attributes,resource.client_org_id)
+        ObjectPolicy().require(principal,'download',document)
+    with ext.db(banco) as c:
+        x=c.execute('SELECT os_id,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
+        if x and not prod.participou(c,x['os_id'],s['pid']):
+            raise PermissionError('Anexo restrito aos técnicos participantes.')
+    if not x:return self.erro('Anexo não encontrado.',404,s)
+    policy_shadow.evaluate_os(
+        banco,s['pid'],x['os_id'],'view',True,'anexo_thumb')
+    arq=Path(x['caminho']).resolve()
+    if not arq.is_relative_to(ext.ANEXOS.resolve()):
+        return self.erro('Anexo fora do diretório autorizado.',403,s)
+    return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg',
+                           cache='private, max-age=31536000, immutable')

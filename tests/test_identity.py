@@ -59,17 +59,21 @@ class IdentityTest(unittest.TestCase):
         ident = identity.load_identity(self.banco, "client", 10)
         self.assertEqual(identity.resolve_identifier(self.banco, "Client@Example.test"), (ident,))
         self.assertEqual(identity.resolve_identifier(self.banco, "222.333.444-55"), (ident,))
-        membership, = identity.memberships(self.banco, ident)
-        self.assertEqual(membership.role, "customer")
-        principal = identity.to_principal(ident, membership)
-        self.assertEqual(principal.client_id, 200)
+        # Unconverted client records do not carry an authoritative role.
+        self.assertEqual((), identity.memberships(self.banco, ident))
+        membership = identity.Membership("client",ident.id,"customer",client_id=ident.client_id)
+        principal = identity.to_principal(ident,membership)
+        self.assertEqual(principal.client_id,200)
 
     def test_inactive_identity_and_principal(self):
         for kind, id_value in (("provider", 3), ("client", 12), ("provider", 5)):
             ident = identity.load_identity(self.banco, kind, id_value)
             self.assertFalse(ident.active)
-            self.assertFalse(identity.to_principal(
-                ident, identity.memberships(self.banco, ident)[0]).active)
+            membership = (identity.memberships(self.banco,ident)[0]
+                          if kind == 'provider' else identity.Membership(
+                              'client',ident.id,'customer',client_id=ident.client_id,
+                              active=False))
+            self.assertFalse(identity.to_principal(ident,membership).active)
         self.assertFalse(identity.resolve_identifier(
             self.banco, "inactive@example.test")[0].active)
 
@@ -94,9 +98,11 @@ class IdentityTest(unittest.TestCase):
                          [("provider", 4), ("client", 11)])
 
     def test_memberships_do_not_claim_a_tenant(self):
-        for kind, id_value in (("provider", 1), ("provider", 2), ("client", 10)):
-            ident = identity.load_identity(self.banco, kind, id_value)
+        for id_value in (1, 2):
+            ident = identity.load_identity(self.banco, "provider", id_value)
             self.assertIsNone(identity.memberships(self.banco, ident)[0].provider_org_id)
+        ident = identity.load_identity(self.banco, "client", 10)
+        self.assertEqual(identity.memberships(self.banco, ident), ())
 
     def test_identity_excludes_password_fields(self):
         names = {field.name for field in fields(identity.Identity)}
@@ -112,8 +118,9 @@ class IdentityTest(unittest.TestCase):
         provider = identity.load_identity(self.banco, "provider", 1)
         other_provider = identity.memberships(
             self.banco, identity.load_identity(self.banco, "provider", 2))[0]
-        client = identity.memberships(
-            self.banco, identity.load_identity(self.banco, "client", 10))[0]
+        client_identity = identity.load_identity(self.banco, "client", 10)
+        client = identity.Membership('client', client_identity.id, 'customer',
+                                     client_id=client_identity.client_id)
         for membership in (other_provider, client):
             with self.assertRaises(ValueError):
                 identity.to_principal(provider, membership)
@@ -156,8 +163,7 @@ class IdentityTest(unittest.TestCase):
                 banco, "123.456.789-01")[0]
             self.assertEqual(
                 identity.memberships(banco, provider)[0].role, "admin")
-            self.assertEqual(
-                identity.memberships(banco, client)[0].role, "customer")
+            self.assertEqual(identity.memberships(banco, client), ())
             self.assertEqual(
                 policy_shadow.principal_provider(banco, provider_id).role,
                 "admin")

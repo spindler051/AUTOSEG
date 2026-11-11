@@ -63,15 +63,33 @@ def principal_provider(banco, provider_id: int) -> Principal:
 
 
 def principal_client(banco, user_id: int) -> Principal:
-    """Delegate legacy client mapping to the identity contract."""
+    """Observational principal only; this is NEVER a login or authorization source.
+
+    Converted accounts use the authoritative client_role/account membership.
+    Unconverted legacy clients get a shadow-only customer snapshot so existing
+    divergence telemetry remains useful. Login/client_service still reject it.
+    """
     try:
+        from flavors.autoseg.modules import accounts
         ident = identity.load_identity(banco, "client", user_id)
-        if ident:
-            vinculo = next((m for m in identity.memberships(banco, ident)
-                            if m.client_id == ident.client_id
-                            and m.role == "customer"), None)
-            if vinculo:
-                return identity.to_principal(ident, vinculo)
+        if ident is None:
+            raise ValueError("Missing legacy identity")
+        with ext.db(banco) as connection:
+            row = connection.execute("""SELECT account_id FROM account_links
+                WHERE link_type='client' AND client_user_id=?""",
+                (int(user_id),)).fetchone() if connection.execute("""
+                SELECT 1 FROM sqlite_master WHERE type='table' AND name='account_links'
+                """).fetchone() else None
+        if row is not None:
+            membership = accounts.membership_for_account(banco, int(row['account_id']))
+            if membership is None:
+                raise ValueError("Invalid converted membership")
+            return identity.to_principal(ident, membership)
+        # Deliberately observational; no session can be created from this.
+        snapshot = identity.Membership(
+            'client', ident.id, 'customer', client_id=ident.client_id,
+            active=ident.active)
+        return identity.to_principal(ident, snapshot)
     except Exception:
         pass
     return Principal(account_id=int(user_id), role="customer", active=False)

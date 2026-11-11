@@ -58,7 +58,7 @@ def provider_session(handler, banco) -> dict | None:
 def client_session(handler, banco) -> web_session.SessionData | None:
     session = unified_session(handler, banco)
     if (session is None or session.identity.kind != "client"
-            or session.principal.role != "customer"
+            or session.principal.role not in ("customer", "porteiro", "zelador", "sindico")
             or not session.principal.active):
         return None
     return session

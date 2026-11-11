@@ -1,13 +1,7 @@
-"""Object-level permission resolution skeleton.
+"""Object-level permission resolution for customer and provider services.
 
-The declarative role/field policy lives in ``officina.application.policy``.
-This module adds the missing object relationship layer: who owns the resource,
-who participates, which organization it belongs to, and which explicit
-grants/denies the account has.
-
-It is deliberately not wired into the web server or desktop app yet. The
-migration will call ``can``/``require`` from the service boundary and remove
-``if admin`` checks from business code.
+The declarative policy lives in ``officina.application.policy``; services
+resolve resource relationships and call ``require`` before reading or writing.
 """
 from __future__ import annotations
 
@@ -22,7 +16,7 @@ ACTIONS = frozenset({
     "start", "assume", "archive", "reopen", "attach", "download",
     "confirm", "send", "merge", "impersonate",
 })
-SCOPES = ("own", "involved", "all")
+SCOPES = ("own", "involved", "organization", "all")
 
 
 class PermissionDenied(PermissionError):
@@ -43,6 +37,7 @@ class Principal:
     grants: frozenset[str] = frozenset()
     denies: frozenset[str] = frozenset()
     active: bool = True
+    client_org_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -54,6 +49,7 @@ class Resource:
     client_id: int | None = None
     participant_ids: frozenset[int] = frozenset()
     attributes: Mapping[str, Any] = field(default_factory=dict)
+    client_org_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -100,8 +96,16 @@ class ObjectPolicy:
                 and principal.provider_id is not None
                 and resource.owner_id == principal.provider_id):
             return "own"
-        if resource.client_id is not None and resource.client_id == principal.client_id:
+        if (principal.provider_id is None and principal.client_id is not None
+                and resource.client_id is not None and resource.client_id == principal.client_id):
             return "own"
+        if (principal.provider_id is None and resource.attributes.get("requester_user_id")
+                == principal.account_id):
+            return "own"
+        if (principal.provider_id is None and principal.role in ("zelador", "sindico")
+                and resource.client_org_id is not None
+                and resource.client_org_id in principal.client_org_ids):
+            return "organization"
         if (principal.provider_id is not None
                 and principal.provider_id in resource.participant_ids):
             return "involved"
@@ -141,7 +145,7 @@ class ObjectPolicy:
         if granted:
             return Decision(True, "Permissão concedida ao usuário.", granted,
                             relationship, tenant_unknown)
-        if relationship == "other":
+        if relationship == "other" and action != "create":
             return Decision(False, "Sem vínculo com o recurso.",
                             relationship=relationship,
                             tenant_unknown=tenant_unknown)

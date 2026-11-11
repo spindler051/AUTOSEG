@@ -33,6 +33,7 @@ class Membership:
     provider_id: int | None = None
     client_id: int | None = None
     active: bool = True
+    client_org_ids: frozenset[int] = frozenset()
 
 
 def _exists(connection, table: str) -> bool:
@@ -158,11 +159,9 @@ def memberships(banco, identity: Identity) -> tuple[Membership, ...]:
     if not isinstance(identity, Identity):
         return ()
     if identity.kind == "client":
-        return (Membership(
-            identity_kind="client", identity_id=identity.id,
-            role="customer", client_id=identity.client_id,
-            active=identity.active,
-        ),)
+        # Client roles require an explicitly converted account_links row.
+        # The legacy user record cannot grant an implicit customer role.
+        return ()
     if identity.kind != "provider":
         return ()
     try:
@@ -191,11 +190,12 @@ def to_principal(identity: Identity, membership: Membership) -> Principal:
             or identity.kind != membership.identity_kind
             or identity.id != membership.identity_id):
         raise ValueError("Identity and membership do not match.")
-    expected = {"provider": ("admin", "employee"), "client": ("customer",)}
+    expected = {"provider": ("admin", "employee"), "client": ("customer", "porteiro", "zelador", "sindico")}
     if membership.role not in expected.get(identity.kind, ()):
         raise ValueError("Membership role is invalid for this identity kind.")
     if identity.kind == "provider":
-        if membership.provider_id != identity.id or membership.client_id is not None:
+        if (membership.provider_id != identity.id or membership.client_id is not None
+                or membership.client_org_ids):
             raise ValueError("Provider membership does not match the identity.")
     elif membership.provider_id is not None or membership.client_id != identity.client_id:
         raise ValueError("Client membership does not match the identity.")
@@ -206,4 +206,5 @@ def to_principal(identity: Identity, membership: Membership) -> Principal:
         provider_id=membership.provider_id,
         client_id=membership.client_id,
         active=identity.active and membership.active,
+        client_org_ids=membership.client_org_ids,
     )

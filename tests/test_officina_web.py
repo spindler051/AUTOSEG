@@ -1,4 +1,5 @@
 """Unit characterization of the generic shell; not an HTTP integration test."""
+from unittest.mock import patch
 import unittest
 from types import SimpleNamespace
 
@@ -403,33 +404,16 @@ class OfficinaWebHttpTest(unittest.TestCase):
         self.assertNotIn(b'Primeira solicita', self.req(other, '/cliente/os')[2])
         self.assertEqual(link[0], accounts.sync_client_pf_link(self.db, account_id, self.client_id))
 
-    def test_legacy_first_request_keeps_session_after_pf_creation(self):
-        import re
+    def test_unconverted_client_login_is_explicitly_denied(self):
         from flavors.autoseg.modules import auth
-        from unittest.mock import patch
         with patch.object(auth, 'accounts', None):
-            browser, status, headers, _ = self.login('customer@example.test', self.client_pass)
-            self.assertEqual(303, status)
-            status, _, form = self.req(browser, '/cliente/solicitar')
-            self.assertEqual(200, status)
-            csrf = re.search(rb'name="csrf" value="([^"]+)"', form).group(1).decode()
-            status, headers, _ = self.req(browser, '/cliente/solicitar', {
-                'csrf': csrf, 'descricao': 'Primeiro pedido legado com perfil novo',
-                'urgencia': 'Normal'})
-            self.assertEqual(303, status)
-            self.assertTrue(any('autosseg_unified=' in c for c in
-                                headers.get_all('Set-Cookie') or ()))
-            status, _, page = self.req(browser, '/cliente/os')
-            self.assertEqual(200, status)
-            work_path = headers['Location']
-            self.assertTrue(work_path.startswith('/cliente/os/'))
-            self.assertIn(work_path.encode(), page)
-            status, _, detail = self.req(browser, work_path)
-            self.assertEqual(200, status)
-            self.assertIn(b'Primeiro pedido legado', detail)
-            self.assertNotIn(b'action="/entrar"', page)
-            other, _, _, _ = self.login('other@example.test', self.client_pass)
-            self.assertNotIn(b'Primeiro pedido legado', self.req(other, '/cliente/os')[2])
+            browser, status, headers, body = self.login('customer@example.test',self.client_pass)
+            self.assertEqual(200,status)
+            self.assertIn(b'Credenciais inv',body)
+            self.assertFalse(any('autosseg_unified=' in c for c in
+                                 headers.get_all('Set-Cookie') or ()))
+            status,_,_=self.req(browser,'/cliente/solicitar')
+            self.assertEqual(303,status)
 
     def test_account_sync_then_os_failure_rotates_session(self):
         import re
@@ -458,25 +442,15 @@ class OfficinaWebHttpTest(unittest.TestCase):
         self.assertEqual(pf, linked)
         self.assertIsNotNone(pf)
 
-    def test_legacy_pf_creation_then_os_failure_rotates_session(self):
-        import re
-        from unittest.mock import patch
+    def test_unconverted_client_cannot_write_os_even_when_legacy_auth_exists(self):
         from flavors.autoseg.modules import auth, cliente_fluxo_v94 as fluxo_pf
-        def fail_after_pf(banco, uid, description, urgency):
-            fluxo_pf.garantir_perfil_pf(banco, uid)
-            raise ValueError('fake write failure')
-        with patch.object(auth, 'accounts', None):
-            browser, _, _, _ = self.login('customer@example.test', self.client_pass)
-            _, _, form = self.req(browser, '/cliente/solicitar')
-            csrf = re.search(rb'name="csrf" value="([^"]+)"', form).group(1).decode()
-            with patch.object(fluxo_pf, 'registrar_os_pf', side_effect=fail_after_pf):
-                status, headers, _ = self.req(browser, '/cliente/solicitar', {
-                    'csrf': csrf, 'descricao': 'Pedido legado com erro na gravacao',
-                    'urgencia': 'Normal'})
-            self.assertEqual(303, status)
-            self.assertTrue(any('autosseg_unified=' in c for c in
-                                headers.get_all('Set-Cookie') or ()))
-            self.assertEqual(200, self.req(browser, '/cliente/os')[0])
+        with (patch.object(auth,'accounts',None),
+              patch.object(fluxo_pf,'registrar_os_pf') as write):
+            browser,status,headers,body=self.login('customer@example.test',self.client_pass)
+            self.assertEqual(200,status)
+            self.assertIn(b'Credenciais inv',body)
+            self.assertEqual(303,self.req(browser,'/cliente/solicitar')[0])
+            write.assert_not_called()
 
     def test_own_organizational_call_visible_associated_work_and_cross_client_denied(self):
         from officina.core import prestadores_ext as ext

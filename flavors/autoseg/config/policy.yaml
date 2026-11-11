@@ -1,38 +1,92 @@
-# Política de permissões da organização.
-# O código não decide sozinho quem vê o quê: ele lê este arquivo.
-# Escopos de campo: none | own | involved | all.
+# AUTOSEG 6.2: Política efetiva em disco. Escopos: none | own | involved | organization | all.
 versao: 1
-
 roles:
   admin:
-    permissions: ["*"]
+    permissions:
+    - '*'
   employee:
     permissions:
-      - work_item.view.own
-      - work_item.view.involved
-      - work_item.create
-      - work_item.edit.own
-      - work_item.edit.involved
-      - work_item.close.own
-      - report.publish.own
-      - finance.view.own
-      - stock.view
-      - customer.view.involved
-      - customer.pii.view.involved
-      - customer.contact.view.involved
+    - work_item.view.own
+    - work_item.view.involved
+    - work_item.create
+    - work_item.edit.own
+    - work_item.edit.involved
+    - work_item.conclude.own
+    - work_item.cancel.own
+    - report.publish.own
+    - document.download.own
+    - document.download.involved
+    - work_item.archive.own
+    - work_item.attach.own
+    - work_item.attach.involved
+    - work_item.start.own
+    - work_item.publish.own
+    - work_item.send.own
+    - finance.view.own
+    - stock.view
+    - customer.view.involved
+    - customer.pii.view.involved
+    - customer.contact.view.involved
   customer:
     permissions:
-      - work_item.create.request
-      - work_item.view.own
-      - report.view.own
-      - document.view.own
-      - customer.view.own
-      - customer.pii.view.own
-      - customer.contact.view.own
-
+    - work_item.create.request
+    - work_item.view.own
+    - report.view.own
+    - document.view.own
+    - document.download.own
+    - customer.view.own
+    - customer.pii.view.own
+    - customer.contact.view.own
+  porteiro:
+    permissions:
+    - work_item.create.request
+    - work_item.view.own
+    - document.view.own
+    - document.download.own
+    - customer.view.own
+  zelador:
+    permissions:
+    - work_item.create.request
+    - work_item.view.own
+    - work_item.view.organization
+    - document.view.own
+    - document.view.organization
+    - document.download.own
+    - document.download.organization
+    - report.view.own
+    - report.view.organization
+    - customer.contact.view.organization
+  sindico:
+    permissions:
+    - work_item.create.request
+    - work_item.view.own
+    - work_item.view.organization
+    - document.view.own
+    - document.view.organization
+    - document.download.own
+    - document.download.organization
+    - report.view.own
+    - report.view.organization
+    - customer.view.organization
+    - customer.contact.view.organization
 campos:
-  customer.nome: {admin: all, employee: involved, customer: own}
-  customer.telefone: {admin: all, employee: involved, customer: own}
-  customer.endereco: {admin: all, employee: involved, customer: own}
-  customer.email: {admin: all, employee: involved, customer: own}
-  customer.documento: {admin: all, employee: involved, customer: own}
+  customer.nome:
+    admin: all
+    employee: involved
+    customer: own
+  customer.telefone:
+    admin: all
+    employee: involved
+    customer: own
+  customer.endereco:
+    admin: all
+    employee: involved
+    customer: own
+  customer.email:
+    admin: all
+    employee: involved
+    customer: own
+  customer.documento:
+    admin: all
+    employee: involved
+    customer: own

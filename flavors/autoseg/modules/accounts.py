@@ -48,6 +48,19 @@ class AccountLink:
     legacy_provider_id: int | None
     legacy_client_user_id: int | None
     active: bool
+    client_role: str = "customer"
+
+
+@dataclass(frozen=True)
+class AccountLinkView:
+    account_id: int
+    display_name: str
+    client_role: str
+    active: bool
+    client_user_id: int
+
+
+CLIENT_ROLES = ("customer", "porteiro", "zelador", "sindico")
 
 
 @dataclass(frozen=True)
@@ -96,6 +109,8 @@ _SCHEMA = (
       provider_id INTEGER, client_user_id INTEGER, client_id INTEGER,
       legacy_provider_id INTEGER UNIQUE, legacy_client_user_id INTEGER UNIQUE,
       active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL,
+      client_role TEXT NOT NULL DEFAULT 'customer'
+        CHECK (client_role IN ('customer','porteiro','zelador','sindico')),
       CHECK ((link_type='provider' AND role IN ('admin','employee')
               AND provider_id IS NOT NULL AND client_user_id IS NULL AND client_id IS NULL)
              OR (link_type='client' AND role='customer'
@@ -111,6 +126,11 @@ _SCHEMA = (
 def _install(c):
     for statement in _SCHEMA:
         c.execute(statement)
+    columns = {row["name"] for row in c.execute("PRAGMA table_info(account_links)")}
+    if "client_role" not in columns:
+        c.execute("""ALTER TABLE account_links ADD COLUMN client_role
+                     TEXT NOT NULL DEFAULT 'customer'
+                     CHECK (client_role IN ('customer','porteiro','zelador','sindico'))""")
     c.execute("INSERT OR IGNORE INTO login_policy(id, allowed_identifier_types, updated_at) VALUES (1, ?, ?)",
               (json.dumps(["email", "cpf"]), _now()))
 
@@ -344,7 +364,8 @@ def account_link(banco, account_id: int) -> AccountLink | None:
         r = c.execute("SELECT * FROM account_links WHERE account_id=?", (int(account_id),)).fetchone()
         return (AccountLink(int(r["id"]), int(r["account_id"]), r["provider_org_id"], r["link_type"], r["role"],
                             r["provider_id"], r["client_user_id"], r["client_id"], r["legacy_provider_id"],
-                            r["legacy_client_user_id"], bool(r["active"]))) if r else None
+                            r["legacy_client_user_id"], bool(r["active"]),
+                            str(r["client_role"]))) if r else None
 
 
 def _legacy_target(link: AccountLink) -> tuple[str, int] | None:
@@ -413,26 +434,85 @@ def identity_for_account(banco, account_id: int) -> identity.Identity | None:
                                   link.provider_id if link.link_type == "provider" else link.client_user_id)
 
 
+def _client_org_ids(banco, user_id: int, role: str) -> frozenset[int]:
+    """Existing approved relationships only; self-declarations grant no access."""
+    if role not in ("sindico", "zelador"):
+        return frozenset()
+    with ext.db(banco) as c:
+        if role == "sindico":
+            rows = c.execute("""SELECT r.organizacao_id FROM v9_responsaveis AS r
+                JOIN v9_organizacoes AS o ON o.id=r.organizacao_id
+                WHERE r.usuario_id=? AND r.papel IN ('Síndico','Gestor')
+                  AND o.mesclado_em IS NULL""", (user_id,)).fetchall()
+        else:
+            rows = c.execute("""SELECT v.organizacao_id FROM v9_vinculos AS v
+                JOIN v9_organizacoes AS o ON o.id=v.organizacao_id
+                WHERE v.usuario_id=? AND v.papel='Zelador' AND v.situacao='Aprovado'
+                  AND o.mesclado_em IS NULL""", (user_id,)).fetchall()
+        return frozenset(int(row[0]) for row in rows)
+
+
 def membership_for_account(banco, account_id: int) -> identity.Membership | None:
     link = account_link(banco, account_id)
     ident = identity_for_account(banco, account_id)
-    if not link or not ident:
+    if not link or not ident or not link.active:
         return None
+    if link.link_type == "client":
+        if link.role != "customer" or link.client_role not in CLIENT_ROLES:
+            return None
+        return identity.Membership(
+            identity_kind="client", identity_id=ident.id, role=link.client_role,
+            provider_org_id=link.provider_org_id, client_id=link.client_id,
+            active=bool(link.active and ident.active),
+            client_org_ids=_client_org_ids(banco, ident.id, link.client_role),
+        )
     legacy = _legacy_target(link)
     if legacy is not None:
-        # Migrated roles follow the legacy admin table, not the stale snapshot
-        # copied into account_links at import time.
         current = identity.memberships(banco, ident)
         if len(current) != 1:
             return None
         role, active = current[0].role, current[0].active
     else:
         role, active = link.role, link.active
-    # Keep the linked role and activation distinct from the identity record.
-    return identity.Membership(identity_kind=ident.kind, identity_id=ident.id,
-                               role=role, provider_org_id=link.provider_org_id,
-                               provider_id=link.provider_id, client_id=link.client_id,
-                               active=bool(link.active and active))
+    return identity.Membership(
+        identity_kind=ident.kind, identity_id=ident.id, role=role,
+        provider_org_id=link.provider_org_id, provider_id=link.provider_id,
+        client_id=link.client_id, active=bool(link.active and active),
+    )
+
+
+def set_client_role(banco, account_id: int, role: str, *, audit=None) -> AccountLink:
+    if role not in CLIENT_ROLES or type(account_id) is not int or account_id <= 0:
+        raise ValueError("Invalid client role.")
+    with ext.db(banco) as c:
+        c.execute("BEGIN IMMEDIATE")
+        row = c.execute("""SELECT l.id FROM account_links l JOIN accounts a
+            ON a.id=l.account_id JOIN v9_usuarios u ON u.id=l.client_user_id
+            WHERE l.account_id=? AND l.link_type='client' AND l.role='customer'
+              AND l.active=1 AND a.active=1 AND u.ativo=1""",
+            (account_id,)).fetchone()
+        if row is None:
+            raise PermissionError("Client account unavailable.")
+        c.execute("UPDATE account_links SET client_role=? WHERE id=?", (role, row["id"]))
+        if audit is not None:
+            audit(c)  # Same SQLite transaction as the role mutation.
+    link = account_link(banco, account_id)
+    if link is None:
+        raise PermissionError("Client account unavailable.")
+    return link
+
+
+def list_client_accounts(banco) -> tuple[AccountLinkView, ...]:
+    with ext.db(banco) as c:
+        rows = c.execute("""SELECT l.account_id,a.display_name,l.client_role,
+            a.active AND l.active AND u.ativo AS active,l.client_user_id
+            FROM account_links l JOIN accounts a ON a.id=l.account_id
+            JOIN v9_usuarios u ON u.id=l.client_user_id
+            WHERE l.link_type='client' AND l.role='customer'
+            ORDER BY l.account_id""").fetchall()
+    return tuple(AccountLinkView(int(r["account_id"]),str(r["display_name"]),
+                                 str(r["client_role"]),bool(r["active"]),
+                                 int(r["client_user_id"])) for r in rows)
 
 
 def sync_client_pf_link(banco, account_id: int, client_user_id: int) -> int:

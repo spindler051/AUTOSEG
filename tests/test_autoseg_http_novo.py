@@ -6,6 +6,7 @@ import unittest
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 from officina.core.banco import criar_banco
 from officina.core import cadastros_v9 as cad
@@ -29,7 +30,7 @@ def token(s):
 
 class HttpTest(unittest.TestCase):
     def test_cliente_para_pendencias_prestador_e_formularios(self):
-        with tempfile.TemporaryDirectory(prefix='autoseg_http_novo_') as pasta:
+        with patch.dict('os.environ', {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'1'}), tempfile.TemporaryDirectory(prefix='autoseg_http_novo_') as pasta:
             db=str(Path(pasta)/'app.db')
             criar_banco(db)
             ext.instalar(db)
@@ -61,12 +62,14 @@ class HttpTest(unittest.TestCase):
                 self.assertIn('Visão geral',html)
                 html=pedido(bp,web_prestador,'/clientes')
                 self.assertIn('Condomínio HTTP de Testes',html)
+                # Associate the new OS with the logged-in employee before viewing it.
+                ext.atribuir(db,1,prov_id)
                 html=pedido(bp,web_prestador,'/os')
                 self.assertIn('Condomínio HTTP de Testes',html)
                 self.assertIn('Aberta',html)
+                # The new policy requires a real current owner, not just the legacy prestador_id.
                 html=pedido(bp,web_prestador,'/os/1')
-                # A OS ainda não é do prestador: fotos exigem responsável ou admin.
-                self.assertIn('Somente o responsável ou administrador pode adicionar fotos',html)
+                self.assertIn('id="modelo-material"',html)
                 html=pedido(bp,web_prestador,'/os/nova')
                 self.assertIn('id="c_cliente_id"',html)
                 self.assertIn('id="modelo-material"',html)

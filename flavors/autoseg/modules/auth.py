@@ -213,6 +213,10 @@ def _legacy_login(banco, candidates, identifier, password):
         if row is None or not ext.verificar_senha(password, row["senha_hash"]):
             raise LoginError("invalid")
         raise LoginError("inactive")
+    # Client login requires a converted, linked account. The legacy
+    # fallback must never synthesize client permissions.
+    if ident.kind == "client":
+        raise LoginError("invalid")
     memberships = identity.memberships(banco, ident)
     if len(memberships) != 1:
         raise LoginError("invalid")

@@ -57,11 +57,9 @@ class AuthTest(unittest.TestCase):
         self.assertEqual(result.principal.provider_id, self.provider)
         self.assertEqual(result.principal.role, "employee")
 
-    def test_legacy_client_cpf(self):
-        result = auth.authenticate(self.banco, "123.456.789-09", self.pwd)
-        self.assertEqual(result.source, "legacy")
-        self.assertEqual(result.identity.kind, "client")
-        self.assertEqual(result.principal.role, "customer")
+    def test_unconverted_legacy_client_cannot_login(self):
+        # 6.2: only account_links.client_role grants a client role.
+        self.error("invalid", "123.456.789-09")
 
     def test_wrong_password_does_not_enumerate(self):
         self.error("invalid", "provider@example.test", "WrongPassword123")
