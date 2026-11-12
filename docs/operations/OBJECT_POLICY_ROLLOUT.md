@@ -1,5 +1,26 @@
 # Officina Web — object-policy enforcement rollout
 
+## P0-AUTH-CLOSE-GATE-HARDENING — DEV freeze (2026-11-12)
+
+- Branch `feat/p0-auth-close-gate`, commit `fafcd8e`; suíte completa 724 OK ·
+  1 skip. MAIN em `3892e7b`, intocada; flag `0`.
+- Manual e-mail resend now has one outbox path. Without the DEV outbox the
+  request fails before queueing or contacting Gmail. The resend form has no
+  free-form address field; only registered contact references are accepted.
+- Email dispatch requires `payload_json.recipient_refs`; a missing list fails
+  before the provider and is recorded as `failed`. The projection is not a
+  fallback recipient source.
+- DEV rollback refuses reference-only projections and aborts without dropping
+  the outbox; it no longer converts them silently.
+- PDF cleanup after a failed publication checks the same `claim_token` and the
+  absence of a registered document under `BEGIN IMMEDIATE` before removing a
+  newly linked target. A replacement worker's file is preserved.
+- Remaining outside this hardening: the conclusion/save form still renders
+  `emails_adicionais` (the handler rejects it with the outbox installed), the
+  `not use_outbox` automatic-send branch, and direct service calls without a
+  shared `connection`. See
+  [`P0_AUTH_DEV_FREEZE.md`](P0_AUTH_DEV_FREEZE.md).
+
 ## P0-AUTH-CLOSE-GATE-FIXES — DEV review (2026-11-12)
 
 - Evidence publication through `/os/<id>/anexo/<aid>/publico` is permitted on
@@ -14,12 +35,12 @@
   does not reset it.
 - Email outbox payloads carry only `recipient_refs` (`cliente`, `sindico`,
   `administradora`). `produtividade_email.destinatarios_json` remains a list
-  of validated e-mail addresses for a safe DEV rollback and legacy resend.
-  Dispatcher resolves the references from current contacts per operation;
-  an unresolvable contact fails before calling Gmail.
-- DEV downgrade converts reference-only projections from earlier installs
-  into validated addresses **before** dropping the outbox. Unresolvable
-  references abort the entire rollback transaction.
+  of validated e-mail addresses for a safe DEV rollback; manual resend is
+  outbox-only. Dispatcher resolves the references from current contacts per
+  operation; an unresolvable contact fails before calling Gmail.
+- DEV downgrade refuses reference-only projections from earlier installs
+  instead of converting them. Unresolvable references abort the entire
+  rollback transaction; the outbox is not dropped.
 - Immediate orphan-quarantine recovery can be requested explicitly with
   `--cleanup-trash --minimum-age 0`; the default remains 3600 seconds.
   Confirm DB status and file hash before restoring; never use against MAIN.

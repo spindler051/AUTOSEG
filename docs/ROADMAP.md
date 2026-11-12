@@ -95,7 +95,12 @@ decisões abaixo, não apenas do código integrado:
 
 ## Agora — P0
 
-1. **Unificação real dos portais, sem fallback**
+> **Estado:** o código do P0-AUTH está completo para DEV em
+> `feat/p0-auth-close-gate` (`fafcd8e`, 724 testes). O que resta é homologação
+> DEV, migração da outbox e ativação controlada. Ver
+> [`operations/P0_AUTH_DEV_FREEZE.md`](operations/P0_AUTH_DEV_FREEZE.md).
+
+1. **Unificação real dos portais**
    - prompt: [`planning/PROMPT_PORTAL_UNIFICATION.md`](planning/PROMPT_PORTAL_UNIFICATION.md);
    - inventariar rotas e responsabilidades de `servidor_web.py`/8765;
    - migrar para a origem única o que ainda for contrato público atual;
@@ -103,8 +108,7 @@ decisões abaixo, não apenas do código integrado:
    - desligar o processo 8765 e retirar `servidor_web.py` do caminho de
      execução; depois da migração, apagar o arquivo e seus testes/launchers
      antigos;
-   - não criar flag, shim, adaptador permanente ou caminho paralelo para manter
-     o portal antigo;
+   - um único caminho de código para portal, login e shell;
    - critério: uma origem, um login, uma shell e um caminho de código; testes e
      smoke cobrindo as rotas que sobreviverem.
 2. **Fechar a numeração de OS na MAIN**
@@ -112,9 +116,10 @@ decisões abaixo, não apenas do código integrado:
    - backup, janela de manutenção e smoke;
    - manter aliases para links, PDFs e e-mails antigos;
    - não reescrever documentos já publicados.
-3. **Fechar o gate de autorização por objeto**
-   - corrigir ou aceitar formalmente o TOCTOU entre autorização e writer;
-   - rodar testes negativos de isolamento entre prestadoras e entre clientes;
+3. **Homologar o gate de autorização por objeto**
+   - rodar a branch no DEV 8866 com a outbox instalada;
+   - validar o smoke de OS, anexos, PDF, e-mail e rollback;
+   - ensaiar a migração da outbox em cópia da MAIN;
    - decidir a ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção.
 4. **Decidir a sessão durável em produção**
    - retenção, revogação entre processos, backup do SQLite de sessões;
@@ -129,9 +134,12 @@ decisões abaixo, não apenas do código integrado:
 próprios dados, reutilizando autenticação, sessão e política do site, sem
 duplicar regra de negócio no widget.
 
-**Depende de:** unificação real dos portais e fechamento do gate P0 de
-autorização por objeto. É a prova de modularidade do GTK, não um segundo
-portal.
+**Status:** não iniciado. O código do gate P0-AUTH está completo para DEV em
+`feat/p0-auth-close-gate` (`fafcd8e`), mas a homologação DEV e a migração da
+outbox para a MAIN ainda não aconteceram.
+
+**Depende de:** homologação do P0-AUTH em DEV e decisão de migração da outbox.
+É a prova de modularidade do GTK, não um segundo portal.
 
 **O que falta:**
 

@@ -1,3 +1,19 @@
+## P0-AUTH-CLOSE-GATE-HARDENING — DEV freeze (2026-11-12)
+
+Branch `feat/p0-auth-close-gate`, commit `fafcd8e`; base do hardening
+`2ba7d46`. Suíte completa: **724 OK · 1 skip**. O reenvio manual tem um único
+caminho, dependente da outbox; sem outbox ele falha antes de enviar. O
+dispatcher exige `recipient_refs`; o rollback recusa projeções com referências
+simbólicas; o cleanup do PDF é limitado ao worker que ainda tem o lease.
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`. MAIN em `3892e7b`, intocada.
+
+Ainda há três caminhos antigos fora do contrato do reenvio manual: o campo
+`emails_adicionais` no formulário de conclusão, o envio automático no branch
+`not use_outbox` e chamadas diretas aos serviços sem `connection`. Antes da
+MAIN, falta homologar a branch no DEV 8866 com a outbox instalada, ensaiar
+migração/rollback e autorizar a outbox em produção. Estado detalhado em
+[`operations/P0_AUTH_DEV_FREEZE.md`](operations/P0_AUTH_DEV_FREEZE.md).
+
 ## P0-AUTH-CLOSE-GATE-FIXES — validação DEV (2026-11-12)
 
 O fechamento adicional corrige `publico` em OS encerrada, faz a verificação de
@@ -32,10 +48,10 @@ permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
 
 # Handoff — estado atual
 
-**Atualizado:** 2026-11-11
+**Atualizado:** 2026-11-12
 **Versão:** `9.6.0-dev.73`
-**Branch de trabalho:** `main` (HEAD após `15ddcd0`)
-**Produção:** MAIN intocada; servidor e túneis parados.
+**Branch de trabalho:** `feat/p0-auth-close-gate` (`fafcd8e`); MAIN em `3892e7b`.
+**Produção:** MAIN intocada; 8765/8766 continuam no código antigo.
 
 Este é o ponto de retomada. O índice completo fica em
 [`docs/README.md`](README.md); o histórico de mudanças no
