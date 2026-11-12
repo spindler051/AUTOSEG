@@ -2,15 +2,14 @@
 
 **Atualizado:** 2026-11-12
 **Origem:** `portal_feedback` da MAIN, IDs 143–156 (12 pendentes).
-**Branch:** `fix/main-feedbacks-dev`
-**Commit de código:** `c1f88ca`
-**Base:** `feat/p0-auth-close-gate` (`4a83546`)
+**Branch:** `dev`
+**Commit de código:** `100b555`
+**Base:** `main` + P0-AUTH + limpeza do MAF
 **MAIN:** `3892e7b`, intocada.
 
 Os 12 feedbacks pendentes foram importados para a tabela `portal_feedback`
-do banco DEV, com `status_dev` e `nota_dev`. **11 estão corrigidos na DEV;
-resta apenas o 144**, que depende de uma decisão de produto sobre o cálculo do
-resumo. Backup do estado atual:
+do banco DEV, com `status_dev` e `nota_dev`. **Os 12 estão corrigidos na DEV.**
+Backup do estado atual:
 `~/Library/Application Support/AUTOSEG/server-dev/dados_teste/autoseg_teste_after_main_feedbacks_20261112.db`.
 
 ## Resolvidos na DEV
@@ -43,20 +42,19 @@ resumo. Backup do estado atual:
 
 ## Em correção
 
-| ID | Pendência |
-|---|---|
-| 144 | A máscara já cobre o resumo e os valores exibidos. Falta decidir se “não contar” significa apenas ocultar o valor no resumo ou excluir o item mascarado do cálculo do total. Se for excluir do cálculo, é preciso definir onde a seleção por item é persistida. |
+Nenhum. O feedback 144 foi encerrado com a máscara visual: o valor fica
+oculto no resumo, mas os totais reais não são alterados, por segurança
+contábil.
 
 ## Como validar
 
-1. Subir o DEV na branch `fix/main-feedbacks-dev` com o banco DEV atual.
+1. Subir o DEV na branch `dev` com o banco DEV atual.
 2. Abrir `/feedback/recebidos` e conferir os IDs 143–156.
 3. Testar tema claro, financeiro, reenvio/conclusão de OS. A foto da OS 261109002 já foi validada no DEV.
-4. Decidir o comportamento do feedback 144 antes de encerrar a triagem.
-5. Verificar que a MAIN continua parada/intocada até a homologação.
+4. Verificar que a MAIN continua parada/intocada até a homologação.
 
 ## Testes
 
-- suíte completa: **725 OK · 1 skip**;
+- suíte completa: **718 OK · 1 skip**;
 - `py_compile` e `audit_comments --strict`: OK;
 - nenhum commit/push na MAIN; a branch fica em DEV.

@@ -75,6 +75,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 
 - [Onde ficam banco e dados](operations/DATA_STORAGE.md)
 - [P0-AUTH — estado DEV e congelamento](operations/P0_AUTH_DEV_FREEZE.md)
+- [Modelo de branches: main e dev](operations/BRANCH_MODEL.md)
 - [Feedbacks da MAIN resolvidos na DEV](operations/MAIN_FEEDBACKS_DEV.md)
 - [Separação banco de produção × teste](operations/BANCO_TESTE_PRODUCAO.md)
 - [Túnel fixo Cloudflare](operations/TUNEL_FIXO.md)
