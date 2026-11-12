@@ -171,7 +171,23 @@ def wait_ports(port_list, proc=None, timeout=12):
     return all(port_pids(port) for port in port_list)
 
 
+def _git_branch(path):
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(path), "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 def start_service(context, service):
+    if context == "main" and service == "site":
+        branch = _git_branch(ROOT)
+        if branch and branch != "main":
+            say(f"MAIN precisa ser iniciada a partir do worktree em main "
+                f"(branch atual: {branch}). Use "
+                f"~/AUTOSEG_MAIN_RUNTIME ou faça checkout de main.")
+            return 1
     env = environment(context)
     port_list = ports(context, service)
     in_use = all_port_pids(port_list)

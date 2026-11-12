@@ -4,6 +4,16 @@
 **Produção:** `main` em `3892e7b`, intocada.
 **Desenvolvimento:** `dev`, única branch de trabalho.
 
+## Runtime
+
+- A MAIN roda a partir do worktree `/Users/idkosx/AUTOSEG_MAIN_RUNTIME`, que
+  fica fixo na branch `main`. Nunca iniciar a MAIN a partir do diretório da DEV.
+- A DEV roda a partir de `/Users/idkosx/GestaoServicos_DEV`, na branch `dev`.
+- O comando `./autoseg` recusa iniciar a MAIN quando o diretório atual não está
+  na branch `main`, para evitar que código de desenvolvimento escreva no banco
+  de produção.
+- Worktree de runtime não é branch nova: é só um checkout de apoio.
+
 ## Regra
 
 - `main` é produção. Só recebe merge da `dev`, depois de homologação e
