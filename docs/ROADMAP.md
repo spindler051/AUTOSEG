@@ -1,4 +1,12 @@
 
+
+## P0-AUTH-CLOSE-GATE — DEV rollout status
+
+Attachment/invoice transaction guards, the outbox email retry UI and
+reconciliation CLI are implemented for DEV review. This does not authorize
+production activation: object policy enforcement stays off by default.
+Validation evidence and any unresolved limitations belong to the change ZIP.
+
 ### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
 
 Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,

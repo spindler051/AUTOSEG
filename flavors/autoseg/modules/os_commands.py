@@ -407,72 +407,77 @@ def _write_create_full(banco, principal, os_id, data, *, ui, session, path, quer
 
 
 def _write_move_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1]);aid=int(partes[3])
-    movido=ext.mover_anexo(banco,oid,aid,str(d.get('direcao','')),pid,ator=s['nome'])
+    from flavors.autoseg.modules.portal_prestador import url_os
+    aid=int(path.strip('/').split('/')[3])
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        _transaction_guard(banco,principal,os_id,'attach')(c)
+        movido=ext.mover_anexo(banco,os_id,aid,str(data.get('direcao','')),
+                               session['pid'],ator=session['nome'],connection=c)
     if quer_json:
         return ui.send_bytes(json.dumps({'ok':True,'movido':bool(movido)}).encode(),
-                               'application/json; charset=utf-8')
-    return ui.redir(f'{url_os(banco, oid)}')
+                             'application/json; charset=utf-8')
+    return ui.redir(url_os(banco,os_id))
 
 
 def _write_remove_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1]);aid=int(partes[3])
-    ext.remover_anexo(banco,oid,aid,pid,ator=f'Prestador {s["nome"]}')
-    return ui.redir(f'{url_os(banco, oid)}')
+    from flavors.autoseg.modules.portal_prestador import url_os
+    aid=int(path.strip('/').split('/')[3])
+    key=None
+    removed_path=None
+    committed=False
+    try:
+        with ext.db(banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            _transaction_guard(banco,principal,os_id,'attach')(c)
+            foto=c.execute('SELECT caminho,sha256 FROM os_anexos WHERE id=? AND os_id=?',
+                           (aid,os_id)).fetchone()
+            if not foto: raise ValueError('Foto não encontrada.')
+            removed_path=Path(foto['caminho']).resolve()
+            if outbox.installed(c):
+                revision=f'{aid}:{foto["sha256"]}'
+                intent=outbox.enqueue_file(c,os_id,revision,'attachment-remove',
+                                           aid,foto['sha256'])
+                key=intent['operation_key']
+                outbox.quarantine_file(ext.ANEXOS,foto['caminho'],key,
+                                        source_id=aid,source_sha256=foto['sha256'])
+            ext.remover_anexo(banco,os_id,aid,session['pid'],
+                              ator=f'Prestador {session["nome"]}',connection=c)
+        committed=True
+    finally:
+        if key and not committed:
+            outbox.restore_quarantine(ext.ANEXOS,key)
+    if key: outbox.publish_file(banco,key)
+    elif removed_path.parent==Path(ext.ANEXOS).resolve(): removed_path.unlink(missing_ok=True)
+    return ui.redir(url_os(banco,os_id))
 
 
 def _write_rotate_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1]);aid=int(partes[3])
+    from flavors.autoseg.modules.portal_prestador import url_os
+    aid=int(path.strip('/').split('/')[3])
     with ext.db(banco) as c:
-        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone())
-        if ext.responsavel_atual(c,oid)!=pid and not admin:
-            raise PermissionError('Somente o responsável ou administrador edita fotos.')
-    ext.girar_imagem(banco,oid,aid,pid,ator=s['nome'])
+        c.execute('BEGIN IMMEDIATE')
+        _transaction_guard(banco,principal,os_id,'attach')(c)
+        ext.girar_imagem(banco,os_id,aid,session['pid'],ator=session['nome'],connection=c)
+    _flush_staged_files(banco,os_id)
     if quer_json:
-        return ui.send_bytes(json.dumps({
-            'ok':True,'anexo_id':aid}).encode(),
-            'application/json; charset=utf-8')
-    return ui.redir(f'{url_os(banco, oid)}')
+        return ui.send_bytes(json.dumps({'ok':True,'anexo_id':aid}).encode(),
+                             'application/json; charset=utf-8')
+    return ui.redir(url_os(banco,os_id))
 
 
 def _write_publish_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1]);aid=int(partes[3])
+    from flavors.autoseg.modules.portal_prestador import url_os
+    aid=int(path.strip('/').split('/')[3])
     with ext.db(banco) as c:
-        ok=c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',(aid,oid)).fetchone()
-    if not ok:raise ValueError('Anexo não pertence à OS.')
-    with ext.db(banco) as c:
-        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
-            raise PermissionError('Somente o técnico responsável ou administrador edita a legenda do anexo.')
-    cad9.aprovar_anexo(banco,aid,str(d.get('visivel','0'))=='1',str(d.get('legenda','')),s['nome'])
-    return ui.redir(f'{url_os(banco, oid)}')
+        c.execute('BEGIN IMMEDIATE')
+        _transaction_guard(banco,principal,os_id,'attach')(c)
+        if not c.execute('SELECT 1 FROM os_anexos WHERE id=? AND os_id=?',
+                         (aid,os_id)).fetchone():
+            raise ValueError('Anexo não pertence à OS.')
+        cad9.aprovar_anexo(banco,aid,str(data.get('visivel','0'))=='1',
+                           str(data.get('legenda','')),session['nome'],connection=c,pid=session['pid'])
+    return ui.redir(url_os(banco,os_id))
 
 
 def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -702,22 +707,38 @@ def _write_rateio(banco, principal, os_id, data, *, ui, session, path, quer_json
 
 
 def _write_remove_invoice(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1]);nid=int(partes[3])
-    with ext.db(banco) as c:
-        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
-            raise PermissionError('Somente o responsável ou administrador pode remover nota fiscal.')
-    ext.remover_nota_fiscal(banco,oid,nid,pid,ator=s['nome'])
+    from flavors.autoseg.modules.portal_prestador import url_os
+    nid=int(path.strip('/').split('/')[3])
+    key=None
+    removed_path=None
+    committed=False
+    try:
+        with ext.db(banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            _transaction_guard(banco,principal,os_id,'attach')(c)
+            invoice=c.execute('SELECT caminho,sha256 FROM os_notas_fiscais WHERE id=? AND os_id=?',
+                              (nid,os_id)).fetchone()
+            if not invoice: raise ValueError('Nota fiscal não encontrada.')
+            removed_path=Path(invoice['caminho']).resolve()
+            if outbox.installed(c):
+                revision=f'{nid}:{invoice["sha256"]}'
+                intent=outbox.enqueue_file(c,os_id,revision,'invoice-remove',
+                                           nid,invoice['sha256'])
+                key=intent['operation_key']
+                outbox.quarantine_file(ext.NOTAS,invoice['caminho'],key,
+                                        source_id=nid,source_sha256=invoice['sha256'])
+            ext.remover_nota_fiscal(banco,os_id,nid,session['pid'],
+                                   ator=session['nome'],connection=c)
+        committed=True
+    finally:
+        if key and not committed:
+            outbox.restore_quarantine(ext.NOTAS,key)
+    if key: outbox.publish_file(banco,key)
+    elif removed_path.parent==Path(ext.NOTAS).resolve(): removed_path.unlink(missing_ok=True)
     if quer_json:
         return ui.send_bytes(json.dumps({'ok':True}).encode(),
-                               'application/json; charset=utf-8')
-    return ui.redir(f'{url_os(banco, oid)}')
+                             'application/json; charset=utf-8')
+    return ui.redir(url_os(banco,os_id))
 
 
 def _write_attach_invoice(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -978,6 +999,31 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
         if not (acao_status=='Cancelada' and ext.administrador(c,pid)):
             prod._os_ativa_responsavel(c,oid,pid)
         use_outbox=outbox.installed(c)
+        if acao_status in ('Pendente','Concluída') and use_outbox:
+            if str(d.get('emails_adicionais','')).strip():
+                raise ValueError('E-mails adicionais exigem cadastro de contato no modo recuperável.')
+            references=d.get('destinatario_sel[]')
+            if references is None:
+                person=c.execute('SELECT tipo_pessoa FROM clientes WHERE id=?',
+                                 (d['cliente_id'],)).fetchone()
+                references=['cliente'] if person and person['tipo_pessoa']=='Física' else ['sindico','cliente']
+            if isinstance(references,str): references=[references]
+            if not isinstance(references,list) or any(x not in
+                ('cliente','sindico','administradora') for x in references):
+                raise ValueError('Seleção de destinatários inválida.')
+            contact=c.execute('''SELECT email,sindico_email,administradora_email
+                FROM clientes WHERE id=?''',(d['cliente_id'],)).fetchone()
+            fields={'cliente':'email','sindico':'sindico_email',
+                    'administradora':'administradora_email'}
+            if not contact:
+                raise ValueError('Cliente indisponível para seleção de destinatários.')
+            if d.get('destinatario_sel[]') is None:
+                references=[ref for ref in references if contact[fields[ref]]]
+            elif any(not contact[fields[ref]] for ref in references):
+                raise ValueError('Destinatário selecionado não tem contato válido.')
+            addresses=[prod._email_validado(contact[fields[ref]]) for ref in references]
+            prod.registrar_envio(banco,oid,addresses,
+                'sem_destinatario' if sem_destinatario else 'pendente',connection=c)
         if acao_status in ('Pendente','Concluída') and not sem_destinatario and not use_outbox:
             try:
                 destinatarios=prod.destinatarios_para_os(banco,oid,
@@ -999,7 +1045,8 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             revision=_work_revision(c,oid)
             pdf_key=outbox.enqueue_pdf(c,oid,revision,'save-'+acao_status)['operation_key']
             if not sem_destinatario and acao_status in ('Pendente','Concluída'):
-                email_key=outbox.enqueue_email(c,oid,revision,'send-'+acao_status)['operation_key']
+                email_key=outbox.enqueue_email(c,oid,revision,'send-'+acao_status,
+                    recipient_refs=references)['operation_key']
 
     _flush_staged_files(banco,oid)
     if acao_status in fluxo.PUBLICAVEIS:
@@ -1018,8 +1065,7 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             try:
                 from flavors.autoseg.modules import gmail_service
                 outbox.deliver_email(banco,email_key,
-                    lambda oid,key: gmail_service._enviar_relatorio_os_concluida(
-                        banco,oid,outbox_operation_key=key))
+                    lambda oid,key: gmail_service.enviar_operacao_outbox(banco,oid,key))
             except Exception:
                 LOG.exception('OS %s: e-mail aguardando reconciliação da outbox',oid)
         elif destinatarios:
@@ -1170,31 +1216,58 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
     acao = partes[2]
     with ext.db(banco) as c:
         if outbox.installed(c):
-            # A previously accepted email may already have left the provider;
-            # the operator must acknowledge the possible duplicate explicitly.
-            request = str(d.get('reenviar_operacao','')).strip()
-            ack = str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
+            request=str(d.get('reenviar_operacao','')).strip()
+            ack=str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
             if not ack or not re.fullmatch(r'[A-Za-z0-9_-]{12,80}',request):
-                raise ValueError('Reenvio manual pode duplicar o e-mail. '
-                                 'Confirme a duplicidade e informe uma chave de requisição única.')
+                raise ValueError('Reenvio pode duplicar uma entrega. Confirme e informe a operação.')
+            if str(d.get('emails_adicionais','')).strip():
+                raise ValueError('E-mails adicionais não são aceitos no modo de envio recuperável.')
+            selected=d.get('destinatario_sel[]')
+            if isinstance(selected,str): selected=[selected]
+            if selected is None: selected=[]
+            if not isinstance(selected,list) or any(x not in ('cliente','sindico','administradora')
+                                                   for x in selected):
+                raise ValueError('Destinatários inválidos.')
             c.execute('BEGIN IMMEDIATE')
             _transaction_guard(banco,principal,oid,'send')(c)
             if ext.responsavel_atual(c,oid)!=pid and not ext.administrador(c,pid):
                 raise PermissionError('Sem permissão para reenviar e-mail.')
-            revision=_work_revision(c,oid)+':'+outbox.operation_key(
-                oid,request,'manual-request','email')
+            recipient=c.execute('''SELECT cl.email,cl.sindico_email,cl.administradora_email
+                FROM ordens_servico o JOIN clientes cl ON o.cliente_id=cl.id WHERE o.id=?''',
+                (oid,)).fetchone()
+            sources={'cliente':'email','sindico':'sindico_email',
+                     'administradora':'administradora_email'}
+            if not recipient or any(not recipient[sources[ref]] for ref in selected):
+                raise ValueError('Atualize o contato antes de selecioná-lo para reenvio.')
+            document=c.execute('''SELECT 1 FROM os_documentos
+                         WHERE os_id=? AND tipo='relatorio_pdf' ORDER BY versao DESC LIMIT 1''',
+                         (oid,)).fetchone()
+            if not document:
+                raise ValueError('Publique o relatório antes do reenvio.')
+            existing=c.execute("""SELECT operation_key,state FROM os_effect_outbox
+                 WHERE os_id=? AND effect_type='email' AND state IN ('pending','processing')
+                 ORDER BY id DESC LIMIT 1""",(oid,)).fetchone()
+            revision=_work_revision(c,oid)+':'+request
             key=outbox.manual_email_retry(c,oid,revision,'send-manual',
-                                         duplicate_acknowledged=ack)['operation_key']
-            pdf_key=outbox.enqueue_pdf(c,oid,revision,'manual-pdf')['operation_key']
+                duplicate_acknowledged=True,recipient_refs=selected)['operation_key']
+            # An already accepted operation must not reset the result or recipients.
+            if existing and existing['operation_key']!=key:
+                raise ValueError('Já há um envio pendente para esta OS.')
+            pending=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
+                              (key,)).fetchone()
+            if pending['state']=='pending':
+                if not existing:
+                    addresses=[prod._email_validado(recipient[sources[ref]])
+                               for ref in selected]
+                    prod.registrar_envio(banco,oid,addresses,'pendente',connection=c)
             manual=True
         else:
             manual=False
     if manual:
-        _publish_postcommit(banco,pdf_key)
         from flavors.autoseg.modules import gmail_service
-        outbox.deliver_email(banco,key,
-            lambda oid,op: gmail_service._enviar_relatorio_os_concluida(
-                banco,oid,outbox_operation_key=op))
+        if outbox.get(banco,key)['state']=='pending':
+            outbox.deliver_email(banco,key,
+                lambda oid,op: gmail_service.enviar_operacao_outbox(banco,oid,op))
         return ui.redir(f'{url_os(banco, oid)}')
     with ext.db(banco) as c:
         if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):

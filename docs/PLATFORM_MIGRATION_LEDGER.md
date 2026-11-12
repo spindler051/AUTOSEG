@@ -1,13 +1,38 @@
+## P0-AUTH-CLOSE-GATE-FIXES — evidence (2026-11-12)
+
+- HTTP provider evidence publication on closed orders uses the same locked
+  authorization and write path as active orders, with negative archival and
+  unrelated-provider coverage.
+- Publication of a reserved PDF version holds a single writer transaction
+  across status/archival check, filesystem link and outbox/document/projection
+  confirmation. An orphan file is never trusted without hash verification.
+- Per-operation recipient references are stored in the outbox only; the domain
+  e-mail projection remains compatible with legacy re-send and safe downgrade.
+- Manual quarantine recovery is an explicit DEV command, not an automatic
+  shortening of the safe cleanup interval. Object enforcement remains off.
+
+
+
+## P0-AUTH-CLOSE-GATE — migration evidence
+
+The outbox is still opt-in on the DEV database. This slice converts the five
+attachment and invoice edit commands to a shared SQLite writer connection,
+uses durable stage/trash metadata for file effects, and introduces a
+reconciliation/inspection CLI. Both mail delivery projections now finalize
+atomically with the outbox state. No generic Workaholic core imports the AUTOSEG
+flavor, and no additional schema or user-data migration is introduced. The
+next gate is controlled DEV verification and explicit production authorization.
 
 ### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
 
 Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
 reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
 foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
-fechado: arquivos removidos/rotacionados, reenvio legado e fluxos restantes
-precisam ser cobertos antes de aprovar a flag. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+fechado: os caminhos HTTP de anexos/nota já usam guarda e efeitos
+recuperáveis, porém efeitos de filesystem e consumidores legados diretos
+precisam de homologação e reconciliação operacional antes da ativação. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
 permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
-`BLOCKED.md` desta entrega; não habilitar na MAIN.
+`NOTES.md` desta entrega; não habilitar na MAIN.
 
 # Platform migration ledger
 

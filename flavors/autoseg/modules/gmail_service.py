@@ -295,6 +295,62 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None, *, outbox_o
             pass
 
 
+def enviar_operacao_outbox(banco, os_id, operation):
+    '''Resolve committed references at dispatch; email addresses stay in domain data.'''
+    import json
+    from officina.core import prestadores_ext as ext, produtividade_os as prod
+    from officina.core.os_effect_outbox import PreDispatchError
+    with ext.db(banco) as c:
+        effect=c.execute('''SELECT os_id,payload_json FROM os_effect_outbox
+            WHERE operation_key=? AND effect_type='email' ''',(operation,)).fetchone()
+        row=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
+                      (os_id,)).fetchone()
+    if not effect or int(effect['os_id'])!=int(os_id):
+        raise PreDispatchError('missing_email_operation')
+    try:
+        payload=json.loads(effect['payload_json'])
+    except (TypeError,ValueError):
+        raise PreDispatchError('invalid_email_operation') from None
+    refs=payload.get('recipient_refs')
+    recipients=[]
+    if refs is None:
+        # Older queued effects have no per-operation references: their domain
+        # projection may contain addresses, never treat an unrecognized string
+        # (such as "cliente") as a deliverable address.
+        try:
+            legacy=json.loads(row['destinatarios_json']) if row else []
+        except (TypeError,ValueError):
+            raise PreDispatchError('invalid_recipient_references') from None
+        if not isinstance(legacy,list):
+            raise PreDispatchError('invalid_recipient_references')
+        for email in legacy:
+            try:
+                address=prod._email_validado(email)
+            except ValueError:
+                raise PreDispatchError('invalid_recipient') from None
+            if address and address not in recipients:
+                recipients.append(address)
+    else:
+        if (not isinstance(refs,list) or any(ref not in
+             ('cliente','sindico','administradora') for ref in refs)):
+            raise PreDispatchError('invalid_recipient_references')
+        contacts=prod.contatos_email_os(banco,os_id)
+        for ref in refs:
+            address=contacts.get(ref,'')
+            if not address:
+                raise PreDispatchError('recipient_no_longer_available')
+            try:
+                address=prod._email_validado(address)
+            except ValueError:
+                raise PreDispatchError('invalid_recipient') from None
+            if address not in recipients:
+                recipients.append(address)
+    if not recipients:
+        raise PreDispatchError('sem_destinatario')
+    return _enviar_relatorio_os_concluida(banco,os_id,recipients,
+                                          outbox_operation_key=operation)
+
+
 def enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
     """Dispara em segundo plano o e-mail do relatório de uma OS concluída.
 

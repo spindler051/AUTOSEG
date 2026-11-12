@@ -1,5 +1,81 @@
 # Officina Web — object-policy enforcement rollout
 
+## P0-AUTH-CLOSE-GATE-FIXES — DEV review (2026-11-12)
+
+- Evidence publication through `/os/<id>/anexo/<aid>/publico` is permitted on
+  closed orders when the responsible provider/admin passes the existing
+  transactional object/archival guard; the visibility event stays in the
+  writer's transaction. Archived orders and unrelated providers are denied.
+- PDF status, archival check, hard-link, document insert, delivery projection
+  and outbox `done` now execute under the **same `BEGIN IMMEDIATE`**. A failed
+  DB commit removes a newly created target; a crash may leave an orphan, which
+  can only be reconciled after candidate SHA-256 verification. A newer PDF
+  version resets the delivery's email status; reprocessing the same document
+  does not reset it.
+- Email outbox payloads carry only `recipient_refs` (`cliente`, `sindico`,
+  `administradora`). `produtividade_email.destinatarios_json` remains a list
+  of validated e-mail addresses for a safe DEV rollback and legacy resend.
+  Dispatcher resolves the references from current contacts per operation;
+  an unresolvable contact fails before calling Gmail.
+- DEV downgrade converts reference-only projections from earlier installs
+  into validated addresses **before** dropping the outbox. Unresolvable
+  references abort the entire rollback transaction.
+- Immediate orphan-quarantine recovery can be requested explicitly with
+  `--cleanup-trash --minimum-age 0`; the default remains 3600 seconds.
+  Confirm DB status and file hash before restoring; never use against MAIN.
+- `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` remains **0** by default. Human review
+  and DEV homologation are still required before any production rollout.
+
+## P0-AUTH-CLOSE-GATE — DEV review (2026-11-11)
+
+The provider attachment commands `mover`, `remover`, `girar`, `publico` and
+`nota-fiscal/remover` now share the command's `BEGIN IMMEDIATE` connection
+and object guard. Moving and visibility changes have no filesystem effect.
+Rotation writes a private stage, commits the new digest/event, then atomically
+promotes the staged bytes. Removal moves the managed file to a recoverable
+quarantine during the transaction, restores it on rollback, and deletes the
+quarantine only after commit. A crash before commit is recovered with
+`dispatch_os_effect_outbox.py --cleanup-trash` after checking the database;
+a committed intent is reconciled without duplicating its effect.
+
+Email outbox operations persist only stable recipient references. The Gmail
+adapter resolves the current contacts before the provider request, and
+`os_effect_outbox.finish` commits delivery status and both legacy projections
+in one transaction. The manual UI requires a fresh operation key and explicit
+duplicate-delivery acknowledgment. An uncertain result becomes `unknown`,
+which the worker **never** resends automatically. Message-ID alone does not
+guarantee provider-side idempotency; this is at-most-once automatic dispatch
+under uncertain outcomes, not exactly-once delivery.
+
+PDF publication now generates a candidate and compares its SHA-256 against
+the deterministic target before accepting any orphan. Conflicts are retained
+for manual reconciliation; no published PDF is overwritten. Generation that
+is nondeterministic across attempts may require manual reconciliation.
+
+Operational commands (DEV only):
+
+```sh
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/dispatch_os_effect_outbox.py \
+  --database /path/to/dev.db --status --json
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/dispatch_os_effect_outbox.py \
+  --database /path/to/dev.db --once --limit 100
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/dispatch_os_effect_outbox.py \
+  --database /path/to/dev.db --reconcile
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/dispatch_os_effect_outbox.py \
+  --database /path/to/dev.db --cleanup-trash --minimum-age 0
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/install_os_effect_outbox.py \
+  --database /path/to/dev.db --status
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/install_os_effect_outbox.py \
+  --database /path/to/dev.db --rollback --backup /path/to/new-backup.db
+```
+
+Rollback refuses unresolved pending/processing/unknown effects; it never
+changes orders or their attachments. Reconcile the effects and verify a fresh
+backup before removing only the DEV outbox and indexes. Keep
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` until explicit deployment approval;
+this change does not activate the flag or touch MAIN.
+
+
 **Scope:** provider portal OS/document operations and client role administration.
 The unified-login flag is separate.
 
@@ -120,9 +196,13 @@ se for indispensável remover após drenagem, com backup verificado executar
 
 ### Limites restantes
 
-Há writers de anexo com exclusão/rotação e fluxos de criação com chamadas
-legadas separadas. Essas operações não estão cobertas pela garantia completa
-de transação/outbox; ver `BLOCKED.md` da entrega antes de ativar enforcement.
+Os caminhos HTTP migrados de mover/publicar/girar/remover anexo e remover
+nota fiscal revalidam a OS e registram alterações/eventos na mesma transação.
+Staging/quarentena mantêm o filesystem recuperável, mas não fazem dele uma
+transação SQLite: quedas de processo ainda podem deixar órfãos para
+reconciliação. Chamadas legadas diretamente aos serviços sem `connection` e
+operações externas não compartilhadas exigem revisão separada antes da
+ativação do enforcement.
 
 ## Rollback
 

@@ -422,11 +422,13 @@ def validar_imagem(conteudo):
     return formato, {'JPEG':'.jpg','PNG':'.png','WEBP':'.webp'}[formato]
 
 
-def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador', *, connection=None):
     """Gira uma foto existente em 90° no sentido horário, sem duplicá-la."""
     from PIL import Image, ImageOps
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    from io import BytesIO
+    from officina.core import os_effect_outbox as outbox
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -436,25 +438,42 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
         if pid is not None:
             p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
             if not p:raise PermissionError('Prestador inativo.')
-        a=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE id=? AND os_id=?',
+            if responsavel_atual(c,os_id)!=pid and not administrador(c,pid):
+                raise PermissionError('Somente o responsável ou administrador edita fotos.')
+        a=c.execute('SELECT caminho,nome_original,sha256 FROM os_anexos WHERE id=? AND os_id=?',
                     (anexo_id,os_id)).fetchone()
         if not a:raise ValueError('Foto não encontrada.')
         caminho=Path(a['caminho'])
         if not caminho.is_file():raise ValueError('Arquivo da foto não encontrado.')
-        temporario=caminho.with_name(caminho.name+'.girando')
-        try:
+        if connection is not None and outbox.installed(c):
             with Image.open(caminho) as original:
                 formato=original.format or 'JPEG'
-                imagem=ImageOps.exif_transpose(original)
-                imagem=imagem.rotate(-90,expand=True)
-                if formato=='JPEG':
-                    imagem=imagem.convert('RGB')
-                imagem.save(temporario,format=formato)
-            os.replace(temporario,caminho)
-        except Exception as erro:
-            temporario.unlink(missing_ok=True)
-            raise ValueError('Não foi possível girar a foto.') from erro
-        digest=hashlib.sha256(caminho.read_bytes()).hexdigest()
+                imagem=ImageOps.exif_transpose(original).rotate(-90,expand=True)
+                if formato=='JPEG': imagem=imagem.convert('RGB')
+                stream=BytesIO()
+                imagem.save(stream,format=formato)
+            content=stream.getvalue()
+            digest=hashlib.sha256(content).hexdigest()
+            event_id=c.execute('SELECT COALESCE(MAX(id),0) FROM os_eventos WHERE os_id=?',
+                               (os_id,)).fetchone()[0]
+            revision=f'{anexo_id}:{event_id}:{a["sha256"]}:{digest}'
+            key=outbox.operation_key(os_id,revision,'attachment-rotate','file')
+            outbox.stage_bytes(ANEXOS,key,content)
+            outbox.enqueue_file(c,os_id,revision,'attachment-rotate',anexo_id,digest,
+                                previous_sha256=a['sha256'])
+        else:
+            temporario=caminho.with_name(caminho.name+'.girando')
+            try:
+                with Image.open(caminho) as original:
+                    formato=original.format or 'JPEG'
+                    imagem=ImageOps.exif_transpose(original).rotate(-90,expand=True)
+                    if formato=='JPEG': imagem=imagem.convert('RGB')
+                    imagem.save(temporario,format=formato)
+                os.replace(temporario,caminho)
+            except Exception as erro:
+                temporario.unlink(missing_ok=True)
+                raise ValueError('Não foi possível girar a foto.') from erro
+            digest=hashlib.sha256(caminho.read_bytes()).hexdigest()
         c.execute('UPDATE os_anexos SET sha256=? WHERE id=?',(digest,anexo_id))
         nome_ator=ator
         if pid is not None:
@@ -464,13 +483,13 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
         return str(caminho)
 
 
-def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
+def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador', *, connection=None):
     """Move uma foto uma posição para cima/baixo dentro da mesma OS."""
     direcao=str(direcao or '').strip().lower()
     if direcao not in ('up','down'):
         raise ValueError('Direção de ordenação inválida.')
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -505,10 +524,10 @@ def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
         return True
 
 
-def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador', *, connection=None):
     """Remove uma foto da OS ativa, com permissão e evento de auditoria."""
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -528,10 +547,11 @@ def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador'):
             p=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()
             if p:nome_ator=p['nome']
         evento(c,os_id,'Foto removida',Path(foto['nome_original']).name[:150],pid,nome_ator)
-    try:
-        Path(foto['caminho']).unlink(missing_ok=True)
-    except OSError:
-        pass
+    if connection is None:
+        try:
+            Path(foto['caminho']).unlink(missing_ok=True)
+        except OSError:
+            pass
     return True
 
 
@@ -1057,30 +1077,33 @@ def obter_nota_fiscal(banco, os_id, nota_id):
     return dict(r), str(caminho)
 
 
-def remover_nota_fiscal(banco, os_id, nota_id, pid=None, ator=None):
+def remover_nota_fiscal(banco, os_id, nota_id, pid=None, ator=None, *, connection=None):
     """Remove o PDF anexado e preserva o histórico da OS.
 
     A permissão (responsável ou administrador) é conferida pela camada web.
     """
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
         if o['status'] not in ATIVAS:
             raise ValueError('A nota fiscal só pode ser removida enquanto a OS está ativa.')
+        if pid is not None and responsavel_atual(c,os_id)!=pid and not administrador(c,pid):
+            raise PermissionError('Somente o responsável ou administrador remove nota fiscal.')
         r=c.execute('SELECT nome_original,caminho FROM os_notas_fiscais WHERE id=? AND os_id=?',
                     (nota_id,os_id)).fetchone()
         if not r:
             raise ValueError('Nota fiscal não encontrada.')
         c.execute('DELETE FROM os_notas_fiscais WHERE id=? AND os_id=?',(nota_id,os_id))
         evento(c,os_id,'Nota fiscal removida',Path(r['nome_original']).name[:150],pid,ator or 'Prestador')
-    try:
-        caminho=Path(r['caminho']).resolve()
-        if caminho.is_relative_to(NOTAS.resolve()) and caminho.is_file():
-            caminho.unlink()
-    except OSError:
-        pass
+    if connection is None:
+        try:
+            caminho=Path(r['caminho']).resolve()
+            if caminho.is_relative_to(NOTAS.resolve()) and caminho.is_file():
+                caminho.unlink()
+        except OSError:
+            pass
     return True
 
 

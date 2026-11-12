@@ -1,3 +1,25 @@
+## P0-AUTH-CLOSE-GATE-FIXES — testes DEV (2026-11-12)
+
+Novos casos de publicação de anexos encerrados (flags 0/1 e negativas),
+TOCTOU PDF/status, rollback de destinatários reais, versão nova da projeção,
+quarentena 3600 s versus restauração explicitamente imediata e resolução de
+referências de e-mail por operação. Executar em banco/portas temporários.
+Resultados exatos: `TEST_RESULTS.txt` da entrega correspondente.
+
+
+
+## P0-AUTH-CLOSE-GATE — new regression modules
+
+`tests.test_p0_auth_close_gate` covers shared attachment/invoice writers,
+rollback, quarantined removal, HTTP object-denial races, duplicate-acknowledged
+manual dispatch and atomic email projections. `tests.test_p0_auth_dispatcher`
+covers orphan PDF rejection, unknown email outcomes and safe DEV rollback.
+`tests.test_os_effect_outbox` now requires candidate regeneration and digest
+comparison even when the target PDF already exists. This strengthens the
+older restart expectation to reject an orphan instead of adopting it blindly.
+
+Run focused and full suites with a temporary `AUTOSEG_SERVER_DATA` directory
+and keep the actual results in the deliverable's `TEST_RESULTS.txt`.
 
 ### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
 

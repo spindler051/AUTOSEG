@@ -1,13 +1,34 @@
+## P0-AUTH-CLOSE-GATE-FIXES — validação DEV (2026-11-12)
+
+O fechamento adicional corrige `publico` em OS encerrada, faz a verificação de
+status e confirmação de PDF na mesma `BEGIN IMMEDIATE`, preserva e-mails
+válidos na projeção de rollback e permite restauração operacional explícita da
+quarentena com idade zero. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` permanece;
+não foi feita integração com MAIN ou aprovação de implantação.
+
+
+
+## P0-AUTH-CLOSE-GATE — DEV handoff
+
+The close-gate review extends transaction-guarded attachment/invoice commands
+with staged rotation, recoverable quarantine and a DEV-only worker. Manual
+email retry requires a fresh operation ID plus duplicate acknowledgment;
+recipient identities remain references and are resolved at dispatch. PDF
+publication validates hashes before adopting an orphan. The original
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` default remains unchanged. Deploy only
+after reviewing the attached test report and any residual issues; MAIN is
+not part of this change.
 
 ### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
 
 Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
 reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
 foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
-fechado: arquivos removidos/rotacionados, reenvio legado e fluxos restantes
-precisam ser cobertos antes de aprovar a flag. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+fechado: os caminhos HTTP de anexos/nota já usam guarda e efeitos
+recuperáveis, porém efeitos de filesystem e consumidores legados diretos
+precisam de homologação e reconciliação operacional antes da ativação. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
 permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
-`BLOCKED.md` desta entrega; não habilitar na MAIN.
+`NOTES.md` desta entrega; não habilitar na MAIN.
 
 # Handoff — estado atual
 

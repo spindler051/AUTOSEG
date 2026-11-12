@@ -2846,12 +2846,18 @@ class PortalPrestador:
                             except Exception: anteriores=[]
                         if not anteriores:
                             anteriores=[contatos.get(k,'') for k in ('cliente','sindico') if contatos.get(k)]
+                        from officina.core import os_effect_outbox as effect_outbox
+                        with ext.db(banco) as c:
+                            outbox_ready=effect_outbox.installed(c)
+                            outbox_status=c.execute('''SELECT state,attempts,last_error,result_json
+                                FROM os_effect_outbox WHERE os_id=? AND effect_type='email'
+                                ORDER BY id DESC LIMIT 1''',(oid,)).fetchone() if outbox_ready else None
                         opcoes_reenvio=''
                         for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),
                                              ('administradora','Administradora / imobiliária')):
                             email=contatos.get(chave) or ''
                             if email:
-                                marcado=' checked' if email in anteriores else ''
+                                marcado=' checked' if (chave in anteriores or email in anteriores) else ''
                                 opcoes_reenvio+=(
                                     '<label style="display:block;margin:5px 0">'
                                     f'<input type="checkbox" name="destinatario_sel[]" '
@@ -2860,14 +2866,32 @@ class PortalPrestador:
                                'style="display:block;margin-top:12px">'
                                f'{token}'
                                '<h3>Reenviar e-mail</h3>'
+                               f'<input type="hidden" name="reenviar_operacao" value="{secrets.token_urlsafe(24)}">'
                                +opcoes_reenvio+
                                '<label>Outro e-mail (opcional)<input name="emails_adicionais" '
                                'type="text" maxlength="500" value="" '
                                'placeholder="financeiro@exemplo.com.br"></label>'
+                               '<label style="display:block;margin:8px 0">'
+                               '<input type="checkbox" name="confirmar_duplicata" value="1" required> '
+                               'O e-mail anterior pode já ter sido entregue; reenviar pode duplicar'
+                               '</label>'
                                '<button class="secondary" type="submit">Reenviar e-mail com anexos</button>'
                                '</form>'
                                '<p class="muted">Desmarque quem não deve receber. O reenvio inclui '
                                'o PDF do relatório e a NFS-e mais recente.</p>')
+                        if outbox_status:
+                            state=dict(outbox_status)
+                            payload=json.loads(state['result_json'] or '{}')
+                            docs+=(f'<p class="muted">Envio: {esc(state["state"])} · '
+                                   f'Tentativas: {int(state["attempts"])} · '
+                                   f'Erro: {esc(state["last_error"] or "—")} · '
+                                   f'Message-ID: {esc(payload.get("provider_message_id") or "—")}</p>')
+                            if state['state']=='unknown':
+                                docs+=('<p class="muted">Resultado incerto: confira no provedor. '
+                                       'Não há reenvio automático; uma nova tentativa pode duplicar.</p>')
+                        if outbox_ready:
+                            docs+=('<p class="muted">No modo recuperável, apenas contatos '
+                                   'cadastrados podem ser selecionados; e-mails adicionais não são aceitos.</p>')
                 elif d['status'] in fluxo.FIM:
                     docs='<p class="muted">O PDF ainda não foi publicado. Use “Gerar e publicar PDF” acima.</p>'
                 else:

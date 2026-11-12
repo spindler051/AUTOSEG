@@ -1,3 +1,29 @@
+## P0-AUTH-CLOSE-GATE-FIXES — DEV, 2026-11-12
+
+- Corrected evidence visibility for concluded OS, with the existing locked
+  authorization guard and archival restrictions.
+- Removed the PDF link→document commit gap and reset delivery status only for
+  a newly published document version.
+- Outbox e-mail references now live in minimal operation payloads; the legacy
+  projection stores validated addresses and DEV rollback repairs older rows.
+- Added controlled immediate quarantine cleanup (`--minimum-age 0`), tests
+  and operational guidance. Enforcement stays disabled; MAIN untouched.
+
+
+
+## P0-AUTH-CLOSE-GATE — DEV review (2026-11-11)
+
+- Attachment move, hide/show, rotate and removal, plus invoice removal, now
+  share the command transaction and authorization guard. Image rotation
+  promotes staged bytes only after commit; removal uses recoverable quarantine.
+- PDF publication verifies candidate digests before accepting pre-existing
+  deterministic paths; mismatches fail without overwriting published files.
+- Manual Gmail retries require a unique operation key and explicit warning;
+  recipient references are resolved at dispatch, and sent/failed/unknown/no
+  recipient projections commit with outbox state. Unknown is never resent
+  automatically.
+- Added DEV-only effect dispatcher and guarded outbox rollback with verified
+  backup. No change to production flags, GTK, financial logic or legacy ports.
 
 ### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
 

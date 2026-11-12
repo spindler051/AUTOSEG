@@ -267,7 +267,7 @@ def controlar_pdf(banco,os_id,pid):
 
 
 def registrar_envio(banco,os_id,destinatarios,status='pendente',message_id=None,erro='',*,connection=None):
-    if status not in ('pendente','enviado','falhou'):raise ValueError('Estado de e-mail inválido.')
+    if status not in ('pendente','enviado','falhou','unknown','sem_destinatario'):raise ValueError('Estado de e-mail inválido.')
     with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         c.execute("""INSERT INTO produtividade_email
         (os_id,destinatarios_json,status,message_id,erro,atualizado_em)

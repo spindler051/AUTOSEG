@@ -119,12 +119,74 @@ class OutboxTests(unittest.TestCase):
             published.write_bytes(PDF)
             self.assertEqual(outbox.reconcile(self.db, now=1121, lease_seconds=120), [row['operation_key']])
             result = outbox.publish_pdf(self.db, row['operation_key'], now=1121,
-                                         generate=lambda *_: self.fail('Must reuse published file'))
+                                         generate=lambda *_: source)
         self.assertEqual(result['state'], 'done')
         with sqlite3.connect(self.db) as c:
             self.assertEqual(c.execute('SELECT COUNT(*) FROM os_documentos').fetchone()[0], 1)
             self.assertEqual(c.execute('SELECT versao FROM os_documentos').fetchone()[0], 1)
             self.assertEqual(c.execute('SELECT sha256 FROM os_documentos').fetchone()[0], hashlib.sha256(PDF).hexdigest())
+
+    def test_pdf_status_change_is_atomic_with_document_insert(self):
+        row=self._enqueue()
+        source=Path(self.tmp.name)/'candidate.pdf'
+        source.write_bytes(PDF)
+        root=Path(self.tmp.name)/'reports'
+        def change_status(*_):
+            with ext.db(self.db) as c:
+                c.execute("UPDATE ordens_servico SET status='Aberta' WHERE id=7")
+            return source
+        with patch.object(ext,'RELATORIOS',root):
+            with self.assertRaisesRegex(ValueError,'status changed'):
+                outbox.publish_pdf(self.db,row['operation_key'],generate=change_status)
+            self.assertEqual(outbox.get(self.db,row['operation_key'])['state'],'failed')
+            self.assertFalse((root/'publicados'/'OS-7_relatorio_v1.pdf').exists())
+            with ext.db(self.db) as c:
+                self.assertEqual(c.execute('SELECT COUNT(*) FROM os_documentos').fetchone()[0],0)
+                c.execute("UPDATE ordens_servico SET status='Concluída' WHERE id=7")
+            self.assertEqual(outbox.publish_pdf(self.db,row['operation_key'],
+                generate=lambda *_:source)['state'],'done')
+            self.assertEqual(outbox.publish_pdf(self.db,row['operation_key'])['state'],'done')
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM os_documentos').fetchone()[0],1)
+
+    def test_new_pdf_version_resets_email_status(self):
+        first=self._enqueue(revision='version-one')
+        source=Path(self.tmp.name)/'candidate.pdf'
+        source.write_bytes(PDF)
+        root=Path(self.tmp.name)/'reports'
+        with patch.object(ext,'RELATORIOS',root):
+            self.assertEqual(outbox.publish_pdf(self.db,first['operation_key'],
+                generate=lambda *_:source)['state'],'done')
+            with ext.db(self.db) as c:
+                old=c.execute('SELECT documento_id FROM os_entregas WHERE os_id=7').fetchone()[0]
+                c.execute("UPDATE os_entregas SET email_status='enviado' WHERE os_id=7")
+            second=self._enqueue(revision='version-two')
+            self.assertEqual(outbox.publish_pdf(self.db,second['operation_key'],
+                generate=lambda *_:source)['state'],'done')
+            with ext.db(self.db) as c:
+                new=c.execute('SELECT documento_id,email_status FROM os_entregas WHERE os_id=7').fetchone()
+                self.assertNotEqual(new['documento_id'],old)
+                self.assertEqual(new['email_status'],'aguardando_api')
+                c.execute("UPDATE os_entregas SET email_status='enviado' WHERE os_id=7")
+            outbox.publish_pdf(self.db,second['operation_key'],
+                generate=lambda *_:self.fail('Should not generate existing PDF'))
+            with ext.db(self.db) as c:
+                self.assertEqual(c.execute('SELECT email_status FROM os_entregas WHERE os_id=7').fetchone()[0],
+                                 'enviado')
+
+    def test_pdf_link_and_metadata_roll_back_together(self):
+        row=self._enqueue()
+        source=Path(self.tmp.name)/'candidate.pdf'
+        source.write_bytes(PDF)
+        root=Path(self.tmp.name)/'reports'
+        with patch.object(ext,'RELATORIOS',root),patch.object(outbox,'_has_table',
+                    side_effect=RuntimeError('metadata failure after link')):
+            with self.assertRaisesRegex(RuntimeError,'metadata failure'):
+                outbox.publish_pdf(self.db,row['operation_key'],generate=lambda *_:source)
+        self.assertFalse((root/'publicados'/'OS-7_relatorio_v1.pdf').exists())
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM os_documentos').fetchone()[0],0)
+        self.assertEqual(outbox.get(self.db,row['operation_key'])['state'],'failed')
 
     def test_pdf_generation_failure_can_retry_and_reuse_reserved_version(self):
         row = self._enqueue()

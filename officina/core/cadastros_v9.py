@@ -771,10 +771,12 @@ def salvar_detalhes(banco,os_id,diagnostico,execucao,resultado,*,connection=None
                     resultado=excluded.resultado,alterado_em=excluded.alterado_em''',
                   (os_id,diagnostico[:5000],execucao[:5000],resultado[:5000],ext.agora()))
 
-def aprovar_anexo(banco,anexo_id,visivel,legenda,ator):
-    with ext.db(banco) as c:
+def aprovar_anexo(banco,anexo_id,visivel,legenda,ator,*,connection=None,pid=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         a=c.execute('SELECT os_id FROM os_anexos WHERE id=?',(anexo_id,)).fetchone()
         if not a:raise ValueError('Anexo não encontrado.')
+        if pid is not None and ext.responsavel_atual(c,a['os_id'])!=pid and not ext.administrador(c,pid):
+            raise PermissionError('Somente o responsável ou administrador publica fotos.')
         c.execute('''INSERT INTO v9_anexos_visiveis(anexo_id,visivel,legenda,autorizado_em)
                      VALUES(?,?,?,?) ON CONFLICT(anexo_id) DO UPDATE SET
                      visivel=excluded.visivel,legenda=excluded.legenda,autorizado_em=excluded.autorizado_em''',

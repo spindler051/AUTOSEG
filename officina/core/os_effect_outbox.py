@@ -104,8 +104,14 @@ def _queue(c, os_id, revision, action, effect_type, *, payload=None, version=Non
         raise RuntimeError('Outbox intent requires an active OS transaction.')
     require_installed(c)
     payload = payload or {}
-    if set(payload) - {'source_id', 'source_sha256', 'document_id', 'reason_code'}:
+    if set(payload) - {'source_id', 'source_sha256', 'previous_sha256', 'document_id', 'reason_code', 'recipient_refs'}:
         raise ValueError('Outbox payload contains unsupported fields.')
+    if 'recipient_refs' in payload:
+        refs = payload['recipient_refs']
+        if (effect_type != 'email' or not isinstance(refs, list)
+                or any(ref not in ('cliente', 'sindico', 'administradora') for ref in refs)
+                or len(set(refs)) != len(refs)):
+            raise ValueError('Invalid recipient references.')
     encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'))
     key = operation_key(os_id, revision, action, effect_type)
     old = c.execute('SELECT * FROM os_effect_outbox WHERE operation_key=?', (key,)).fetchone()
@@ -136,15 +142,20 @@ def enqueue_pdf(c, os_id, revision, action='publish'):
     return _queue(c, os_id, revision, action, 'pdf')
 
 
-def enqueue_email(c, os_id, revision, action='send'):
-    return _queue(c, os_id, revision, action, 'email')
+def enqueue_email(c, os_id, revision, action='send', *, recipient_refs=None):
+    payload = {} if recipient_refs is None else {'recipient_refs': list(recipient_refs)}
+    return _queue(c, os_id, revision, action, 'email', payload=payload)
 
 
-def enqueue_file(c, os_id, revision, action, source_id, source_sha256):
+def enqueue_file(c, os_id, revision, action, source_id, source_sha256, *, previous_sha256=None):
     if not re.fullmatch(r'[0-9a-f]{64}', str(source_sha256)):
         raise ValueError('Invalid source digest.')
-    return _queue(c, os_id, revision, action, 'file',
-                  payload={'source_id': int(source_id), 'source_sha256': source_sha256})
+    payload={'source_id': int(source_id), 'source_sha256': source_sha256}
+    if previous_sha256 is not None:
+        if not re.fullmatch(r'[0-9a-f]{64}',str(previous_sha256)):
+            raise ValueError('Invalid original digest.')
+        payload['previous_sha256']=previous_sha256
+    return _queue(c, os_id, revision, action, 'file',payload=payload)
 
 
 def get(banco, operation):
@@ -173,6 +184,7 @@ def claim(banco, operation, *, now=None, lease_seconds=LEASE_SECONDS):
             c.execute("""UPDATE os_effect_outbox SET state='unknown',
                         claim_token=NULL,last_error=?,updated_at=? WHERE id=?""",
                       ('Provider outcome not known after lease expiration.', now, row['id']))
+            _project_email(c,row['os_id'],'unknown',error='provider_outcome_unknown')
             return None
         if row['state'] not in ('pending', 'failed') and not expired:
             return None
@@ -182,6 +194,25 @@ def claim(banco, operation, *, now=None, lease_seconds=LEASE_SECONDS):
                   (now, token, now, row['id']))
         claimed = dict(c.execute('SELECT * FROM os_effect_outbox WHERE id=?', (row['id'],)).fetchone())
         return claimed
+
+
+def _has_table(c, name):
+    return c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                     (name,)).fetchone() is not None
+
+
+def _project_email(c, os_id, status, *, message_id='', error=''):
+    # The same transaction updates status and the legacy projections.
+    projection = {'done':'enviado','unknown':'unknown','failed':'falhou',
+                  'sem_destinatario':'sem_destinatario'}[status]
+    if _has_table(c,'produtividade_email'):
+        c.execute('''UPDATE produtividade_email SET status=?,message_id=?,erro=?,
+                     atualizado_em=? WHERE os_id=?''',
+                  (projection,str(message_id or '')[:150],str(error or '')[:350],
+                   ext.agora(),os_id))
+    if _has_table(c,'os_entregas'):
+        c.execute('''UPDATE os_entregas SET email_status=?,atualizado_em=?
+                     WHERE os_id=?''', (projection,ext.agora(),os_id))
 
 
 def finish(banco, operation, claim_token, *, state, result=None, error=''):
@@ -200,6 +231,12 @@ def finish(banco, operation, claim_token, *, state, result=None, error=''):
              time.time(), operation, claim_token))
         if updated.rowcount != 1:
             raise RuntimeError('Outbox lease was superseded.')
+        row=c.execute('SELECT os_id,effect_type FROM os_effect_outbox WHERE operation_key=?',
+                      (operation,)).fetchone()
+        if row['effect_type']=='email':
+            status='sem_destinatario' if error=='sem_destinatario' else state
+            _project_email(c,row['os_id'],status,
+                           message_id=result.get('provider_message_id',''),error=error)
 
 
 def reconcile(banco, *, now=None, lease_seconds=LEASE_SECONDS):
@@ -208,11 +245,16 @@ def reconcile(banco, *, now=None, lease_seconds=LEASE_SECONDS):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         require_installed(c)
+        expired=c.execute("""SELECT os_id FROM os_effect_outbox WHERE effect_type='email'
+            AND state='processing' AND claimed_at<=?""",
+            (now-lease_seconds,)).fetchall()
         c.execute('''UPDATE os_effect_outbox SET state='unknown', claim_token=NULL,
             claimed_at=NULL,updated_at=?,last_error=?
             WHERE effect_type='email' AND state='processing'
               AND claimed_at<=?''',
             (now, 'Uncertain provider outcome after worker restart.', now - lease_seconds))
+        for item in expired:
+            _project_email(c,item['os_id'],'unknown',error='provider_outcome_unknown')
         keys = c.execute('''SELECT operation_key FROM os_effect_outbox
             WHERE state IN ('pending','failed') OR
             (effect_type!='email' AND state='processing' AND claimed_at<=?)
@@ -242,98 +284,133 @@ def _validate_pdf(path):
 
 def publish_pdf(banco, operation, *, generate=None, after_publish=None,
                 now=None, lease_seconds=LEASE_SECONDS):
-    """Publish one reserved PDF version; never overwrite a published file.
+    '''Publish a reserved version with one locked status/document/outbox commit.
 
-    A crash after atomic file publication but before DB confirmation is
-    recovered from the deterministic filename and verified content hash.
-    """
+    The PDF candidate is staged before BEGIN IMMEDIATE. A pre-existing target
+    must match its digest. A crash before commit may leave a target orphan;
+    retries compare the candidate digest instead of adopting it blindly.
+    '''
     claimed = claim(banco, operation, now=now, lease_seconds=lease_seconds)
     if not claimed:
         return get(banco, operation)
     if claimed['effect_type'] != 'pdf':
-        finish(banco, operation, claimed['claim_token'], state='failed', error='Wrong effect type.')
+        finish(banco, operation, claimed['claim_token'], state='failed',
+               error='Wrong effect type.')
         raise ValueError('Not a PDF operation.')
     from officina.core import fluxo_os
-    with ext.db(banco) as c:
-        order = c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',
-                          (claimed['os_id'],)).fetchone()
-    if not order or order['status'] not in fluxo_os.PUBLICAVEIS:
-        finish(banco, operation, claimed['claim_token'], state='failed',
-               error='OS status does not allow publication.')
-        raise ValueError('OS status does not allow publication.')
     directory = Path(ext.RELATORIOS) / 'publicados'
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / _safe_pdf_name(order['numero_os'], claimed['version_reserved'])
     stage = directory / ('.stage-' + claimed['operation_key'] + '.pdf')
+    target = None
+    linked = False
+    committed = False
     try:
-        if not target.exists():
-            generator = generate or ext.gerar_pdf
-            source = Path(generator(banco, claimed['os_id']))
-            _validate_pdf(source)
-            try:
+        with ext.db(banco) as c:
+            order = c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                              (claimed['os_id'],)).fetchone()
+        if not order:
+            raise ValueError('OS unavailable for publication.')
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / _safe_pdf_name(order['numero_os'], claimed['version_reserved'])
+        generator = generate or ext.gerar_pdf
+        source = Path(generator(banco, claimed['os_id']))
+        expected = _validate_pdf(source)
+        try:
+            with source.open('rb') as incoming, stage.open('xb') as outgoing:
+                shutil.copyfileobj(incoming, outgoing)
+                outgoing.flush()
+                os.fsync(outgoing.fileno())
+        except FileExistsError:
+            if _validate_pdf(stage) != expected:
+                stage.unlink(missing_ok=True)
                 with source.open('rb') as incoming, stage.open('xb') as outgoing:
                     shutil.copyfileobj(incoming, outgoing)
                     outgoing.flush()
                     os.fsync(outgoing.fileno())
-            except FileExistsError:
-                # An interrupted attempt can have left a stage file.
-                if not stage.is_file() or _validate_pdf(stage) != _validate_pdf(source):
-                    stage.unlink(missing_ok=True)
-                    with source.open('rb') as incoming, stage.open('xb') as outgoing:
-                        shutil.copyfileobj(incoming, outgoing)
-                        outgoing.flush()
-                        os.fsync(outgoing.fileno())
-            _validate_pdf(stage)
-            try:
-                os.link(stage, target)
-            except FileExistsError:
-                pass
-        digest = _validate_pdf(target)
+        if _validate_pdf(stage) != expected:
+            raise ValueError('PDF staging digest mismatch.')
+
         with ext.db(banco) as c:
             c.execute('BEGIN IMMEDIATE')
-            row = c.execute('SELECT state,claim_token FROM os_effect_outbox WHERE operation_key=?',
-                            (operation,)).fetchone()
-            if not row or row['state'] != 'processing' or row['claim_token'] != claimed['claim_token']:
+            current=c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                              (claimed['os_id'],)).fetchone()
+            if not current or current['status'] not in fluxo_os.PUBLICAVEIS or (
+                    'arquivada' in current.keys() and current['arquivada']):
+                raise ValueError('OS status changed before publication.')
+            row=c.execute('SELECT state,claim_token FROM os_effect_outbox WHERE operation_key=?',
+                          (operation,)).fetchone()
+            if not row or row['state']!='processing' or row['claim_token']!=claimed['claim_token']:
                 raise RuntimeError('Outbox lease changed during PDF publication.')
-            existing = c.execute('''SELECT id,sha256,caminho FROM os_documentos
-                 WHERE os_id=? AND tipo='relatorio_pdf' AND versao=?''',
-                (claimed['os_id'], claimed['version_reserved'])).fetchone()
-            if existing:
-                if existing['sha256'] != digest or Path(existing['caminho']) != target:
-                    raise RuntimeError('Reserved PDF version conflicts with another document.')
-                document_id = existing['id']
+            existing=c.execute('''SELECT id,sha256,caminho FROM os_documentos
+                WHERE os_id=? AND tipo='relatorio_pdf' AND versao=?''',
+                (claimed['os_id'],claimed['version_reserved'])).fetchone()
+            if existing and (Path(existing['caminho'])!=target or existing['sha256']!=expected):
+                raise RuntimeError('PDFConflict: recorded PDF differs from candidate.')
+            if target.exists():
+                if _validate_pdf(target)!=expected:
+                    raise RuntimeError('PDFConflict: orphan or published PDF differs from candidate.')
             else:
-                document_id = c.execute('''INSERT INTO os_documentos
+                try:
+                    os.link(stage,target)
+                    linked=True
+                except FileExistsError:
+                    if _validate_pdf(target)!=expected:
+                        raise RuntimeError('PDFConflict: concurrent publication differs from candidate.')
+            if existing:
+                document_id=existing['id']
+            else:
+                document_id=c.execute('''INSERT INTO os_documentos
                     (os_id,tipo,versao,caminho,sha256,publicado_em)
                     VALUES(?,'relatorio_pdf',?,?,?,?)''',
-                    (claimed['os_id'], claimed['version_reserved'], str(target),
-                     digest, ext.agora())).lastrowid
-            # Existing delivery relation is reused, not a second delivery table.
-            customer = c.execute('''SELECT cl.email,o.status FROM clientes cl
+                    (claimed['os_id'],claimed['version_reserved'],str(target),
+                     expected,ext.agora())).lastrowid
+            customer=c.execute('''SELECT cl.email,o.status FROM clientes cl
                 JOIN ordens_servico o ON o.cliente_id=cl.id WHERE o.id=?''',
                 (claimed['os_id'],)).fetchone()
-            email = (customer['email'] or '').strip() if customer else ''
+            email=(customer['email'] or '').strip() if customer else ''
+            projection=(c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
+                (claimed['os_id'],)).fetchone() if _has_table(c,'produtividade_email') else None)
+            email_status=('sem_destinatario' if projection and
+                          projection['status']=='sem_destinatario' else
+                          ('aguardando_api' if email else 'email_nao_cadastrado'))
             c.execute('''INSERT INTO os_entregas
                 (os_id,documento_id,destinatario,email_status,nf_status,atualizado_em)
                 VALUES(?,?,?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
-                documento_id=excluded.documento_id,destinatario=excluded.destinatario,
-                email_status=excluded.email_status,nf_status=excluded.nf_status,
+                documento_id=excluded.documento_id,
+                destinatario=CASE WHEN os_entregas.destinatario!=''
+                    THEN os_entregas.destinatario ELSE excluded.destinatario END,
+                email_status=CASE WHEN os_entregas.documento_id=excluded.documento_id
+                    AND os_entregas.email_status IN
+                    ('enviado','falhou','unknown','sem_destinatario')
+                    THEN os_entregas.email_status ELSE excluded.email_status END,
+                nf_status=excluded.nf_status,
                 atualizado_em=excluded.atualizado_em''',
-                (claimed['os_id'], document_id, email,
-                 'aguardando_api' if email else 'email_nao_cadastrado',
-                 'aguardando_api' if customer and customer['status'] == 'Concluída'
-                 else 'nao_aplicavel', ext.agora()))
-            c.execute('''UPDATE os_effect_outbox SET state='done',claimed_at=NULL,
+                (claimed['os_id'],document_id,email,email_status,
+                 'aguardando_api' if customer and customer['status']=='Concluída'
+                 else 'nao_aplicavel',ext.agora()))
+            changed=c.execute('''UPDATE os_effect_outbox SET state='done',claimed_at=NULL,
                 claim_token=NULL,last_error='',result_json=?,updated_at=?
-                WHERE operation_key=? AND claim_token=?''',
-                (json.dumps({'document_id': document_id, 'sha256': digest}),
-                 time.time(), operation, claimed['claim_token']))
+                WHERE operation_key=? AND claim_token=? AND state='processing' ''',
+                (json.dumps({'document_id':document_id,'sha256':expected}),
+                 time.time(),operation,claimed['claim_token']))
+            if changed.rowcount!=1:
+                raise RuntimeError('Outbox lease lost while publishing.')
+        committed=True
         if after_publish:
             after_publish(str(target))
-        return get(banco, operation)
+        return get(banco,operation)
     except Exception as exc:
+        if linked and not committed and target is not None:
+            # A rollback leaves no document row. Never delete an existing
+            # independently published version after losing a lease.
+            with ext.db(banco) as c:
+                recorded=c.execute('''SELECT 1 FROM os_documentos WHERE os_id=?
+                    AND tipo='relatorio_pdf' AND versao=?''',
+                    (claimed['os_id'],claimed['version_reserved'])).fetchone()
+            if not recorded:
+                target.unlink(missing_ok=True)
         try:
-            finish(banco, operation, claimed['claim_token'], state='failed', error=type(exc).__name__)
+            finish(banco,operation,claimed['claim_token'],state='failed',
+                   error=type(exc).__name__)
         except RuntimeError:
             pass
         raise
@@ -358,7 +435,8 @@ def deliver_email(banco, operation, sender: Callable, *, now=None,
     try:
         message_id = sender(claimed['os_id'], claimed['operation_key'])
     except PreDispatchError as exc:
-        finish(banco, operation, claimed['claim_token'], state='failed', error=type(exc).__name__)
+        code='sem_destinatario' if str(exc)=='sem_destinatario' else type(exc).__name__
+        finish(banco, operation, claimed['claim_token'], state='failed', error=code)
         raise
     except Exception as exc:
         finish(banco, operation, claimed['claim_token'], state='unknown', error=type(exc).__name__)
@@ -368,10 +446,11 @@ def deliver_email(banco, operation, sender: Callable, *, now=None,
     return get(banco, operation)
 
 
-def manual_email_retry(c, os_id, revision, action, *, duplicate_acknowledged):
+def manual_email_retry(c, os_id, revision, action, *, duplicate_acknowledged,
+                       recipient_refs=None):
     if not duplicate_acknowledged:
         raise PermissionError('Explicit duplicate-delivery warning must be acknowledged.')
-    return enqueue_email(c, os_id, revision, action)
+    return enqueue_email(c, os_id, revision, action, recipient_refs=recipient_refs)
 
 
 def stage_bytes(directory, operation, data):
@@ -418,6 +497,21 @@ def publish_file(banco, operation, *, now=None, lease_seconds=LEASE_SECONDS):
     table = 'os_notas_fiscais' if is_invoice else 'os_anexos'
     root = Path(ext.NOTAS if is_invoice else ext.ANEXOS).resolve()
     try:
+        action=claimed['action']
+        if action in ('attachment-remove','invoice-remove'):
+            root=Path(ext.NOTAS if is_invoice else ext.ANEXOS).resolve()
+            trash=root/'.outbox-trash'/operation
+            with ext.db(banco) as c:
+                if c.execute(f'SELECT 1 FROM {table} WHERE id=? AND os_id=?',
+                             (payload['source_id'],claimed['os_id'])).fetchone():
+                    raise RuntimeError('Deleted source still exists.')
+            if trash.exists():
+                if sha256(trash.read_bytes()).hexdigest()!=payload['source_sha256']:
+                    raise ValueError('Quarantine digest mismatch.')
+                trash.unlink()
+            (root/'.outbox-trash'/(operation+'.json')).unlink(missing_ok=True)
+            finish(banco,operation,claimed['claim_token'],state='done')
+            return get(banco,operation)
         with ext.db(banco) as c:
             row = c.execute(f'SELECT caminho,sha256 FROM {table} WHERE id=? AND os_id=?',
                             (payload['source_id'], claimed['os_id'])).fetchone()
@@ -427,15 +521,28 @@ def publish_file(banco, operation, *, now=None, lease_seconds=LEASE_SECONDS):
         if not target.is_relative_to(root) or target.parent != root:
             raise ValueError('Attachment destination leaves its managed root.')
         staged = root / '.outbox-staging' / operation
-        if not target.exists():
-            if not staged.is_file():
-                raise FileNotFoundError('Attachment stage missing; manual recovery required.')
-            if sha256(staged.read_bytes()).hexdigest() != row['sha256']:
-                raise ValueError('Staged attachment digest mismatch.')
-            try:
-                os.link(staged, target)
-            except FileExistsError:
+        if action=='attachment-rotate':
+            previous=payload['previous_sha256']
+            if target.exists() and sha256(target.read_bytes()).hexdigest()==row['sha256']:
                 pass
+            else:
+                if not staged.is_file():
+                    raise FileNotFoundError('Rotation staging missing.')
+                if sha256(staged.read_bytes()).hexdigest()!=row['sha256']:
+                    raise ValueError('Rotation digest mismatch.')
+                if not target.is_file() or sha256(target.read_bytes()).hexdigest()!=previous:
+                    raise ValueError('Existing image differs from rotation input.')
+                os.replace(staged,target)
+        else:
+            if not target.exists():
+                if not staged.is_file():
+                    raise FileNotFoundError('Attachment stage missing; manual recovery required.')
+                if sha256(staged.read_bytes()).hexdigest() != row['sha256']:
+                    raise ValueError('Staged attachment digest mismatch.')
+                try:
+                    os.link(staged, target)
+                except FileExistsError:
+                    pass
         if sha256(target.read_bytes()).hexdigest() != row['sha256']:
             raise ValueError('Published attachment digest mismatch.')
         finish(banco, operation, claimed['claim_token'], state='done',
@@ -448,6 +555,83 @@ def publish_file(banco, operation, *, now=None, lease_seconds=LEASE_SECONDS):
         except RuntimeError:
             pass
         raise
+
+
+def quarantine_file(root, source, operation, *, source_id, source_sha256):
+    # Quarantine makes removal recoverable across a rollback.
+    root=Path(root).resolve()
+    source=Path(source).resolve()
+    if source.parent!=root or not source.is_file():
+        raise ValueError('Source must be a managed attachment.')
+    if sha256(source.read_bytes()).hexdigest()!=source_sha256:
+        raise ValueError('Source digest changed.')
+    trash=root/'.outbox-trash'
+    trash.mkdir(parents=True,exist_ok=True)
+    dest=trash/operation
+    metadata=trash/(operation+'.json')
+    if dest.exists() or metadata.exists():
+        raise FileExistsError('Quarantine operation already exists.')
+    metadata.write_text(json.dumps({'source_id':int(source_id),
+                                    'basename':source.name,'sha256':source_sha256}),encoding='utf-8')
+    try:
+        os.replace(source,dest)
+    except Exception:
+        metadata.unlink(missing_ok=True)
+        raise
+    return dest
+
+
+def restore_quarantine(root, operation):
+    root=Path(root).resolve()
+    trash=root/'.outbox-trash'
+    meta=trash/(operation+'.json')
+    if not meta.is_file(): return False
+    data=json.loads(meta.read_text(encoding='utf-8'))
+    source=root/Path(data['basename']).name
+    target=trash/operation
+    if target.exists():
+        if source.exists() or sha256(target.read_bytes()).hexdigest()!=data['sha256']:
+            raise ValueError('Quarantine cannot be restored safely.')
+        os.replace(target,source)
+    meta.unlink(missing_ok=True)
+    return True
+
+
+def cleanup_orphan_trash(banco, root, *, minimum_age=3600, now=None):
+    # Restore uncommitted files; delete committed quarantines only.
+    now=time.time() if now is None else float(now)
+    root=Path(root).resolve()
+    trash=root/'.outbox-trash'
+    if not trash.is_dir(): return 0
+    with ext.db(banco) as c:
+        require_installed(c)
+        count=0
+        for meta in trash.glob('*.json'):
+            if meta.stat().st_mtime > now-minimum_age: continue
+            key=meta.stem
+            row=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
+                          (key,)).fetchone()
+            if row:
+                if row['state']=='done':
+                    (trash/key).unlink(missing_ok=True)
+                    meta.unlink(missing_ok=True)
+                    count+=1
+                continue
+            data=json.loads(meta.read_text(encoding='utf-8'))
+            table='os_notas_fiscais' if root==Path(ext.NOTAS).resolve() else 'os_anexos'
+            source=c.execute(f'SELECT caminho,sha256 FROM {table} WHERE id=?',
+                             (int(data['source_id']),)).fetchone()
+            expected=root/Path(data['basename']).name
+            if source and (Path(source['caminho']).resolve()!=expected or
+                           source['sha256']!=data['sha256']):
+                raise ValueError('Quarantine source row changed; manual reconciliation required.')
+            if source:
+                if restore_quarantine(root,key): count+=1
+            else:
+                (trash/key).unlink(missing_ok=True)
+                meta.unlink(missing_ok=True)
+                count+=1
+        return count
 
 
 def cleanup_orphan_stages(banco, root, *, minimum_age=3600, now=None):
@@ -464,8 +648,9 @@ def cleanup_orphan_stages(banco, root, *, minimum_age=3600, now=None):
                     or not re.fullmatch('[0-9a-f]{64}', stage.name)
                     or stage.stat().st_mtime > now - minimum_age):
                 continue
-            if c.execute('SELECT 1 FROM os_effect_outbox WHERE operation_key=?',
-                         (stage.name,)).fetchone():
+            record=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
+                             (stage.name,)).fetchone()
+            if record and record['state']!='done':
                 continue
             stage.unlink(missing_ok=True)
             count += 1
