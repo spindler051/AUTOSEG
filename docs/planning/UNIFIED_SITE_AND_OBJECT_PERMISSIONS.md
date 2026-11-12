@@ -170,7 +170,10 @@ dois portos; cada servidor ignora o cookie que não conhece.
 | Prestador web | `prestadores.email` | `senha_hash` | `autosseg_session`, memória | `v9_admin_prestadores`, global |
 | Prestador desktop | `prestadores.id` | token `autoseg_desk_` | `desktop_sessoes`, banco | `v9_admin_prestadores`, global |
 | API financeira | `prestadores.id` | token `autoseg_fin_` | `api_tokens`, banco | escopo `financeiro:read` |
-| MAF (dormente) | `meu_auto_financeiro.usuarios` | senha própria | `maf_session`, memória | admin da família |
+
+O Meu Auto Financeiro é um produto separado, com banco, login e sessão
+próprios; não participa da identidade nem da sessão do AUTOSEG. O único ponto
+de contato é o bridge de empréstimos no financeiro do prestador.
 
 Não existe tabela `accounts`, `account_links`, `memberships` ou equivalente.
 Uma pessoa que é cliente e prestador precisa de duas contas e dois logins.
