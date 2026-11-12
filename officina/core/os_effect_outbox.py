@@ -282,6 +282,27 @@ def _validate_pdf(path):
     return digest.hexdigest()
 
 
+def _discard_new_pdf_target(banco, operation, claim_token, target, *, os_id, version):
+    '''Discard a rolled-back link only while this worker still owns its lease.
+
+    A competing worker must acquire the same SQLite write lock before taking
+    over the claim or committing a document. File cleanup is serialized with
+    that ownership check and never removes a recorded publication.
+    '''
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        owner = c.execute('''SELECT state,claim_token FROM os_effect_outbox
+            WHERE operation_key=?''', (operation,)).fetchone()
+        if not owner or owner['state'] != 'processing' or owner['claim_token'] != claim_token:
+            return False
+        recorded = c.execute('''SELECT 1 FROM os_documentos WHERE os_id=?
+            AND tipo='relatorio_pdf' AND versao=?''', (os_id, version)).fetchone()
+        if recorded:
+            return False
+        Path(target).unlink(missing_ok=True)
+        return True
+
+
 def publish_pdf(banco, operation, *, generate=None, after_publish=None,
                 now=None, lease_seconds=LEASE_SECONDS):
     '''Publish a reserved version with one locked status/document/outbox commit.
@@ -400,14 +421,8 @@ def publish_pdf(banco, operation, *, generate=None, after_publish=None,
         return get(banco,operation)
     except Exception as exc:
         if linked and not committed and target is not None:
-            # A rollback leaves no document row. Never delete an existing
-            # independently published version after losing a lease.
-            with ext.db(banco) as c:
-                recorded=c.execute('''SELECT 1 FROM os_documentos WHERE os_id=?
-                    AND tipo='relatorio_pdf' AND versao=?''',
-                    (claimed['os_id'],claimed['version_reserved'])).fetchone()
-            if not recorded:
-                target.unlink(missing_ok=True)
+            _discard_new_pdf_target(banco, operation, claimed['claim_token'], target,
+                                    os_id=claimed['os_id'], version=claimed['version_reserved'])
         try:
             finish(banco,operation,claimed['claim_token'],state='failed',
                    error=type(exc).__name__)

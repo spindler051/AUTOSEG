@@ -1,3 +1,15 @@
+## P0-AUTH-CLOSE-GATE-HARDENING — DEV, 2026-11-12
+
+- PDF cleanup after a failed publication now holds `BEGIN IMMEDIATE`, verifies
+  the original processing claim token and checks document registration before
+  deleting a newly linked target; a replacement worker's file is preserved.
+- Manual OS e-mail resend is outbox-only. Without the DEV outbox, the request
+  fails closed and does not send. The extra-address control is removed from
+  the resend form; only registered contact references are accepted.
+- Email dispatch without `recipient_refs` fails before provider entry; DEV
+  rollback refuses unresolved reference projections instead of rewriting them.
+- No schema, production flag, MAIN, GTK or production port changes.
+
 ## P0-AUTH-CLOSE-GATE-FIXES — DEV, 2026-11-12
 
 - Corrected evidence visibility for concluded OS, with the existing locked

@@ -107,6 +107,45 @@ class OutboxTests(unittest.TestCase):
         self.assertEqual(sum(bool(x) for x in claims), 1)
         self.assertEqual(outbox.get(self.db, row['operation_key'])['attempts'], 1)
 
+    def test_pdf_cleanup_does_not_remove_target_owned_by_another_worker(self):
+        item=self._enqueue()
+        first=outbox.claim(self.db,item['operation_key'])
+        target=self.root/'publicados'/'OS-7_relatorio_v1.pdf'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(PDF)
+        with ext.db(self.db) as c:
+            c.execute('BEGIN IMMEDIATE')
+            c.execute("UPDATE os_effect_outbox SET claim_token='another-worker',state='processing' "
+                      'WHERE operation_key=?',(item['operation_key'],))
+        self.assertFalse(outbox._discard_new_pdf_target(self.db,item['operation_key'],
+                          first['claim_token'],target,os_id=7,version=1))
+        self.assertEqual(target.read_bytes(),PDF)
+
+    def test_pdf_cleanup_removes_own_target_after_metadata_failure(self):
+        item=self._enqueue()
+        claimed=outbox.claim(self.db,item['operation_key'])
+        target=self.root/'publicados'/'OS-7_relatorio_v1.pdf'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(PDF)
+        self.assertTrue(outbox._discard_new_pdf_target(self.db,item['operation_key'],
+                        claimed['claim_token'],target,os_id=7,version=1))
+        self.assertFalse(target.exists())
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM os_documentos').fetchone()[0],0)
+
+    def test_pdf_cleanup_never_removes_recorded_document(self):
+        item=self._enqueue()
+        claimed=outbox.claim(self.db,item['operation_key'])
+        target=self.root/'publicados'/'OS-7_relatorio_v1.pdf'
+        target.parent.mkdir(parents=True)
+        target.write_bytes(PDF)
+        with ext.db(self.db) as c:
+            c.execute('INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) '
+                      "VALUES(7,'relatorio_pdf',1,?,?, '')",(str(target),hashlib.sha256(PDF).hexdigest()))
+        self.assertFalse(outbox._discard_new_pdf_target(self.db,item['operation_key'],
+                         claimed['claim_token'],target,os_id=7,version=1))
+        self.assertEqual(target.read_bytes(),PDF)
+
     def test_pdf_recovers_after_crash_without_duplicate_version(self):
         row = self._enqueue()
         source = Path(self.tmp.name) / 'source.pdf'

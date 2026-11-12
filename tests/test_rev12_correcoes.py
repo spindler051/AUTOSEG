@@ -1358,6 +1358,9 @@ class CorrecoesRev12(unittest.TestCase):
         conclusao.update(acao_status='Concluída', v9_execucao='exec',
                          relatorio_tecnico='Relatório técnico final.')
         neg.os_salvar(self.db, conclusao, pid, oid)
+        from officina.core import os_effect_outbox as effects
+        fluxo.publicar_relatorio(self.db, oid)
+        effects.install(self.db)
         servidor, base = self._servidor()
         cliente = self._login(base)
         token = self._csrf(base, cliente, oid)
@@ -1376,7 +1379,10 @@ class CorrecoesRev12(unittest.TestCase):
         original = gmail_service.enviar_email_gmail
         gmail_service.enviar_email_gmail = fake
         try:
-            status, html = req(cliente, base, f'/os/{oid}/reenviar-email', {'csrf': token})
+            status, html = req(cliente, base, f'/os/{oid}/reenviar-email', {
+                'csrf': token, 'confirmar_duplicata': '1',
+                'reenviar_operacao': 'retry-nf-unique-request-12345',
+                'destinatario_sel[]': ['cliente']})
             self.assertEqual(status, 200)
             for _ in range(50):
                 with ext.db(self.db) as c:

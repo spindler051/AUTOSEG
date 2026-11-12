@@ -63,15 +63,9 @@ def main(argv=None):
                         raise ValueError('Cannot roll back: invalid recipient projection.') from None
                     if not isinstance(addresses,list):
                         raise ValueError('Cannot roll back: invalid recipient projection.')
-                    if addresses and all(isinstance(value,str) and value in references for value in addresses):
-                        # Restore the original legacy contract before deleting the
-                        # per-operation reference map. Missing contacts fail closed.
-                        resolved=prod.destinatarios_para_os(source,item['os_id'],addresses)
-                        c.execute('UPDATE produtividade_email SET destinatarios_json=? WHERE os_id=?',
-                                  (json.dumps(resolved),item['os_id']))
-                    elif any(not isinstance(value,str) or not prod._email_validado(value)
-                             for value in addresses):
-                        raise ValueError('Cannot roll back: unresolved recipient reference.')
+                    if any(not isinstance(value,str) or value in references
+                           or not prod._email_validado(value) for value in addresses):
+                        raise ValueError('Cannot roll back: recipient references require operational reconciliation.')
             for index in ('idx_os_effect_state','idx_os_effect_os',
                           'idx_os_effect_pdf_version'):
                 c.execute('DROP INDEX IF EXISTS '+index)

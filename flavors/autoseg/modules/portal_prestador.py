@@ -2868,9 +2868,6 @@ class PortalPrestador:
                                '<h3>Reenviar e-mail</h3>'
                                f'<input type="hidden" name="reenviar_operacao" value="{secrets.token_urlsafe(24)}">'
                                +opcoes_reenvio+
-                               '<label>Outro e-mail (opcional)<input name="emails_adicionais" '
-                               'type="text" maxlength="500" value="" '
-                               'placeholder="financeiro@exemplo.com.br"></label>'
                                '<label style="display:block;margin:8px 0">'
                                '<input type="checkbox" name="confirmar_duplicata" value="1" required> '
                                'O e-mail anterior pode já ter sido entregue; reenviar pode duplicar'
@@ -2890,8 +2887,10 @@ class PortalPrestador:
                                 docs+=('<p class="muted">Resultado incerto: confira no provedor. '
                                        'Não há reenvio automático; uma nova tentativa pode duplicar.</p>')
                         if outbox_ready:
-                            docs+=('<p class="muted">No modo recuperável, apenas contatos '
-                                   'cadastrados podem ser selecionados; e-mails adicionais não são aceitos.</p>')
+                            docs+=('<p class="muted">No modo recuperável, use apenas contatos '
+                                   'cadastrados; e-mails avulsos precisam ser cadastrados no cliente.</p>')
+                        else:
+                            docs+=('<p class="muted">Reenvio indisponível: outbox DEV não instalada.</p>')
                 elif d['status'] in fluxo.FIM:
                     docs='<p class="muted">O PDF ainda não foi publicado. Use “Gerar e publicar PDF” acima.</p>'
                 else:

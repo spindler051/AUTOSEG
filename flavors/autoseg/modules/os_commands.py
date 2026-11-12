@@ -1215,84 +1215,54 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
     oid = os_id
     acao = partes[2]
     with ext.db(banco) as c:
-        if outbox.installed(c):
-            request=str(d.get('reenviar_operacao','')).strip()
-            ack=str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
-            if not ack or not re.fullmatch(r'[A-Za-z0-9_-]{12,80}',request):
-                raise ValueError('Reenvio pode duplicar uma entrega. Confirme e informe a operação.')
-            if str(d.get('emails_adicionais','')).strip():
-                raise ValueError('E-mails adicionais não são aceitos no modo de envio recuperável.')
-            selected=d.get('destinatario_sel[]')
-            if isinstance(selected,str): selected=[selected]
-            if selected is None: selected=[]
-            if not isinstance(selected,list) or any(x not in ('cliente','sindico','administradora')
-                                                   for x in selected):
-                raise ValueError('Destinatários inválidos.')
-            c.execute('BEGIN IMMEDIATE')
-            _transaction_guard(banco,principal,oid,'send')(c)
-            if ext.responsavel_atual(c,oid)!=pid and not ext.administrador(c,pid):
-                raise PermissionError('Sem permissão para reenviar e-mail.')
-            recipient=c.execute('''SELECT cl.email,cl.sindico_email,cl.administradora_email
-                FROM ordens_servico o JOIN clientes cl ON o.cliente_id=cl.id WHERE o.id=?''',
-                (oid,)).fetchone()
-            sources={'cliente':'email','sindico':'sindico_email',
-                     'administradora':'administradora_email'}
-            if not recipient or any(not recipient[sources[ref]] for ref in selected):
-                raise ValueError('Atualize o contato antes de selecioná-lo para reenvio.')
-            document=c.execute('''SELECT 1 FROM os_documentos
-                         WHERE os_id=? AND tipo='relatorio_pdf' ORDER BY versao DESC LIMIT 1''',
-                         (oid,)).fetchone()
-            if not document:
-                raise ValueError('Publique o relatório antes do reenvio.')
-            existing=c.execute("""SELECT operation_key,state FROM os_effect_outbox
-                 WHERE os_id=? AND effect_type='email' AND state IN ('pending','processing')
-                 ORDER BY id DESC LIMIT 1""",(oid,)).fetchone()
-            revision=_work_revision(c,oid)+':'+request
-            key=outbox.manual_email_retry(c,oid,revision,'send-manual',
-                duplicate_acknowledged=True,recipient_refs=selected)['operation_key']
-            # An already accepted operation must not reset the result or recipients.
-            if existing and existing['operation_key']!=key:
-                raise ValueError('Já há um envio pendente para esta OS.')
-            pending=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
-                              (key,)).fetchone()
-            if pending['state']=='pending':
-                if not existing:
-                    addresses=[prod._email_validado(recipient[sources[ref]])
-                               for ref in selected]
-                    prod.registrar_envio(banco,oid,addresses,'pendente',connection=c)
-            manual=True
-        else:
-            manual=False
-    if manual:
-        from flavors.autoseg.modules import gmail_service
-        if outbox.get(banco,key)['state']=='pending':
-            outbox.deliver_email(banco,key,
-                lambda oid,op: gmail_service.enviar_operacao_outbox(banco,oid,op))
-        return ui.redir(f'{url_os(banco, oid)}')
-    with ext.db(banco) as c:
-        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
-            raise PermissionError('Somente o responsável ou administrador pode reenviar o e-mail.')
-        registro=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',(oid,)).fetchone()
-    if 'destinatario_sel[]' in d or 'emails_adicionais' in d:
-        selecionados=d.get('destinatario_sel[]')
-        if isinstance(selecionados,str): selecionados=[selecionados]
-        if selecionados is None: selecionados=[]
-        destinatarios=prod.destinatarios_para_os(
-            banco,oid,selecionados,str(d.get('emails_adicionais','')))
-    else:
-        destinatarios=None
-        if registro and registro['destinatarios_json']:
-            try:destinatarios=json.loads(registro['destinatarios_json'])
-            except Exception:destinatarios=None
-    # Republica o PDF com as imagens/legendas atuais antes de reenviar.
-    try:
-        fluxo.publicar_relatorio(banco,oid)
-    except Exception:
-        pass
+        c.execute('BEGIN IMMEDIATE')
+        outbox.require_installed(c)
+        request=str(d.get('reenviar_operacao','')).strip()
+        ack=str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
+        if not ack or not re.fullmatch(r'[A-Za-z0-9_-]{12,80}',request):
+            raise ValueError('Reenvio pode duplicar uma entrega. Confirme e informe a operação.')
+        if 'emails_adicionais' in d:
+            raise ValueError('E-mails adicionais não são aceitos no modo de envio recuperável.')
+        selected=d.get('destinatario_sel[]')
+        if isinstance(selected,str): selected=[selected]
+        if selected is None: selected=[]
+        if not isinstance(selected,list) or any(x not in ('cliente','sindico','administradora')
+                                               for x in selected):
+            raise ValueError('Destinatários inválidos.')
+        _transaction_guard(banco,principal,oid,'send')(c)
+        if ext.responsavel_atual(c,oid)!=pid and not ext.administrador(c,pid):
+            raise PermissionError('Sem permissão para reenviar e-mail.')
+        recipient=c.execute('''SELECT cl.email,cl.sindico_email,cl.administradora_email
+            FROM ordens_servico o JOIN clientes cl ON o.cliente_id=cl.id WHERE o.id=?''',
+            (oid,)).fetchone()
+        sources={'cliente':'email','sindico':'sindico_email',
+                 'administradora':'administradora_email'}
+        if not recipient or any(not recipient[sources[ref]] for ref in selected):
+            raise ValueError('Atualize o contato antes de selecioná-lo para reenvio.')
+        document=c.execute('''SELECT 1 FROM os_documentos
+                     WHERE os_id=? AND tipo='relatorio_pdf' ORDER BY versao DESC LIMIT 1''',
+                     (oid,)).fetchone()
+        if not document:
+            raise ValueError('Publique o relatório antes do reenvio.')
+        existing=c.execute('''SELECT operation_key,state FROM os_effect_outbox
+             WHERE os_id=? AND effect_type='email' AND state IN ('pending','processing')
+             ORDER BY id DESC LIMIT 1''',(oid,)).fetchone()
+        revision=_work_revision(c,oid)+':'+request
+        key=outbox.manual_email_retry(c,oid,revision,'send-manual',
+            duplicate_acknowledged=True,recipient_refs=selected)['operation_key']
+        if existing and existing['operation_key']!=key:
+            raise ValueError('Já há um envio pendente para esta OS.')
+        pending=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
+                          (key,)).fetchone()
+        if pending['state']=='pending' and not existing:
+            addresses=[prod._email_validado(recipient[sources[ref]])
+                       for ref in selected]
+            prod.registrar_envio(banco,oid,addresses,'pendente',connection=c)
     from flavors.autoseg.modules import gmail_service
-    gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
-    return ui.redir(f"{url_os(banco, os_id)}")
-
+    if outbox.get(banco,key)['state']=='pending':
+        outbox.deliver_email(banco,key,
+            lambda oid,op: gmail_service.enviar_operacao_outbox(banco,oid,op))
+    return ui.redir(f'{url_os(banco, oid)}')
 
 
 # Permission for an action depends on its *effective* mutation, never the URL

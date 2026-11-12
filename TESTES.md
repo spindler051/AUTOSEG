@@ -1,3 +1,18 @@
+## P0-AUTH-CLOSE-GATE-HARDENING — cobertura DEV (2026-11-12)
+
+- `tests.test_os_effect_outbox` checks that PDF cleanup removes only a
+  target owned by the same processing claim and never removes another worker's
+  target or a recorded document.
+- `tests.test_p0_auth_close_gate` verifies resend form without additional
+  addresses (with or without outbox), fail-closed resend without outbox,
+  rejected forged addresses, dispatcher failure without `recipient_refs`, and
+  safe rollback rejection of unresolved references.
+- REV12 retains the invoice-included email assertion, using the new outbox
+  resend contract rather than direct legacy sending.
+- All integration runs must use temporary `AUTOSEG_SERVER_DATA`,
+  `AUTOSEG_USER_DATA`, and `AUTOSEG_LOCAL_DATA`; see the delivery's
+  `TEST_RESULTS.txt` for executed commands and exact outcomes.
+
 ## P0-AUTH-CLOSE-GATE-FIXES — testes DEV (2026-11-12)
 
 Novos casos de publicação de anexos encerrados (flags 0/1 e negativas),

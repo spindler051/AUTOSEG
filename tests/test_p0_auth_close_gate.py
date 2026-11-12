@@ -241,7 +241,7 @@ class CloseGateHTTPTests(unittest.TestCase):
                 f'/os/{self.oid}/anexo/{aid}/publico',
                 {'visivel':'0','legenda':'Unauthorized'},unauthorized)
 
-    def test_rollback_keeps_legacy_email_recipients(self):
+    def test_rollback_preserves_valid_email_projection_but_disables_manual_resend(self):
         from scripts.autoseg import install_os_effect_outbox as migration
         with ext.db(self.db) as c:
             c.execute("INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
@@ -251,7 +251,7 @@ class CloseGateHTTPTests(unittest.TestCase):
         with patch.object(effects,'deliver_email',return_value=None):
             self.command('reenviar-email',payload)
         with ext.db(self.db) as c:
-            key=c.execute('SELECT operation_key,payload_json FROM os_effect_outbox '
+            key=c.execute("SELECT operation_key,payload_json FROM os_effect_outbox "
                           "WHERE action='send-manual'").fetchone()
             self.assertEqual(json.loads(key['payload_json'])['recipient_refs'],['cliente'])
             c.execute("UPDATE os_effect_outbox SET state='done' WHERE operation_key=?",
@@ -260,12 +260,86 @@ class CloseGateHTTPTests(unittest.TestCase):
         with patch.dict(os.environ,{'AUTOSEG_DEV':'1'}):
             self.assertEqual(migration.main(['--database',self.db,'--rollback',
                                              '--backup',backup]),0)
-        with patch.object(fluxo_os,'publicar_relatorio',return_value=None),patch.object(
-                gmail_service,'enviar_relatorio_os_concluida') as sender:
-            self.command('reenviar-email',{})
-            self.assertEqual(sender.call_args.args[2],['example@example.invalid'])
-            self.command('reenviar-email',{'destinatario_sel[]':['cliente']})
-            self.assertEqual(sender.call_args.args[2],['example@example.invalid'])
+        with ext.db(self.db) as c:
+            stored=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
+                             (self.oid,)).fetchone()[0]
+            self.assertEqual(json.loads(stored),['example@example.invalid'])
+            self.assertFalse(effects.installed(c))
+        with patch.object(gmail_service,'enviar_relatorio_os_concluida') as sender:
+            with self.assertRaises(effects.OutboxUnavailable):
+                self.command('reenviar-email',payload)
+            sender.assert_not_called()
+
+    def test_manual_resend_requires_outbox_and_fails_closed(self):
+        with ext.db(self.db) as c:
+            c.execute('DROP TABLE os_effect_outbox')
+        payload={'reenviar_operacao':'x'*25,'confirmar_duplicata':'1',
+                 'destinatario_sel[]':['cliente']}
+        with patch.object(gmail_service,'enviar_relatorio_os_concluida') as direct, \
+             patch.object(effects,'deliver_email') as deferred, \
+             self.assertRaises(effects.OutboxUnavailable):
+            self.command('reenviar-email',payload)
+        direct.assert_not_called()
+        deferred.assert_not_called()
+
+    def test_manual_resend_rejects_forged_additional_email(self):
+        with ext.db(self.db) as c:
+            c.execute("INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
+                      "VALUES(?,'relatorio_pdf',1,'mock','digest','')",(self.oid,))
+        payload={'reenviar_operacao':'x'*25,'confirmar_duplicata':'1',
+                 'destinatario_sel[]':['cliente'],
+                 'emails_adicionais':'unlisted@example.invalid'}
+        with patch.object(effects,'deliver_email') as delivery, self.assertRaises(ValueError):
+            self.command('reenviar-email',payload)
+        delivery.assert_not_called()
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM os_effect_outbox WHERE effect_type='email'").fetchone()[0],0)
+
+    def _resend_page(self):
+        from flavors.autoseg.modules.portal_prestador import PortalPrestador
+        from urllib.request import build_opener, HTTPCookieProcessor, Request
+        from http.cookiejar import CookieJar
+        from urllib.parse import urlencode
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Concluída' WHERE id=?",(self.oid,))
+            c.execute("INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
+                      "VALUES(?,'relatorio_pdf',1,'mock','digest','')",(self.oid,))
+        server=PortalPrestador(self.db,'127.0.0.1',0)
+        server.iniciar()
+        self.addCleanup(server.parar)
+        base=f'http://127.0.0.1:{server.servidor.server_port}'
+        browser=build_opener(HTTPCookieProcessor(CookieJar()))
+        login=urlencode({'email':'worker@example.invalid','senha':'valid-password'}).encode()
+        with browser.open(Request(base+'/login',data=login),timeout=20) as response:
+            response.read()
+        with browser.open(base+f'/os/{self.oid}',timeout=20) as response:
+            return response.read().decode('utf-8','replace')
+
+    def test_manual_resend_has_no_additional_email_field(self):
+        html=self._resend_page()
+        self.assertIn('reenviar_operacao',html)
+        self.assertNotIn('name="emails_adicionais"',html)
+        self.assertIn('e-mails avulsos precisam ser cadastrados',html)
+
+    def test_manual_resend_has_no_additional_email_field_without_outbox(self):
+        with ext.db(self.db) as c:
+            c.execute('DROP TABLE os_effect_outbox')
+        html=self._resend_page()
+        self.assertNotIn('name="emails_adicionais"',html)
+        self.assertIn('Reenvio indisponível',html)
+
+    def test_dispatcher_without_recipient_refs_fails_closed(self):
+        with ext.db(self.db) as c:
+            c.execute('BEGIN IMMEDIATE')
+            produtividade_os.registrar_envio(self.db,self.oid,['example@example.invalid'],
+                                 'pendente',connection=c)
+            item=effects.enqueue_email(c,self.oid,'no-refs','send')
+        with patch.object(gmail_service,'_enviar_relatorio_os_concluida') as sender:
+            with self.assertRaises(effects.PreDispatchError):
+                effects.deliver_email(self.db,item['operation_key'],
+                    lambda oid,op:gmail_service.enviar_operacao_outbox(self.db,oid,op))
+            sender.assert_not_called()
+        self.assertEqual(effects.get(self.db,item['operation_key'])['state'],'failed')
 
     def test_email_dispatch_uses_operation_refs_not_mutable_projection(self):
         with ext.db(self.db) as c:
@@ -282,7 +356,7 @@ class CloseGateHTTPTests(unittest.TestCase):
                 self.db,self.oid,row['operation_key']),'sent-id')
         self.assertEqual(sender.call_args.args[2],['example@example.invalid'])
 
-    def test_rollback_converts_old_reference_projection(self):
+    def test_rollback_refuses_reference_projection(self):
         from scripts.autoseg import install_os_effect_outbox as migration
         with ext.db(self.db) as c:
             c.execute('INSERT INTO produtividade_email '
@@ -290,12 +364,14 @@ class CloseGateHTTPTests(unittest.TestCase):
                 "VALUES(?,?,'enviado','','','')",
                 (self.oid,json.dumps(['cliente'])))
         with patch.dict(os.environ,{'AUTOSEG_DEV':'1'}):
-            self.assertEqual(migration.main(['--database',self.db,'--rollback',
-                '--backup',str(Path(self.tmp.name)/'old-backup.db')]),0)
+            with self.assertRaisesRegex(ValueError,'operational reconciliation'):
+                migration.main(['--database',self.db,'--rollback',
+                    '--backup',str(Path(self.tmp.name)/'old-backup.db')])
         with ext.db(self.db) as c:
+            self.assertTrue(effects.installed(c))
             row=c.execute('SELECT destinatarios_json FROM produtividade_email '
                 'WHERE os_id=?',(self.oid,)).fetchone()
-        self.assertEqual(json.loads(row[0]),['example@example.invalid'])
+        self.assertEqual(json.loads(row[0]),['cliente'])
 
     def test_quarantine_restore_with_minimum_age_zero(self):
         from scripts.autoseg import dispatch_os_effect_outbox as dispatcher
