@@ -29,6 +29,19 @@ from pathlib import Path
 from officina.core import runtime_config
 runtime_config.configure_server()
 
+
+def _validar_ambiente():
+    """Impede que DEV e MAIN abram o banco um do outro."""
+    banco = runtime_config.database_path().resolve()
+    dev_root = (runtime_config.user_data_dir() / 'server-dev').resolve()
+    if runtime_config.is_dev() and dev_root not in banco.parents:
+        raise SystemExit(f'DEV recusou banco fora de {dev_root}: {banco}')
+    if not runtime_config.is_dev() and dev_root in banco.parents:
+        raise SystemExit(f'MAIN recusou banco de DEV: {banco}')
+
+
+_validar_ambiente()
+
 from officina.core.banco import BANCO, criar_banco
 from officina.core import prestadores_ext as ext
 from officina.core import fluxo_os as fluxo

@@ -967,6 +967,10 @@ def layout(titulo,corpo,usuario=None,nonce=None,cliente=False,banco=None,
     audience = 'Cliente' if page_context and page_context.kind == 'client' else 'Prestador'
     us=f'<span class="usuario">{esc(usuario["nome"])} · {audience}</span>' if usuario else ''
     ambiente='DEV (testes)' if os.environ.get('AUTOSEG_DEV')=='1' else 'produção'
+    env_banner=('<div style="background:#9a3412;color:#fff;text-align:center;'
+                'font:700 13px/1.4 Arial;padding:8px 12px;letter-spacing:.04em">'
+                'AMBIENTE DEV — TESTES · NÃO É PRODUÇÃO</div>'
+                if os.environ.get('AUTOSEG_DEV')=='1' else '')
     footer=f'''<footer>AUTOSEG {VERSAO_PORTAL} · ambiente {ambiente} · relatórios por e-mail e NFS-e em anexo quando cadastrados.</footer>'''
     feedback_html=_dialogo_feedback(None if cliente else usuario, banco)
     logout=(f'<form method="post" action="/sair" class="logout"><input type="hidden" name="csrf" value="{esc(usuario["csrf"])}">'
@@ -997,7 +1001,7 @@ fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}l
 .composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}.composicao-preview .filho{{padding-left:14px;color:#aaa}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row,.material-row-os{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
-{CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js?v={VERSAO_PORTAL}" defer></script></head><body><header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
+{CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js?v={VERSAO_PORTAL}" defer></script></head><body>{env_banner}<header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
 
 
 class PortalPrestador:
