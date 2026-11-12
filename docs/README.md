@@ -50,6 +50,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Condomínios, compartilhamento e tenancy](planning/CONDO_SHARING_AND_TENANCY.md)
 - [Visão multicliente e local-first](planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md)
 - [Plano de modo local e sincronização](planning/PLANO_MODO_LOCAL_SYNC.md)
+- [Modos local/sync/serverless — análise externa](planning/LOCAL_SYNC_MODES_ANALYSIS.md) — quatro presets, autoridade por entidade, version vectors, Syncthing e direção Rust; análise não implementada.
 
 ## Qualidade e processo
 

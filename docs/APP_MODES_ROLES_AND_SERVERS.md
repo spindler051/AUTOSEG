@@ -70,6 +70,13 @@ banco local para escrita.
 | **Servidor** | servidor | não; precisa de rede | vários dispositivos/usuários |
 | **Híbrido** | local + servidor | sim, com sync | fase posterior |
 
+> **Seis modos de UX:** o recorte de produto separa prestador/cliente e
+> LAN/WAN em seis presets: local prestador, local cliente, local + sync (hub),
+> servidor thin client, sync LAN e sync WAN/P2P. “Híbrido” é o modo local +
+> sync com peers opcionais, não um sétimo modo. A arquitetura continua sendo
+> uma só, com `storage`/`transports`/`authority`; ver
+> [`planning/LOCAL_SYNC_MODES_ANALYSIS.md`](planning/LOCAL_SYNC_MODES_ANALYSIS.md).
+
 ### 2.1 Local cliente
 
 É o caso mais delicado:

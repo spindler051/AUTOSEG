@@ -177,8 +177,12 @@ A análise detalhada, decisões e critérios de aceite estão em
 
 - **6.6 — paridade cliente no GTK:** solicitações, documentos/PDF, “Em rota”,
   modo local (se aprovado) e paridade com o site;
+- **modos local/sync/serverless:** presets de `storage`/`transports`/`authority`,
+  autoridade por entidade, version vectors, journal append-only e transportes
+  LAN/Syncthing/relay; ver
+  [`planning/LOCAL_SYNC_MODES_ANALYSIS.md`](planning/LOCAL_SYNC_MODES_ANALYSIS.md);
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e
-  estoque;
+  estoque (somente no modo com servidor);
 - backup/restauração verificados;
 - revisão externa dos módulos de dinheiro, autenticação, permissões, schema e
   migração;
@@ -192,7 +196,12 @@ A análise detalhada, decisões e critérios de aceite estão em
 - clientes móveis/PWA;
 - Qt, WinUI, Jetpack Compose e SwiftUI **somente** se o núcleo e o contrato de
   aplicação estiverem estáveis;
-- sync LAN e P2P/WAN apenas depois de servidor central estável.
+- sync LAN e P2P/WAN apenas depois de servidor central estável;
+- **Rust:** reescrita ampla do núcleo/protocolo atrás de contrato, testes de
+  conformidade e protocolo v0; UIs continuam nativas/web. `p2panda` e outras
+  bibliotecas P2P em Rust são candidatas a avaliar, não dependências atuais;
+  ver [`planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md`](planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md)
+  §6.3.
 
 ## Fora de escopo por enquanto
 

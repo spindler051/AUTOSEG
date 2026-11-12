@@ -32,7 +32,9 @@ Decisões centrais:
    explícito).
 8. Chave privada **não fica no servidor em texto puro**. O padrão recomendado é
    dispositivo do administrador/hardware. Armazenar chave privada criptografada
-   no banco é um perfil de menor garantia, nunca o padrão silencioso.
+   no banco é um perfil de menor garantia, nunca o padrão silencioso. O modo de
+   conveniência que usa a senha de login como fator de desbloqueio é o perfil de
+   menor garantia; exige opt-in explícito, aviso na UI e política de senha.
 9. Assinaturas são **independentes + verificação de quórum**; não se presume
    threshold cryptography nativa no OpenPGP.
 10. O histórico local é **tamper-evident**, não imutável por si só. Checkpoints
@@ -79,7 +81,9 @@ criptografada. Isso é possível, mas **reduz a garantia**: um servidor
 comprometido que capture a senha de desbloqueio ou o processo de assinatura pode
 assinar em nome do admin.
 
-Se esse perfil for aceito, ele deve ser explícito e separado:
+Se esse perfil for aceito, ele deve ser explícito e separado. Este é o perfil
+recomendado quando a chave fica no banco; a seção 3.2 abre uma exceção
+consciente para quem aceitar usar a senha de login como desbloqueio:
 
 - Argon2id com salt individual e parâmetros calibrados;
 - AES-256-GCM com nonce único e AAD vinculando `admin_id`, `key_fingerprint` e
@@ -94,7 +98,75 @@ Se esse perfil for aceito, ele deve ser explícito e separado:
 Não aplicar hash irreversível à chave privada: ela precisa ser recuperável para
 assinar. Hash é para senha de autenticação, não para a chave em si.
 
-### 3.2 Revogação, rotação e recuperação
+### 3.2 Modo conveniência: senha de login como fator de desbloqueio
+
+O modo de conveniência existe para o usuário não precisar decorar uma passphrase
+longa. Ele é **opt-in, de menor garantia e nunca o padrão silencioso**.
+
+Desenho:
+
+1. A chave privada OpenPGP é protegida por uma passphrase aleatória de alta
+   entropia (ou por uma DEK aleatória). O usuário não precisa memorizá-la.
+2. Uma **KEK** é derivada da senha de login com **Argon2id**, salt individual,
+   parâmetros versionados e contexto de domínio
+   (`autoseg.signing-key.v1`). Não reutilizar o hash de login armazenado como
+   chave.
+3. A passphrase/DEK é envolvida com **AES-256-GCM** ou ChaCha20-Poly1305. O
+   envelope guarda ciphertext, nonce, salt, parâmetros, fingerprint da chave e
+   AAD vinculando conta/fingerprint/versão.
+4. No login, o cliente (GTK/nativo) deriva a KEK, desembrulha a passphrase, abre
+   a chave PGP e mantém a chave privada **somente em memória**.
+5. Ao sair, bloquear a tela, expirar a sessão ou após um timeout curto, o cache
+   é descartado. Assinaturas de alto risco podem exigir reautenticação.
+6. No desbloqueio da chave, o servidor não recebe a KEK, a passphrase ou a
+   chave privada em claro; a derivação e o desbloqueio acontecem no cliente. Se
+   o envelope for armazenado no banco, ele contém apenas material cifrado. A
+   senha de login ainda pode ser exposta na autenticação; ver o risco crítico
+   abaixo.
+
+**Consequência central:** neste modo, a senha de login passa a ser uma entrada
+para a capacidade de assinatura. Uma senha fraca, reutilizada ou vazada reduz a
+garantia da assinatura; um envelope vazado pode ser atacado offline.
+
+**Risco crítico do fluxo atual:** hoje a senha de login é enviada ao servidor
+para autenticação. Um servidor comprometido pode capturá-la e, se também tiver
+o envelope da chave, desbloquear a chave e assinar. Isso quebra a premissa de
+que o servidor não consegue assinar em nome do usuário. Portanto, o modo de
+conveniência com a senha de login só é aceitável se:
+
+- a autenticação não expuser a senha crua ao servidor (ex.: PAKE/OPAQUE ou
+  derivação/verificador separado no cliente), **ou**
+- o risco for aceito explicitamente e o envelope não estiver no servidor, **ou**
+- houver uma camada adicional (hardware/biometria/segundo fator) que o servidor
+  não consiga contornar.
+
+Caso contrário, a recomendação é Keychain/OS, hardware ou uma senha de
+desbloqueio separada que nunca sai do dispositivo.
+
+O sistema não controla a escolha da senha do usuário, mas controla as proteções
+ao redor:
+
+- exigir comprimento/entropia mínimos e bloquear senhas comuns/comprometidas;
+- Argon2id calibrado, salt por usuário e parâmetros versionados;
+- rate limit e auditoria de tentativas de desbloqueio;
+- aviso explícito na UI: “sua senha de login também protege sua chave de
+  assinatura; use uma senha longa e única”;
+- reautenticação/biometria para assinaturas de alto valor;
+- opção de migrar para Keychain/OS, hardware ou passphrase separada;
+- nunca ativar o modo de conveniência sem consentimento informado.
+
+**Responsabilidades:** o usuário escolhe e protege a senha; o sistema recomenda,
+impõe mínimos e informa o risco. Não é aceitável esconder que a senha virou
+fator de assinatura nem tratar esse modo como equivalente ao hardware.
+
+| Modo | Onde a chave privada fica | Fator de desbloqueio | Garantia |
+|---|---|---|---|
+| Manual | Dispositivo, protegida por passphrase | Passphrase digitada | Alta com passphrase forte; menor conveniência |
+| Keychain/OS | Keychain do sistema | Login/biometria do SO | Alta; depende do dispositivo |
+| Hardware | YubiKey/OpenPGP card/TPM/Secure Enclave | PIN/biometria | Mais alta; requer hardware |
+| Conveniência | Envelope cifrado no banco/dispositivo | Senha de login (KEK) | Menor; aceitável só com opt-in, Argon2id e aviso |
+
+### 3.3 Revogação, rotação e recuperação
 
 - Revogação é um evento assinado; vale a partir de `revoked_at`.
 - Assinaturas antigas continuam válidas para o passado; não contam para eventos
@@ -106,6 +178,111 @@ assinar. Hash é para senha de autenticação, não para a chave em si.
   individuais. Recuperação autoriza troca/revogação; não assina no lugar.
 - Se o quórum ficar insuficiente, o sistema entra em modo somente leitura e
   exige cerimônia de recuperação; não inventa aprovação.
+
+### 3.4 Como eliminar o risco do servidor comprometido
+
+O risco aparece quando se combinam três elos: a senha de login vai ao servidor,
+o envelope da chave privada fica no servidor e a mesma senha abre o envelope.
+A regra é **quebrar ao menos um elo**. As opções abaixo não são exclusivas; o
+desenho pode combinar mais de uma.
+
+#### 3.4.1 Chave privada fora do servidor (recomendado)
+
+- Chave no Keychain do sistema, Secure Enclave, TPM, YubiKey/OpenPGP card ou
+  outro hardware.
+- O servidor guarda somente a chave pública, as assinaturas e a política.
+- Desbloqueio por login do SO, biometria, PIN do hardware ou toque no token.
+- Mesmo que o servidor capture a senha de login, não há chave privada lá para
+  abrir.
+
+Vantagens: melhor combinação de conveniência e garantia; não exige decorar
+passphrase longa. Limites: perda/roubo do dispositivo exige revogação e
+recuperação; hardware tem custo; no navegador é preciso um helper nativo ou
+token, não a chave crua em JavaScript.
+
+#### 3.4.2 Segredo de desbloqueio separado
+
+- A chave é cifrada com uma passphrase/PIN que **nunca** é enviada ao servidor.
+- O envelope pode ficar no servidor; a senha de login, capturada, não abre a
+  chave.
+- O segredo pode ser guardado no Keychain para não ser digitado sempre, ou
+  solicitado por sessão/assinatura.
+- PIN curto exige Argon2id, rate limit e bloqueio; hardware/biometria é melhor
+  que PIN curto.
+
+Vantagem: simples e eficaz contra captura da senha de login. Limite: volta a
+exigir um segredo que o usuário precisa lembrar ou guardar; se guardado no
+Keychain, equivale parcialmente à opção 3.4.1.
+
+#### 3.4.3 PAKE/OPAQUE
+
+- O servidor armazena um verificador/registro PAKE, não a senha.
+- O cliente e o servidor executam um protocolo em que o servidor não aprende a
+  senha; a KEK é derivada no cliente.
+- Um servidor comprometido não consegue derivar a KEK sozinho a partir do
+  registro.
+
+Vantagem: permite manter o envelope no servidor e usar a senha de login como
+fator de desbloqueio sem entregar a senha. Limites: complexidade de protocolo,
+necessidade de biblioteca revisada, cliente nativo confiável, proteção contra
+phishing/online guessing e atualização assinada do cliente. Não é um projeto
+para criptografia caseira.
+
+#### 3.4.4 Verificador derivado no cliente, com domínios separados
+
+- O cliente deriva dois valores da senha: um verificador de login e uma KEK de
+  assinatura, com salts/contextos diferentes.
+- O servidor vê apenas o verificador; não consegue derivar a KEK.
+- Se o verificador vazar, há risco de pass-the-hash/replay; use TLS, channel
+  binding e, de preferência, PAKE.
+
+Vantagem: mais simples que PAKE. Limite: não é equivalente a PAKE; no navegador,
+XSS/código malicioso pode capturar a senha antes da derivação. É aceitável como
+transição, não como garantia máxima.
+
+#### 3.4.5 Multiassinatura como defesa em profundidade
+
+- 2-de-3 (ou 3-de-5) assinaturas independentes, de chaves distintas.
+- Comprometer uma senha/chave não valida uma OS sozinho.
+- Para valores altos, hardware para os admins e assinatura do prestador
+  afetado.
+
+Não substitui a proteção da chave; reduz o impacto de um comprometimento
+individual. O atacante precisa comprometer o quórum, não uma pessoa.
+
+#### 3.4.6 HSM ou serviço de assinatura dedicado
+
+- A chave privada fica num HSM/KMS/serviço de assinatura com política e
+  auditoria; o servidor da aplicação não tem a chave.
+- O serviço exige autorização forte (hardware/PIN/política) e registra cada uso.
+- Protege contra vazamento do banco/servidor da aplicação, mas o próprio serviço
+  de assinatura vira um alvo; compromise/política bypass continuam possíveis.
+
+É uma opção empresarial; não elimina a necessidade de quórum, auditoria e
+recuperação.
+
+| Solução | Servidor vê a senha? | Chave privada no servidor? | Conveniência | Garantia |
+|---|---|---|---|---|
+| Keychain/OS | Pode ver a senha de login | Não | Alta (biometria/login) | Alta; depende do dispositivo |
+| Hardware | Pode ver a senha de login | Não | Alta (toque/PIN) | Mais alta; requer token |
+| Segredo separado | Não (não é enviado) | Envelope cifrado, sim | Média | Alta se o segredo for forte |
+| PAKE/OPAQUE | Não aprende a senha | Envelope cifrado, sim | Alta | Alta, com protocolo correto |
+| Verificador no cliente | Vê só o verificador | Envelope cifrado, sim | Alta | Média; risco de replay/XSS |
+| HSM/serviço | Pode ver a senha de login | Não (no HSM) | Média/Alta | Alta, com política/auditoria |
+| Conveniência atual | Sim, na autenticação | Envelope cifrado, sim | Alta | Menor; só com opt-in e risco aceito |
+
+**Recomendação para o AUTOSEG:**
+
+1. Padrão: chave no Keychain/OS ou hardware; assinatura com biometria/PIN/toque;
+   nenhuma chave privada no servidor.
+2. Se houver backup/multidispositivo com envelope no servidor: usar segredo de
+   desbloqueio separado ou PAKE/OPAQUE; nunca a senha de login no fluxo atual.
+3. Manter 2-de-3 assinaturas independentes e hardware para alto valor.
+4. No web, usar helper nativo/hardware; não colocar a chave privada no
+   JavaScript.
+5. Tratar comprometimento do servidor como realista: presença do usuário
+   (hardware/biometria), atualizações assinadas, auditoria e revogação são
+   barreiras; nenhuma promessa de “o servidor nunca consegue” deve ser absoluta.
 
 ## 4. M-de-N: assinaturas independentes + política
 

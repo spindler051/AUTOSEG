@@ -123,6 +123,7 @@ not authorize production behavior.
 | Who can change permissions and roles | Self-approval and last-admin lockout are high-impact. | Security review and a recovery drill. | Provider admin; platform admin audits; last admin protected. | Before phase 5. |
 | Audit retention and export | Legal/support decision. | LGPD review and storage cost. | Keep sensitive decisions; define retention before production. | Before production. |
 | Per-provider branding, CNPJ and fiscal identity | Needed for Officina Web, not for the first AUTOSEG-only release. | A second provider or a real white-label need. | AUTOSEG branding as default; model the fields. | Before multi-provider. |
+| Signing-key unlock: login-password convenience vs OS keychain/hardware vs manual passphrase | The convenient mode makes the login password an input to signing; weak/reused passwords and shared devices reduce the assurance. The right balance depends on real signing frequency, device policy and tolerance for friction. | A pilot with real OS signing, support data, a security review, and observed password/device behavior. | Convenience mode is opt-in only, never silent; recommend OS keychain/hardware; warn that the password protects signing. If a server-side envelope is required, use a separate unlock secret or PAKE/OPAQUE. | Before production signing or any legally relevant OS signature. |
 
 Technical choices that follow from these decisions (shared database versus
 database per provider, table names, token format) do not need the product owner
