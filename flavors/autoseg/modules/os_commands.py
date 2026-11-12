@@ -1002,22 +1002,28 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
         if acao_status in ('Pendente','Concluída') and use_outbox:
             if str(d.get('emails_adicionais','')).strip():
                 raise ValueError('E-mails adicionais exigem cadastro de contato no modo recuperável.')
+            explicit = str(d.get('destinatarios_presente','')) == '1'
             references=d.get('destinatario_sel[]')
             if references is None:
-                person=c.execute('SELECT tipo_pessoa FROM clientes WHERE id=?',
-                                 (d['cliente_id'],)).fetchone()
-                references=['cliente'] if person and person['tipo_pessoa']=='Física' else ['sindico','cliente']
+                if explicit:
+                    references=[]
+                else:
+                    person=c.execute('SELECT tipo_pessoa FROM clientes WHERE id=?',
+                                     (d['cliente_id'],)).fetchone()
+                    references=['cliente'] if person and person['tipo_pessoa']=='Física' else ['sindico','cliente']
             if isinstance(references,str): references=[references]
             if not isinstance(references,list) or any(x not in
                 ('cliente','sindico','administradora') for x in references):
                 raise ValueError('Seleção de destinatários inválida.')
+            if explicit and not references and not sem_destinatario:
+                raise ValueError('Selecione ao menos um destinatário ou marque "Não precisa de destinatário".')
             contact=c.execute('''SELECT email,sindico_email,administradora_email
                 FROM clientes WHERE id=?''',(d['cliente_id'],)).fetchone()
             fields={'cliente':'email','sindico':'sindico_email',
                     'administradora':'administradora_email'}
             if not contact:
                 raise ValueError('Cliente indisponível para seleção de destinatários.')
-            if d.get('destinatario_sel[]') is None:
+            if d.get('destinatario_sel[]') is None and not explicit:
                 references=[ref for ref in references if contact[fields[ref]]]
             elif any(not contact[fields[ref]] for ref in references):
                 raise ValueError('Destinatário selecionado não tem contato válido.')
@@ -1488,7 +1494,8 @@ def read_anexo(banco,principal,aid,*,ui,session):
         ObjectPolicy().require(principal,'download',document)
     with ext.db(banco) as c:
         x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-        if x and not prod.participou(c,x['os_id'],s['pid']):
+        if x and not (prod.participou(c,x['os_id'],s['pid'])
+                      or ext.administrador(c,s['pid'])):
             raise PermissionError('Anexo restrito aos técnicos participantes.')
     if not x:return self.erro('Anexo não encontrado.',404,s)
     policy_shadow.evaluate_os(
@@ -1523,7 +1530,8 @@ def read_anexo_thumb(banco,principal,aid,*,ui,session):
         ObjectPolicy().require(principal,'download',document)
     with ext.db(banco) as c:
         x=c.execute('SELECT os_id,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-        if x and not prod.participou(c,x['os_id'],s['pid']):
+        if x and not (prod.participou(c,x['os_id'],s['pid'])
+                      or ext.administrador(c,s['pid'])):
             raise PermissionError('Anexo restrito aos técnicos participantes.')
     if not x:return self.erro('Anexo não encontrado.',404,s)
     policy_shadow.evaluate_os(

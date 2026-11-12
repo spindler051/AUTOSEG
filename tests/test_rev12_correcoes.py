@@ -580,8 +580,9 @@ class CorrecoesRev12(unittest.TestCase):
         cliente = self._login(base, 'semvisita@exemplo.com.br')
         status, html = req(cliente, base, f'/os/{oid}')
         self.assertEqual(status, 200)
-        self.assertIn('name="cobrar_visita"', html)
-        self.assertIn('value="0" selected>Não cobrar', html)
+        self.assertIn('name="cobrar_visita" value="0"', html)
+        self.assertIn('Cobrar taxa mínima de visita', html)
+        self.assertNotIn('name="cobrar_visita" value="1" checked', html)
         self.assertRegex(html, r'name="valor_mao_obra" value="72(?:[.,]0+)?"')
 
     def test_servico_1500_distribui_o_total_sem_somar_taxas(self):

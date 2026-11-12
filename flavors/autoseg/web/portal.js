@@ -572,7 +572,8 @@
   // Financeiro: abas e confirmação de recebimento sem recarregar.
   const finTabs = Array.from(document.querySelectorAll('[data-fin-tab]'));
   const finPanels = Array.from(document.querySelectorAll('[data-fin-panel]'));
-  const ativarFin = nome => {
+  const FIN_TAB_KEY = 'autoseg:fin-tab';
+  const ativarFin = (nome, persistir = true) => {
     finTabs.forEach(botao => {
       const ativo = botao.dataset.finTab === nome;
       botao.classList.toggle('active', ativo);
@@ -581,6 +582,9 @@
     finPanels.forEach(painel => {
       painel.hidden = painel.dataset.finPanel !== nome;
     });
+    if (persistir) {
+      try { sessionStorage.setItem(FIN_TAB_KEY, nome); } catch (_erro) {}
+    }
   };
   finTabs.forEach(botao => botao.addEventListener('click', () =>
     ativarFin(botao.dataset.finTab)));
@@ -598,7 +602,14 @@
       }
     });
   });
-  if (finTabs.length) ativarFin(finTabs[0].dataset.finTab);
+  if (finTabs.length) {
+    let finInicial = finTabs[0].dataset.finTab;
+    try {
+      const salva = sessionStorage.getItem(FIN_TAB_KEY);
+      if (salva && finTabs.some(botao => botao.dataset.finTab === salva)) finInicial = salva;
+    } catch (_erro) {}
+    ativarFin(finInicial, false);
+  }
   const brlNumero = texto => {
     const limpo = String(texto || '').replace(/[^\d,.-]/g,'')
       .replace(/\./g,'').replace(',','.');
@@ -680,6 +691,43 @@
       }
     });
   });
+
+  // Máscara visual do financeiro: não altera valores nem totais no servidor.
+  const maskFinanceiro = document.getElementById('fin-mask-toggle');
+  const shellFinanceiro = document.getElementById('finance-shell');
+  if (maskFinanceiro && shellFinanceiro) {
+    const chaveMascara = 'autoseg:fin-mask';
+    const aplicarMascara = ativa => {
+      shellFinanceiro.classList.toggle('fin-masked', ativa);
+      maskFinanceiro.textContent = ativa ? 'Mostrar valores' : 'Ocultar valores';
+      maskFinanceiro.setAttribute('aria-pressed', ativa ? 'true' : 'false');
+    };
+    let mascaraAtiva = false;
+    try { mascaraAtiva = localStorage.getItem(chaveMascara) === '1'; } catch (_erro) {}
+    aplicarMascara(mascaraAtiva);
+    maskFinanceiro.addEventListener('click', () => {
+      mascaraAtiva = !mascaraAtiva;
+      try { localStorage.setItem(chaveMascara, mascaraAtiva ? '1' : '0'); } catch (_erro) {}
+      aplicarMascara(mascaraAtiva);
+    });
+  }
+
+  // Resumo dos destinatários antes de concluir a OS.
+  const resumoDestinatarios = document.getElementById('destinatarios-resumo');
+  if (resumoDestinatarios) {
+    const atualizarDestinatarios = () => {
+      const nomes = Array.from(document.querySelectorAll(
+        'input[name="destinatario_sel[]"]:checked'))
+        .map(input => (input.closest('label')?.textContent || '').split(':')[0].trim())
+        .filter(Boolean);
+      resumoDestinatarios.textContent = nomes.length
+        ? 'Selecionados: ' + nomes.join(', ')
+        : 'Nenhum destinatário selecionado.';
+    };
+    document.querySelectorAll('input[name="destinatario_sel[]"]').forEach(input =>
+      input.addEventListener('change', atualizarDestinatarios));
+    atualizarDestinatarios();
+  }
 
   // Máscaras visuais de documentos, sem alterar a validação do servidor.
   function mascaraDocumento(valor) {

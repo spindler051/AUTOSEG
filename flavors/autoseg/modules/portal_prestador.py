@@ -162,7 +162,7 @@ html[data-acento="vermelho"] body.ui-app{--u-accent:#df8a8a;--u-accent-soft:rgba
 html[data-acento="roxo"] body.ui-app{--u-accent:#b39bdf;--u-accent-soft:rgba(179,155,223,.14);--u-accent-ink:#160f22}
 html[data-acento="ciano"] body.ui-app{--u-accent:#6ec7c7;--u-accent-soft:rgba(110,199,199,.14);--u-accent-ink:#081a1a}
 html[data-acento="laranja"] body.ui-app{--u-accent:#e2a06a;--u-accent-soft:rgba(226,160,106,.14);--u-accent-ink:#1d1107}
-html[data-tema="claro"] body.ui-app{--u-bg:#f3f3f1;--u-side:#eaeae7;--u-card:#fff;--u-card-2:#f4f4f2;--u-raised:#e6e6e2;--u-line:rgba(24,24,24,.10);--u-line-2:rgba(24,24,24,.20);--u-text:#202020;--u-text-2:#454545;--u-muted:#6f6f6f;--u-input:#fff;--u-hover:#d9d9d4;--u-primary-text:#fff;--u-primary-hover:#74746f;--u-good:#1f6d4a;--u-bad:#9c3636;--u-warn:#7a5312}
+html[data-tema="claro"] body.ui-app{--u-bg:#f3f3f1;--u-side:#eaeae7;--u-card:#fff;--u-card-2:#f4f4f2;--u-raised:#e6e6e2;--u-line:rgba(24,24,24,.10);--u-line-2:rgba(24,24,24,.20);--u-text:#151515;--u-text-2:#1f1f1f;--u-muted:#333333;--u-input:#fff;--u-hover:#d9d9d4;--u-primary-text:#fff;--u-primary-hover:#74746f;--u-good:#1f6d4a;--u-bad:#9c3636;--u-warn:#7a5312}
 html[data-tema="claro"] body.ui-app button,html[data-tema="claro"] body.ui-app .btn{background:#8a8a86;border-color:#8a8a86;color:#fff}
 html[data-tema="claro"] body.ui-app button:hover,html[data-tema="claro"] body.ui-app .btn:hover{background:#74746f;border-color:#74746f}
 html[data-tema="claro"] body.ui-app button.secondary,html[data-tema="claro"] body.ui-app .btn.secondary{background:var(--u-raised);border-color:var(--u-line-2);color:var(--u-text)}
@@ -489,6 +489,10 @@ body.ui-app .finance-item-type{color:var(--u-muted);font:400 12px/1.4 var(--u-mo
 body.ui-app .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13px;overflow-wrap:anywhere}
 body.ui-app .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
 body.ui-app .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
+.finance-tools{display:flex;justify-content:flex-end;margin:0 0 10px}
+.finance-shell.fin-masked .kpi strong,.finance-shell.fin-masked .finance-item-values strong{visibility:hidden}
+.finance-shell.fin-masked .finance-item-values strong::after,.finance-shell.fin-masked .kpi strong::after{content:"R$ ••••";visibility:visible;position:absolute;inset:0;display:flex;align-items:center}
+.finance-shell.fin-masked .finance-item-values strong,.finance-shell.fin-masked .kpi strong{position:relative}
 body.ui-app .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
 body.ui-app .finance-item-foot .tag{display:inline-flex;align-items:center;margin:0;padding:4px 10px;border:1px solid transparent;border-radius:999px;font:600 11px/1.2 var(--u-font)}
 body.ui-app .finance-item-foot .tag::before{display:none}
@@ -2516,15 +2520,15 @@ class PortalPrestador:
                     if isinstance(selecionados_d, str):
                         selecionados_d = [selecionados_d]
                     selecionados_d = [str(x) for x in selecionados_d if str(x).strip()]
-                    if not selecionados_d:
-                        selecionados_d = ['cliente', 'sindico']
                     corpo+='<fieldset><legend>Destinatários do relatório</legend>'
                     corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
+                    corpo+='<input type="hidden" name="destinatarios_presente" value="1">'
                     for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
                         email=contatos_os.get(chave) or ''
                         if email:
                             marcado=' checked' if chave in selecionados_d else ''
                             corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
+                    corpo+='<p class="muted" id="destinatarios-resumo" aria-live="polite">Nenhum destinatário selecionado.</p>'
                     corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@exemplo.com.br"></label>'
                     marcado_sem_dest=' checked' if str(d.get('sem_destinatario','')) in ('1','on','true','sim') else ''
                     corpo+=(f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
@@ -2562,10 +2566,11 @@ class PortalPrestador:
                     marcado_comp='' if composicao_simplificada else ' checked'
                     corpo+=f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1"{marcado_comp}> Aplicar composição padrão (custos e margem)</label>'
                     corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. A taxa de visita é opcional nesta OS.</p>'
-                    corpo+=select('Taxa mínima de visita','cobrar_visita',
-                                  [('1','Cobrar'),('0','Não cobrar')],
-                                  '0' if sem_visita_atual else '1')
-                    corpo+='<p class="muted">Escolha <b>Não cobrar</b> para uma OS negociada sem taxa de visita: os custos percentuais continuam incidindo sobre o total e a mão de obra recebe o restante.</p>'
+                    corpo+=('<input type="hidden" name="cobrar_visita" value="0">'
+                            '<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
+                            f'<input type="checkbox" name="cobrar_visita" value="1"{"" if sem_visita_atual else " checked"}> '
+                            'Cobrar taxa mínima de visita</label>')
+                    corpo+='<p class="muted">Desmarque para uma OS negociada sem taxa de visita: os custos percentuais continuam incidindo sobre o total e a mão de obra recebe o restante.</p>'
                     corpo+=select('Composição dos valores','base_percentuais',opcoes_base,base_atual)
                     corpo+='<p class="muted">Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante. Visita mínima: os percentuais ficam dentro da visita e a hora recebe o restante. Em ambas, o total final não muda.</p>'
                     corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
@@ -3193,31 +3198,42 @@ class PortalPrestador:
                 tabs=('<div class="os-tabs finance-tabs" role="tablist" '
                       'aria-label="Seções do financeiro">'
                       +_tab('resumo','Resumo','home',True)
+                      +_tab('financas-pessoais','Finanças pessoais','wallet')
                       +_tab('a-receber','A receber','wallet')
                       +_tab('recebidos','Recebidos','check')
                       +_tab('repasses','Repasses','users')
                       +_tab('emprestimos','Empréstimos','receipt')
+                      +( _tab('caixa','Caixa da empresa','receipt') if caixa_card else '')
                       +'</div>')
-                resumo_painel=(caixa_card
-                    +f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span>'
+                resumo_painel=(
+                    f'<div class="kpis"><div class="kpi"><span>{rotulo_a}</span>'
                     +f'<strong id="kpi-a-receber">{dinheiro(a_receber_total)}</strong></div>'
                     +f'<div class="kpi"><span>{rotulo_r}</span>'
                     +f'<strong id="kpi-recebido">{dinheiro(recebido_total)}</strong></div></div>'
                     +'<p class="notice">A forma de pagamento PIX não comprova recebimento. '
                     'Use “Confirmar recebimento” apenas após verificar o pagamento.</p>'
                     +'<p class="muted">A lista mostra a sua parcela nas OS em que você participou, '
-                    'como finalizador ou técnico secundário. O valor bruto e os repasses aparecem no detalhe de cada item.</p>'
-                    +banco_card)
+                    'como finalizador ou técnico secundário. O valor bruto e os repasses aparecem no detalhe de cada item.</p>')
+                financas_pessoais_painel=(banco_card
+                    +'<p class="muted">Os dados bancários valem para o site e para o app GTK; '
+                    'eles aparecem apenas em cobranças com valor maior que zero.</p>')
                 a_receber_painel=_coluna('A receber / Confirmar recebimento',a_receber,
                                          'Nenhum lançamento a receber.',emprestar)
                 recebidos_painel=_coluna('Recebidos',recebidos,'Nenhum lançamento recebido.')
                 corpo=(cabecalho
+                    +'<div class="finance-tools">'
+                    +'<button type="button" class="secondary" id="fin-mask-toggle" '
+                    +'aria-pressed="false">Ocultar valores</button></div>'
+                    +'<div class="finance-shell" id="finance-shell">'
                     +tabs
                     +_painel('resumo',resumo_painel,True)
+                    +_painel('financas-pessoais',financas_pessoais_painel)
                     +_painel('a-receber',a_receber_painel)
                     +_painel('recebidos',recebidos_painel)
                     +_painel('repasses',repasses_card)
-                    +_painel('emprestimos',maf_card))
+                    +_painel('emprestimos',maf_card)
+                    +(_painel('caixa',caixa_card) if caixa_card else '')
+                    +'</div>')
                 return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):

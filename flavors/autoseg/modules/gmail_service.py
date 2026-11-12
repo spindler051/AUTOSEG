@@ -187,7 +187,9 @@ def _dados_pagamento_html(banco, os_id):
     from officina.core import prestadores_ext as ext
     with ext.db(banco) as c:
         pid = ext.responsavel_atual(c, os_id)
-    if not pid:
+        order = c.execute('SELECT valor_total FROM ordens_servico WHERE id=?',
+                          (os_id,)).fetchone()
+    if not pid or not order or float(order['valor_total'] or 0) <= 0:
         return ''
     config = ext.obter_config_prestador(banco, pid)
     itens = []

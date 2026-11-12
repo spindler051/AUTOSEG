@@ -835,7 +835,7 @@ def salvar_config_prestador(banco,pid,dados):
 
 def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     with db(banco) as c:
-        r=c.execute('SELECT o.numero_os,c.email,c.nome FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        r=c.execute('SELECT o.numero_os,c.email,c.nome,o.valor_total FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
         if prestador_id is None:
             prestador_id=responsavel_atual(c,os_id)
     if not r: raise ValueError('OS inválida.')
@@ -853,7 +853,8 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     if texto_bancario:
         pagamento.append('Dados bancários e cadastrais:\n'+texto_bancario)
     corpo=f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.'
-    if pagamento:corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
+    if pagamento and float(r['valor_total'] or 0)>0:
+        corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
     corpo+='\n\nAtenciosamente,\n'+(config.get('banco_titular') or 'AUTOSEG')
     nota=ultima_nota_fiscal(banco,os_id)
     caminho_nf=None

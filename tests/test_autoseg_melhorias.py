@@ -166,7 +166,7 @@ class AutoSegMelhorias(unittest.TestCase):
         dados['email']='teste@example.org'
         cid=neg.cliente_salvar(self.db,dados,p1)
         d={'cliente_id':str(cid),'descricao':'Serviço fictício','forma_pagamento':'PIX',
-           'valor_mao_obra':'0','valor_materiais_manual':'0','acao_status':'salvar'}
+           'valor_mao_obra':'100','valor_materiais_manual':'0','acao_status':'salvar'}
         oid=neg.os_salvar(self.db,d,p1)
         pdf=Path(self.tmp.name)/'relatorio.pdf'
         pdf.write_bytes(b'%PDF-1.4\n%%EOF')
