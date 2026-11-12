@@ -1,4 +1,4 @@
-# P0-AUTH-CLOSE-GATE-HARDENING — lease-safe cleanup e UX do reenvio
+# P0-AUTH-CLOSE-GATE-HARDENING — lease-safe cleanup e fim do reenvio legado
 
 **Status:** passe curto de hardening; a entrega `p0-auth-close-gate-fixes`
 foi aceita para DEV/homologação.
@@ -16,7 +16,8 @@ itens já corrigidos.
 - `py_compile`, `audit_comments --strict` e `git diff --check` limpos;
 - flag `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`; MAIN intocada.
 
-**Preserve tudo isso.** Este passe corrige apenas dois resíduos.
+**Preserve tudo isso.** Este passe corrige dois resíduos e **remove o caminho
+legado de reenvio**.
 
 ## 2. Hardening — cleanup do PDF não pode apagar target de outro worker
 
@@ -68,33 +69,48 @@ arquivo ausente.
   `os_documentos`, o target não é removido;
 - manter o teste de retry após crash e o de conflito de hash.
 
-## 3. UX — esconder “Outro e-mail” no modo recuperável
+## 3. Reenvio manual — sem modo legado, sem fallback
 
-`flavors/autoseg/modules/portal_prestador.py` (formulário de
-`/os/<id>/reenviar-email`, por volta das linhas 2860–2885) ainda renderiza o
-campo `emails_adicionais` mesmo quando a outbox está instalada. O handler
-rejeita esse campo no modo recuperável, mas o operador só descobre depois de
-enviar.
+Hoje `flavors/autoseg/modules/os_commands.py` tem dois caminhos em
+`_write_action_reenviar_email`: o recuperável (outbox) e um `else` legado que
+usa `destinatarios_para_os`/`emails_adicionais` e chama o envio direto. A
+outbox é obrigatória para o gate; não pode existir um segundo caminho que
+contorne o contrato.
 
 **Correção obrigatória:**
 
-- quando `outbox_ready` for verdadeiro, não renderizar o label/input
-  `emails_adicionais`;
-- mostrar uma nota curta: “No modo recuperável, use apenas contatos
-  cadastrados; e-mails avulsos precisam ser cadastrados no cliente”;
-- quando a outbox **não** estiver instalada, manter o campo e o comportamento
-  legado;
-- o handler continua rejeitando `emails_adicionais` forjado no modo
-  recuperável; não confie só na UI.
+- remover **completamente** o `else` legado e a variável `manual`/`if manual`;
+  o reenvio manual passa a ter um único caminho;
+- se `outbox.installed(c)` for falso, falhar fechado antes de enfileirar ou
+  enviar, com erro explícito de que a outbox DEV é obrigatória;
+- remover o campo `emails_adicionais` do formulário de reenvio **em todos os
+  modos**, não apenas quando a outbox estiver instalada;
+- manter a seleção apenas por referências cadastradas
+  (`cliente|sindico|administradora`), com `recipient_refs` no payload;
+- remover do `gmail_service.enviar_operacao_outbox` o fallback `refs is None`
+  que lê `produtividade_email.destinatarios_json` como endereços; operação sem
+  `recipient_refs` deve falhar com `PreDispatchError`, nunca usar projeção
+  antiga como caminho alternativo;
+- no rollback do instalador, **não converter** projeções antigas com
+  referências; se houver referência em vez de e-mail validado, o rollback deve
+  falhar fechado e exigir reconciliação operacional. Não criar compatibilidade
+  para o formato antigo;
+- o handler continua rejeitando `emails_adicionais` forjado; não confie só na
+  UI.
 
 **Testes obrigatórios:**
 
-- `test_manual_resend_hides_additional_email_in_outbox_mode`: com outbox
-  instalada, GET da OS não contém `name="emails_adicionais"`;
-- `test_manual_resend_keeps_additional_email_in_legacy_mode`: sem outbox, o
-  campo continua presente;
-- POST forjado com `emails_adicionais` no modo recuperável continua falhando
-  sem enfileirar operação.
+- `test_manual_resend_has_no_additional_email_field`: GET da OS não contém
+  `name="emails_adicionais"` em nenhum modo;
+- `test_manual_resend_requires_outbox_and_fails_closed`: sem outbox, o POST
+  falha sem enfileirar e sem chamar Gmail;
+- `test_manual_resend_rejects_forged_additional_email`: POST forjado continua
+  falhando sem operação;
+- `test_dispatcher_without_recipient_refs_fails_closed`: efeito de e-mail sem
+  `recipient_refs` não usa a projeção como endereço; termina `failed`;
+- `test_rollback_refuses_reference_projection`: projeção com `"cliente"` faz o
+  rollback falhar fechado, sem `DROP TABLE` e sem conversão silenciosa;
+- remover o teste antigo que exigia manter o campo no modo legado.
 
 ## 4. Proibido
 
@@ -103,6 +119,8 @@ enviar.
 - Ativar `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` ou migrar fora de DEV.
 - Criar tabela/coluna nova ou alterar schema.
 - Recriar shim, fallback, flag ou segundo caminho de autorização.
+- Manter `else` legado, campo `emails_adicionais`, fallback de projeção ou
+  conversão de referências antigas.
 - Reabrir ou enfraquecer os testes dos cinco itens já aceitos.
 - Commit/push.
 
@@ -146,7 +164,8 @@ ZIP com:
   ZIP;
 - `CHANGED_FILES.txt`;
 - `TEST_RESULTS.txt` com focado, regressão e suíte completa;
-- `NOTES.md` com a decisão do lease-safe cleanup e a condição de UI;
+- `NOTES.md` com a decisão do lease-safe cleanup e a remoção do caminho
+  legado;
 - `BLOCKED.md` se houver bloqueio real.
 
 Sem `.git`, banco, anexos, PDFs de produção, logs, tokens ou credenciais.
@@ -156,7 +175,10 @@ Nenhum commit/push.
 
 - [ ] Cleanup do PDF só remove target do próprio worker/lease.
 - [ ] Target de outro worker ou documento registrado nunca é removido.
-- [ ] Campo “Outro e-mail” some no modo recuperável e permanece no legado.
-- [ ] POST forjado continua rejeitado.
+- [ ] Reenvio manual tem um único caminho, dependente da outbox.
+- [ ] Sem outbox: falha fechada, sem enfileirar e sem enviar.
+- [ ] Campo “Outro e-mail” não existe em nenhum modo.
+- [ ] Dispatcher sem `recipient_refs` falha fechado, sem fallback.
+- [ ] Rollback com referência antiga falha fechado, sem conversão.
 - [ ] Testes novos + 716 existentes verdes; 1 skip.
 - [ ] Flag 0, MAIN intocada, sem schema novo.
