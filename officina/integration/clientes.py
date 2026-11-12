@@ -12,6 +12,7 @@ the legacy path can be removed.
 from __future__ import annotations
 
 from functools import lru_cache
+from contextlib import nullcontext
 from pathlib import Path
 
 import yaml
@@ -48,8 +49,9 @@ class ErroCliente(ValueError):
 class RepositorioClientes(Repository):
     """Mapeia o registro genérico para a tabela ``clientes`` existente."""
 
-    def __init__(self, banco=None):
+    def __init__(self, banco=None, connection=None):
         self.banco = str(banco or BANCO)
+        self.connection = connection
 
     def get(self, entity, id):
         self._validar(entity)
@@ -57,14 +59,14 @@ class RepositorioClientes(Repository):
             identificador = int(id)
         except (TypeError, ValueError):
             return None
-        with ext.db(self.banco) as conexao:
+        with (nullcontext(self.connection) if self.connection is not None else ext.db(self.banco)) as conexao:
             linha = conexao.execute(
                 "SELECT * FROM clientes WHERE id=?", (identificador,)).fetchone()
         return self._registro(linha) if linha else None
 
     def list(self, entity):
         self._validar(entity)
-        with ext.db(self.banco) as conexao:
+        with (nullcontext(self.connection) if self.connection is not None else ext.db(self.banco)) as conexao:
             linhas = conexao.execute(
                 "SELECT * FROM clientes ORDER BY nome").fetchall()
         return [self._registro(linha) for linha in linhas]
@@ -79,7 +81,7 @@ class RepositorioClientes(Repository):
             for campo in CAMPOS
         ]
         agora = ext.agora()
-        with ext.db(self.banco) as conexao:
+        with (nullcontext(self.connection) if self.connection is not None else ext.db(self.banco)) as conexao:
             if expected_version is None:
                 cursor = conexao.execute(
                     f"INSERT INTO clientes ({','.join(CAMPOS)}, criado_em, atualizado_em, versao) "
@@ -140,8 +142,8 @@ class RepositorioClientes(Repository):
         }
 
 
-def _servico(banco=None):
-    return RecordService(_schema(), RepositorioClientes(banco))
+def _servico(banco=None, connection=None):
+    return RecordService(_schema(), RepositorioClientes(banco,connection))
 
 
 def listar(termo="", banco=None):
@@ -284,19 +286,19 @@ def buscar_rapida(termo="", banco=None, limite=100):
     return [dict(linha) for linha in linhas]
 
 
-def buscar_por_nome_exato(nome, banco=None):
+def buscar_por_nome_exato(nome, banco=None, *, connection=None):
     """Return the first active client with exactly this display name."""
     nome = str(nome or "").strip()
     if not nome:
         return None
-    with ext.db(banco or BANCO) as conexao:
+    with (nullcontext(connection) if connection is not None else ext.db(banco or BANCO)) as conexao:
         linha = conexao.execute(
             "SELECT id,nome FROM clientes WHERE status NOT IN ('Inativo','A definir') "
             "AND lower(nome)=lower(?) ORDER BY id LIMIT 1", (nome,)).fetchone()
     return dict(linha) if linha else None
 
 
-def criar_provisorio(nome, banco=None):
+def criar_provisorio(nome, banco=None, *, connection=None):
     """Create a minimal client, explicitly marked as incomplete.
 
     Used when a provider types a new client name directly in the OS form.
@@ -305,7 +307,7 @@ def criar_provisorio(nome, banco=None):
     nome = str(nome or "").strip()[:250]
     if len(nome) < 2:
         raise ErroCliente("Cliente não criado", "Informe ao menos 2 caracteres no nome.")
-    existente = buscar_por_nome_exato(nome, banco=banco)
+    existente = buscar_por_nome_exato(nome, banco=banco, connection=connection)
     if existente:
         return int(existente["id"])
     registro = salvar(None, {
@@ -313,15 +315,15 @@ def criar_provisorio(nome, banco=None):
         "nome": nome,
         "status": "Ativo",
         "provisorio": True,
-    }, banco=banco)
+    }, banco=banco, connection=connection)
     return int(registro["id"])
 
 
-def salvar(cliente_id, dados, banco=None):
-    servico = _servico(banco)
+def salvar(cliente_id, dados, banco=None, *, connection=None):
+    servico = _servico(banco, connection=connection)
     existente = None
     if cliente_id is not None:
-        existente = obter(cliente_id, banco)
+        existente = _servico(banco,connection=connection).get("cliente",str(cliente_id))
         if existente is None:
             raise ErroCliente("Cadastro não salvo", "Cliente não encontrado.")
     tipo = str(dados.get("tipo_pessoa") or "Jurídica")
@@ -335,7 +337,7 @@ def salvar(cliente_id, dados, banco=None):
         except ValueError as erro:
             raise ErroCliente("Documento inválido", str(erro)) from erro
         if documento:
-            with ext.db(banco or BANCO) as conexao:
+            with (nullcontext(connection) if connection is not None else ext.db(banco or BANCO)) as conexao:
                 duplicado = cad9.buscar_documento_duplicado(
                     conexao, documento, cliente_id)
             if duplicado:

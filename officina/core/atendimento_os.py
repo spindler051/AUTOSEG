@@ -3,6 +3,7 @@ Migração não destrutiva: não atualiza campos da OS original nem migra dados
 sobrepostos retroativamente para uma falsa versão histórica.
 """
 from officina.core import prestadores_ext as ext
+from contextlib import nullcontext
 def instalar(banco):
     with ext.db(banco) as c:
         c.executescript("""
@@ -32,11 +33,13 @@ def registrar_solicitacao(c,os_id,cliente_id,descricao,observacoes='',origem='Ap
         (os_id,cliente_id,descricao_original,observacoes_originais,criado_em,origem)
         VALUES(?,?,?,?,?,?)""",(os_id,cliente_id,descricao,observacoes,ext.agora(),origem))
 
-def iniciar(banco,os_id,pid=None,ator='Administrador desktop',admin=False):
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
-        o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
-        if not o or o['status'] not in ext.ATIVAS: raise ValueError('A OS não está ativa.')
+def iniciar(banco,os_id,pid=None,ator='Administrador desktop',admin=False,*,connection=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
+        o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not o or o['status'] not in ext.ATIVAS or o['arquivada']:
+            raise ValueError('A OS não está ativa.')
         if pid is not None:
             p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
             if not p:
@@ -87,25 +90,25 @@ def obter(banco,os_id):
         return (dict(s) if s else None,dict(a) if a else {})
 
 
-def iniciar_assumindo(banco,os_id,pid,admin=False):
+def iniciar_assumindo(banco,os_id,pid,admin=False,*,connection=None):
     """Um botão: assume (quando autorizado) e inicia; os dois fatos são auditados.
 
     A validação de assunção é feita em transação pelo módulo de prestadores.
     Um administrador pode iniciar OS atribuída a outro prestador sem trocar
     a responsabilidade.
     """
-    with ext.db(banco) as c:
-        os_atual=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
-        if not os_atual or os_atual['status'] not in ext.ATIVAS:
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        os_atual=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+        if not os_atual or os_atual['status'] not in ext.ATIVAS or os_atual['arquivada']:
             raise ValueError('Esta OS não está disponível para iniciar.')
         atual=ext.responsavel_atual(c,os_id)
         status=os_atual['status']
         admin=bool(admin or ext.administrador(c,pid))
     if atual is None:
-        ext.assumir(banco,os_id,pid)
+        ext.assumir(banco,os_id,pid,connection=connection)
     elif atual != pid and not admin:
         raise PermissionError('OS atribuída a outro técnico; solicite transferência.')
-    return iniciar(banco,os_id,pid,admin=admin)
+    return iniciar(banco,os_id,pid,admin=admin,connection=connection)
 
 
 def assumir_os(banco, os_id, pid):

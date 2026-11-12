@@ -108,7 +108,8 @@ def enviar_email_gmail(
     caminho_pdf_nf=None,
     usar_bcc=False,
     nome_pdf_relatorio=None,
-    nome_pdf_nf=None
+    nome_pdf_nf=None,
+    operation_key=None
 ):
     HttpError = None
     try:
@@ -141,6 +142,8 @@ def enviar_email_gmail(
         else:
             message['To'] = ', '.join(para_lista)
         message['Subject'] = assunto
+        if operation_key:
+            message['Message-ID'] = f'<{operation_key}@officina.local>'
         if copia:
             message['Cc'] = ', '.join(copia)
 
@@ -203,25 +206,37 @@ def _dados_pagamento_html(banco, os_id):
     return '<h4>Dados para pagamento</h4><ul>' + ''.join(itens) + '</ul>'
 
 
-def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
+def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None, *, outbox_operation_key=None):
     """Thread de envio: resolve destinatários, publica o PDF se necessário e envia."""
     from officina.core import produtividade_os as prod
+    if outbox_operation_key and os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
+        from officina.core.os_effect_outbox import PreDispatchError
+        raise PreDispatchError('Gmail disabled before provider dispatch.')
     if destinatarios is None:
         try:
             destinatarios = prod.destinatarios_conclusao(banco, os_id)
-        except Exception:
-            # Sem e-mail válido cadastrado não há o que enviar.
+        except Exception as exc:
+            if outbox_operation_key:
+                from officina.core.os_effect_outbox import PreDispatchError
+                raise PreDispatchError('No usable recipients before dispatch.') from exc
             return
     else:
         destinatarios = [str(x) for x in destinatarios if str(x).strip()]
         if not destinatarios:
+            if outbox_operation_key:
+                from officina.core.os_effect_outbox import PreDispatchError
+                raise PreDispatchError('No recipients before dispatch.')
             return
-    prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
+    if not outbox_operation_key:
+        prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
     try:
         from officina.core import fluxo_os as fluxo
         from officina.core import prestadores_ext as ext
         documento = fluxo.ultimo_documento(banco, os_id)
         if not documento:
+            if outbox_operation_key:
+                from officina.core.os_effect_outbox import PreDispatchError
+                raise PreDispatchError('PDF not published before sending.')
             fluxo.publicar_relatorio(banco, os_id)
             documento = fluxo.ultimo_documento(banco, os_id)
         if not documento:
@@ -261,12 +276,18 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
             corpo += '<p>Nenhuma nota fiscal foi anexada a esta OS.</p>'
         if not diagnostico:
             corpo += _dados_pagamento_html(banco, os_id)
+        send_options = {'operation_key': outbox_operation_key} if outbox_operation_key else {}
         msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
                                     caminho_pdf_relatorio=arquivo,
                                     caminho_pdf_nf=caminho_nf,
-                                    nome_pdf_nf=(nota['nome_original'] if nota else None))
-        prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
+                                    nome_pdf_nf=(nota['nome_original'] if nota else None),
+                                    **send_options)
+        if not outbox_operation_key:
+            prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
+        return msg_id
     except Exception as erro:
+        if outbox_operation_key:
+            raise
         try:
             from officina.core import produtividade_os as prod
             prod.registrar_envio(banco, os_id, destinatarios, 'falhou', erro=str(erro))

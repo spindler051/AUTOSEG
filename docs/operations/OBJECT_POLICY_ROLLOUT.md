@@ -68,6 +68,62 @@ See the delivery's `BLOCKED.md` and `NOTES.md` before enabling enforcement.
 it in production until the remaining gap is fixed or explicitly accepted.
 An in-process lock is not a replacement for a single SQLite transaction.
 
+## P0-AUTH-FINAL — DEV outbox (2026-11-11)
+
+**Estado: implantação somente DEV; enforcement permanece desligado.**
+O schema autorizado adiciona exclusivamente `os_effect_outbox` e seus índices;
+nenhuma tabela existente é alterada pela instalação. Uma intenção (`operation_key`
+SHA-256 de OS/revisão/ação/tipo) é inserida no mesmo `BEGIN IMMEDIATE` do
+writer. A execução de PDF, nota/arquivo ou e-mail só começa após commit.
+
+### Instalação autorizada e backup
+
+Na cópia DEV, com o site parado e uma cópia testável do banco:
+
+```sh
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/install_os_effect_outbox.py \
+  --database /caminho/DEV/dados.db \
+  --backup /caminho/DEV/backup-before-outbox.db
+```
+
+O comando exige backup **novo** com `sqlite3.Connection.backup` e `PRAGMA
+quick_check` antes do `CREATE TABLE IF NOT EXISTS`. Reexecutar `install` é
+idempotente. É responsabilidade do operador manter o backup em volume seguro,
+validar restauração numa cópia e não apontar o comando para a MAIN.
+
+### Recuperação e rollback
+
+Após reinício, reconciliar efeitos `pdf/file` pendentes/falhos por
+`os_effect_outbox.dispatch_retryable(banco)` em uma operação de manutenção DEV:
+
+```sh
+AUTOSEG_DEV=1 PYTHONPATH=. python3 scripts/autoseg/reconcile_os_effect_outbox.py \
+  --database /caminho/DEV/dados.db
+```
+Duas instâncias competem por lease com `BEGIN IMMEDIATE`; PDF usa nome de versão
+reservada, arquivo via hard-link e digest SHA-256. Stages órfãos de transações
+revertidas são removidos somente após a idade mínima pelo
+`cleanup_orphan_stages`; não apagar arquivos ainda referenciados.
+
+Um envio de e-mail em `processing` com lease expirado torna-se `unknown`.
+**Nunca reenviar automaticamente `unknown`:** SQLite + SMTP/Gmail não oferecem
+`exactly-once`. O `Message-ID` estável é metadado, não garantia do provedor.
+Conciliação manual deve checar o provedor, informar possibilidade de duplicata
+e usar uma nova `operation_key` para novo pedido consciente. O destinatário e o
+corpo não são persistidos na outbox; devem ser resolvidos no banco no despacho.
+
+Rollback DEV: interromper site e reconciliador, documentar intenção pendente,
+reconciliar ou cancelar pendências com auditoria operacional e testar restore
+do backup isoladamente. Depois, **manter a tabela dormente** é opção segura;
+se for indispensável remover após drenagem, com backup verificado executar
+`DROP TABLE os_effect_outbox` somente na DEV. Não reverter OS/eventos válidos.
+
+### Limites restantes
+
+Há writers de anexo com exclusão/rotação e fluxos de criação com chamadas
+legadas separadas. Essas operações não estão cobertas pela garantia completa
+de transação/outbox; ver `BLOCKED.md` da entrega antes de ativar enforcement.
+
 ## Rollback
 
 1. Set `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` and restart.

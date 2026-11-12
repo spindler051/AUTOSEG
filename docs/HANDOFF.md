@@ -1,3 +1,14 @@
+
+### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
+
+Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
+reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
+foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
+fechado: arquivos removidos/rotacionados, reenvio legado e fluxos restantes
+precisam ser cobertos antes de aprovar a flag. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
+`BLOCKED.md` desta entrega; não habilitar na MAIN.
+
 # Handoff — estado atual
 
 **Atualizado:** 2026-11-11

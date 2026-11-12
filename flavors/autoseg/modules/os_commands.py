@@ -21,7 +21,8 @@ from urllib.parse import urlencode as urllib_parse_urlencode
 import logging
 from officina.core import (prestadores_ext as ext, portal_negocios as neg,
     fluxo_os as fluxo, atendimento_os as aten, cadastros_v9 as cad9,
-    produtividade_os as prod, catalogo_servicos as catalogo)
+    produtividade_os as prod, catalogo_servicos as catalogo,
+    os_effect_outbox as outbox)
 from flavors.autoseg.modules import object_policy_flags
 from flavors.autoseg.modules import (importacao_yaml as yaml_import,
     solicitacoes_pj as pj_publico, policy_shadow)
@@ -29,7 +30,7 @@ from officina.integration import clientes as clientes_core
 from officina.repositories import ordens as ordens_repo
 LOG=logging.getLogger('autosseg.portal')
 from threading import RLock
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 _LOCK_POOL: dict[int, RLock] = {}
 _POOL_GUARD = RLock()
@@ -63,21 +64,70 @@ def _provider_context(banco, session):
 
 
 def _transaction_guard(banco, principal, os_id, action):
-    """Inject status and relationship checks into the writer transaction."""
-    if not object_policy_flags.enforcement_enabled(banco):
-        return None
+    """Validate current OS/account state inside the caller's BEGIN IMMEDIATE.
+
+    Existing legacy permission scope remains opt-in; current account activity,
+    cached role and archived/state constraints are never trusted from preflight.
+    """
+    enforce = object_policy_flags.enforcement_enabled(banco)
 
     def verify(connection):
-        row = connection.execute(
-            'SELECT status,arquivada FROM ordens_servico WHERE id=?',
-            (os_id,)).fetchone()
+        if not connection.in_transaction:
+            raise RuntimeError('Writer authorization requires a transaction.')
+        row = connection.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                                 (os_id,)).fetchone()
         if not row or row['arquivada']:
             raise PermissionError('OS indisponível para alteração.')
-        if action in ('start', 'assign', 'assume') and row['status'] not in ext.ATIVAS:
+        if action in ('start', 'assign', 'assume', 'edit', 'cancel') and row['status'] not in ext.ATIVAS:
             raise PermissionError('OS não está ativa.')
-        return require_work_item_locked(connection, principal, os_id, action)
+        if principal is not None and principal.provider_id is not None:
+            active = connection.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',
+                                        (principal.provider_id,)).fetchone()
+            if not active:
+                raise PermissionError('Prestador inativo ou vínculo revogado.')
+            current_role = 'admin' if ext.administrador(connection,principal.provider_id) else 'employee'
+            if principal.role != current_role:
+                raise PermissionError('Papel alterado desde a autenticação.')
+        if enforce:
+            return require_work_item_locked(connection, principal, os_id, action)
+        return None
 
     return verify
+
+
+def _work_revision(c, os_id):
+    """A committed OS event uniquely identifies the current domain revision."""
+    event = c.execute('SELECT COALESCE(MAX(id),0) FROM os_eventos WHERE os_id=?',
+                      (os_id,)).fetchone()[0]
+    row = c.execute('SELECT status,atualizado_em FROM ordens_servico WHERE id=?',
+                    (os_id,)).fetchone()
+    if not row:
+        raise ValueError('OS não encontrada.')
+    return f'{int(event)}:{row["status"]}:{row["atualizado_em"]}'
+
+
+def _publish_postcommit(banco, key):
+    if key:
+        return outbox.publish_pdf(banco, key)
+    return None
+
+
+def _enqueue_pdf_if_installed(c, os_id, action):
+    if not outbox.installed(c):
+        return None
+    return outbox.enqueue_pdf(c, os_id, _work_revision(c, os_id), action)['operation_key']
+
+
+def _flush_staged_files(banco, os_id):
+    # Publication is deliberately after the OS transaction commits.
+    with ext.db(banco) as c:
+        if not outbox.installed(c):
+            return
+        rows=c.execute('''SELECT operation_key FROM os_effect_outbox
+            WHERE os_id=? AND effect_type='file' AND state IN ('pending','failed')
+            ORDER BY id''',(os_id,)).fetchall()
+    for row in rows:
+        outbox.publish_file(banco,row['operation_key'])
 
 
 def _authorize(banco, principal, os_id, permission):
@@ -94,12 +144,12 @@ class OsBusinessSupport:
     """Business-side compatibility helpers moved out of HTTP Handler."""
     def __init__(self,banco):
         self.banco=banco
-    def _cliente_por_nome(self, nome):
+    def _cliente_por_nome(self, nome, *, connection=None):
         banco = self.banco
-        return clientes_core.criar_provisorio(nome, banco=banco)
+        return clientes_core.criar_provisorio(nome, banco=banco, connection=connection)
 
 
-    def _resolver_cliente_os(self, d, oid=None):
+    def _resolver_cliente_os(self, d, oid=None, *, connection=None):
         banco = self.banco
         """Existing selected id, new client typed by name, or current OS client."""
         bruto = str(d.get('cliente_id', '')).strip()
@@ -108,10 +158,12 @@ class OsBusinessSupport:
                 cliente_id = int(bruto)
             except (TypeError, ValueError):
                 raise ValueError('Cliente selecionado inválido.') from None
-            if clientes_core.obter_resumo_ativo(cliente_id, banco=banco):
+            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+                ativo = c.execute("SELECT 1 FROM clientes WHERE id=? AND status NOT IN ('Inativo','A definir')", (cliente_id,)).fetchone()
+            if ativo:
                 return cliente_id
             # "Cliente a definir" is intentionally allowed on an OS.
-            with ext.db(banco) as c:
+            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
                 linha = c.execute('SELECT status FROM clientes WHERE id=?',
                                   (cliente_id,)).fetchone()
             if linha and linha['status'] == 'A definir':
@@ -119,9 +171,9 @@ class OsBusinessSupport:
             raise ValueError('Cliente selecionado não encontrado ou inativo.')
         nome = str(d.get('cliente_busca', '')).strip()
         if len(nome) >= 2:
-            return self._cliente_por_nome(nome)
+            return self._cliente_por_nome(nome,connection=connection)
         if oid is not None:
-            with ext.db(banco) as c:
+            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
                 atual = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
                                   (oid,)).fetchone()
             if atual and atual['cliente_id']:
@@ -129,10 +181,10 @@ class OsBusinessSupport:
         raise ValueError('Selecione um cliente existente ou digite o nome de um novo cliente.')
 
 
-    def _cliente_a_definir(self):
+    def _cliente_a_definir(self, *, connection=None):
         banco = self.banco
         """Cadastro provisório para OS aberta antes de escolher o cliente."""
-        with ext.db(banco) as c:
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
             linha=c.execute("SELECT id FROM clientes WHERE status='A definir' "
                             "ORDER BY id LIMIT 1").fetchone()
             if linha:
@@ -145,9 +197,9 @@ class OsBusinessSupport:
             return int(cur.lastrowid)
 
 
-    def _exigir_cliente_os(self, oid, acao, cliente_id=None):
+    def _exigir_cliente_os(self, oid, acao, cliente_id=None, *, connection=None):
         banco = self.banco
-        with ext.db(banco) as c:
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
             if cliente_id:
                 linha=c.execute("SELECT nome,status FROM clientes WHERE id=?",
                                 (int(cliente_id),)).fetchone()
@@ -158,7 +210,7 @@ class OsBusinessSupport:
             raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
 
 
-    def _persist_form_client(self, d, oid, pid, actor, rule):
+    def _persist_form_client(self, d, oid, pid, actor, rule, *, connection=None):
         banco = self.banco
         """Persist the client chosen in a workflow form before its action.
 
@@ -170,7 +222,7 @@ class OsBusinessSupport:
         """
         if 'cliente_id' not in d and 'cliente_busca' not in d:
             return None
-        with ext.db(banco) as c:
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
             linha=c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
             if not linha:
                 raise ValueError('OS não encontrada.')
@@ -180,9 +232,10 @@ class OsBusinessSupport:
         if rule=='route' and responsavel is None:
             raise ValueError('Atribua um técnico antes de marcar Em rota.')
         # ObjectPolicy already checked the exact command before this helper.
-        cliente_id=int(self._resolver_cliente_os(d,oid))
-        with ext.db(banco) as c:
-            c.execute('BEGIN IMMEDIATE')
+        cliente_id=int(self._resolver_cliente_os(d,oid,connection=connection))
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+            if connection is None:
+                c.execute('BEGIN IMMEDIATE')
             atual=c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',(oid,)).fetchone()
             anterior=int(atual['cliente_id'] or 0) if atual else 0
             if anterior!=cliente_id:
@@ -194,7 +247,8 @@ class OsBusinessSupport:
                            f'{anterior} -> {cliente_id} ({rotulo})',pid,actor)
                 neg.audit(c,pid,'Cliente da OS alterado',oid,
                           f'{anterior} -> {cliente_id} ({rotulo})')
-            c.commit()
+            if connection is None:
+                c.commit()
         return cliente_id
 
 
@@ -232,56 +286,62 @@ def _write_create_quick(banco, principal, os_id, data, *, ui, session, path, que
     partes = path.strip('/').split('/')
     cliente_texto=str(d.get('cliente_id','')).strip()
     cliente_nome=str(d.get('cliente_nome','')).strip()[:250]
+    descricao=str(d.get('descricao','')).strip()
+    if len(descricao)<5:
+        return ui.os_rapida_form(s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
+                                dados_form=d)
+    urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
+    if urgencia not in ('Baixa','Normal','Alta'):
+        return ui.os_rapida_form(s,erro='Escolha a urgência.',dados_form=d)
     if cliente_texto:
         try:
             cliente_id=int(cliente_texto)
         except (ValueError,TypeError):
-            return ui.os_rapida_form(
-                s,erro='Cliente inválido. Digite o nome novamente.',
-                dados_form=d)
+            return ui.os_rapida_form(s,erro='Cliente inválido. Digite o nome novamente.',
+                                    dados_form=d)
         if not clientes_core.obter_resumo_ativo(cliente_id,banco=banco):
-            return ui.os_rapida_form(
-                s,erro='Cliente não encontrado ou inativo.',
-                dados_form=d)
-    elif cliente_nome:
-        try:
-            cliente_id=business._cliente_por_nome(cliente_nome)
-        except ValueError as exc:
-            return ui.os_rapida_form(s,erro=str(exc),dados_form=d)
+            return ui.os_rapida_form(s,erro='Cliente não encontrado ou inativo.',
+                                    dados_form=d)
     else:
-        cliente_id=business._cliente_a_definir()
-    descricao=str(d.get('descricao','')).strip()
-    if len(descricao)<5:
-        return ui.os_rapida_form(
-            s,erro='Descreva a solicitação com pelo menos 5 caracteres.',
-            dados_form=d,cliente_id=cliente_id)
-    urgencia=str(d.get('urgencia','Normal')).strip() or 'Normal'
-    if urgencia not in ('Baixa','Normal','Alta'):
-        return ui.os_rapida_form(
-            s,erro='Escolha a urgência.',
-            dados_form=d,cliente_id=cliente_id)
-    duplicada=ui._os_duplicada_recente(cliente_id)
-    if duplicada and not str(d.get('confirmar_duplicidade',''))=='1':
-        return ui.os_rapida_form(
-            s,dados_form=d,cliente_id=cliente_id,
-            duplicada=duplicada)
-    dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
-           'forma_pagamento':'','forma_pagamento_opcional':'1',
-           'urgencia':urgencia,
-           'valor_mao_obra':'0','valor_materiais_manual':'0',
-           'materiais_presentes':'1','acao_status':'salvar'}
-    oid=neg.os_salvar(banco,dados,pid)
-    ext.assumir(banco,oid,pid)
-    if str(d.get('confirmar_duplicidade',''))=='1':
+        cliente_id=None
+
+    class DuplicateNotice(Exception):
+        def __init__(self, selected_id, existing):
+            self.selected_id=selected_id
+            self.existing=existing
+
+    try:
         with ext.db(banco) as c:
-            ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
-                       f'OS recente do mesmo cliente: {duplicada["numero_os"]} '
-                       f'({duplicada["criado_em"]}).',pid,f'Prestador {s["nome"]}')
-    with ext.db(banco) as c:
-        numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
-                          (oid,)).fetchone() or {'numero_os': oid})['numero_os']
-        cliente=(c.execute('SELECT status,dados_incompletos FROM clientes WHERE id=?',
-                           (cliente_id,)).fetchone() or {'status':'','dados_incompletos':0})
+            c.execute('BEGIN IMMEDIATE')
+            if cliente_id:
+                cliente_id=business._resolver_cliente_os({'cliente_id':str(cliente_id)},
+                                                         connection=c)
+            elif cliente_nome:
+                cliente_id=business._cliente_por_nome(cliente_nome,connection=c)
+            else:
+                cliente_id=business._cliente_a_definir(connection=c)
+            duplicada=ui._os_duplicada_recente(cliente_id)
+            if duplicada and str(d.get('confirmar_duplicidade',''))!='1':
+                raise DuplicateNotice(cliente_id,duplicada)
+            dados={'cliente_id':str(cliente_id),'descricao':descricao,'tecnico':'',
+                   'forma_pagamento':'','forma_pagamento_opcional':'1',
+                   'urgencia':urgencia,'valor_mao_obra':'0',
+                   'valor_materiais_manual':'0','materiais_presentes':'1',
+                   'acao_status':'salvar'}
+            oid=neg.os_salvar(banco,dados,pid,connection=c)
+            ext.assumir(banco,oid,pid,connection=c)
+            if duplicada and str(d.get('confirmar_duplicidade',''))=='1':
+                ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
+                           f'OS recente do mesmo cliente: {duplicada["numero_os"]} '
+                           f'({duplicada["criado_em"]}).',pid,f'Prestador {s["nome"]}')
+            numero=(c.execute('SELECT numero_os FROM ordens_servico WHERE id=?',
+                              (oid,)).fetchone() or {'numero_os': oid})['numero_os']
+            cliente=(c.execute('SELECT status,dados_incompletos FROM clientes WHERE id=?',
+                               (cliente_id,)).fetchone() or
+                     {'status':'','dados_incompletos':0})
+    except DuplicateNotice as warning:
+        return ui.os_rapida_form(s,dados_form=d,cliente_id=warning.selected_id,
+                                duplicada=warning.existing)
     aviso_cliente=''
     if cliente['status']=='A definir':
         aviso_cliente=('<p class="notice">A OS está com <b>Cliente a definir</b>. '
@@ -338,9 +398,11 @@ def _write_create_full(banco, principal, os_id, data, *, ui, session, path, quer
     d = data
     partes = path.strip('/').split('/')
     d = dict(d)
-    d['cliente_id'] = business._resolver_cliente_os(d)
-    oid=neg.os_salvar(banco,d,pid)
-    ext.assumir(banco,oid,pid)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        d['cliente_id'] = business._resolver_cliente_os(d,connection=c)
+        oid=neg.os_salvar(banco,d,pid,connection=c)
+        ext.assumir(banco,oid,pid,connection=c)
     return ui.redir(f'{url_os(banco, oid)}')
 
 
@@ -431,7 +493,7 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
     if not os_atual or os_atual['status'] not in ext.ATIVAS:
         raise ValueError('Somente OS ativas podem receber fotos.')
     if 'arquivada' in os_atual.keys() and os_atual['arquivada']:
-        raise ValueError('OS arquivada: edição bloqueada.')
+        raise PermissionError('OS arquivada: edição bloqueada.')
     def _lista(valor):
         if valor is None:return []
         return valor if isinstance(valor,list) else [valor]
@@ -451,8 +513,8 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
         raise ValueError('Envie no máximo 10 fotos por vez.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
-        if object_policy_flags.enforcement_enabled(banco):
-            require_work_item_locked(c, principal, oid, 'attach')
+        guard = _transaction_guard(banco, principal, oid, 'attach')
+        guard(c)
         current = c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
                             (oid,)).fetchone()
         if not current or current['status'] not in ext.ATIVAS or current['arquivada']:
@@ -467,7 +529,8 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
                 permitir_colaboracao=admin,
                 chave=chaves[i] if i<len(chaves) else None,
                 legenda=legendas[i] if i<len(legendas) else '',
-                visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1)
+                visivel=str(visiveis[i])!='0' if i<len(visiveis) else 1,
+                staged=outbox.installed(c))
         for i,anexo_id in enumerate(anexo_ids):
             try:
                 anexo_id=int(anexo_id)
@@ -482,6 +545,7 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
                 c,oid,anexo_id,
                 anexo_legendas[i] if i<len(anexo_legendas) else '',
                 visivel)
+    _flush_staged_files(banco,oid)
     if quer_json:
         return ui.send_bytes(json.dumps({
             'ok': True,
@@ -493,91 +557,79 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
 
 def _write_autosave_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1])
-    prod.salvar_rascunho(banco,oid,pid,d)
-    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
-    ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
-    # Auto-save also persists the monetary fields on the OS,
-    # so the PDF/email reflect the values typed in the form.
-    versao_os=None
-    aviso_os=''
+    pid = session['pid']
+    oid = os_id
+    values = {key: value for key, value in data.items()
+              if key not in ('csrf', 'modo_envio', 'nota_fiscal')}
     try:
-        dados_os=dict(d)
-        dados_os['acao_status']='salvar'
-        neg.os_salvar(banco,dados_os,pid,oid,silent=True)
         with ext.db(banco) as c:
-            linha_versao=c.execute(
-                'SELECT atualizado_em FROM ordens_servico WHERE id=?',
-                (oid,)).fetchone()
-        versao_os=linha_versao['atualizado_em'] if linha_versao else None
-    except Exception as exc:
-        LOG.exception('Auto-save: falha ao aplicar valores na OS %s',oid)
-        aviso_os=('Rascunho salvo, mas os valores da OS não foram '
-                  'aplicados.')
-        if isinstance(exc,(ValueError,PermissionError)) and str(exc):
-            aviso_os+=f' {exc}'
-        else:
-            aviso_os+=(' Recarregue a página e confira os campos '
-                       'obrigatórios.')
-    try:
-        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
-                             str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-    except Exception:
-        pass
-    if str(d.get('relatorio_tecnico','')).strip():
-        with ext.db(banco) as c:
-            aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
-    if quer_json:
-        resposta={'ok':True}
-        if versao_os:
-            resposta['versao_os']=versao_os
-        if aviso_os:
-            resposta['aviso']=aviso_os
-        return ui.send_bytes(json.dumps(resposta).encode(),
-                               'application/json; charset=utf-8')
-    return ui.redir(f'{url_os(banco, oid)}')
+            c.execute('BEGIN IMMEDIATE')
+            guard=_transaction_guard(banco,principal,oid,'edit')
+            if guard:
+                guard(c)
+            prod.salvar_rascunho(banco,oid,pid,data,connection=c)
+            ext.salvar_rascunho_web(banco,oid,pid,values,connection=c)
+            # A background autosave can contain only technical draft fields.
+            # Do not invoke full-form validation without its required description.
+            if str(data.get('descricao','')).strip():
+                save=dict(data,acao_status='salvar')
+                save['cliente_id']=OsBusinessSupport(banco)._resolver_cliente_os(
+                    save,oid,connection=c)
+                neg.os_salvar(banco,save,pid,oid,silent=True,connection=c,
+                             staged_attachments=outbox.installed(c))
+            cad9.salvar_detalhes(banco,oid,str(data.get('v9_diagnostico','')),
+                str(data.get('v9_execucao','')),str(data.get('v9_resultado','')),
+                connection=c)
+            if str(data.get('relatorio_tecnico','')).strip():
+                aten.salvar_rascunho(c,oid,str(data['relatorio_tecnico']),
+                                     f'Prestador {session["nome"]}')
+            version=c.execute('SELECT atualizado_em FROM ordens_servico WHERE id=?',
+                              (oid,)).fetchone()
+            versao_os=version['atualizado_em'] if version else None
+        _flush_staged_files(banco,oid)
+        if quer_json:
+            return ui.send_bytes(json.dumps({'ok':True,'versao_os':versao_os}).encode(),
+                                 'application/json; charset=utf-8')
+        return ui.redir(portal.url_os(banco,oid))
+    except (ValueError,PermissionError) as exc:
+        if quer_json:
+            return ui.send_bytes(json.dumps({'ok':False,'error':str(exc)}).encode(),
+                'application/json; charset=utf-8',status=(403 if isinstance(exc,PermissionError) else 400))
+        raise
 
 
 def _write_save_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
-    card = portal.card
-    botao = portal.botao
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1])
-    prod.salvar_rascunho(banco,oid,pid,d)
-    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
-    ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
-    sem_fechar = dict(d)
-    sem_fechar['acao_status'] = 'salvar'
-    neg.os_salvar(banco,sem_fechar,pid,oid)
-    try:
-        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-    except Exception:
-        pass
-    if str(d.get('relatorio_tecnico','')).strip():
-        with ext.db(banco) as c:
-            aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
-    # A nota fiscal anexada no mesmo envio é gravada junto com o rascunho.
-    arquivo=d.get('nota_fiscal')
-    if isinstance(arquivo,tuple) and arquivo[0]:
-        try:
-            ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
-        except Exception as falha:
-            LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
-    return ui.pagina('Rascunho salvo',card('Rascunho',
+    pid=session['pid']
+    oid=os_id
+    values={key: value for key, value in data.items()
+            if key not in ('csrf','modo_envio','nota_fiscal')}
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        guard=_transaction_guard(banco,principal,oid,'edit')
+        if guard:
+            guard(c)
+        prod.salvar_rascunho(banco,oid,pid,data,connection=c)
+        ext.salvar_rascunho_web(banco,oid,pid,values,connection=c)
+        save=dict(data,acao_status='salvar')
+        save['cliente_id']=OsBusinessSupport(banco)._resolver_cliente_os(
+            save,oid,connection=c)
+        neg.os_salvar(banco,save,pid,oid,connection=c,
+                         staged_attachments=outbox.installed(c))
+        cad9.salvar_detalhes(banco,oid,str(data.get('v9_diagnostico','')),
+            str(data.get('v9_execucao','')),str(data.get('v9_resultado','')),
+            connection=c)
+        if str(data.get('relatorio_tecnico','')).strip():
+            aten.salvar_rascunho(c,oid,str(data['relatorio_tecnico']),
+                f'Prestador {session["nome"]}')
+        arquivo=data.get('nota_fiscal')
+        if isinstance(arquivo,tuple) and arquivo[0]:
+            ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1],
+               connection=c,staged=outbox.installed(c))
+    _flush_staged_files(banco,oid)
+    return ui.pagina('Rascunho salvo',portal.card('Rascunho',
         '<p class="good">Rascunho salvo com sucesso. Ele será recuperado ao reabrir esta OS.</p>'
-        +botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
+        +portal.botao('Voltar à OS',f'{portal.url_os(banco, oid)}')),session)
 
 
 def _write_rateio(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -599,8 +651,13 @@ def _write_rateio(banco, principal, os_id, data, *, ui, session, path, quer_json
                 'application/json; charset=utf-8',status=400)
         raise ValueError(erro)
     try:
-        prod.definir_rateio_manual(banco,oid,pid,tecnico,
-                                   str(d.get('rateio_manual_valor','0')))
+        with ext.db(banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            guard=_transaction_guard(banco,principal,oid,'edit')
+            if guard:
+                guard(c)
+            prod.definir_rateio_manual(banco,oid,pid,tecnico,
+                                       str(d.get('rateio_manual_valor','0')),connection=c)
     except Exception as exc:
         if quer_json:
             status=403 if isinstance(exc,PermissionError) else 400
@@ -665,39 +722,34 @@ def _write_remove_invoice(banco, principal, os_id, data, *, ui, session, path, q
 
 def _write_attach_invoice(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid=int(partes[1])
-    arquivo=d.get('nota_fiscal')
+    pid=session['pid']
+    oid=os_id
+    arquivo=data.get('nota_fiscal')
     if not isinstance(arquivo,tuple) or not arquivo[0]:
         raise ValueError('Selecione um arquivo PDF de nota fiscal.')
     with ext.db(banco) as c:
-        if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
+        c.execute('BEGIN IMMEDIATE')
+        guard=_transaction_guard(banco,principal,oid,'attach')
+        if guard:
+            guard(c)
+        if ext.responsavel_atual(c,oid)!=pid and not ext.administrador(c,pid):
             raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
-    # Preserva os campos já preenchidos ao anexar a NF.
-    dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio','nota_fiscal')}
-    if dados_rasc:
-        try:
-            ext.salvar_rascunho_web(banco,oid,pid,dados_rasc)
-            try:
-                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
-                                     str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-            except Exception:
-                pass
-            if str(d.get('relatorio_tecnico','')).strip():
-                with ext.db(banco) as c:
-                    aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),f'Prestador {s["nome"]}')
-        except Exception as falha:
-            LOG.exception('Falha ao preservar rascunho ao anexar NF na OS %s', oid)
-    nota_id=ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
+        values={k: data[k] for k in data if k not in ('csrf','modo_envio','nota_fiscal')}
+        if values:
+            ext.salvar_rascunho_web(banco,oid,pid,values,connection=c)
+            cad9.salvar_detalhes(banco,oid,str(data.get('v9_diagnostico','')),
+                str(data.get('v9_execucao','')),str(data.get('v9_resultado','')),
+                connection=c)
+            if str(data.get('relatorio_tecnico','')).strip():
+                aten.salvar_rascunho(c,oid,str(data['relatorio_tecnico']),
+                    f'Prestador {session["nome"]}')
+        nid=ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1],
+                                  connection=c,staged=outbox.installed(c))
+    _flush_staged_files(banco,oid)
     if quer_json:
-        return ui.send_bytes(json.dumps({'ok':True,'nota_id':nota_id}).encode(),
-                               'application/json; charset=utf-8')
-    return ui.redir(f'{url_os(banco, oid)}')
+        return ui.send_bytes(json.dumps({'ok':True,'nota_id':nid}).encode(),
+                             'application/json; charset=utf-8')
+    return ui.redir(portal.url_os(banco,oid))
 
 
 def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -718,9 +770,11 @@ def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, que
             raise ValueError('Esta OS não está ativa.')
         if 'arquivada' in o.keys() and o['arquivada']:
             raise ValueError('OS arquivada: edição bloqueada.')
-        if o['status'] == 'Pendente' or object_policy_flags.enforcement_enabled(banco):
-            require_work_item_locked(c, principal, oid,
-                                     'reopen' if o['status'] == 'Pendente' else 'edit')
+        action = 'reopen' if o['status'] == 'Pendente' else 'edit'
+        guard = _transaction_guard(banco, principal, oid, action)
+        guard(c)
+        if o['status'] == 'Pendente' and not object_policy_flags.enforcement_enabled(banco):
+            require_work_item_locked(c, principal, oid, 'reopen')
         # Client selection is part of this transaction, not an earlier write.
         # A new provisional customer is a separate domain operation and is not
         # implicitly created as part of a privileged reopen.
@@ -733,13 +787,9 @@ def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, que
             except (ValueError, TypeError):
                 raise ValueError('Cliente selecionado inválido.') from None
         elif raw_name and len(raw_name) >= 2:
-            known = c.execute("SELECT id FROM clientes WHERE lower(nome)=lower(?) "
-                              "AND status NOT IN ('Inativo','A definir') "
-                              "ORDER BY id LIMIT 1", (raw_name,)).fetchone()
-            if known:
-                cliente_id = int(known['id'])
-            else:
-                raise ValueError('Cadastre o novo cliente antes de reabrir a OS.')
+            # The provisional client and reopen share the same transaction.
+            # Authorization has already been checked before this write.
+            cliente_id = business._cliente_por_nome(raw_name, connection=c)
         customer = c.execute('SELECT nome,status FROM clientes WHERE id=?',
                              (cliente_id,)).fetchone()
         if not customer or customer['status'] in ('A definir','Inativo'):
@@ -811,6 +861,7 @@ def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, 
     motivo=str(d.get('motivo_encerramento','')).strip()[:2000]
     if not motivo:
         raise ValueError('Informe o motivo do cancelamento.')
+    publish_key=None
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',
@@ -819,8 +870,7 @@ def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, 
             raise ValueError('Esta OS não está ativa.')
         if 'arquivada' in o.keys() and o['arquivada']:
             raise ValueError('OS arquivada: edição bloqueada.')
-        if object_policy_flags.enforcement_enabled(banco):
-            require_work_item_locked(c, principal, oid, 'cancel')
+        _transaction_guard(banco,principal,oid,'cancel')(c)
         atual=ext.responsavel_atual(c,oid)
         admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
                              (pid,)).fetchone())
@@ -832,8 +882,12 @@ def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, 
             c,oid,'Cancelada','',motivo,prestador_id=pid,
             ator=f'Prestador {s["nome"]}')
         neg.audit(c,pid,'OS cancelada',oid,f'Motivo: {motivo}')
+        publish_key=_enqueue_pdf_if_installed(c,oid,'cancel')
     try:
-        fluxo.publicar_relatorio(banco,oid)
+        if publish_key:
+            _publish_postcommit(banco,publish_key)
+        else:
+            fluxo.publicar_relatorio(banco,oid)
     except (ValueError,OSError) as falha:
         LOG.exception('OS %s cancelada, mas falhou a publicação do PDF',oid)
         return ui.pagina('OS cancelada — PDF pendente',card('Cancelamento salvo',
@@ -845,125 +899,137 @@ def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, 
 
 def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
-    card = portal.card
-    botao = portal.botao
-    esc = portal.esc
-    url_os = portal.url_os
+    card, botao, esc, url_os = portal.card, portal.botao, portal.esc, portal.url_os
     business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
+    pid = session['pid']
     oid = os_id
-    acao = partes[2]
-    if d.get('modo_envio') in ('rascunho','salvar'):
-        try:
-            dados_rasc = {k: d[k] for k in d.keys() if k not in ('csrf','modo_envio')}
-            ext.salvar_rascunho_web(banco, oid, pid, dados_rasc)
-            d2 = dict(d)
-            d2['acao_status'] = 'salvar'
-            try:
-                neg.os_salvar(banco,d2,pid,oid)
-            except Exception:
-                LOG.exception('Falha ao salvar OS %s no rascunho', oid)
-            try:
-                cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-            except Exception:
-                pass
+    d = dict(data)
+    draft = d.get('modo_envio') in ('rascunho', 'salvar')
+    if draft:
+        with ext.db(banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            guard = _transaction_guard(banco, principal, oid, 'edit')
+            if guard:
+                guard(c)
+            # No partial draft is kept if the OS data is rejected.
+            values = {key: value for key, value in d.items()
+                      if key not in ('csrf', 'modo_envio', 'nota_fiscal')}
+            ext.salvar_rascunho_web(banco, oid, pid, values, connection=c)
+            save = dict(d, acao_status='salvar')
+            save['cliente_id'] = business._resolver_cliente_os(save, oid, connection=c)
+            neg.os_salvar(banco, save, pid, oid, connection=c,
+                         staged_attachments=outbox.installed(c))
+            cad9.salvar_detalhes(banco, oid, str(d.get('v9_diagnostico','')),
+                str(d.get('v9_execucao','')), str(d.get('v9_resultado','')),
+                connection=c)
             if d.get('relatorio_tecnico'):
-                try:
-                    with ext.db(banco) as c:
-                        aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')) or '', f'Prestador {s["nome"]}')
-                except Exception:
-                    pass
-            arquivo=d.get('nota_fiscal')
+                aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),
+                                    f'Prestador {session["nome"]}')
+            # Uploaded invoice bytes require a durable stage before the commit;
+            # reject this combination instead of silently committing only data.
+            arquivo = d.get('nota_fiscal')
             if isinstance(arquivo,tuple) and arquivo[0]:
-                try:
-                    ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1])
-                except Exception as falha:
-                    LOG.exception('Falha ao salvar NF no rascunho da OS %s', oid)
-            return ui.pagina('Rascunho salvo',card('Rascunho',
-                '<p class="good">Rascunho salvo com sucesso.</p>'+botao('Voltar à OS',f'{url_os(banco, oid)}')),s)
-        except Exception as e:
-            LOG.exception('Falha ao salvar rascunho da OS %s', oid)
-            return ui.erro(str(e),400,s)
+                ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1],
+                   connection=c,staged=outbox.installed(c))
+        _flush_staged_files(banco,oid)
+        return ui.pagina('Rascunho salvo',card('Rascunho',
+            '<p class="good">Rascunho salvo com sucesso.</p>'
+            +botao('Voltar à OS',f'{url_os(banco, oid)}')),session)
+
     cancelar_os = str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
     acao_status = 'Cancelada' if cancelar_os else str(d.get('acao_status',''))
-    d = dict(d)
     d['acao_status'] = acao_status
     if cad9.prestador_admin(banco, pid):
         d['_permitir_trocar_cliente'] = '1'
     if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
-        d = dict(d); d['modo_envio'] = 'encerrar'
-    if d.get('modo_envio')!='encerrar':raise ValueError('Use Confirmar situação da OS.')
+        d['modo_envio'] = 'encerrar'
+    if d.get('modo_envio')!='encerrar':
+        raise ValueError('Use Confirmar situação da OS.')
     if acao_status not in ('Pendente','Concluída','Cancelada'):
         raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
-    d['cliente_id'] = business._resolver_cliente_os(d, oid)
-    if acao_status=='Concluída':
-        business._exigir_cliente_os(oid,'concluir a OS', d['cliente_id'])
-    # Só o botão de encerramento aplica o status escolhido.
-    # O relato técnico é histórico interno: não bloqueia
-    # cancelar nem deixar pendente. Para concluir, basta
-    # o serviço executado (ou um relato legado já preenchido).
-    if d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída' and not (str(d.get('v9_execucao','')).strip() or str(d.get('relatorio_tecnico','')).strip()):
+    if acao_status=='Concluída' and not (str(d.get('v9_execucao','')).strip()
+            or str(d.get('relatorio_tecnico','')).strip()):
         raise ValueError('Preencha Serviço executado antes de concluir.')
-    # Exige nota fiscal (ou a opção "não precisa") para concluir a OS.
-    if (d.get('modo_envio')=='encerrar' and str(d.get('acao_status',''))=='Concluída'
-            and not d.get('sem_nota_fiscal')
-            and not ext.listar_notas_fiscais(banco, oid)):
-        raise ValueError('Anexe a nota fiscal ou marque "Não precisa de nota fiscal" antes de concluir.')
-    if not str(d.get('relatorio_tecnico','')).strip():
-        d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip() for x in ('v9_diagnostico','v9_execucao','v9_resultado') if str(d.get(x,'')).strip())
-    with ext.db(banco) as c:
-        if not (str(d.get('acao_status',''))=='Cancelada'
-                and cad9.prestador_admin(banco,pid)):
-            prod._os_ativa_responsavel(c,oid,pid)
-    if (acao_status=='Concluída'
-            and not str(d.get('forma_pagamento','')).strip()):
+    if acao_status=='Concluída' and not str(d.get('forma_pagamento','')).strip():
         raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
-    # Pendente e Concluída publicam relatório e podem
-    # enviar o e-mail automático aos destinatários.
+    if not str(d.get('relatorio_tecnico','')).strip():
+        d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip()
+            for x in ('v9_diagnostico','v9_execucao','v9_resultado')
+            if str(d.get(x,'')).strip())
     sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
-    destinatarios=None
-    if str(d.get('acao_status',''))=='Concluída' and not sem_destinatario:
-        destinatarios=prod.destinatarios_para_os(
-            banco,oid,d.get('destinatario_sel[]'),
-            str(d.get('emails_adicionais','')))
-    elif str(d.get('acao_status',''))=='Pendente' and not sem_destinatario:
+    pdf_key = email_key = None
+    destinatarios = None
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        action = _permission('salvar',d)
+        guard = _transaction_guard(banco,principal,oid,action)
+        if guard:
+            guard(c)
+        if acao_status in ('Pendente','Concluída'):
+            pub_guard = _transaction_guard(banco,principal,oid,'publish')
+            if pub_guard:
+                pub_guard(c)
+        d['cliente_id'] = business._resolver_cliente_os(d,oid,connection=c)
+        if acao_status=='Concluída':
+            business._exigir_cliente_os(oid,'concluir a OS',d['cliente_id'],connection=c)
+            if not d.get('sem_nota_fiscal') and not c.execute(
+                    'SELECT 1 FROM os_notas_fiscais WHERE os_id=? LIMIT 1', (oid,)).fetchone():
+                raise ValueError('Anexe a nota fiscal ou marque "Não precisa de nota fiscal" antes de concluir.')
+        if not (acao_status=='Cancelada' and ext.administrador(c,pid)):
+            prod._os_ativa_responsavel(c,oid,pid)
+        use_outbox=outbox.installed(c)
+        if acao_status in ('Pendente','Concluída') and not sem_destinatario and not use_outbox:
+            try:
+                destinatarios=prod.destinatarios_para_os(banco,oid,
+                    d.get('destinatario_sel[]'),str(d.get('emails_adicionais','')))
+            except ValueError as exc:
+                if acao_status!='Pendente' or 'Selecione ao menos um destinatário' not in str(exc):
+                    raise
+        neg.os_salvar(banco,d,pid,oid,connection=c,
+                         staged_attachments=use_outbox)
+        prod.limpar_rota_ao_iniciar(banco,oid,connection=c)
+        if acao_status in ('Pendente','Concluída'):
+            prod.registrar_etapa(banco,oid,pid,acao_status,d,connection=c)
+        if destinatarios:
+            prod.registrar_envio(banco,oid,destinatarios,connection=c)
+        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
+            str(d.get('v9_execucao','')),str(d.get('v9_resultado','')),
+            connection=c)
+        if acao_status in fluxo.PUBLICAVEIS and use_outbox:
+            revision=_work_revision(c,oid)
+            pdf_key=outbox.enqueue_pdf(c,oid,revision,'save-'+acao_status)['operation_key']
+            if not sem_destinatario and acao_status in ('Pendente','Concluída'):
+                email_key=outbox.enqueue_email(c,oid,revision,'send-'+acao_status)['operation_key']
+
+    _flush_staged_files(banco,oid)
+    if acao_status in fluxo.PUBLICAVEIS:
         try:
-            destinatarios=prod.destinatarios_para_os(
-                banco,oid,d.get('destinatario_sel[]'),
-                str(d.get('emails_adicionais','')))
-        except ValueError as erro:
-            if 'Selecione ao menos um destinatário' not in str(erro):
-                raise
-            # Pendência sem contato cadastrado não bloqueia.
-            destinatarios=None
-    neg.os_salvar(banco,d,pid,oid)
-    prod.limpar_rota_ao_iniciar(banco,oid)
-    if d.get('acao_status') in ('Pendente','Concluída'):
-        prod.registrar_etapa(banco,oid,pid,str(d.get('acao_status')),d)
-    if destinatarios:
-        prod.registrar_envio(banco,oid,destinatarios)
-    cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),str(d.get('v9_execucao','')),str(d.get('v9_resultado','')))
-    if str(d.get('acao_status','')) in fluxo.PUBLICAVEIS:
-        try: fluxo.publicar_relatorio(banco,oid)
-        except Exception as falha:
+            if pdf_key:
+                _publish_postcommit(banco,pdf_key)
+            else:
+                fluxo.publicar_relatorio(banco,oid)
+        except Exception as exc:
             LOG.exception('Encerrada OS %s, mas falhou a publicação do PDF',oid)
             return ui.pagina('OS encerrada — PDF pendente',card('Encerramento salvo',
                 '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
-                +f'<p class="bad">{esc(str(falha)[:400])}</p>'
-                +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
-        if destinatarios:
-            # Disparo automático do e-mail em segundo plano:
-            # Não bloqueia a resposta da conclusão da OS.
+                +f'<p class="bad">{esc(str(exc)[:400])}</p>'
+                +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),session,503)
+        if email_key:
             try:
                 from flavors.autoseg.modules import gmail_service
-                gmail_service.enviar_relatorio_os_concluida(banco, oid, destinatarios)
-            except Exception as falha:
-                LOG.exception('Gmail: OS %s — falha ao agendar envio', oid)
-                prod.registrar_envio(banco, oid, destinatarios, 'falhou', erro=str(falha))
-    return ui.redir(f"{url_os(banco, os_id)}")
+                outbox.deliver_email(banco,email_key,
+                    lambda oid,key: gmail_service._enviar_relatorio_os_concluida(
+                        banco,oid,outbox_operation_key=key))
+            except Exception:
+                LOG.exception('OS %s: e-mail aguardando reconciliação da outbox',oid)
+        elif destinatarios:
+            try:
+                from flavors.autoseg.modules import gmail_service
+                gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
+            except Exception as exc:
+                LOG.exception('Gmail: OS %s — falha ao agendar envio',oid)
+                prod.registrar_envio(banco,oid,destinatarios,'falhou',erro=str(exc))
+    return ui.redir(f'{url_os(banco, oid)}')
 
 
 def _write_action_publicar(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -976,7 +1042,20 @@ def _write_action_publicar(banco, principal, os_id, data, *, ui, session, path, 
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
-    fluxo.publicar_relatorio(banco,oid)
+    publish_key=None
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        guard = _transaction_guard(banco,principal,oid,'publish')
+        guard(c)
+        status=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',
+                         (oid,)).fetchone()
+        if not status or status['arquivada'] or status['status'] not in fluxo.PUBLICAVEIS:
+            raise PermissionError('OS indisponível para publicação.')
+        publish_key=_enqueue_pdf_if_installed(c,oid,'publish')
+    if publish_key:
+        _publish_postcommit(banco,publish_key)
+    else:
+        fluxo.publicar_relatorio(banco,oid)
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -1026,12 +1105,16 @@ def _write_action_em_rota(banco, principal, os_id, data, *, ui, session, path, q
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
-    cliente_id=business._persist_form_client(
-        d,oid,pid,f'Prestador {s["nome"]}','route')
-    business._exigir_cliente_os(oid,'colocar em rota',cliente_id)
-    ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
-                       admin=bool(s.get('admin')),
-                       authorize=_transaction_guard(banco,principal,oid,'start'))
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        guard=_transaction_guard(banco,principal,oid,'start')
+        if guard is not None:
+            guard(c)
+        cliente_id=business._persist_form_client(
+            d,oid,pid,f'Prestador {s["nome"]}','route',connection=c)
+        business._exigir_cliente_os(oid,'colocar em rota',cliente_id,connection=c)
+        ext.marcar_em_rota(banco,oid,pid,ator=f'Prestador {s["nome"]}',
+                           admin=bool(s.get('admin')),connection=c)
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -1061,11 +1144,17 @@ def _write_action_iniciar(banco, principal, os_id, data, *, ui, session, path, q
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
-    cliente_id=business._persist_form_client(
-        d,oid,pid,f'Prestador {s["nome"]}','start')
-    business._exigir_cliente_os(oid,'iniciar o atendimento',cliente_id)
-    aten.iniciar_assumindo(banco,oid,pid,admin=bool(s.get('admin')))
-    prod.limpar_rota_ao_iniciar(banco,oid)
+    with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        guard=_transaction_guard(banco,principal,oid,'start')
+        if guard is not None:
+            guard(c)
+        cliente_id=business._persist_form_client(
+            d,oid,pid,f'Prestador {s["nome"]}','start',connection=c)
+        business._exigir_cliente_os(oid,'iniciar o atendimento',cliente_id,connection=c)
+        aten.iniciar_assumindo(banco,oid,pid,admin=bool(s.get('admin')),
+                               connection=c)
+        prod.limpar_rota_ao_iniciar(banco,oid,connection=c)
     return ui.redir(f"{url_os(banco, os_id)}")
 
 
@@ -1079,6 +1168,34 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
+    with ext.db(banco) as c:
+        if outbox.installed(c):
+            # A previously accepted email may already have left the provider;
+            # the operator must acknowledge the possible duplicate explicitly.
+            request = str(d.get('reenviar_operacao','')).strip()
+            ack = str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
+            if not ack or not re.fullmatch(r'[A-Za-z0-9_-]{12,80}',request):
+                raise ValueError('Reenvio manual pode duplicar o e-mail. '
+                                 'Confirme a duplicidade e informe uma chave de requisição única.')
+            c.execute('BEGIN IMMEDIATE')
+            _transaction_guard(banco,principal,oid,'send')(c)
+            if ext.responsavel_atual(c,oid)!=pid and not ext.administrador(c,pid):
+                raise PermissionError('Sem permissão para reenviar e-mail.')
+            revision=_work_revision(c,oid)+':'+outbox.operation_key(
+                oid,request,'manual-request','email')
+            key=outbox.manual_email_retry(c,oid,revision,'send-manual',
+                                         duplicate_acknowledged=ack)['operation_key']
+            pdf_key=outbox.enqueue_pdf(c,oid,revision,'manual-pdf')['operation_key']
+            manual=True
+        else:
+            manual=False
+    if manual:
+        _publish_postcommit(banco,pdf_key)
+        from flavors.autoseg.modules import gmail_service
+        outbox.deliver_email(banco,key,
+            lambda oid,op: gmail_service._enviar_relatorio_os_concluida(
+                banco,oid,outbox_operation_key=op))
+        return ui.redir(f'{url_os(banco, oid)}')
     with ext.db(banco) as c:
         if ext.responsavel_atual(c,oid)!=pid and not cad9.prestador_admin(banco,pid):
             raise PermissionError('Somente o responsável ou administrador pode reenviar o e-mail.')

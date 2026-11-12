@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from email.message import EmailMessage
 from email.policy import SMTP
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from officina.core import runtime_config
 BASE = runtime_config.base_dir()
@@ -305,10 +305,10 @@ def responsavel_atual(c, os_id):
 
 def pode_assumir(c,os_id,pid):
     """Somente OS ativa sem responsável pode ser assumida por outro prestador."""
-    o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     p=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
     if not o or not p: return False
-    return o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
+    return not o['arquivada'] and o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
 
 def atribuir(banco,os_id,prestador_id,ator='Administrador',authorize=None):
     """Atribuição administrativa define responsável; preserva participantes históricos."""
@@ -333,10 +333,11 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador',authorize=None):
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
 
-def assumir(banco,os_id,pid,authorize=None):
+def assumir(banco,os_id,pid,authorize=None,*,connection=None):
     """Assunção atômica de OS ativa desatribuída, sem iniciar execução."""
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         if authorize is not None:
             authorize(c)
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
@@ -575,7 +576,7 @@ def atualizar_legenda_anexo(banco, os_id, anexo_id, legenda, visivel=1, ator='Pr
 
 
 def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=False,
-                               chave=None,legenda='',visivel=1):
+                               chave=None,legenda='',visivel=1,*,staged=False):
     """Anexa ou atualiza uma foto sem duplicar; a legenda fica ligada à chave/hash."""
     formato,extensao=validar_imagem(conteudo)
     if pid is not None:
@@ -606,8 +607,14 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
                    (c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome'] if pid else 'Administrador'))
         return str(existente['caminho'])
     ANEXOS.mkdir(parents=True,exist_ok=True)
-    destino=ANEXOS/(secrets.token_hex(16)+extensao)
-    destino.write_bytes(conteudo)
+    if staged:
+        from officina.core import os_effect_outbox as effects
+        effects.require_installed(c)
+        # Assign the final operation key after insertion, using its record ID.
+        destino=ANEXOS/('pending-'+secrets.token_hex(16)+extensao)
+    else:
+        destino=ANEXOS/(secrets.token_hex(16)+extensao)
+        destino.write_bytes(conteudo)
     try:
         ordem=c.execute('SELECT COALESCE(MAX(ordem),0)+1 FROM os_anexos WHERE os_id=?',
                         (os_id,)).fetchone()[0]
@@ -615,17 +622,28 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
                          VALUES(?,?,?,?,?,?,?,?,?)''',
                   (os_id,pid,Path(nome).name[:150],str(destino),formato,agora(),chave,digest,ordem))
         definir_legenda_anexo_c(c,os_id,cur.lastrowid,legenda,visivel)
+        if staged:
+            revision=f'{cur.lastrowid}:{digest}'
+            operation=effects.operation_key(os_id,revision,'attachment-add','file')
+            destino=ANEXOS/(operation+extensao)
+            c.execute('UPDATE os_anexos SET caminho=? WHERE id=?',
+                      (str(destino),cur.lastrowid))
+            effects.stage_bytes(ANEXOS,operation,conteudo)
+            effects.enqueue_file(c,os_id,revision,'attachment-add',cur.lastrowid,digest)
         ator='Administrador'
         if pid is not None:
             ator=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome']
         evento(c,os_id,'Imagem anexada',Path(nome).name[:150],pid,ator)
     except Exception:
-        destino.unlink(missing_ok=True);raise
+        if not staged:
+            destino.unlink(missing_ok=True)
+        raise
     # Warm the thumbnail cache so the first OS page load does not decode the original.
-    try:
-        thumb_imagem(destino)
-    except Exception:
-        pass
+    if not staged:
+        try:
+            thumb_imagem(destino)
+        except Exception:
+            pass
     return str(destino)
 
 
@@ -879,9 +897,10 @@ def administrador(c, pid):
                           (pid,)).fetchone())
 
 
-def marcar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None):
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+def marcar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None,*,connection=None):
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         if authorize is not None:
             authorize(c)
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
@@ -906,7 +925,7 @@ def finalizar_em_rota(c, os_id):
               (agora(), os_id))
 
 
-def salvar_rascunho_web(banco, os_id, pid, dados):
+def salvar_rascunho_web(banco, os_id, pid, dados, *, connection=None):
     import json
     limpos = {}
     for chave, valor in dados.items():
@@ -914,7 +933,7 @@ def salvar_rascunho_web(banco, os_id, pid, dados):
         if chave.startswith('imagens_') or isinstance(valor, (bytes, tuple)):
             continue
         limpos[chave] = valor
-    with db(banco) as c:
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
         c.execute('''INSERT INTO os_rascunhos_web(os_id, prestador_id, dados_json, atualizado_em)
                      VALUES(?,?,?,?) ON CONFLICT(os_id, prestador_id) DO UPDATE SET
                      dados_json=excluded.dados_json, atualizado_em=excluded.atualizado_em''',
@@ -959,7 +978,7 @@ def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None):
         return True
 
 
-def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
+def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo, *, connection=None, staged=False):
     """Anexa um PDF de nota fiscal à OS, com deduplicação por SHA-256."""
     if not isinstance(conteudo, bytes) or not conteudo.startswith(b'%PDF-'):
         raise ValueError('A nota fiscal deve ser um arquivo PDF válido.')
@@ -967,8 +986,9 @@ def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
         raise ValueError('A nota fiscal deve ter no máximo 20 MB.')
     import hashlib
     digest = hashlib.sha256(conteudo).hexdigest()
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
@@ -983,20 +1003,35 @@ def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
         if existente:
             return int(existente['id'])
         NOTAS.mkdir(parents=True, exist_ok=True)
-        destino = NOTAS / (secrets.token_hex(16) + '.pdf')
-        destino.write_bytes(conteudo)
+        use_stage = bool(staged)
+        if use_stage:
+            from officina.core import os_effect_outbox as effects
+            effects.require_installed(c)
+            destino = NOTAS / ('pending-' + secrets.token_hex(16) + '.pdf')
+        else:
+            destino = NOTAS / (secrets.token_hex(16) + '.pdf')
+            destino.write_bytes(conteudo)
         try:
             cur = c.execute('''INSERT INTO os_notas_fiscais
                 (os_id,prestador_id,nome_original,caminho,sha256,criado_em)
                 VALUES(?,?,?,?,?,?)''',
                 (os_id, pid, Path(nome).name[:150], str(destino), digest, agora()))
+            if use_stage:
+                revision=f'{cur.lastrowid}:{digest}'
+                operation=effects.operation_key(os_id,revision,'invoice-attach','file')
+                destino=NOTAS/(operation+'.pdf')
+                c.execute('UPDATE os_notas_fiscais SET caminho=? WHERE id=?',
+                          (str(destino),cur.lastrowid))
+                effects.stage_bytes(NOTAS,operation,conteudo)
+                effects.enqueue_file(c,os_id,revision,'invoice-attach',cur.lastrowid,digest)
             ator = 'Administrador'
             if pid is not None:
                 ator = c.execute('SELECT nome FROM prestadores WHERE id=?', (pid,)).fetchone()['nome']
             evento(c, os_id, 'Nota fiscal anexada', Path(nome).name[:150], pid, ator)
             return int(cur.lastrowid)
         except Exception:
-            destino.unlink(missing_ok=True)
+            if not use_stage:
+                destino.unlink(missing_ok=True)
             raise
 
 

@@ -3,6 +3,7 @@
 Não altera a definição das tabelas originais. Cada operação sensível gera auditoria.
 """
 import re
+from contextlib import nullcontext
 import sqlite3
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
@@ -146,7 +147,7 @@ def cliente_excluir(banco,cid,pid):
         c.execute('DELETE FROM clientes WHERE id=?',(cid,))
 
 
-def os_salvar(banco,d,pid,oid=None,silent=False):
+def os_salvar(banco,d,pid,oid=None,silent=False,*,connection=None,authorize=None,staged_attachments=False):
     """Insere/edita uma OS, materiais, relatório e estado numa transação SQLite."""
     try: cliente_id=int(d['cliente_id'])
     except (KeyError,ValueError,TypeError): raise ValueError('Selecione o cliente.')
@@ -158,7 +159,7 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
     tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
     forma=texto(d,'forma_pagamento',60)
     if not forma and oid is not None:
-        with ext.db(banco) as conexao:
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as conexao:
             atual=conexao.execute('SELECT forma_pagamento FROM ordens_servico WHERE id=?',
                                   (oid,)).fetchone()
         if atual and not str(atual['forma_pagamento'] or '').strip():
@@ -284,11 +285,16 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
         # discard it or mistake a modular composition for a frozen total.
         comp['valor_total_override']=round(float(total_negociado),2)
     comp_json=composicao.para_json(comp)
-    composicao.instalar_banco(banco)
-    # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.
-    aten.instalar(banco)
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    if connection is None:
+        composicao.instalar_banco(banco)
+        aten.instalar(banco)
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
+        elif not c.in_transaction:
+            raise RuntimeError('Shared OS connection must already be locked.')
+        if authorize is not None:
+            authorize(c)
         if not c.execute('SELECT 1 FROM clientes WHERE id=?',(cliente_id,)).fetchone():
             raise ValueError('Cliente não encontrado.')
         if oid is None:
@@ -434,7 +440,8 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
             legenda=legendas_fotos[indice] if indice<len(legendas_fotos) else ''
             visivel=str(visiveis_fotos[indice])!='0' if indice<len(visiveis_fotos) else True
             ext.registrar_imagem_transacao(c,oid,pid,item[0],item[1],permitir_colaboracao=True,
-                                           chave=chave,legenda=legenda,visivel=visivel)
+                                           chave=chave,legenda=legenda,visivel=visivel,
+                                           staged=staged_attachments)
         for indice,anexo_id in enumerate(anexo_ids):
             try:anexo_id=int(anexo_id)
             except (TypeError,ValueError):continue

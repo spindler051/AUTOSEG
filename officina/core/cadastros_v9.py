@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+from contextlib import nullcontext
 from datetime import datetime
 from officina.core import prestadores_ext as ext
 SITUACOES = ('Aguardando AUTOSEG', 'Aguardando síndico', 'Autorizado', 'Recusado', 'Mais informações', 'Cancelado')
@@ -762,8 +763,8 @@ def desativar_cliente(banco,cliente_id,autor):
         c.execute('INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em) VALUES(?,?,?,?,?,?)',
                   (cliente_id,None,'Desativação',cl['nome'],autor,ext.agora()))
 
-def salvar_detalhes(banco,os_id,diagnostico,execucao,resultado):
-    with ext.db(banco) as c:
+def salvar_detalhes(banco,os_id,diagnostico,execucao,resultado,*,connection=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         c.execute('''INSERT INTO v9_detalhes_os(os_id,diagnostico,execucao,resultado,alterado_em)
                     VALUES(?,?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
                     diagnostico=excluded.diagnostico,execucao=excluded.execucao,
