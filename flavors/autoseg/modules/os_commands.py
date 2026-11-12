@@ -1485,18 +1485,16 @@ def read_anexo(banco,principal,aid,*,ui,session):
         row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
     if row is None:
         raise PermissionError('Recurso indisponível.')
-    if object_policy_flags.enforcement_enabled(banco):
-        from officina.application.work_item_access import resource_for_work_item
-        resource=resource_for_work_item(banco,int(row['os_id']))
-        document=Resource('document',aid,resource.organization_id,resource.owner_id,
-                          resource.client_id,resource.participant_ids,
-                          resource.attributes,resource.client_org_id)
-        ObjectPolicy().require(principal,'download',document)
+    if principal is None:
+        raise PermissionError('Recurso indisponível.')
+    from officina.application.work_item_access import resource_for_work_item
+    resource=resource_for_work_item(banco,int(row['os_id']))
+    document=Resource('document',aid,resource.organization_id,resource.owner_id,
+                      resource.client_id,resource.participant_ids,
+                      resource.attributes,resource.client_org_id)
+    ObjectPolicy().require(principal,'download',document)
     with ext.db(banco) as c:
         x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-        if x and not (prod.participou(c,x['os_id'],s['pid'])
-                      or ext.administrador(c,s['pid'])):
-            raise PermissionError('Anexo restrito aos técnicos participantes.')
     if not x:return self.erro('Anexo não encontrado.',404,s)
     policy_shadow.evaluate_os(
         banco,s['pid'],x['os_id'],'download',True,'anexo')
@@ -1521,18 +1519,16 @@ def read_anexo_thumb(banco,principal,aid,*,ui,session):
         row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
     if row is None:
         raise PermissionError('Recurso indisponível.')
-    if object_policy_flags.enforcement_enabled(banco):
-        from officina.application.work_item_access import resource_for_work_item
-        resource=resource_for_work_item(banco,int(row['os_id']))
-        document=Resource('document',aid,resource.organization_id,resource.owner_id,
-                          resource.client_id,resource.participant_ids,
-                          resource.attributes,resource.client_org_id)
-        ObjectPolicy().require(principal,'download',document)
+    if principal is None:
+        raise PermissionError('Recurso indisponível.')
+    from officina.application.work_item_access import resource_for_work_item
+    resource=resource_for_work_item(banco,int(row['os_id']))
+    document=Resource('document',aid,resource.organization_id,resource.owner_id,
+                      resource.client_id,resource.participant_ids,
+                      resource.attributes,resource.client_org_id)
+    ObjectPolicy().require(principal,'download',document)
     with ext.db(banco) as c:
         x=c.execute('SELECT os_id,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-        if x and not (prod.participou(c,x['os_id'],s['pid'])
-                      or ext.administrador(c,s['pid'])):
-            raise PermissionError('Anexo restrito aos técnicos participantes.')
     if not x:return self.erro('Anexo não encontrado.',404,s)
     policy_shadow.evaluate_os(
         banco,s['pid'],x['os_id'],'view',True,'anexo_thumb')

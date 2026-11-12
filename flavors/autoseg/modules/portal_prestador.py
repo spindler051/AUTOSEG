@@ -53,6 +53,13 @@ from flavors.autoseg.modules import maf_loans
 from officina.integration import clientes as clientes_core
 from officina.repositories import ordens as ordens_repo
 
+
+def _policy_allows(banco, session, permission):
+    """Resolve a UI action through the policy matrix, not a literal admin if."""
+    from officina.application.policy import load_policy
+    principal = os_commands._provider_context(banco, session)
+    return load_policy().allows(principal.role, permission)
+
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 
@@ -490,9 +497,6 @@ body.ui-app .finance-item-client{margin:4px 0;color:var(--u-text-2);font-size:13
 body.ui-app .finance-item-values span{color:var(--u-muted);font:400 12px/1.4 var(--u-mono)}
 body.ui-app .finance-item-values strong{color:var(--u-accent);font:500 20px/1.1 var(--u-mono);letter-spacing:-.02em}
 .finance-tools{display:flex;justify-content:flex-end;margin:0 0 10px}
-.finance-shell.fin-masked .kpi strong,.finance-shell.fin-masked .finance-item-values strong{visibility:hidden}
-.finance-shell.fin-masked .finance-item-values strong::after,.finance-shell.fin-masked .kpi strong::after{content:"R$ ••••";visibility:visible;position:absolute;inset:0;display:flex;align-items:center}
-.finance-shell.fin-masked .finance-item-values strong,.finance-shell.fin-masked .kpi strong{position:relative}
 body.ui-app .finance-item-detail{color:var(--u-muted);font:400 12px/1.5 var(--u-mono);overflow-wrap:anywhere}
 body.ui-app .finance-item-foot .tag{display:inline-flex;align-items:center;margin:0;padding:4px 10px;border:1px solid transparent;border-radius:999px;font:600 11px/1.2 var(--u-font)}
 body.ui-app .finance-item-foot .tag::before{display:none}
@@ -3126,7 +3130,7 @@ class PortalPrestador:
                     +tabela(['OS','Colega','Parcela','Confirmado','Aguardando confirmação',
                              'A enviar','Ação'],repasses))
                 caixa_card=''
-                if s.get('admin'):
+                if _policy_allows(banco,s,'finance.view.all'):
                     try:
                         resumo_caixa=empresa.resumo(banco)
                         linhas_caixa=[]
@@ -3928,9 +3932,9 @@ class PortalPrestador:
                         return self.send_bytes(Path(caminho).read_bytes(),'application/pdf',
                                                filename=registro['nome_original'])
                     if len(partes)==4 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit() and partes[3]=='thumb':
-                        return os_commands.read_anexo_thumb(banco,(os_commands._provider_context(banco,s) if object_policy_flags.enforcement_enabled(banco) else None),int(partes[2]),ui=self,session=s)
+                        return os_commands.read_anexo_thumb(banco,os_commands._provider_context(banco,s),int(partes[2]),ui=self,session=s)
                     if len(partes)==3 and partes[0]=='arquivos' and partes[1]=='anexo' and partes[2].isdigit():
-                        return os_commands.read_anexo(banco,(os_commands._provider_context(banco,s) if object_policy_flags.enforcement_enabled(banco) else None),int(partes[2]),ui=self,session=s)
+                        return os_commands.read_anexo(banco,os_commands._provider_context(banco,s),int(partes[2]),ui=self,session=s)
                     return self.erro('Página não encontrada.',404,s)
                 except PermissionError as e:return self.erro(str(e),403,self.sessao())
                 except ValueError as e:return self.erro(str(e),409,self.sessao())

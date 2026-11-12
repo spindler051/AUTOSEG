@@ -1046,6 +1046,49 @@ class CorrecoesRev12(unittest.TestCase):
         dados = json.loads(falha.exception.read())
         self.assertTrue(dados.get('error'))
 
+    @mock.patch.dict('os.environ', {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT': '0'})
+    def test_admin_ve_foto_de_os_de_outro_com_policy(self):
+        a = self._prestador('Técnico Foto Policy A', email='foto.policy.a@exemplo.com.br')
+        b = self._prestador('Admin Foto Policy B', email='foto.policy.b@exemplo.com.br')
+        c = self._prestador('Funcionário Foto Policy C', email='foto.policy.c@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Foto Policy')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente_a = self._login(base, 'foto.policy.a@exemplo.com.br')
+        token = self._csrf(base, cliente_a, oid)
+        buffer = io.BytesIO()
+        Image.new('RGB', (4, 4), 'blue').save(buffer, 'PNG')
+        status, _ = multipart(
+            cliente_a, base, f'/os/{oid}/fotos',
+            [('csrf', token), ('foto_legenda[]', 'Foto do portão'),
+             ('foto_chave[]', 'chave-policy'), ('foto_visivel[]', '1')],
+            [('imagens_encerramento[]', 'portao.png', buffer.getvalue(), 'image/png')])
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            foto = c.execute('SELECT id FROM os_anexos WHERE os_id=?', (oid,)).fetchone()
+
+        admin = self._login(base, 'foto.policy.b@exemplo.com.br')
+        with admin.open(urllib.request.Request(
+                base + f'/arquivos/anexo/{foto["id"]}/thumb'), timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'image/jpeg')
+        with admin.open(urllib.request.Request(
+                base + f'/arquivos/anexo/{foto["id"]}'), timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertGreater(len(resposta.read()), 0)
+
+        funcionario = self._login(base, 'foto.policy.c@exemplo.com.br')
+        status, _ = req(funcionario, base, f'/arquivos/anexo/{foto["id"]}/thumb')
+        self.assertEqual(status, 403)
+        status, _ = req(funcionario, base, f'/arquivos/anexo/{foto["id"]}')
+        self.assertEqual(status, 403)
+
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):
         outro = self._prestador('Prestador Outro', documento='11222333000181')

@@ -692,23 +692,49 @@
     });
   });
 
-  // Máscara visual do financeiro: não altera valores nem totais no servidor.
+  // Máscara visual do financeiro: troca apenas o texto exibido, sem tocar
+  // nos valores, totais ou no servidor. Vale para KPIs, listas e tabelas.
   const maskFinanceiro = document.getElementById('fin-mask-toggle');
   const shellFinanceiro = document.getElementById('finance-shell');
   if (maskFinanceiro && shellFinanceiro) {
     const chaveMascara = 'autoseg:fin-mask';
+    const textosOriginais = new WeakMap();
+    const mascararTexto = (no, ativa) => {
+      if (no.nodeType === Node.TEXT_NODE) {
+        if (ativa) {
+          if (/\bR\$\s*[\d.,]+/.test(no.nodeValue) && !textosOriginais.has(no)) {
+            textosOriginais.set(no, no.nodeValue);
+            no.nodeValue = no.nodeValue.replace(/\bR\$\s*[\d.,]+/g, 'R$ ••••');
+          }
+        } else if (textosOriginais.has(no)) {
+          no.nodeValue = textosOriginais.get(no);
+          textosOriginais.delete(no);
+        }
+        return;
+      }
+      if (no.nodeType !== Node.ELEMENT_NODE
+          || no.tagName === 'SCRIPT' || no.tagName === 'STYLE') return;
+      no.childNodes.forEach(filho => mascararTexto(filho, ativa));
+    };
+    let mascaraAtiva = false;
     const aplicarMascara = ativa => {
+      mascaraAtiva = ativa;
+      mascararTexto(shellFinanceiro, ativa);
       shellFinanceiro.classList.toggle('fin-masked', ativa);
       maskFinanceiro.textContent = ativa ? 'Mostrar valores' : 'Ocultar valores';
       maskFinanceiro.setAttribute('aria-pressed', ativa ? 'true' : 'false');
     };
-    let mascaraAtiva = false;
     try { mascaraAtiva = localStorage.getItem(chaveMascara) === '1'; } catch (_erro) {}
     aplicarMascara(mascaraAtiva);
+    new MutationObserver(mutacoes => {
+      if (!mascaraAtiva) return;
+      mutacoes.forEach(mutacao => mutacao.addedNodes.forEach(no =>
+        mascararTexto(no, true)));
+    }).observe(shellFinanceiro, {childList: true, subtree: true});
     maskFinanceiro.addEventListener('click', () => {
-      mascaraAtiva = !mascaraAtiva;
-      try { localStorage.setItem(chaveMascara, mascaraAtiva ? '1' : '0'); } catch (_erro) {}
-      aplicarMascara(mascaraAtiva);
+      const ativa = !mascaraAtiva;
+      try { localStorage.setItem(chaveMascara, ativa ? '1' : '0'); } catch (_erro) {}
+      aplicarMascara(ativa);
     });
   }
 
