@@ -58,6 +58,10 @@ permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
 - Remaining multi-transaction flows still need refactoring; enforcement stays
   off by default and production activation is not approved.
 
+## Não lançado — limpeza do Meu Auto Financeiro no AUTOSEG
+
+- **Meu Auto Financeiro:** removido o módulo embutido (`meu_auto_financeiro.py`), seus testes e a documentação do modo integrado. O produto continua separado em `~/AUTOSEG_MAF`, na porta 8967, com banco, login e túnel próprios.
+- **Empréstimos MAF:** mantido apenas o bridge `maf_loans.py` no financeiro do prestador, que usa o banco do site separado para exibir e operar os empréstimos; a rota `/auto-financeiro` e os atalhos antigos não existem mais no AUTOSEG.
 
 ## 9.6.0-dev.73 — preparação da primeira publicação pública — 2026-11-09 — develop
 

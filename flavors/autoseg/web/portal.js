@@ -2109,9 +2109,6 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
 `;
     document.head?.append(estiloGeral);
   }
-  // Módulo Meu Auto Financeiro é separado do AUTOSEG: remove os atalhos.
-  document.querySelectorAll('a[href="/auto-financeiro"]').forEach(link => link.remove());
-
   // Fluxo único de Nova OS: usa a tela rápida e remove o conceito de completa.
   document.querySelectorAll('.page-actions').forEach(area => {
     const rapida = area.querySelector('a[href="/os/rapida"]');
