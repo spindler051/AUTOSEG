@@ -238,15 +238,32 @@ class HttpService(AppService):
                           params={'limite': limite})
         return [SolicitacaoPortal(**item) for item in dados]
 
+    @staticmethod
+    def _mapear_resumo_os_desktop(item: Mapping[str, Any]) -> OSResumo:
+        if 'valor_total' in item:
+            return OSResumo(**item)
+        equipe = str(item.get('participantes') or '').strip()
+        responsavel = str(item.get('responsavel') or 'Não atribuído')
+        if equipe:
+            responsavel += ' | Equipe: ' + equipe
+        # "Compartilhada" is a display-only sentinel. The API never sends
+        # financial placeholders; GTK renders restricted columns as dashes.
+        return OSResumo(id=int(item['id']), numero_os=str(item['numero_os']),
+                        cliente=str(item['cliente']),
+                        data_abertura=str(item.get('data_abertura') or ''),
+                        valor_total=0.0, forma_pagamento='',
+                        origem='Compartilhada', responsavel=responsavel,
+                        status=str(item['status']), incompleto=False)
+
     def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
         dados = self._ler('/api/v1/desktop/os/ativas', [],
                           params={'termo': termo})
-        return [OSResumo(**item) for item in dados]
+        return [self._mapear_resumo_os_desktop(item) for item in dados]
 
     def listar_os_recentes(self, limite: int = 6) -> list[OSResumo]:
         dados = self._ler('/api/v1/desktop/os/recentes', [],
                           params={'limite': limite})
-        return [OSResumo(**item) for item in dados]
+        return [self._mapear_resumo_os_desktop(item) for item in dados]
 
     def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
         dados = self._ler('/api/v1/desktop/os/escolha', [],

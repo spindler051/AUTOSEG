@@ -501,7 +501,8 @@ class Janela(Adw.ApplicationWindow):
         self._os_inicio = list(recentes)
         if getattr(self, "tabela_inicio", None) is not None:
             self.tabela_inicio.definir_linhas([
-                (r.numero_os, r.cliente, r.status, ui.brl(r.valor_total),
+                (r.numero_os, r.cliente, r.status,
+                 '—' if r.origem == 'Compartilhada' else ui.brl(r.valor_total),
                  str(r.data_abertura or '')[:10])
                 for r in recentes
             ])
@@ -954,9 +955,12 @@ class Janela(Adw.ApplicationWindow):
         termo = self.busca_os.get_text().strip() if hasattr(self, "busca_os") else ""
         registros = self.service.listar_os_ativas(termo)
         self.tabela_os.definir_linhas([
-            (r.id, r.numero_os, r.cliente, r.data_abertura, ui.brl(r.valor_total),
-             r.forma_pagamento, r.origem, r.responsavel, r.status,
-             "Incompletos" if r.incompleto else "OK")
+            (r.id, r.numero_os, r.cliente, r.data_abertura,
+             '—' if r.origem == 'Compartilhada' else ui.brl(r.valor_total),
+             '—' if r.origem == 'Compartilhada' else r.forma_pagamento,
+             r.origem, r.responsavel, r.status,
+             'Restritos' if r.origem == 'Compartilhada' else
+             ('Incompletos' if r.incompleto else 'OK'))
             for r in registros
         ])
 
