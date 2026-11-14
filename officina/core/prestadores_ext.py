@@ -890,10 +890,12 @@ def criar_rascunho_fiscal(banco,os_id):
         raise ValueError('OS sem número público; não é possível preparar a nota fiscal.')
     path=RASCUNHOS/f'nota_fiscal_rascunho_{nome_os}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
 
-def desatribuir(banco, os_id, ator='Administrador'):
+def desatribuir(banco, os_id, ator='Administrador', authorize=None):
     """Remove apenas o responsável atual. Histórico e participantes são preservados."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ATIVAS:
             raise ValueError('Selecione uma OS ativa.')

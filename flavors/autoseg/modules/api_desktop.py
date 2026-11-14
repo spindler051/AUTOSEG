@@ -193,9 +193,8 @@ def _hidden_resource():
 def _require_object(banco, principal, os_id, action='view'):
     """The API gate authenticates transport, not access to a service order.
 
-    Preflight is read-only. The legacy LocalService writers use separate
-    transactions, so relationship changes between authorization and a write
-    remain a TOCTOU risk until they accept a transaction-local guard.
+    Preflight is read-only. Mutating OS routes additionally supply a
+    transaction-local guard to their writer.
     """
     if type(os_id) is not int or os_id <= 0:
         _hidden_resource()
@@ -216,6 +215,30 @@ def _require_object(banco, principal, os_id, action='view'):
         raise
     except PermissionError:
         _hidden_resource()
+
+
+def _os_writer_authorize(principal, os_id, action):
+    """Revalidate the current actor and object in the writer's BEGIN IMMEDIATE."""
+    def authorize(connection):
+        if principal.provider_id is None:
+            _hidden_resource()
+        provider = connection.execute(
+            'SELECT ativo,excluido FROM prestadores WHERE id=?',
+            (principal.provider_id,)).fetchone()
+        if (provider is None or not provider['ativo'] or provider['excluido']):
+            _hidden_resource()
+        current = replace(principal,
+                          role=('admin' if ext.administrador(connection, principal.provider_id)
+                                else 'employee'), active=True)
+        try:
+            access.require_work_item_locked(connection, current, os_id, action)
+        except PermissionDenied as error:
+            if error.decision.relationship == 'other':
+                _hidden_resource()
+            raise
+        except PermissionError:
+            _hidden_resource()
+    return authorize
 
 
 def _require_customer(banco, principal, customer_id, action='view'):
@@ -498,7 +521,9 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
             _require_object(banco, principal, int(payload.os_id), permission)
         else:
             access.require_create(banco, principal)
-        return _enviar(handler, 200, servico.salvar_os(payload))
+        return _enviar(handler, 200, servico.salvar_os(
+            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission))
+            if payload.os_id else servico.salvar_os(payload))
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, _scoped_os_rows(banco, principal,
             termo=str(query.get('termo', [''])[0])))
@@ -555,25 +580,30 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         if prestador_id is None:
             raise ValidacaoError('Informe o prestador.')
         return _enviar(handler, 200, {
-            'mudou': servico.atribuir_os(os_id, prestador_id)})
+            'mudou': servico.atribuir_os(os_id, prestador_id,
+                             authorize=_os_writer_authorize(principal, os_id, 'assign'))})
     if resto == ['desatribuir'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'mudou': servico.desatribuir_os(os_id)})
+            'mudou': servico.desatribuir_os(os_id,
+                             authorize=_os_writer_authorize(principal, os_id, 'assign'))})
     if resto == ['iniciar'] and metodo == 'POST':
-        servico.iniciar_os(os_id)
+        servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start'))
         return _enviar(handler, 200, {'ok': True})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id)})
     if resto == ['pdf', 'publicar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.publicar_pdf(os_id)})
+            'arquivo': servico.publicar_pdf(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'publish'))})
     if resto == ['email', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.preparar_email(os_id)})
+            'arquivo': servico.preparar_email(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'send'))})
     if resto == ['nota', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.preparar_nota(os_id)})
+            'arquivo': servico.preparar_nota(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'send'))})
     raise NaoEncontradoError('Rota não encontrada.')
 
 
