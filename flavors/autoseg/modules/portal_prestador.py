@@ -2304,8 +2304,8 @@ class PortalPrestador:
                                         continue
                                     item={'id':x.get('id'),'nome':x.get('nome'),
                                           'valor':f'{int(x.get("valor_centavos") or 0)/100:.2f}'.replace('.',',')}
-                                    if x.get('saldo_pai'):
-                                        item['saldo_pai']=True
+                                    if x.get('parent_keeps_remainder'):
+                                        item['parent_keeps_remainder']=True
                                     filhos=_componentes_yaml(x.get('filhos') or [])
                                     if filhos:
                                         item['filhos']=filhos
