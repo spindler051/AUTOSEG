@@ -33,7 +33,8 @@ sistema falhar fechado quando a outbox não estiver instalada.
 
 - Manter qualquer envio automático fora da outbox.
 - Manter o branch `not use_outbox` que chama Gmail.
-- Manter `emails_adicionais` escondido, desabilitado ou aceito no backend.
+- Manter `emails_adicionais` no caminho de OS/e-mail. O campo homônimo da
+  importação Asaas não faz parte deste escopo.
 - Usar `produtividade_email.destinatarios_json` como fallback de endereço.
 - `try/except` que engole erro e segue por outro caminho.
 - Flag que preserve o comportamento antigo permanentemente.
@@ -62,6 +63,7 @@ sistema falhar fechado quando a outbox não estiver instalada.
 - `flavors/autoseg/modules/os_commands.py`
 - `flavors/autoseg/web/portal.js`
 - `officina/core/os_effect_outbox.py`
+- `officina/core/produtividade_os.py`
 - `officina/core/prestadores_ext.py`, se houver chamada direta
 - `scripts/autoseg/install_os_effect_outbox.py`
 - `scripts/autoseg/dispatch_os_effect_outbox.py`
@@ -83,8 +85,8 @@ sistema falhar fechado quando a outbox não estiver instalada.
 - Dispatcher sem `recipient_refs` falha antes do provedor.
 - `unknown` não é reenviado automaticamente.
 - Nenhuma chamada direta a Gmail a partir de writer de OS.
-- Grep final não encontra `emails_adicionais`, `not use_outbox` nem envio
-  legado.
+- Grep do caminho de OS/e-mail não encontra `emails_adicionais` (fora da
+  importação Asaas), `not use_outbox` nem envio legado.
 
 ## Critérios de aceite
 
@@ -106,7 +108,7 @@ sistema falhar fechado quando a outbox não estiver instalada.
 Rejeitar imediatamente se:
 
 - sobrou `if not outbox` com envio antigo;
-- sobrou `emails_adicionais` em qualquer camada;
+- sobrou `emails_adicionais` no caminho de OS/e-mail;
 - o handler aceita e-mail livre “por compatibilidade”;
 - existe `except` que cai no Gmail;
 - o dispatcher usa projeção como fallback de destinatário;
