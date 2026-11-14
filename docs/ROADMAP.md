@@ -202,6 +202,21 @@ vars e launchers antigos compatíveis; nenhuma mudança de idioma visível ao
 usuário; testes verdes. Sem rename em massa e sem misturar rename com migração
 de dados.
 
+## Prioridade — MAF ⇄ AUTOSEG read interface
+
+**Registrado em 2026-11-14.** O Meu Auto Financeiro deixa de abrir `dados.db`
+diretamente e passa a consumir uma interface de leitura versionada. A migração
+precisa ser **invisível ao usuário**: mesmos valores, mesmo fluxo de vínculo,
+mesmas mensagens, sem nova configuração ou tela.
+
+- inventário de dependências, evidência da produção e contrato de paridade em
+  [`planning/MAF_AUTOSEG_READ_INTERFACE.md`](planning/MAF_AUTOSEG_READ_INTERFACE.md);
+- a interface financeira `/api/v1` já existe e é somente leitura, por prestador,
+  com token revogável e auditoria de acesso;
+- posição: **P1**, logo após a fila A5 (A5b, A5c) e antes da extração Workaholic;
+- ganho: o MAF deixa de precisar de acesso ao arquivo do banco e o AUTOSEG pode
+  voltar a negar acesso de escrita ao diretório de dados.
+
 ## Depois
 
 - **6.6 — paridade cliente no GTK:** solicitações, documentos/PDF, “Em rota”,
