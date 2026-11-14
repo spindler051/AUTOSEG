@@ -1493,72 +1493,47 @@ def document_get(banco,principal,os_id,*,ui,session,kind):
         return self.send_bytes(Path(arq).read_bytes(),mime,filename=Path(arq).name)
 
 
-def read_anexo(banco,principal,aid,*,ui,session):
-    from flavors.autoseg.modules import portal_prestador as portal
+def _attachment_data(banco, principal, aid, *, thumbnail):
+    """Resolve, authorize, and read an attachment from one SQLite snapshot."""
+    from officina.application.work_item_access import require_attachment_read_locked
     from officina.core import prestadores_ext as ext
+    from pathlib import Path
+
+    with ext.db(banco) as connection:
+        connection.execute('BEGIN')
+        record = require_attachment_read_locked(connection, principal, aid)
+        path = Path(record['caminho']).resolve()
+        if not path.is_relative_to(ext.ANEXOS.resolve()):
+            return (None, None, 403, 'Anexo fora do diretório autorizado.')
+        if not path.is_file():
+            return (None, None, 404, 'Arquivo de imagem não encontrado.')
+        data = ext.thumb_imagem(path) if thumbnail else path.read_bytes()
+        return (dict(record), data, None, None)
+
+
+def read_anexo(banco,principal,aid,*,ui,session):
+    from flavors.autoseg.modules import policy_shadow
     import mimetypes
     from pathlib import Path
-    from flavors.autoseg.modules import policy_shadow
-    prod=portal.prod
-    self=ui
-    s=session
-    with ext.db(banco) as c:
-        row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
-    if row is None:
-        raise PermissionError('Recurso indisponível.')
-    if principal is None:
-        raise PermissionError('Recurso indisponível.')
-    from officina.application.work_item_access import (
-        require_read_work_item, resource_for_work_item)
-    require_read_work_item(banco,principal,int(row['os_id']))
-    resource=resource_for_work_item(banco,int(row['os_id']))
-    document=Resource('document',aid,resource.organization_id,resource.owner_id,
-                      resource.client_id,resource.participant_ids,
-                      resource.attributes,resource.client_org_id)
-    ObjectPolicy().require(principal,'download',document)
-    with ext.db(banco) as c:
-        x=c.execute('SELECT os_id,nome_original,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-    if not x:return self.erro('Anexo não encontrado.',404,s)
+
+    record,data,error_code,error_text = _attachment_data(
+        banco, principal, aid, thumbnail=False)
+    if error_code is not None:
+        return ui.erro(error_text, error_code, session)
     policy_shadow.evaluate_os(
-        banco,s['pid'],x['os_id'],'download',True,'anexo')
-    arq=Path(x['caminho']).resolve()
-    if not arq.is_relative_to(ext.ANEXOS.resolve()):
-        return self.erro('Anexo fora do diretório autorizado.',403,s)
-    if not arq.is_file():return self.erro('Arquivo de imagem não encontrado.',404,s)
-    mime=mimetypes.guess_type(arq.name)[0] or 'application/octet-stream'
-    return self.send_bytes(arq.read_bytes(),mime,filename=x['nome_original'])
+        banco, session['pid'], record['os_id'], 'download', True, 'anexo')
+    mime = mimetypes.guess_type(Path(record['caminho']).name)[0] or 'application/octet-stream'
+    return ui.send_bytes(data, mime, filename=record['nome_original'])
 
 
 def read_anexo_thumb(banco,principal,aid,*,ui,session):
-    from flavors.autoseg.modules import portal_prestador as portal
-    from officina.core import prestadores_ext as ext
-    import mimetypes
-    from pathlib import Path
     from flavors.autoseg.modules import policy_shadow
-    prod=portal.prod
-    self=ui
-    s=session
-    with ext.db(banco) as c:
-        row=c.execute("SELECT os_id FROM os_anexos WHERE id=?",(aid,)).fetchone()
-    if row is None:
-        raise PermissionError('Recurso indisponível.')
-    if principal is None:
-        raise PermissionError('Recurso indisponível.')
-    from officina.application.work_item_access import (
-        require_read_work_item, resource_for_work_item)
-    require_read_work_item(banco,principal,int(row['os_id']))
-    resource=resource_for_work_item(banco,int(row['os_id']))
-    document=Resource('document',aid,resource.organization_id,resource.owner_id,
-                      resource.client_id,resource.participant_ids,
-                      resource.attributes,resource.client_org_id)
-    ObjectPolicy().require(principal,'download',document)
-    with ext.db(banco) as c:
-        x=c.execute('SELECT os_id,caminho FROM os_anexos WHERE id=?',(aid,)).fetchone()
-    if not x:return self.erro('Anexo não encontrado.',404,s)
+
+    record,data,error_code,error_text = _attachment_data(
+        banco, principal, aid, thumbnail=True)
+    if error_code is not None:
+        return ui.erro(error_text, error_code, session)
     policy_shadow.evaluate_os(
-        banco,s['pid'],x['os_id'],'view',True,'anexo_thumb')
-    arq=Path(x['caminho']).resolve()
-    if not arq.is_relative_to(ext.ANEXOS.resolve()):
-        return self.erro('Anexo fora do diretório autorizado.',403,s)
-    return self.send_bytes(ext.thumb_imagem(arq),'image/jpeg',
-                           cache='private, max-age=31536000, immutable')
+        banco, session['pid'], record['os_id'], 'view', True, 'anexo_thumb')
+    return ui.send_bytes(data, 'image/jpeg',
+                         cache='private, max-age=31536000, immutable')
