@@ -229,7 +229,7 @@ def ultimo_documento(banco,os_id):
         return dict(r) if r else None
 
 
-def publicar_relatorio(banco,os_id):
+def publicar_relatorio(banco,os_id,*,authorize=None):
     """Cria uma cópia imutável do PDF que será servida ao cliente e prestador.
     Invocar depois de commit do status. Se falhar, OS permanece encerrada e
     administrador pode republicar sem modificar status.
@@ -254,6 +254,9 @@ def publicar_relatorio(banco,os_id):
             os.replace(temp,destino)
             sha=hashlib.sha256(destino.read_bytes()).hexdigest()
             with ext.db(banco) as c:
+                if authorize is not None:
+                    c.execute('BEGIN IMMEDIATE')
+                    authorize(c)
                 cur=c.execute('INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) VALUES(?,?,?,?,?,?)',
                           (os_id,'relatorio_pdf',proximo,str(destino),sha,ext.agora()))
                 cliente=c.execute('SELECT cl.email,o.status FROM clientes cl JOIN ordens_servico o ON o.cliente_id=cl.id WHERE o.id=?',(os_id,)).fetchone()

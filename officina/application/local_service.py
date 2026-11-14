@@ -476,10 +476,10 @@ class LocalService:
         cad9.alterar_vinculo(
             self.banco, int(vinculo_id), bool(aprovar), 'Desktop AUTOSEG')
 
-    def salvar_os(self, dados: OSInput) -> OSResultado:
+    def salvar_os(self, dados: OSInput, *, authorize=None) -> OSResultado:
         from officina.application.os_write import salvar_os
         try:
-            return salvar_os(self.banco, dados)
+            return salvar_os(self.banco, dados, authorize=authorize)
         except ValidacaoError:
             raise
         except ValueError as erro:
@@ -533,16 +533,21 @@ class LocalService:
     def definir_senha_cliente(self, cliente_id: int, senha: str | None = None) -> str:
         return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha)
 
-    def atribuir_os(self, os_id: int, prestador_id: int) -> bool:
+    def atribuir_os(self, os_id: int, prestador_id: int, *, authorize=None) -> bool:
         return bool(ext.atribuir(self.banco, int(os_id), int(prestador_id),
-                                 ator='Desktop AUTOSEG'))
+                                 ator='Desktop AUTOSEG', authorize=authorize))
 
-    def desatribuir_os(self, os_id: int) -> bool:
+    def desatribuir_os(self, os_id: int, *, authorize=None) -> bool:
         return bool(ext.desatribuir(self.banco, int(os_id),
-                                    ator='Desktop AUTOSEG'))
+                                    ator='Desktop AUTOSEG', authorize=authorize))
 
-    def iniciar_os(self, os_id: int) -> None:
-        aten.iniciar(self.banco, int(os_id))
+    def iniciar_os(self, os_id: int, *, authorize=None) -> None:
+        if authorize is None:
+            return aten.iniciar(self.banco, int(os_id))
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return aten.iniciar(self.banco, int(os_id), connection=connection)
 
     def atribuir_responsavel(self, organizacao_id: int, usuario_id: int) -> str:
         return cad9.atribuir_responsavel(
@@ -579,18 +584,31 @@ class LocalService:
         return ext.definir_documento_prestador(
             self.banco, int(prestador_id), str(documento))
 
-    def publicar_pdf(self, os_id: int) -> str:
-        return str(fluxo.publicar_relatorio(self.banco, int(os_id)))
+    def publicar_pdf(self, os_id: int, *, authorize=None) -> str:
+        return str(fluxo.publicar_relatorio(self.banco, int(os_id),
+                                           authorize=authorize))
 
-    def preparar_email(self, os_id: int) -> str:
-        publicado = fluxo.ultimo_documento(self.banco, int(os_id))
-        if not publicado:
-            raise ValueError('Esta OS não possui PDF publicado.')
-        pdf = fluxo.validar_pdf_publicado(publicado)
-        return str(ext.criar_email_rascunho(self.banco, int(os_id), pdf))
+    def preparar_email(self, os_id: int, *, authorize=None) -> str:
+        def prepare():
+            publicado = fluxo.ultimo_documento(self.banco, int(os_id))
+            if not publicado:
+                raise ValueError('Esta OS não possui PDF publicado.')
+            pdf = fluxo.validar_pdf_publicado(publicado)
+            return str(ext.criar_email_rascunho(self.banco, int(os_id), pdf))
+        if authorize is None:
+            return prepare()
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return prepare()
 
-    def preparar_nota(self, os_id: int) -> str:
-        return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+    def preparar_nota(self, os_id: int, *, authorize=None) -> str:
+        if authorize is None:
+            return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
 
     def pdf_publicado(self, os_id: int) -> str:
         publicado = fluxo.ultimo_documento(self.banco, int(os_id))
