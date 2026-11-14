@@ -50,7 +50,9 @@ comportamento + implementação pequena; o comentário é consequência.
 9. **Prefira teste a comentário para comportamento.** Se uma regra pode ser
    testada, teste.
 10. **Idioma:** código novo e comentários novos em inglês; arquivos legados em
-    português podem manter o idioma até serem tocados, mas sem piorar.
+    português podem manter o idioma até serem tocados, mas sem piorar. Termos
+    legais/fiscais brasileiros permanecem em português no módulo de locale; ver
+    `docs/planning/ENGLISH_MIGRATION_PLAN.md` §2.1.
 
 ## 3. Exemplos
 

@@ -173,6 +173,35 @@ modo local e paridade visual completa. Esses itens ficam para a 6.6.
 A análise detalhada, decisões e critérios de aceite estão em
 [`planning/GTK_CLIENT_MODE.md`](planning/GTK_CLIENT_MODE.md).
 
+## English code + pt_BR locale (architecture track)
+
+**Regra:** inglês para código/plataforma; português para conteúdo legal/fiscal
+brasileiro e para o que o usuário vê. Detalhes em
+[`planning/ENGLISH_MIGRATION_PLAN.md`](planning/ENGLISH_MIGRATION_PLAN.md) §2.1.
+
+Ordem:
+
+1. congelar novos identificadores em português; código, testes, docs de
+   desenvolvedor e mensagens de commit em inglês;
+2. catálogo `pt_BR` para UI/PDF/e-mail; documentos legais podem manter o texto
+   português como fonte canônica;
+3. extrair o domínio brasileiro para `flavors/autoseg/br/`:
+   `tax_id` (CPF/CNPJ), `address` (CEP), `payments` (PIX/boleto), `fiscal`,
+   `legal`; promover para `workaholic/locales/pt_BR/` quando houver um segundo
+   consumidor;
+4. renomear módulos de baixo risco apenas quando forem tocados; sem rename em
+   massa;
+5. **nota fiscal** como feature de locale: porta inglesa
+   `FiscalDocumentIssuer` + adaptador `pt_BR` (NF-e/NFS-e, códigos
+   municipais, ISS/ICMS, certificado); o núcleo genérico não conhece regra
+   fiscal brasileira;
+6. docs de desenvolvedor em inglês; guias de usuário em português.
+
+Aceite: código genérico novo em inglês; locale isolado; rotas, colunas, env
+vars e launchers antigos compatíveis; nenhuma mudança de idioma visível ao
+usuário; testes verdes. Sem rename em massa e sem misturar rename com migração
+de dados.
+
 ## Depois
 
 - **6.6 — paridade cliente no GTK:** solicitações, documentos/PDF, “Em rota”,
