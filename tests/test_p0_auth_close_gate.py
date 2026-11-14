@@ -197,8 +197,8 @@ class CloseGateHTTPTests(unittest.TestCase):
         with ext.db(self.db) as c:
             self.assertEqual(c.execute("SELECT COUNT(*) FROM os_effect_outbox WHERE action='send-manual'").fetchone()[0],1)
             stored=c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
-                             (self.oid,)).fetchone()[0]
-        self.assertEqual(json.loads(stored),['example@example.invalid'])
+                             (self.oid,)).fetchone()
+        self.assertIsNone(stored)
         with ext.db(self.db) as c:
             payload=c.execute('SELECT payload_json FROM os_effect_outbox WHERE action=?',
                               ('send-manual',)).fetchone()[0]
@@ -256,6 +256,8 @@ class CloseGateHTTPTests(unittest.TestCase):
             self.assertEqual(json.loads(key['payload_json'])['recipient_refs'],['cliente'])
             c.execute("UPDATE os_effect_outbox SET state='done' WHERE operation_key=?",
                       (key['operation_key'],))
+            produtividade_os.registrar_envio(self.db,self.oid,
+                ['example@example.invalid'],'enviado',connection=c)
         backup=str(Path(self.tmp.name)/'rollback-backup.db')
         with patch.dict(os.environ,{'AUTOSEG_DEV':'1'}):
             self.assertEqual(migration.main(['--database',self.db,'--rollback',
@@ -265,17 +267,118 @@ class CloseGateHTTPTests(unittest.TestCase):
                              (self.oid,)).fetchone()[0]
             self.assertEqual(json.loads(stored),['example@example.invalid'])
             self.assertFalse(effects.installed(c))
-        with patch.object(gmail_service,'enviar_relatorio_os_concluida') as sender:
+        with patch.object(gmail_service,'enviar_operacao_outbox') as sender:
             with self.assertRaises(effects.OutboxUnavailable):
                 self.command('reenviar-email',payload)
             sender.assert_not_called()
+
+    def test_draft_routes_reject_additional_email_as_json_without_writes(self):
+        with ext.db(self.db) as c:
+            before=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                                  (self.oid,)).fetchone())
+        for writer in (os_commands._write_autosave_draft,
+                       os_commands._write_save_draft):
+            with self.subTest(writer=writer.__name__):
+                self.ui.send_bytes.reset_mock()
+                writer(self.db,self.principal,self.oid,
+                       {'emails_adicionais':'extra@example.invalid'},
+                       ui=self.ui,session=self.session,path='',quer_json=False)
+                args, kwargs=self.ui.send_bytes.call_args
+                self.assertIn('application/json',args[1])
+                self.assertEqual(kwargs['status'],400)
+                self.assertFalse(__import__('json').loads(args[0])['ok'])
+                self.assertIsNone(ext.obter_rascunho_web(self.db,self.oid,self.pid))
+        with ext.db(self.db) as c:
+            after=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                                 (self.oid,)).fetchone())
+        self.assertEqual(before,after)
+
+    def test_os_writers_have_no_direct_gmail_send(self):
+        root=Path(__file__).resolve().parents[1]
+        for name in ('flavors/autoseg/modules/os_commands.py',
+                     'flavors/autoseg/modules/gtk_app.py'):
+            text=(root/name).read_text(encoding='utf-8')
+            self.assertNotIn('enviar_relatorio_os_concluida',text)
+            self.assertNotIn('enviar_email_gmail(',text)
+            self.assertNotIn('not use_outbox',text)
+
+    def test_close_requires_outbox_and_rolls_back_before_email(self):
+        with ext.db(self.db) as c:
+            c.execute('DROP TABLE os_effect_outbox')
+            before=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',(self.oid,)).fetchone())
+        payload={'modo_envio':'encerrar','acao_status':'Concluída',
+                 'descricao':'Example','relatorio_tecnico':'diagnóstico','v9_execucao':'parcial','forma_pagamento':'PIX','sem_nota_fiscal':'1',
+                 'destinatario_sel[]':['cliente'], 'destinatarios_presente':'1'}
+        with patch.object(gmail_service,'enviar_operacao_outbox') as sender, \
+             self.assertRaises(effects.OutboxUnavailable):
+            self.command('salvar',payload)
+        sender.assert_not_called()
+        with ext.db(self.db) as c:
+            after=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',(self.oid,)).fetchone())
+            pending=c.execute('SELECT COUNT(*) FROM produtividade_email WHERE os_id=?',(self.oid,)).fetchone()[0]
+        self.assertEqual(before,after)
+        self.assertEqual(pending,0)
+
+    def test_close_without_recipients_does_not_require_email_outbox(self):
+        with ext.db(self.db) as c:
+            c.execute('DROP TABLE os_effect_outbox')
+        payload={'modo_envio':'encerrar','acao_status':'Pendente',
+                 'descricao':'Example','relatorio_tecnico':'diagnóstico','v9_execucao':'parcial','forma_pagamento':'PIX',
+                 'destinatario_sel[]':[], 'destinatarios_presente':'1',
+                 'sem_destinatario':'1'}
+        with patch.object(gmail_service,'enviar_operacao_outbox') as sender, \
+             patch.object(fluxo_os,'publicar_relatorio',return_value=None):
+            self.command('salvar',payload)
+        sender.assert_not_called()
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                       (self.oid,)).fetchone()[0],'Pendente')
+
+    def test_close_without_valid_email_and_without_checkbox_rolls_back(self):
+        with ext.db(self.db) as c:
+            c.execute('UPDATE clientes SET email=NULL WHERE id=(SELECT cliente_id FROM ordens_servico WHERE id=?)',
+                      (self.oid,))
+            before=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',(self.oid,)).fetchone())
+        payload={'modo_envio':'encerrar','acao_status':'Concluída',
+                 'descricao':'Example','relatorio_tecnico':'diagnóstico',
+                 'v9_execucao':'parcial','forma_pagamento':'PIX',
+                 'sem_nota_fiscal':'1','destinatario_sel[]':['cliente'],
+                 'destinatarios_presente':'1'}
+        with patch.object(gmail_service,'enviar_operacao_outbox') as sender, \
+             self.assertRaisesRegex(ValueError,'contato válido|endereço válido'):
+            self.command('salvar',payload)
+        sender.assert_not_called()
+        with ext.db(self.db) as c:
+            after=dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',(self.oid,)).fetchone())
+            queued=c.execute('SELECT COUNT(*) FROM os_effect_outbox WHERE os_id=?',(self.oid,)).fetchone()[0]
+            projected=c.execute('SELECT COUNT(*) FROM produtividade_email WHERE os_id=?',(self.oid,)).fetchone()[0]
+        self.assertEqual(before,after)
+        self.assertEqual((queued,projected),(0,0))
+
+    def test_completed_without_recipient_does_not_require_outbox(self):
+        with ext.db(self.db) as c:
+            c.execute('DROP TABLE os_effect_outbox')
+        payload={'modo_envio':'encerrar','acao_status':'Concluída',
+                 'descricao':'Example','relatorio_tecnico':'diagnóstico',
+                 'v9_execucao':'parcial','forma_pagamento':'PIX',
+                 'sem_nota_fiscal':'1','destinatario_sel[]':[],
+                 'destinatarios_presente':'1','sem_destinatario':'1'}
+        with patch.object(gmail_service,'enviar_operacao_outbox') as sender, \
+             patch.object(fluxo_os,'publicar_relatorio',return_value=None):
+            self.command('salvar',payload)
+        sender.assert_not_called()
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                       (self.oid,)).fetchone()[0],'Concluída')
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM produtividade_email WHERE os_id=?',
+                                       (self.oid,)).fetchone()[0],0)
 
     def test_manual_resend_requires_outbox_and_fails_closed(self):
         with ext.db(self.db) as c:
             c.execute('DROP TABLE os_effect_outbox')
         payload={'reenviar_operacao':'x'*25,'confirmar_duplicata':'1',
                  'destinatario_sel[]':['cliente']}
-        with patch.object(gmail_service,'enviar_relatorio_os_concluida') as direct, \
+        with patch.object(gmail_service,'enviar_operacao_outbox') as direct, \
              patch.object(effects,'deliver_email') as deferred, \
              self.assertRaises(effects.OutboxUnavailable):
             self.command('reenviar-email',payload)
@@ -333,8 +436,15 @@ class CloseGateHTTPTests(unittest.TestCase):
             c.execute('BEGIN IMMEDIATE')
             produtividade_os.registrar_envio(self.db,self.oid,['example@example.invalid'],
                                  'pendente',connection=c)
-            item=effects.enqueue_email(c,self.oid,'no-refs','send')
-        with patch.object(gmail_service,'_enviar_relatorio_os_concluida') as sender:
+            with self.assertRaises(TypeError):
+                effects.enqueue_email(c,self.oid,'no-refs','send')
+            item=effects.enqueue_email(c,self.oid,'corrupt-refs','send',
+                                       recipient_refs=['cliente'])
+            # Simulate a malformed legacy/corrupt persisted payload, impossible
+            # through the new enqueue API.
+            c.execute('UPDATE os_effect_outbox SET payload_json=? WHERE operation_key=?',
+                      ('{}',item['operation_key']))
+        with patch.object(gmail_service,'_send_outbox_report') as sender:
             with self.assertRaises(effects.PreDispatchError):
                 effects.deliver_email(self.db,item['operation_key'],
                     lambda oid,op:gmail_service.enviar_operacao_outbox(self.db,oid,op))
@@ -350,7 +460,7 @@ class CloseGateHTTPTests(unittest.TestCase):
                                       recipient_refs=['cliente'])
             c.execute("UPDATE produtividade_email SET destinatarios_json=? WHERE os_id=?",
                       (json.dumps(['other@example.invalid']),self.oid))
-        with patch.object(gmail_service,'_enviar_relatorio_os_concluida',
+        with patch.object(gmail_service,'_send_outbox_report',
                           return_value='sent-id') as sender:
             self.assertEqual(gmail_service.enviar_operacao_outbox(
                 self.db,self.oid,row['operation_key']),'sent-id')
@@ -403,7 +513,7 @@ class ProjectionTests(unittest.TestCase):
         effects.install(self.db)
         with ext.db(self.db) as c:
             c.execute('BEGIN IMMEDIATE')
-            self.row=effects.enqueue_email(c,7,'rev','send')
+            self.row=effects.enqueue_email(c,7,'rev','send',recipient_refs=['cliente'])
 
     def test_outbox_and_projection_finalization_is_atomic(self):
         claim=effects.claim(self.db,self.row['operation_key'])
@@ -427,9 +537,9 @@ class ProjectionTests(unittest.TestCase):
                        state='failed',error='sem_destinatario')
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT status FROM produtividade_email').fetchone()[0],
-                             'sem_destinatario')
+                             'falhou')
             self.assertEqual(c.execute('SELECT email_status FROM os_entregas').fetchone()[0],
-                             'sem_destinatario')
+                             'falhou')
         claim=effects.claim(self.db,self.row['operation_key'])
         effects.finish(self.db,self.row['operation_key'],claim['claim_token'],
                        state='unknown',error='provider_outcome_unknown')

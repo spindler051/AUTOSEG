@@ -174,9 +174,9 @@ class MelhoriasRev12(unittest.TestCase):
              'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
              'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}
         oid = neg.os_salvar(self.db, d, pid)
-        self.assertEqual(len(prod.destinatarios_para_os(
-            self.db, oid, ['sindico', 'cliente', 'administradora'], 'extra@example.org')), 4)
-        self.assertEqual(len(prod.destinatarios_para_os(self.db, oid, ['cliente'], '')), 1)
+        contacts=prod.contatos_email_os(self.db,oid)
+        self.assertEqual(contacts['cliente'],'cliente@example.org')
+        self.assertFalse(hasattr(prod,'destinatarios_para_os'))
 
     # ---------------------------------------------------------------- 4
     def test_pdf_logo_e_selo_em_todas_as_paginas(self):

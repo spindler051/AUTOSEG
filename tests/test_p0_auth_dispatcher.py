@@ -33,7 +33,7 @@ class DispatcherAndRollbackTests(unittest.TestCase):
     def test_status_dryrun_and_safe_rollback(self):
         with ext.db(self.db) as c:
             c.execute('BEGIN IMMEDIATE')
-            effect=effects.enqueue_email(c,7,'one','send')
+            effect=effects.enqueue_email(c,7,'one','send',recipient_refs=['cliente'])
         self.assertEqual(worker.summary(self.db)['states'][0]['count'],1)
         before=effects.get(self.db,effect['operation_key'])
         self.assertEqual(worker.run_once(self.db,dry_run=True)[0]['state'],'pending')
@@ -77,7 +77,7 @@ class DispatcherAndRollbackTests(unittest.TestCase):
             c.execute('BEGIN IMMEDIATE')
             c.execute("INSERT INTO produtividade_email VALUES(7,'[\"cliente\"]','pendente',NULL,'','')")
             c.execute("INSERT INTO os_entregas VALUES(7,1,'original@example.invalid','aguardando_api','','')")
-            effect=effects.enqueue_email(c,7,'emailrev')
+            effect=effects.enqueue_email(c,7,'emailrev',recipient_refs=['cliente'])
         claimed=effects.claim(self.db,effect['operation_key'],now=100)
         self.assertTrue(claimed)
         self.assertEqual(effects.reconcile(self.db,now=300),[])

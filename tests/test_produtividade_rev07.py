@@ -101,20 +101,17 @@ class ProdutividadeTestes(unittest.TestCase):
         etapa=prod.registrar_etapa(self.db,osid,self.b,'Pendente',dados)
         self.assertIsInstance(etapa,int)
 
-    def test_destinatarios_condominio_e_morador_ignorado(self):
+    def test_email_contacts_are_resolved_by_reference(self):
         osid=self.nova_os('Jurídica','condominio@example.org','sindico@example.org')
-        self.assertEqual(prod.destinatarios_conclusao(self.db,osid),
-                         ['sindico@example.org','condominio@example.org'])
-        self.assertEqual(len(prod.destinatarios_conclusao(self.db,osid,'sindico@example.org')),2)
+        contacts=prod.contatos_email_os(self.db,osid)
+        self.assertEqual(contacts['cliente'],'condominio@example.org')
+        self.assertEqual(contacts['sindico'],'sindico@example.org')
+        self.assertFalse(hasattr(prod,'destinatarios_conclusao'))
+        self.assertFalse(hasattr(prod,'destinatarios_para_os'))
 
-    def test_email_obrigatorio_so_na_conclusao(self):
-        osid=self.nova_os('Jurídica','','')
+    def test_email_validation_rejects_header_injection(self):
         with self.assertRaises(ValueError):
-            prod.destinatarios_conclusao(self.db,osid)
-        self.assertEqual(prod.destinatarios_conclusao(self.db,osid,'extra@example.org'),
-                         ['extra@example.org'])
-        with self.assertRaises(ValueError):
-            prod.destinatarios_conclusao(self.db,osid,'invalido\r\nBCC:fake@example.org')
+            prod._email_validado('invalido\r\nBCC:fake@example.org')
 
     def test_rateio_e_repasse_manual(self):
         oid=self.nova_os()

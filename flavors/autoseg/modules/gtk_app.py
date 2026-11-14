@@ -1029,11 +1029,11 @@ class Janela(Adw.ApplicationWindow):
             try:
                 caminho = self.service.publicar_pdf(os_id)
                 if enviar_email and not self.remote_mode:
-                    try:
-                        from flavors.autoseg.modules import gmail_service
-                        gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)
-                    except Exception:
-                        pass
+                    GLib.idle_add(self._pdf_publicado, True, caminho)
+                    GLib.idle_add(ui.aviso_erro, self, 'E-mail não enviado',
+                        'O PDF foi publicado. O envio local pelo GTK está indisponível; '
+                        'use o fluxo da outbox no portal.')
+                    return False
                 GLib.idle_add(self._pdf_publicado, True, caminho)
             except Exception as erro:
                 GLib.idle_add(self._pdf_publicado, False, str(erro))

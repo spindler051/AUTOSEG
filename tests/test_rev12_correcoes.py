@@ -1244,20 +1244,10 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIsNone(cat.obter(self.db, servico))
 
     # ---------------------------------------------------------------- 5
-    def test_emails_adicionais_entram_na_lista_final(self):
-        pid = self._prestador()
-        cid = self._cliente(pid, 'Condomínio Multi',
-                            email='cliente@exemplo.com.br',
-                            sindico_email='sindico@exemplo.com.br',
-                            administradora_email='adm@exemplo.com.br')
-        dados = {'cliente_id': str(cid), 'descricao': 'Serviço multi', 'tecnico': 'T',
-                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
-                 'materiais_presentes': '1', 'acao_status': 'salvar'}
-        oid = neg.os_salvar(self.db, dados, pid)
-        lista = prod.destinatarios_para_os(
-            self.db, oid, ['administradora'], 'extra@exemplo.com.br, cliente@exemplo.com.br')
-        self.assertEqual(lista, ['adm@exemplo.com.br', 'extra@exemplo.com.br',
-                                 'cliente@exemplo.com.br'])
+    def test_campos_de_destinatarios_nao_aceitam_email_avulso(self):
+        self.assertNotIn('emails_adicionais', prod.CAMPOS)
+        self.assertFalse(hasattr(prod, 'destinatarios_para_os'))
+        self.assertFalse(hasattr(prod, 'destinatarios_conclusao'))
 
     def test_gmail_bloqueia_dominios_de_teste_antes_da_rede(self):
         for endereco in ('34567890175@example.org', 'teste@example.com',
@@ -1268,7 +1258,7 @@ class CorrecoesRev12(unittest.TestCase):
             self.assertIn(endereco, str(contexto.exception))
 
     # ---------------------------------------------------------------- 6
-    def test_rascunho_restaura_destinatarios_e_email_adicional(self):
+    def test_rascunho_rejeita_email_adicional(self):
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
                             sindico_email='sindico@exemplo.com.br',
@@ -1287,13 +1277,13 @@ class CorrecoesRev12(unittest.TestCase):
                 'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
                 'emails_adicionais': 'extra@exemplo.com.br'}
         status, html = req(cliente, base, f'/os/{oid}/rascunho/salvar', rasc)
-        self.assertEqual(status, 200)
-        _, html = req(cliente, base, f'/os/{oid}')
-        self.assertIn('value="extra@exemplo.com.br"', html)
-        self.assertIn('value="administradora" checked', html)
-        self.assertIn('value="cliente" checked', html)
+        self.assertEqual(status, 400)
+        self.assertIn('e-mail avulso', html.lower())
+        self.assertIsNone(ext.obter_rascunho_web(self.db, oid, pid))
 
     def test_conclusao_envia_todos_os_destinatarios_selecionados(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
                             sindico_email='sindico@exemplo.com.br',
@@ -1306,21 +1296,24 @@ class CorrecoesRev12(unittest.TestCase):
         servidor, base = self._servidor()
         cliente = self._login(base)
         token = self._csrf(base, cliente, oid)
-        status, html = req(cliente, base, f'/os/{oid}/salvar',
+        from flavors.autoseg.modules import gmail_service
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'AUTOSEG_GMAIL_DESATIVADO': '0'}), \
+             patch.object(gmail_service, 'enviar_email_gmail', return_value='msg-fake'):
+            status, html = req(cliente, base, f'/os/{oid}/salvar',
                            {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Serviço',
                             'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
                             'materiais_presentes': '1', 'v9_execucao': 'exec',
                             'relatorio_tecnico': 'rel', 'acao_status': 'Concluída',
                             'modo_envio': 'encerrar', 'sem_nota_fiscal': '1',
-                            'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
-                            'emails_adicionais': 'extra@exemplo.com.br'})
+                            'destinatario_sel[]': ['cliente', 'sindico', 'administradora']})
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             reg = c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
                             (oid,)).fetchone()
         self.assertEqual(sorted(json.loads(reg['destinatarios_json'])),
                          sorted(['cliente@exemplo.com.br', 'sindico@exemplo.com.br',
-                                 'adm@exemplo.com.br', 'extra@exemplo.com.br']))
+                                 'adm@exemplo.com.br']))
 
     def test_anexar_nota_fiscal_preserva_rascunho(self):
         pid = self._prestador()
@@ -1440,6 +1433,8 @@ class CorrecoesRev12(unittest.TestCase):
             gmail_service.enviar_email_gmail = original
 
     def test_conclusao_exige_nota_fiscal_ou_nao_precisa(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
         dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
@@ -1461,14 +1456,16 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('nota fiscal', html.lower())
         # Com "não precisa de nota fiscal" → permitido.
         status, html = req(cliente, base, f'/os/{oid}/salvar',
-                           dict(base_form, sem_nota_fiscal='1'))
+                           dict(base_form, sem_nota_fiscal='1', sem_destinatario='1',
+                                destinatarios_presente='1'))
         self.assertEqual(status, 200)
 
-    def test_pendente_publica_pdf_e_envia_email(self):
+    def test_pendente_publica_pdf_sem_email(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         import time
         import os
         from flavors.autoseg.modules import gmail_service
-        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Pendente', email='cliente@exemplo.com.br')
         dados = {'cliente_id': str(cid), 'descricao': 'Atendimento pendente', 'tecnico': 'T',
@@ -1504,13 +1501,12 @@ class CorrecoesRev12(unittest.TestCase):
                                     (oid,)).fetchone()[0]
                     reg = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
                                     (oid,)).fetchone()
-                if doc and reg and reg['status'] in ('enviado', 'falhou'):
+                if doc:
                     break
                 time.sleep(0.05)
             self.assertGreaterEqual(doc, 1)
-            self.assertIsNotNone(reg)
-            self.assertEqual(reg['status'], 'enviado')
-            self.assertIn('orçamento', capt.get('assunto', '').lower())
+            self.assertIsNone(reg)
+            self.assertEqual(capt, {})
             with ext.db(self.db) as c:
                 self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                            (oid,)).fetchone()['status'], 'Pendente')

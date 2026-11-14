@@ -562,6 +562,10 @@ def _write_photos(banco, principal, os_id, data, *, ui, session, path, quer_json
 
 def _write_autosave_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
+    if 'emails_adicionais' in data:
+        message='Campo de e-mail avulso não aceito. Cadastre o contato da OS.'
+        return ui.send_bytes(json.dumps({'ok':False,'error':message}).encode(),
+            'application/json; charset=utf-8',status=400)
     pid = session['pid']
     oid = os_id
     values = {key: value for key, value in data.items()
@@ -605,6 +609,10 @@ def _write_autosave_draft(banco, principal, os_id, data, *, ui, session, path, q
 
 def _write_save_draft(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
+    if 'emails_adicionais' in data:
+        message='Campo de e-mail avulso não aceito. Cadastre o contato da OS.'
+        return ui.send_bytes(json.dumps({'ok':False,'error':message}).encode(),
+            'application/json; charset=utf-8',status=400)
     pid=session['pid']
     oid=os_id
     values={key: value for key, value in data.items()
@@ -925,6 +933,8 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
     pid = session['pid']
     oid = os_id
     d = dict(data)
+    if 'emails_adicionais' in d:
+        raise ValueError('Campo de e-mail avulso não aceito. Cadastre o contato da OS.')
     draft = d.get('modo_envio') in ('rascunho', 'salvar')
     if draft:
         with ext.db(banco) as c:
@@ -979,7 +989,7 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             if str(d.get(x,'')).strip())
     sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
     pdf_key = email_key = None
-    destinatarios = None
+    references = []
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         action = _permission('salvar',d)
@@ -999,9 +1009,8 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
         if not (acao_status=='Cancelada' and ext.administrador(c,pid)):
             prod._os_ativa_responsavel(c,oid,pid)
         use_outbox=outbox.installed(c)
-        if acao_status in ('Pendente','Concluída') and use_outbox:
-            if str(d.get('emails_adicionais','')).strip():
-                raise ValueError('E-mails adicionais exigem cadastro de contato no modo recuperável.')
+        requires_email=False
+        if acao_status=='Concluída' and not sem_destinatario:
             explicit = str(d.get('destinatarios_presente','')) == '1'
             references=d.get('destinatario_sel[]')
             if references is None:
@@ -1015,7 +1024,7 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             if not isinstance(references,list) or any(x not in
                 ('cliente','sindico','administradora') for x in references):
                 raise ValueError('Seleção de destinatários inválida.')
-            if explicit and not references and not sem_destinatario:
+            if explicit and not references:
                 raise ValueError('Selecione ao menos um destinatário ou marque "Não precisa de destinatário".')
             contact=c.execute('''SELECT email,sindico_email,administradora_email
                 FROM clientes WHERE id=?''',(d['cliente_id'],)).fetchone()
@@ -1028,29 +1037,24 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             elif any(not contact[fields[ref]] for ref in references):
                 raise ValueError('Destinatário selecionado não tem contato válido.')
             addresses=[prod._email_validado(contact[fields[ref]]) for ref in references]
-            prod.registrar_envio(banco,oid,addresses,
-                'sem_destinatario' if sem_destinatario else 'pendente',connection=c)
-        if acao_status in ('Pendente','Concluída') and not sem_destinatario and not use_outbox:
-            try:
-                destinatarios=prod.destinatarios_para_os(banco,oid,
-                    d.get('destinatario_sel[]'),str(d.get('emails_adicionais','')))
-            except ValueError as exc:
-                if acao_status!='Pendente' or 'Selecione ao menos um destinatário' not in str(exc):
-                    raise
+            if not references or not addresses or any(not address for address in addresses):
+                raise ValueError('Não há endereço válido para envio. Cadastre um contato ou marque "Não precisa de destinatário".')
+            requires_email = True
+            # Reject before OS persistence; earlier transactional edits roll back.
+            if requires_email:
+                outbox.require_installed(c)
         neg.os_salvar(banco,d,pid,oid,connection=c,
                          staged_attachments=use_outbox)
         prod.limpar_rota_ao_iniciar(banco,oid,connection=c)
         if acao_status in ('Pendente','Concluída'):
             prod.registrar_etapa(banco,oid,pid,acao_status,d,connection=c)
-        if destinatarios:
-            prod.registrar_envio(banco,oid,destinatarios,connection=c)
         cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
             str(d.get('v9_execucao','')),str(d.get('v9_resultado','')),
             connection=c)
         if acao_status in fluxo.PUBLICAVEIS and use_outbox:
             revision=_work_revision(c,oid)
             pdf_key=outbox.enqueue_pdf(c,oid,revision,'save-'+acao_status)['operation_key']
-            if not sem_destinatario and acao_status in ('Pendente','Concluída'):
+            if acao_status=='Concluída' and requires_email:
                 email_key=outbox.enqueue_email(c,oid,revision,'send-'+acao_status,
                     recipient_refs=references)['operation_key']
 
@@ -1072,15 +1076,13 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
                 from flavors.autoseg.modules import gmail_service
                 outbox.deliver_email(banco,email_key,
                     lambda oid,key: gmail_service.enviar_operacao_outbox(banco,oid,key))
-            except Exception:
-                LOG.exception('OS %s: e-mail aguardando reconciliação da outbox',oid)
-        elif destinatarios:
-            try:
-                from flavors.autoseg.modules import gmail_service
-                gmail_service.enviar_relatorio_os_concluida(banco,oid,destinatarios)
             except Exception as exc:
-                LOG.exception('Gmail: OS %s — falha ao agendar envio',oid)
-                prod.registrar_envio(banco,oid,destinatarios,'falhou',erro=str(exc))
+                LOG.exception('OS %s: e-mail não entregue pela outbox',oid)
+                return ui.pagina('OS salva — e-mail não entregue',card('Envio de e-mail',
+                    '<p>A OS foi salva, mas o envio não foi confirmado. '
+                    'Confira o estado da outbox antes de solicitar reenvio.</p>'
+                    +f'<p class="bad">{esc(str(exc)[:400])}</p>'
+                    +botao('Voltar à OS',f'{url_os(banco, oid)}')),session,503)
     return ui.redir(f'{url_os(banco, oid)}')
 
 
@@ -1220,6 +1222,8 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
     partes = path.strip('/').split('/')
     oid = os_id
     acao = partes[2]
+    if 'emails_adicionais' in d:
+        raise ValueError('Campo de e-mail avulso não aceito. Cadastre o contato da OS.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         outbox.require_installed(c)
@@ -1227,12 +1231,10 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
         ack=str(d.get('confirmar_duplicata','')).lower() in ('1','on','true','sim')
         if not ack or not re.fullmatch(r'[A-Za-z0-9_-]{12,80}',request):
             raise ValueError('Reenvio pode duplicar uma entrega. Confirme e informe a operação.')
-        if 'emails_adicionais' in d:
-            raise ValueError('E-mails adicionais não são aceitos no modo de envio recuperável.')
         selected=d.get('destinatario_sel[]')
         if isinstance(selected,str): selected=[selected]
         if selected is None: selected=[]
-        if not isinstance(selected,list) or any(x not in ('cliente','sindico','administradora')
+        if not selected or not isinstance(selected,list) or any(x not in ('cliente','sindico','administradora')
                                                for x in selected):
             raise ValueError('Destinatários inválidos.')
         _transaction_guard(banco,principal,oid,'send')(c)
@@ -1260,10 +1262,6 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
             raise ValueError('Já há um envio pendente para esta OS.')
         pending=c.execute('SELECT state FROM os_effect_outbox WHERE operation_key=?',
                           (key,)).fetchone()
-        if pending['state']=='pending' and not existing:
-            addresses=[prod._email_validado(recipient[sources[ref]])
-                       for ref in selected]
-            prod.registrar_envio(banco,oid,addresses,'pendente',connection=c)
     from flavors.autoseg.modules import gmail_service
     if outbox.get(banco,key)['state']=='pending':
         outbox.deliver_email(banco,key,
