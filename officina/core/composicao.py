@@ -808,7 +808,7 @@ def declarativa(total_centavos, blocos, config=None):
         if valor_pai is None:
             raise ValueError(f"Componente {indice_pai}: o pai não pode ser residual.")
         valor_pai = max(0, int(valor_pai))
-        saldo_pai = bool(entrada_norm.get("saldo_pai"))
+        parent_keeps_remainder = bool(entrada_norm.get("parent_keeps_remainder"))
         soma_pais += valor_pai
 
         valores_filhos = []
@@ -834,13 +834,13 @@ def declarativa(total_centavos, blocos, config=None):
                     f"Componente {cid_pai}: os filhos excedem o valor do pai.")
             for posicao, (cid_f, cfg_f) in enumerate(residuais):
                 valores_filhos.append((cid_f, cfg_f, disponivel if posicao == 0 else 0))
-            if not residuais and disponivel > 0 and not saldo_pai:
+            if not residuais and disponivel > 0 and not parent_keeps_remainder:
                 if not valores_filhos:
                     raise ValueError(f"Componente {cid_pai}: informe os filhos.")
                 cid_f, cfg_f, valor_f = valores_filhos[-1]
                 valores_filhos[-1] = (cid_f, cfg_f, valor_f + disponivel)
             soma_filhos = sum(valor for _, _, valor in valores_filhos)
-            if saldo_pai:
+            if parent_keeps_remainder:
                 if soma_filhos > valor_pai:
                     raise ValueError(
                         f"Componente {cid_pai}: os filhos excedem o valor do pai.")
@@ -872,8 +872,8 @@ def declarativa(total_centavos, blocos, config=None):
             "ordem": indice_pai,
             "filhos": filhos,
         })
-        if saldo_pai:
-            saida[-1]["saldo_pai"] = True
+        if parent_keeps_remainder:
+            saida[-1]["parent_keeps_remainder"] = True
 
     if soma_pais != total:
         raise ValueError(
