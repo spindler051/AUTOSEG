@@ -255,6 +255,7 @@ class NumeroPublicoTest(unittest.TestCase):
             servidor.parar()
 
     def test_draft_materials_restore_on_os_form(self):
+        ext.assumir(self.db, self.oid, self.pid)
         ext.salvar_rascunho_web(self.db, self.oid, self.pid, {
             'material_item[]': ['Material do rascunho'],
             'material_qtd[]': ['2'],

@@ -280,8 +280,12 @@ def listar_os_compartilhadas(banco, ordem='status', pid=None):
     clausula = ordens.get(str(ordem or ''), ordens['status'])
     with db(banco) as c:
         return [dict(x) for x in c.execute(f"""
-            SELECT o.id, o.numero_os, o.status, o.descricao, o.data_abertura,
+            SELECT o.id, o.numero_os, o.status, o.data_abertura,
                    o.cliente_id, cl.nome AS cliente,
+                   (r.prestador_id=? OR EXISTS(
+                     SELECT 1 FROM os_prestadores own
+                     WHERE own.os_id=o.id AND own.prestador_id=? AND own.ativo=1
+                   )) AS involved,
                    r.prestador_id AS responsavel_id,
                    p.nome AS responsavel,
                    (SELECT GROUP_CONCAT(nome, ', ') FROM (
@@ -297,7 +301,7 @@ def listar_os_compartilhadas(banco, ordem='status', pid=None):
             WHERE o.status IN ('Aberta','Iniciada','Pendente')
               AND COALESCE(o.arquivada,0)=0
             ORDER BY {clausula}
-        """, (int(pid or 0),)).fetchall()]
+        """, (int(pid or 0),int(pid or 0),int(pid or 0))).fetchall()]
 
 def responsavel_atual(c, os_id):
     x = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (os_id,)).fetchone()

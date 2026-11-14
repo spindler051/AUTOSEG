@@ -1382,32 +1382,47 @@ def execute_http(ui,banco,principal,path,data,session,quer_json=False):
                       quer_json=quer_json)
 
 
-def authorize_get(banco, principal, path):
-    """Authorize provider reads before redirect or UI reveals object metadata."""
-    from officina.application.work_item_access import resource_for_work_item,require_document
-    if not object_policy_flags.enforcement_enabled(banco):
-        return None
+def authorize_get(banco, principal, path, *, allow_reduced=False):
+    """Enforce read authorization independently of the write policy flag."""
+    from officina.application.work_item_access import (
+        resource_for_work_item, require_document, require_read_work_item,
+        shared_queue_item,
+    )
     parts=path.strip('/').split('/')
     if len(parts)<2 or parts[0]!='os' or not parts[1].isdigit():
         raise PermissionError('Recurso indisponível.')
     oid=int(parts[1])
     tail=parts[2:]
     if not tail:
-        return require_work_item(banco,principal,oid,'view')
+        try:
+            return require_read_work_item(banco,principal,oid)
+        except PermissionError:
+            if not allow_reduced:
+                raise
+            shared_queue_item(banco, principal, oid)
+            return None
     if tail==['relatorio.yaml']:
-        return require_work_item(banco,principal,oid,'view')
+        return require_read_work_item(banco,principal,oid)
     if tail==['rascunho']:
-        return require_work_item(banco,principal,oid,'edit')
+        decision=require_read_work_item(banco,principal,oid)
+        if object_policy_flags.enforcement_enabled(banco):
+            return require_work_item(banco,principal,oid,'edit')
+        return decision
     if tail in (['pdf'],['pdf-preview'],['email'],['nota']):
         if tail==['pdf']:
+            require_read_work_item(banco,principal,oid)
             resource=resource_for_work_item(banco,oid)
             doc=Resource('document',oid,resource.organization_id,resource.owner_id,
                          resource.client_id,resource.participant_ids,
                          resource.attributes,resource.client_org_id)
             return ObjectPolicy().require(principal,'download',doc)
-        action = 'publish' if tail==['pdf-preview'] else 'send'
-        return require_work_item(banco,principal,oid,action)
+        decision=require_read_work_item(banco,principal,oid)
+        if object_policy_flags.enforcement_enabled(banco):
+            action = 'publish' if tail==['pdf-preview'] else 'send'
+            return require_work_item(banco,principal,oid,action)
+        return decision
     if len(tail)>=2 and tail[0]=='nota-fiscal' and tail[1].isdigit():
+        require_read_work_item(banco,principal,oid)
         return require_document(banco,principal,oid,int(tail[1]),'download')
     raise PermissionError('Recurso indisponível.')
 
@@ -1487,7 +1502,9 @@ def read_anexo(banco,principal,aid,*,ui,session):
         raise PermissionError('Recurso indisponível.')
     if principal is None:
         raise PermissionError('Recurso indisponível.')
-    from officina.application.work_item_access import resource_for_work_item
+    from officina.application.work_item_access import (
+        require_read_work_item, resource_for_work_item)
+    require_read_work_item(banco,principal,int(row['os_id']))
     resource=resource_for_work_item(banco,int(row['os_id']))
     document=Resource('document',aid,resource.organization_id,resource.owner_id,
                       resource.client_id,resource.participant_ids,
@@ -1521,7 +1538,9 @@ def read_anexo_thumb(banco,principal,aid,*,ui,session):
         raise PermissionError('Recurso indisponível.')
     if principal is None:
         raise PermissionError('Recurso indisponível.')
-    from officina.application.work_item_access import resource_for_work_item
+    from officina.application.work_item_access import (
+        require_read_work_item, resource_for_work_item)
+    require_read_work_item(banco,principal,int(row['os_id']))
     resource=resource_for_work_item(banco,int(row['os_id']))
     document=Resource('document',aid,resource.organization_id,resource.owner_id,
                       resource.client_id,resource.participant_ids,

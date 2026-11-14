@@ -182,30 +182,47 @@ def contar_ativos(banco=None):
             "SELECT COUNT(*) FROM clientes WHERE status NOT IN ('Inativo','A definir')").fetchone()[0])
 
 
-def listar_paginado(termo="", limite=40, offset=0, banco=None):
-    """Lista paginada da tela /clientes do Portal do Prestador.
-
-    Retorna ``(total, linhas)``. O filtro por documento também aceita
-    CPF/CNPJ formatado, comparando somente os dígitos.
-    """
+def listar_paginado(termo="", limite=40, offset=0, banco=None, provider_id=None,
+                   allowed_fields=None):
+    """Read the scoped customer projection with SQL-side search and pagination."""
     busca = str(termo or "").strip()[:110]
+    campos = frozenset(allowed_fields) if allowed_fields is not None else frozenset(
+        ('nome','documento','telefone','email','endereco'))
+    permitted = {
+        'documento':'documento', 'cidade':'endereco',
+        'telefone':'telefone', 'email':'email',
+    }
+    columns = ','.join((field if policy_name in campos else "''") + ' AS ' + field
+                       for field,policy_name in permitted.items())
     filtro = " WHERE status!='A definir'"
     params = []
+    if provider_id is not None:
+        filtro += """ AND EXISTS (SELECT 1 FROM ordens_servico o WHERE o.cliente_id=clientes.id
+            AND (EXISTS (SELECT 1 FROM os_responsaveis r
+                         WHERE r.os_id=o.id AND r.prestador_id=?)
+            OR EXISTS (SELECT 1 FROM os_prestadores op
+                       WHERE op.os_id=o.id AND op.prestador_id=? AND op.ativo=1)))"""
+        params.extend((provider_id,provider_id))
     if busca:
-        filtro += (" AND (nome LIKE ? ESCAPE '!' OR documento LIKE ? ESCAPE '!' "
-                   "OR cidade LIKE ? ESCAPE '!' OR email LIKE ? ESCAPE '!' "
-                   "OR replace(replace(replace(documento,'.',''),'/',''),'-','') "
-                   "LIKE ? ESCAPE '!') ")
-        termo_like = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
-        documentos = cad9.digitos(busca)
-        params = [termo_like] * 4 + [
-            '%' + documentos + '%' if documentos else 'documento_nunca_corresponde']
+        term = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+        predicates = [('nome',term)]
+        if 'documento' in campos:
+            predicates.append(('documento',term))
+            digits = cad9.digitos(busca)
+            if digits:
+                predicates.append(("replace(replace(replace(documento,'.',''),'/',''),'-','')",
+                                   '%' + digits + '%'))
+        if 'endereco' in campos:
+            predicates.append(('cidade',term))
+        if 'email' in campos:
+            predicates.append(('email',term))
+        filtro += ' AND (' + ' OR '.join(field+" LIKE ? ESCAPE '!'" for field,_ in predicates) + ')'
+        params.extend(value for _,value in predicates)
     with ext.db(banco or BANCO) as conexao:
-        total = int(conexao.execute(
-            'SELECT COUNT(*) FROM clientes' + filtro, params).fetchone()[0])
+        total = int(conexao.execute('SELECT COUNT(*) FROM clientes' + filtro, params).fetchone()[0])
         linhas = conexao.execute(
-            'SELECT id,nome,documento,cidade,telefone,email,status,dados_incompletos '
-            'FROM clientes' + filtro + ' ORDER BY nome LIMIT ? OFFSET ?',
+            'SELECT id,nome,' + columns + ',status,dados_incompletos FROM clientes' + filtro +
+            ' ORDER BY nome LIMIT ? OFFSET ?',
             params + [int(limite), int(offset)]).fetchall()
     return total, [dict(linha) for linha in linhas]
 
@@ -364,3 +381,13 @@ def salvar(cliente_id, dados, banco=None, *, connection=None):
         return servico.create("cliente", campos)
     return servico.update("cliente", str(cliente_id), campos,
                           expected_version=existente["version"])
+
+def buscar_para_criacao_os(termo='', banco=None, limite=400):
+    """Provider-facing picker returns only the identity needed to open an OS."""
+    busca = str(termo or '').strip()[:120]
+    padrao = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    with ext.db(banco or BANCO) as connection:
+        rows = connection.execute("""SELECT id,nome FROM clientes
+          WHERE status NOT IN ('Inativo','A definir') AND nome LIKE ? ESCAPE '!'
+          ORDER BY nome LIMIT ?""", (padrao, int(limite))).fetchall()
+    return [dict(row) for row in rows]

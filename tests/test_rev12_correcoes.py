@@ -1029,7 +1029,8 @@ class CorrecoesRev12(unittest.TestCase):
         # sem navegar para uma página de erro.
         cliente_c = self._login(base, 'foto.c@exemplo.com.br')
         _, html_c = req(cliente_c, base, f'/os/{oid}')
-        self.assertIn('Recurso indisponível.', html_c)
+        self.assertIn('fila compartilhada', html_c)
+        self.assertNotIn('Salvar fotos e legendas', html_c)
         _, inicio_c = req(cliente_c, base, '/')
         token_c = re.search(r'name="csrf" value="([^"]+)"', inicio_c).group(1)
         corpo = urllib.parse.urlencode({
@@ -1929,7 +1930,7 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertNotIn('Salvar fotos e legendas', html)
         self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
-        self.assertIn('Recurso indisponível.', html)
+        self.assertIn('fila compartilhada', html)
         _, pagina_inicio = req(cliente_b, base, '/')
         token = re.search(r'name="csrf" value="([^"]+)"', pagina_inicio).group(1)
         buffer = io.BytesIO()

@@ -52,6 +52,7 @@ from flavors.autoseg.modules import texto_os
 from flavors.autoseg.modules import maf_loans
 from officina.integration import clientes as clientes_core
 from officina.repositories import ordens as ordens_repo
+from officina.application import work_item_access as read_access
 
 
 def _policy_allows(banco, session, permission):
@@ -1301,15 +1302,12 @@ class PortalPrestador:
 
             def os_lista(self,s,concluidas=False):
                 if concluidas:
-                    lista=ordens_repo.listar_historico(banco)
+                    principal=os_commands._provider_context(banco,s)
+                    lista=(ordens_repo.listar_historico(banco)
+                           if read_access.can_read_all(principal)
+                           else ordens_repo.listar_historico_scoped(banco,principal.provider_id))
                     rows=[]
                     for x in lista:
-                        try:
-                            if object_policy_flags.enforcement_enabled(banco):
-                                os_commands.authorize_get(banco,os_commands._provider_context(banco,s),
-                                                      f'/os/{int(x["id"])}')
-                        except PermissionError:
-                            continue
                         link_pdf=(botao('Baixar PDF',f'{url_os(banco, x["id"])}/pdf') if x['versao'] else
                             '<span class="warn">Não publicado</span> '+botao('Abrir para republicar',f'{url_os(banco, x["id"])}','secondary'))
                         rows.append((f'<a href="{url_os(banco, x["id"])}">{esc(x["numero_os"])}</a>',esc(x['cliente']),
@@ -1320,14 +1318,11 @@ class PortalPrestador:
                         tabela(['OS','Cliente','Situação','Valor','Versão PDF','Documento'],rows)),s)
                 ordem=parse_qs(urlparse(self.path).query).get('ordem',['status'])[0]
                 if ordem not in ('status','data','cliente','os','alteracao','abertura'):ordem='status'
+                principal=os_commands._provider_context(banco,s)
                 lista=ext.listar_os_compartilhadas(banco,ordem,s['pid'])
                 rows=[]
                 for x in lista:
-                    try:
-                        os_commands.authorize_get(banco,os_commands._provider_context(banco,s),
-                                                  f'/os/{int(x["id"])}')
-                    except PermissionError:
-                        continue
+                    full=bool(x['involved']) or read_access.can_read_all(principal)
                     estado=x['status']
                     try:
                         with ext.db(banco) as c:
@@ -1335,7 +1330,8 @@ class PortalPrestador:
                     except Exception:
                         pass
                     rows.append((f'<a href="{url_os(banco, x["id"])}">{esc(x["numero_os"])}</a>',
-                        f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>',
+                        (f'<a href="/clientes/{int(x["cliente_id"])}">{esc(x["cliente"])}</a>'
+                         if full else esc(x['cliente'])),
                         f'<span class="tag">{esc(estado)}</span>',esc(x.get('responsavel') or 'Não atribuído'),
                         esc(x.get('participantes') or 'Nenhum')))
                 opcoes_ordem=[
@@ -1359,10 +1355,17 @@ class PortalPrestador:
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
             def inicio(self,s):
-                clientes_ativos=clientes_core.contar_ativos(banco)
-                o=ordens_repo.resumo(banco)
-                f=ordens_repo.financeiro_resumo(banco)
-                recentes=ordens_repo.recentes(banco, limite=6)
+                principal=os_commands._provider_context(banco,s)
+                if read_access.can_read_all(principal):
+                    clientes_ativos=clientes_core.contar_ativos(banco)
+                    o=ordens_repo.resumo(banco)
+                    f=ordens_repo.financeiro_resumo(banco)
+                    recentes=ordens_repo.recentes(banco, limite=6)
+                else:
+                    clientes_ativos=ordens_repo.clientes_ativos_scoped(banco,principal.provider_id)
+                    o=ordens_repo.resumo_scoped(banco,principal.provider_id)
+                    f=ordens_repo.financeiro_resumo_scoped(banco,principal.provider_id)
+                    recentes=ordens_repo.recentes_scoped(banco,principal.provider_id)
                 if self.ui_app():
                     def stat(rotulo,valor,href):
                         return (f'<a class="stat" href="{href}"><span>{esc(rotulo)}</span>'
@@ -1633,8 +1636,15 @@ class PortalPrestador:
                 try:pagina=max(1,min(10000,int(qs.get('pagina',['1'])[0])))
                 except (ValueError,TypeError):pagina=1
                 limite=40;offset=(pagina-1)*limite
+                principal=os_commands._provider_context(banco,s)
+                allowed_fields=read_access.involved_customer_field_scopes(principal)
+                if 'nome' not in allowed_fields:
+                    return self.erro('Acesso não autorizado.',403,s)
+                provider_filter=(None if read_access.can_read_all(principal,'customer')
+                                 else principal.provider_id)
                 total, rows = clientes_core.listar_paginado(
-                    busca, limite, offset, banco=banco)
+                    busca, limite, offset, banco=banco, provider_id=provider_filter,
+                    allowed_fields=allowed_fields)
                 linhas=[]
                 for r in rows:
                     linhas.append((f'<a href="/clientes/{r["id"]}">{esc(r["nome"])}</a>',esc(cad9.formatar_documento(r['documento'])),esc(r['cidade']),
@@ -1819,6 +1829,12 @@ class PortalPrestador:
                            + form), s)
 
             def cliente_form(self,s,cid=None,preenchimento=None,erro=None):
+                if cid:
+                    try:
+                        read_access.require_customer_read(
+                            banco, os_commands._provider_context(banco,s), cid)
+                    except PermissionError:
+                        return self.erro('Recurso indisponível.',404,s)
                 x=clientes_core.obter_linha(cid, banco=banco) if cid else None
                 if cid and not x: return self.erro('Cliente não encontrado.',404,s)
                 d=dict(x) if x else {}
@@ -1832,6 +1848,14 @@ class PortalPrestador:
                     ('administradora','Administradora / imobiliária'),('administradora_telefone','Telefone da administradora'),
                     ('administradora_email','E-mail da imobiliária / administradora')]
                 for k,t in campos:
+                    field_scope=('documento' if k=='documento' else
+                                 'telefone' if 'telefone' in k else
+                                 'email' if 'email' in k else
+                                 'endereco' if k in ('endereco','numero','complemento','bairro','cep','cidade','uf') else
+                                 'nome')
+                    if cid and not read_access.customer_field_allowed(
+                            banco,os_commands._provider_context(banco,s),cid,field_scope):
+                        continue
                     fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
                 corpo=(f'<div class="page-actions">{botao("← Clientes","/clientes","secondary")}'
                     + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
@@ -1902,17 +1926,16 @@ class PortalPrestador:
                     prestadores=c.execute(
                         "SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome").fetchall()
                 termo=str(q or '').strip()[:120]
-                clientes=clientes_core.buscar_rapida(termo,banco=banco,limite=400)
+                clientes=clientes_core.buscar_para_criacao_os(termo,banco=banco,limite=400)
                 if not clientes:
-                    clientes=clientes_core.buscar_rapida('',banco=banco,limite=400)
+                    clientes=clientes_core.buscar_para_criacao_os('',banco=banco,limite=400)
                 selecionado=str(cliente_id or dados_form.get('cliente_id') or '')
                 opcoes=[('','Cliente a definir (associar depois)')]
                 for x in clientes:
-                    partes=[x.get('tipo_pessoa') or '',x.get('cidade') or '']
-                    detalhe=' · '.join(p for p in partes if p)
-                    opcoes.append((str(x['id']),x['nome']+(f' — {detalhe}' if detalhe else '')))
+                    opcoes.append((str(x['id']),x['nome']))
                 if selecionado and not any(str(v)==selecionado for v,_ in opcoes):
-                    atual=clientes_core.obter_linha(int(selecionado),banco=banco)
+                    atual=next((x for x in clientes_core.buscar_para_criacao_os(
+                        '',banco=banco,limite=10000) if str(x['id'])==selecionado),None)
                     if atual:
                         opcoes.append((str(atual['id']),atual['nome']))
                 aviso=f'<p class="bad">{esc(erro)}</p>' if erro else ''
@@ -1975,9 +1998,36 @@ class PortalPrestador:
                     + importar_rapida
                     + botao('← Voltar às OS', '/os', 'secondary'), s)
 
+            def os_reduzida(self,s,oid):
+                principal=os_commands._provider_context(banco,s)
+                try:
+                    dados,can_assume=read_access.shared_queue_item(
+                        banco,principal,oid,
+                        enforce_assume_policy=object_policy_flags.enforcement_enabled(banco))
+                except PermissionError:
+                    return self.erro('Recurso indisponível.',404,s)
+                corpo=(f'<p>Número: {esc(dados["numero_os"])}</p>'
+                       f'<p>Cliente: {esc(dados["cliente"])}</p>'
+                       f'<p>Situação: {esc(dados["status"])}</p>'
+                       f'<p>Abertura: {esc(dados["data_abertura"])}</p>'
+                       f'<p>Atualização: {esc(dados["atualizado_em"])}</p>'
+                       f'<p>Responsável: {esc(dados["responsavel"] or "Não atribuído")}</p>'
+                       f'<p>Participantes: {esc(dados["participantes"] or "Nenhum")}</p>')
+                if can_assume:
+                    corpo+=(f'<form method="post" action="{url_os(banco,oid)}/assumir">'
+                            +self.hidden(s)+'<button type="submit">Assumir OS</button></form>')
+                return self.pagina('OS — fila compartilhada',
+                    card('Dados da fila',corpo)+botao('Voltar à fila','/os','secondary'),s)
+
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
+                if oid is not None:
+                    try:
+                        read_access.require_read_work_item(
+                            banco,os_commands._provider_context(banco,s),oid)
+                    except PermissionError:
+                        return self.os_reduzida(s,oid)
                 with ext.db(banco) as c:
-                    cl=clientes_core.listar_para_os(banco)
+                    cl=clientes_core.buscar_para_criacao_os(banco=banco,limite=10000)
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
@@ -1997,13 +2047,6 @@ class PortalPrestador:
                                             (oid,)).fetchall() if oid else []
                     contatos_os=prod.contatos_email_os(banco,oid) if oid else None
                 if oid and not o: return self.erro('OS não encontrada.',404,s)
-                if oid:
-                    # Shadow measurement only; the route still opens the OS for
-                    # any authenticated provider until enforcement lands.
-                    policy_shadow.evaluate_os(
-                        banco,s['pid'],oid,'view',True,'os_form')
-                    policy_shadow.evaluate_os(
-                        banco,s['pid'],oid,'read',True,'os_form')
                 d=dict(o) if o else {}
                 arquivada=bool(d.get('arquivada'))
                 # A pending OS is not "started" even if an older start remains
@@ -2086,7 +2129,7 @@ class PortalPrestador:
                 if oid and app:
                     cliente_info=next((x for x in cl if x['id']==d.get('cliente_id')),None)
                     cliente_nome=cliente_info['nome'] if cliente_info else ''
-                    local=' · '.join(str(cliente_info[k] or '') for k in ('bairro','cidade') if cliente_info and cliente_info[k])
+                    local=''
                     resp_nome=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     status_exibicao='Em rota' if em_rota and d['status'] in ext.ATIVAS else d['status']
                     partes_meta=[x for x in (local,f'Aberta em {data_curta(d.get("data_abertura"))}',f'{url_os(banco, oid)}') if x]
@@ -3670,7 +3713,9 @@ class PortalPrestador:
                             if session is None:
                                 return self.login()
                             principal=os_commands._provider_context(banco,session)
-                            os_commands.authorize_get(banco,principal,normalized)
+                            os_commands.authorize_get(
+                                banco,principal,normalized,
+                                allow_reduced=(len(parts)==2))
                     except PermissionError:
                         return self.erro('Recurso indisponível.',404)
                 redirecionar = self._redirecionar_os(path)
@@ -3834,6 +3879,11 @@ class PortalPrestador:
                         return self.os_rapida_form(s,q=q,cliente_id=cliente_rapido)
                     if path=='/os/nova':return self.os_form(s)
                     if path=='/clientes':return self.clientes_lista(s)
+                    if path=='/clientes/busca':
+                        termo=parse_qs(urlparse(self.path).query).get('q',[''])[0]
+                        itens=clientes_core.buscar_para_criacao_os(termo,banco=banco)
+                        return self.send_bytes(json.dumps(itens,ensure_ascii=False).encode(),
+                            'application/json; charset=utf-8')
                     if path=='/orcamento':
                         qs=parse_qs(urlparse(self.path).query)
                         try:cliente_orcamento=int(qs.get('cliente_id',['0'])[0]) or None
@@ -3888,7 +3938,16 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='editar':
                         return self.servico_form(s,int(partes[1]))
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='contato':
-                        contato=clientes_core.obter_linha(int(partes[1]),banco=banco)
+                        cid=int(partes[1])
+                        try:
+                            principal=os_commands._provider_context(banco,s)
+                            read_access.require_customer_contact(banco,principal,cid)
+                            for field in ('email','telefone'):
+                                if not read_access.customer_field_allowed(banco,principal,cid,field):
+                                    raise PermissionError('Recurso indisponível.')
+                        except PermissionError:
+                            return self.erro('Recurso indisponível.',404,s)
+                        contato=clientes_core.obter_linha(cid,banco=banco)
                         if not contato:
                             return self.send_bytes(json.dumps({'error':'Cliente não encontrado.'}).encode(),
                                                    'application/json; charset=utf-8',status=404)
@@ -3918,7 +3977,7 @@ class PortalPrestador:
                         if not rascunho:return self.erro('Nenhum rascunho salvo para esta OS.',404,s)
                         return self.os_form(s,oid,preenchimento=rascunho['dados'])
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2] in ('pdf','pdf-preview','email','nota'):
-                        return os_commands.document_get(banco,(os_commands._provider_context(banco,s) if object_policy_flags.enforcement_enabled(banco) else None),int(partes[1]),ui=self,session=s,kind=partes[2])
+                        return os_commands.document_get(banco,os_commands._provider_context(banco,s),int(partes[1]),ui=self,session=s,kind=partes[2])
                     if len(partes)==5 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='nota-fiscal' and partes[3].isdigit() and partes[4]=='preview':
                         oid=int(partes[1]);nid=int(partes[3])
                         with ext.db(banco) as c:
