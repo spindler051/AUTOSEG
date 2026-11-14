@@ -17,6 +17,7 @@ import logging
 import os
 import sqlite3
 from dataclasses import asdict, is_dataclass, replace
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Mapping
@@ -217,16 +218,38 @@ def _require_object(banco, principal, os_id, action='view'):
         _hidden_resource()
 
 
-def _os_writer_authorize(principal, os_id, action):
-    """Revalidate the current actor and object in the writer's BEGIN IMMEDIATE."""
+def _os_writer_authorize(principal, os_id, action, *, session_id):
+    """Revalidate session, account, role and OS inside the writer transaction."""
     def authorize(connection):
-        if principal.provider_id is None:
+        if (not principal.active or type(principal.provider_id) is not int
+                or type(session_id) is not int or session_id <= 0):
+            _hidden_resource()
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        session = connection.execute('''SELECT 1 FROM desktop_sessoes
+            WHERE id=? AND prestador_id=? AND revogado_em IS NULL AND expira_em>?''',
+            (session_id, principal.provider_id, now)).fetchone()
+        if session is None:
             _hidden_resource()
         provider = connection.execute(
             'SELECT ativo,excluido FROM prestadores WHERE id=?',
             (principal.provider_id,)).fetchone()
-        if (provider is None or not provider['ativo'] or provider['excluido']):
+        if provider is None or not provider['ativo'] or provider['excluido']:
             _hidden_resource()
+        tables = {row[0] for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('accounts','account_links')")}
+        if 'account_links' in tables:
+            if 'accounts' not in tables:
+                _hidden_resource()
+            linked = connection.execute('''SELECT a.active AS account_active,
+                l.active AS membership_active,l.provider_org_id
+                FROM account_links l LEFT JOIN accounts a ON a.id=l.account_id
+                WHERE l.link_type='provider' AND
+                      (l.provider_id=? OR l.legacy_provider_id=?)''',
+                (principal.provider_id, principal.provider_id)).fetchall()
+            if any(not row['account_active'] or not row['membership_active']
+                   or row['provider_org_id'] != 'autoseg' for row in linked):
+                _hidden_resource()
         current = replace(principal,
                           role=('admin' if ext.administrador(connection, principal.provider_id)
                                 else 'employee'), active=True)
@@ -522,7 +545,7 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
         else:
             access.require_create(banco, principal)
         return _enviar(handler, 200, servico.salvar_os(
-            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission))
+            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')))
             if payload.os_id else servico.salvar_os(payload))
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, _scoped_os_rows(banco, principal,
@@ -581,13 +604,13 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
             raise ValidacaoError('Informe o prestador.')
         return _enviar(handler, 200, {
             'mudou': servico.atribuir_os(os_id, prestador_id,
-                             authorize=_os_writer_authorize(principal, os_id, 'assign'))})
+                             authorize=_os_writer_authorize(principal, os_id, 'assign', session_id=info.get('sessao_id')))})
     if resto == ['desatribuir'] and metodo == 'POST':
         return _enviar(handler, 200, {
             'mudou': servico.desatribuir_os(os_id,
-                             authorize=_os_writer_authorize(principal, os_id, 'assign'))})
+                             authorize=_os_writer_authorize(principal, os_id, 'assign', session_id=info.get('sessao_id')))})
     if resto == ['iniciar'] and metodo == 'POST':
-        servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start'))
+        servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start', session_id=info.get('sessao_id')))
         return _enviar(handler, 200, {'ok': True})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
@@ -595,15 +618,15 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
     if resto == ['pdf', 'publicar'] and metodo == 'POST':
         return _enviar(handler, 200, {
             'arquivo': servico.publicar_pdf(os_id,
-                              authorize=_os_writer_authorize(principal, os_id, 'publish'))})
+                              authorize=_os_writer_authorize(principal, os_id, 'publish', session_id=info.get('sessao_id')))})
     if resto == ['email', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
             'arquivo': servico.preparar_email(os_id,
-                              authorize=_os_writer_authorize(principal, os_id, 'send'))})
+                              authorize=_os_writer_authorize(principal, os_id, 'send', session_id=info.get('sessao_id')))})
     if resto == ['nota', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
             'arquivo': servico.preparar_nota(os_id,
-                              authorize=_os_writer_authorize(principal, os_id, 'send'))})
+                              authorize=_os_writer_authorize(principal, os_id, 'send', session_id=info.get('sessao_id')))})
     raise NaoEncontradoError('Rota não encontrada.')
 
 
