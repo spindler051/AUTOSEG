@@ -44,8 +44,17 @@ class OutboxTests(unittest.TestCase):
             if kind == 'pdf':
                 return outbox.enqueue_pdf(c, 7, revision, action)
             if kind == 'email':
-                return outbox.enqueue_email(c, 7, revision, action)
+                return outbox.enqueue_email(c, 7, revision, action, recipient_refs=['cliente'])
             return outbox.enqueue_file(c, 7, revision, action, 1, 'a' * 64)
+
+    def test_email_requires_recipient_refs_before_insertion(self):
+        with ext.db(self.db) as c:
+            c.execute('BEGIN IMMEDIATE')
+            with self.assertRaises(TypeError):
+                outbox.enqueue_email(c, 7, 'bad', 'send')
+            with self.assertRaisesRegex(ValueError, 'recipient_refs'):
+                outbox.enqueue_email(c, 7, 'bad-empty', 'send', recipient_refs=[])
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM os_effect_outbox WHERE effect_type='email'").fetchone()[0], 0)
 
     def test_schema_is_additive_and_install_idempotent(self):
         with sqlite3.connect(self.db) as c:
@@ -274,8 +283,8 @@ class OutboxTests(unittest.TestCase):
         with ext.db(self.db) as c:
             c.execute('BEGIN IMMEDIATE')
             with self.assertRaises(PermissionError):
-                outbox.manual_email_retry(c, 7, 'rev2', 'resend', duplicate_acknowledged=False)
-            retried = outbox.manual_email_retry(c, 7, 'rev2', 'resend', duplicate_acknowledged=True)
+                outbox.manual_email_retry(c, 7, 'rev2', 'resend', duplicate_acknowledged=False, recipient_refs=['cliente'])
+            retried = outbox.manual_email_retry(c, 7, 'rev2', 'resend', duplicate_acknowledged=True, recipient_refs=['cliente'])
         self.assertNotEqual(first['operation_key'], retried['operation_key'])
 
     def test_backup_verified_and_downgrade_is_additive(self):

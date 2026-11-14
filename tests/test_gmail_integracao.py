@@ -8,6 +8,7 @@ import time
 import unittest
 from pathlib import Path
 
+from officina.core import os_effect_outbox as outbox
 from officina.core import atendimento_os as aten
 from officina.core import cadastros_v9 as cad9
 from officina.core import fluxo_os as fluxo
@@ -31,6 +32,7 @@ class GmailIntegracao(unittest.TestCase):
             modulo.instalar(self.banco)
         from officina.core import produtividade_os as prod
         prod.instalar(self.banco)
+        outbox.install(self.banco)
         self.env_anterior = os.environ.get('AUTOSEG_GMAIL_DESATIVADO')
 
     def tearDown(self):
@@ -60,6 +62,16 @@ class GmailIntegracao(unittest.TestCase):
         fluxo.publicar_relatorio(self.banco, oid)
         return oid
 
+    def _dispatch(self, oid, refs=None):
+        refs = ['cliente'] if refs is None else refs
+        with ext.db(self.banco) as c:
+            c.execute('BEGIN IMMEDIATE')
+            effect = outbox.enqueue_email(c, oid, f'integration-{len(refs)}-{oid}',
+                                          'send', recipient_refs=refs)
+        return outbox.deliver_email(
+            self.banco, effect['operation_key'],
+            lambda os_id, key: gmail_service.enviar_operacao_outbox(self.banco, os_id, key))
+
     def test_envio_automatico_registra_enviado(self):
         os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
         oid = self._concluir_com_pdf()
@@ -68,14 +80,15 @@ class GmailIntegracao(unittest.TestCase):
         detalhes = {}
         def fake_enviar(destinatario, assunto, corpo_html, cc=None,
                         caminho_pdf_relatorio=None, caminho_pdf_nf=None, usar_bcc=False,
-                        nome_pdf_relatorio=None, nome_pdf_nf=None):
+                        nome_pdf_relatorio=None, nome_pdf_nf=None,
+                        operation_key=None):
             detalhes.update(destinatario=destinatario, corpo=corpo_html, nf=caminho_pdf_nf,
                             bcc=usar_bcc)
             chamadas.append((destinatario, assunto, caminho_pdf_relatorio))
             return 'msg-fake-123'
         gmail_service.enviar_email_gmail = fake_enviar
         try:
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid)
+            self._dispatch(oid)
             from officina.core import produtividade_os as prod
             status = None
             for _ in range(50):
@@ -104,18 +117,19 @@ class GmailIntegracao(unittest.TestCase):
             raise RuntimeError('sem conexão')
         gmail_service.enviar_email_gmail = fake_erro
         try:
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid)
+            with self.assertRaises(outbox.DispatchUncertain):
+                self._dispatch(oid)
             from officina.core import produtividade_os as prod
             status = None
             for _ in range(50):
                 with ext.db(self.banco) as c:
                     r = c.execute('SELECT status,erro FROM produtividade_email WHERE os_id=?', (oid,)).fetchone()
-                if r and r['status'] == 'falhou':
+                if r and r['status'] == 'unknown':
                     status = r
                     break
                 time.sleep(0.05)
             self.assertIsNotNone(status)
-            self.assertIn('sem conexão', status['erro'])
+            self.assertEqual(status['status'], 'unknown')
         finally:
             gmail_service.enviar_email_gmail = original
 
@@ -129,13 +143,16 @@ class GmailIntegracao(unittest.TestCase):
             return 'x'
         gmail_service.enviar_email_gmail = fake
         try:
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid)
-            time.sleep(0.2)
+            with self.assertRaises(outbox.PreDispatchError):
+                self._dispatch(oid)
             self.assertEqual(chamou, [])
             from officina.core import produtividade_os as prod
             with ext.db(self.banco) as c:
                 r = c.execute('SELECT status FROM produtividade_email WHERE os_id=?', (oid,)).fetchone()
-            self.assertEqual(r['status'], 'pendente')
+            self.assertIsNone(r)
+            with ext.db(self.banco) as c:
+                state = c.execute("SELECT state FROM os_effect_outbox WHERE effect_type='email'").fetchone()[0]
+            self.assertEqual(state, 'failed')
         finally:
             gmail_service.enviar_email_gmail = original
 
@@ -155,16 +172,14 @@ class GmailIntegracao(unittest.TestCase):
         original = gmail_service.enviar_email_gmail
         capturado = {}
         def fake(destinatario, assunto, corpo_html, cc=None, caminho_pdf_relatorio=None,
-                 caminho_pdf_nf=None, usar_bcc=False, nome_pdf_relatorio=None, nome_pdf_nf=None):
+                 caminho_pdf_nf=None, usar_bcc=False, nome_pdf_relatorio=None, nome_pdf_nf=None,
+                 operation_key=None):
             capturado.update(destinatario=destinatario, corpo=corpo_html,
                              nf=caminho_pdf_nf, bcc=usar_bcc)
             return 'msg-multi-1'
         gmail_service.enviar_email_gmail = fake
         try:
-            destinatarios = prod.destinatarios_para_os(
-                self.banco, oid, ['cliente', 'sindico', 'administradora'], 'extra@example.org')
-            self.assertEqual(len(destinatarios), 4)
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid, destinatarios)
+            self._dispatch(oid, ['cliente', 'sindico', 'administradora'])
             status = None
             for _ in range(50):
                 with ext.db(self.banco) as c:
@@ -176,10 +191,7 @@ class GmailIntegracao(unittest.TestCase):
                 time.sleep(0.05)
             self.assertEqual(status['status'], 'enviado')
             self.assertEqual(status['message_id'], 'msg-multi-1')
-            for email in ('cliente@example.org', 'sindico@example.org',
-                          'adm@example.org', 'extra@example.org'):
-                self.assertIn(email, status['destinatarios_json'])
-            self.assertEqual(len(capturado['destinatario']), 4)
+            self.assertEqual(len(capturado['destinatario']), 3)
             self.assertFalse(capturado['bcc'])
             self.assertTrue(str(capturado['nf']).endswith('.pdf'))
             self.assertIn('Favorecido Teste', capturado['corpo'])
@@ -205,9 +217,7 @@ class GmailIntegracao(unittest.TestCase):
             return 'msg-dev-1'
         gmail_service.enviar_email_gmail = fake
         try:
-            destinatarios = prod.destinatarios_para_os(
-                self.banco, oid, ['cliente', 'sindico', 'administradora'], '')
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid, destinatarios)
+            self._dispatch(oid, ['cliente', 'sindico', 'administradora'])
             for _ in range(50):
                 with ext.db(self.banco) as c:
                     r = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
@@ -258,20 +268,18 @@ class GmailIntegracao(unittest.TestCase):
             return 'nao-deve-chegar'
         gmail_service.enviar_email_gmail = fake
         try:
-            gmail_service.enviar_relatorio_os_concluida(self.banco, oid)
-            from officina.core import produtividade_os as prod
-            status = None
-            for _ in range(50):
-                with ext.db(self.banco) as c:
-                    r = c.execute('SELECT status,erro FROM produtividade_email WHERE os_id=?',
-                                  (oid,)).fetchone()
-                if r and r['status'] == 'falhou':
-                    status = r
-                    break
-                time.sleep(0.05)
-            self.assertIsNotNone(status, 'deveria registrar falha de envio')
+            with self.assertRaises(outbox.PreDispatchError):
+                self._dispatch(oid)
             self.assertEqual(chamado, [], 'não deveria enviar sem a nota fiscal')
-            self.assertIn('nota fiscal', status['erro'].lower())
+            with ext.db(self.banco) as c:
+                state = c.execute(
+                    "SELECT state FROM os_effect_outbox WHERE effect_type='email'"
+                ).fetchone()['state']
+                projected = c.execute(
+                    'SELECT COUNT(*) FROM produtividade_email WHERE os_id=?', (oid,)
+                ).fetchone()[0]
+            self.assertEqual(state, 'failed')
+            self.assertEqual(projected, 0)
         finally:
             gmail_service.enviar_email_gmail = original
 

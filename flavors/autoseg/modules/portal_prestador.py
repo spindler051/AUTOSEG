@@ -2580,7 +2580,6 @@ class PortalPrestador:
                             marcado=' checked' if chave in selecionados_d else ''
                             corpo+=f'<label style="display:block;margin:5px 0"><input type="checkbox" name="destinatario_sel[]" value="{chave}"{marcado}> {rotulo}: {esc(email)}</label>'
                     corpo+='<p class="muted" id="destinatarios-resumo" aria-live="polite">Nenhum destinatário selecionado.</p>'
-                    corpo+=f'<label>E-mails adicionais (separe por vírgula)<input name="emails_adicionais" type="text" maxlength="500" value="{esc(str(d.get("emails_adicionais","")))}" placeholder="financeiro@exemplo.com.br"></label>'
                     marcado_sem_dest=' checked' if str(d.get('sem_destinatario','')) in ('1','on','true','sim') else ''
                     corpo+=(f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
                             f'<input type="checkbox" name="sem_destinatario" value="1"{marcado_sem_dest}> '

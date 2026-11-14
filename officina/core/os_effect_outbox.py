@@ -106,11 +106,14 @@ def _queue(c, os_id, revision, action, effect_type, *, payload=None, version=Non
     payload = payload or {}
     if set(payload) - {'source_id', 'source_sha256', 'previous_sha256', 'document_id', 'reason_code', 'recipient_refs'}:
         raise ValueError('Outbox payload contains unsupported fields.')
+    if effect_type == 'email' and (not isinstance(payload.get('recipient_refs'), list)
+                                   or not payload['recipient_refs']):
+        raise ValueError('Email outbox requires recipient_refs.')
     if 'recipient_refs' in payload:
         refs = payload['recipient_refs']
         if (effect_type != 'email' or not isinstance(refs, list)
                 or any(ref not in ('cliente', 'sindico', 'administradora') for ref in refs)
-                or len(set(refs)) != len(refs)):
+                or not refs or len(set(refs)) != len(refs)):
             raise ValueError('Invalid recipient references.')
     encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'))
     key = operation_key(os_id, revision, action, effect_type)
@@ -142,8 +145,10 @@ def enqueue_pdf(c, os_id, revision, action='publish'):
     return _queue(c, os_id, revision, action, 'pdf')
 
 
-def enqueue_email(c, os_id, revision, action='send', *, recipient_refs=None):
-    payload = {} if recipient_refs is None else {'recipient_refs': list(recipient_refs)}
+def enqueue_email(c, os_id, revision, action='send', *, recipient_refs):
+    if not isinstance(recipient_refs, (list, tuple)) or not recipient_refs:
+        raise ValueError('Email outbox requires recipient_refs.')
+    payload = {'recipient_refs': list(recipient_refs)}
     return _queue(c, os_id, revision, action, 'email', payload=payload)
 
 
@@ -201,15 +206,44 @@ def _has_table(c, name):
                      (name,)).fetchone() is not None
 
 
-def _project_email(c, os_id, status, *, message_id='', error=''):
-    # The same transaction updates status and the legacy projections.
-    projection = {'done':'enviado','unknown':'unknown','failed':'falhou',
-                  'sem_destinatario':'sem_destinatario'}[status]
+def _project_email(c, os_id, status, *, message_id='', error='', recipient_refs=None):
+    # The same transaction updates the durable effect and its email projections.
+    projection = {'done':'enviado','unknown':'unknown','failed':'falhou'}[status]
+    recipients=[]
+    if (status != 'failed' and recipient_refs and _has_table(c,'produtividade_email')
+            and _has_table(c,'ordens_servico') and _has_table(c,'clientes')):
+        columns={'cliente':'email','sindico':'sindico_email',
+                 'administradora':'administradora_email'}
+        names=[columns[ref] for ref in recipient_refs if ref in columns]
+        if names:
+            contact=c.execute('SELECT '+','.join('cl.'+name for name in names)+
+                ' FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id WHERE o.id=?',
+                (os_id,)).fetchone()
+            if contact:
+                from officina.core import produtividade_os as prod
+                for name in names:
+                    try:
+                        address=prod._email_validado(contact[name])
+                    except ValueError:
+                        address=''
+                    if address and address not in recipients:
+                        recipients.append(address)
     if _has_table(c,'produtividade_email'):
-        c.execute('''UPDATE produtividade_email SET status=?,message_id=?,erro=?,
-                     atualizado_em=? WHERE os_id=?''',
-                  (projection,str(message_id or '')[:150],str(error or '')[:350],
-                   ext.agora(),os_id))
+        if status == 'failed':
+            c.execute('''UPDATE produtividade_email SET status=?,message_id=?,erro=?,
+                         atualizado_em=? WHERE os_id=?''',
+                      (projection,str(message_id or '')[:150],str(error or '')[:350],
+                       ext.agora(),os_id))
+        else:
+            c.execute('''INSERT INTO produtividade_email
+                         (os_id,destinatarios_json,status,message_id,erro,atualizado_em)
+                         VALUES(?,?,?,?,?,?)
+                         ON CONFLICT(os_id) DO UPDATE SET status=excluded.status,
+                             destinatarios_json=excluded.destinatarios_json,
+                             message_id=excluded.message_id,erro=excluded.erro,
+                             atualizado_em=excluded.atualizado_em''',
+                      (os_id,json.dumps(recipients),projection,str(message_id or '')[:150],
+                       str(error or '')[:350],ext.agora()))
     if _has_table(c,'os_entregas'):
         c.execute('''UPDATE os_entregas SET email_status=?,atualizado_em=?
                      WHERE os_id=?''', (projection,ext.agora(),os_id))
@@ -231,12 +265,12 @@ def finish(banco, operation, claim_token, *, state, result=None, error=''):
              time.time(), operation, claim_token))
         if updated.rowcount != 1:
             raise RuntimeError('Outbox lease was superseded.')
-        row=c.execute('SELECT os_id,effect_type FROM os_effect_outbox WHERE operation_key=?',
+        row=c.execute('SELECT os_id,effect_type,payload_json FROM os_effect_outbox WHERE operation_key=?',
                       (operation,)).fetchone()
         if row['effect_type']=='email':
-            status='sem_destinatario' if error=='sem_destinatario' else state
-            _project_email(c,row['os_id'],status,
-                           message_id=result.get('provider_message_id',''),error=error)
+            _project_email(c,row['os_id'],state,
+                           message_id=result.get('provider_message_id',''),error=error,
+                           recipient_refs=json.loads(row['payload_json']).get('recipient_refs'))
 
 
 def reconcile(banco, *, now=None, lease_seconds=LEASE_SECONDS):
@@ -450,7 +484,7 @@ def deliver_email(banco, operation, sender: Callable, *, now=None,
     try:
         message_id = sender(claimed['os_id'], claimed['operation_key'])
     except PreDispatchError as exc:
-        code='sem_destinatario' if str(exc)=='sem_destinatario' else type(exc).__name__
+        code=type(exc).__name__
         finish(banco, operation, claimed['claim_token'], state='failed', error=code)
         raise
     except Exception as exc:
@@ -462,7 +496,7 @@ def deliver_email(banco, operation, sender: Callable, *, now=None,
 
 
 def manual_email_retry(c, os_id, revision, action, *, duplicate_acknowledged,
-                       recipient_refs=None):
+                       recipient_refs):
     if not duplicate_acknowledged:
         raise PermissionError('Explicit duplicate-delivery warning must be acknowledged.')
     return enqueue_email(c, os_id, revision, action, recipient_refs=recipient_refs)

@@ -12,7 +12,7 @@ CAMPOS = (
     'valor_mao_obra','valor_materiais_manual','valor_total_override',
     'forma_pagamento','tecnico','motivo_encerramento',
     'material_item[]','material_qtd[]','material_unit[]',
-    'destinatario_sel[]','emails_adicionais'
+    'destinatario_sel[]'
 )
 
 
@@ -221,36 +221,6 @@ def contatos_email_os(banco,os_id):
         'administradora': cl['administradora_email'] or '',
         'tipo_pessoa': cl['tipo_pessoa'],
     }
-
-
-def destinatarios_para_os(banco,os_id,selecionados=None,adicionais=''):
-    """Monta a lista final a partir das caixas marcadas + e-mails manuais.
-
-    Seleção explícita nunca é sobrescrita pelo síndico. Quando `selecionados`
-    é None (desktop legado), usa o comportamento anterior: cliente + síndico.
-    """
-    import re as _re
-    contatos=contatos_email_os(banco,os_id)
-    if selecionados is None:
-        chaves=['cliente'] if contatos['tipo_pessoa']=='Física' else ['sindico','cliente']
-    else:
-        if isinstance(selecionados,str):selecionados=[selecionados]
-        chaves=[str(x) for x in selecionados]
-    resultado=[]
-    for chave in chaves:
-        e=_email_validado(contatos.get(chave,''))
-        if e and e not in resultado:resultado.append(e)
-    for valor in _re.split(r'[,;\s]+',str(adicionais or '')):
-        e=_email_validado(valor)
-        if e and e not in resultado:resultado.append(e)
-    if not resultado:
-        raise ValueError('Selecione ao menos um destinatário válido para finalizar esta OS.')
-    return resultado
-
-
-def destinatarios_conclusao(banco,os_id,adicional=''):
-    """Compatibilidade: cliente + síndico (desktop) + e-mail adicional."""
-    return destinatarios_para_os(banco,os_id,None,adicional)
 
 
 def participou(c,os_id,pid):

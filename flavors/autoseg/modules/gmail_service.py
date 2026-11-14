@@ -1,12 +1,10 @@
 """Envio de e-mail pela Gmail API, com credenciais fora do repositório.
 
-As bibliotecas do Google são importadas sob demanda (lazy), para que o módulo
-possa ser importado sem dependências instaladas e a interface nunca trave: o
-envio ocorre em thread separada e qualquer falha é registrada no banco.
+As bibliotecas do Google são importadas sob demanda. O envio de OS acontece
+somente por uma operação previamente registrada na outbox.
 """
 import os
 import base64
-import threading
 from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -208,41 +206,28 @@ def _dados_pagamento_html(banco, os_id):
     return '<h4>Dados para pagamento</h4><ul>' + ''.join(itens) + '</ul>'
 
 
-def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None, *, outbox_operation_key=None):
-    """Thread de envio: resolve destinatários, publica o PDF se necessário e envia."""
-    from officina.core import produtividade_os as prod
-    if outbox_operation_key and os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
-        from officina.core.os_effect_outbox import PreDispatchError
-        raise PreDispatchError('Gmail disabled before provider dispatch.')
-    if destinatarios is None:
-        try:
-            destinatarios = prod.destinatarios_conclusao(banco, os_id)
-        except Exception as exc:
-            if outbox_operation_key:
-                from officina.core.os_effect_outbox import PreDispatchError
-                raise PreDispatchError('No usable recipients before dispatch.') from exc
-            return
-    else:
-        destinatarios = [str(x) for x in destinatarios if str(x).strip()]
-        if not destinatarios:
-            if outbox_operation_key:
-                from officina.core.os_effect_outbox import PreDispatchError
-                raise PreDispatchError('No recipients before dispatch.')
-            return
+def _send_outbox_report(banco, os_id, destinatarios, *, outbox_operation_key):
+    """Send only an authorized, claimed outbox operation.
+
+    Everything before the provider call is deterministic. If the published PDF,
+    the invoice file or the payment data cannot be prepared, no message was
+    sent: raise ``PreDispatchError`` so the outbox records ``failed``, not the
+    uncertain state reserved for provider/network failures.
+    """
+    from officina.core.os_effect_outbox import PreDispatchError
     if not outbox_operation_key:
-        prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
+        raise PreDispatchError('Outbox operation required.')
+    if os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
+        raise PreDispatchError('Gmail disabled before provider dispatch.')
+    destinatarios = [str(x) for x in destinatarios if str(x).strip()]
+    if not destinatarios:
+        raise PreDispatchError('No recipients before dispatch.')
     try:
         from officina.core import fluxo_os as fluxo
         from officina.core import prestadores_ext as ext
         documento = fluxo.ultimo_documento(banco, os_id)
         if not documento:
-            if outbox_operation_key:
-                from officina.core.os_effect_outbox import PreDispatchError
-                raise PreDispatchError('PDF not published before sending.')
-            fluxo.publicar_relatorio(banco, os_id)
-            documento = fluxo.ultimo_documento(banco, os_id)
-        if not documento:
-            raise ValueError('PDF do relatório não foi publicado.')
+            raise PreDispatchError('PDF not published before sending.')
         arquivo = fluxo.validar_pdf_publicado(documento)
         with ext.db(banco) as c:
             dados = c.execute(
@@ -278,24 +263,15 @@ def _enviar_relatorio_os_concluida(banco, os_id, destinatarios=None, *, outbox_o
             corpo += '<p>Nenhuma nota fiscal foi anexada a esta OS.</p>'
         if not diagnostico:
             corpo += _dados_pagamento_html(banco, os_id)
-        send_options = {'operation_key': outbox_operation_key} if outbox_operation_key else {}
-        msg_id = enviar_email_gmail(destinatarios, assunto, corpo,
-                                    caminho_pdf_relatorio=arquivo,
-                                    caminho_pdf_nf=caminho_nf,
-                                    nome_pdf_nf=(nota['nome_original'] if nota else None),
-                                    **send_options)
-        if not outbox_operation_key:
-            prod.registrar_envio(banco, os_id, destinatarios, 'enviado', msg_id)
-        return msg_id
-    except Exception as erro:
-        if outbox_operation_key:
-            raise
-        try:
-            from officina.core import produtividade_os as prod
-            prod.registrar_envio(banco, os_id, destinatarios, 'falhou', erro=str(erro))
-        except Exception:
-            pass
-
+    except PreDispatchError:
+        raise
+    except Exception as exc:
+        raise PreDispatchError(f'Pre-dispatch failed: {exc}') from exc
+    return enviar_email_gmail(destinatarios, assunto, corpo,
+                              caminho_pdf_relatorio=arquivo,
+                              caminho_pdf_nf=caminho_nf,
+                              nome_pdf_nf=(nota['nome_original'] if nota else None),
+                              operation_key=outbox_operation_key)
 
 def enviar_operacao_outbox(banco, os_id, operation):
     '''Resolve committed references at dispatch; email addresses stay in domain data.'''
@@ -312,8 +288,10 @@ def enviar_operacao_outbox(banco, os_id, operation):
     except (TypeError,ValueError):
         raise PreDispatchError('invalid_email_operation') from None
     refs=payload.get('recipient_refs')
-    if (not isinstance(refs,list) or any(ref not in
-         ('cliente','sindico','administradora') for ref in refs)):
+    if (not isinstance(refs,list) or not refs
+            or any(not isinstance(ref,str) or ref not in
+                   ('cliente','sindico','administradora') for ref in refs)
+            or len(set(refs)) != len(refs)):
         raise PreDispatchError('invalid_recipient_references')
     recipients=[]
     contacts=prod.contatos_email_os(banco,os_id)
@@ -328,25 +306,6 @@ def enviar_operacao_outbox(banco, os_id, operation):
         if address not in recipients:
             recipients.append(address)
     if not recipients:
-        raise PreDispatchError('sem_destinatario')
-    return _enviar_relatorio_os_concluida(banco,os_id,recipients,
+        raise PreDispatchError('invalid_recipient_references')
+    return _send_outbox_report(banco,os_id,recipients,
                                           outbox_operation_key=operation)
-
-
-def enviar_relatorio_os_concluida(banco, os_id, destinatarios=None):
-    """Dispara em segundo plano o e-mail do relatório de uma OS concluída.
-
-    Nunca bloqueia a interface nem a resposta HTTP. Se AUTOSEG_GMAIL_DESATIVADO=1,
-    não envia (apenas registra a pendência), útil para testes sem rede.
-    """
-    if os.environ.get('AUTOSEG_GMAIL_DESATIVADO') == '1':
-        try:
-            from officina.core import produtividade_os as prod
-            if destinatarios is None:
-                destinatarios = prod.destinatarios_conclusao(banco, os_id)
-            prod.registrar_envio(banco, os_id, destinatarios, 'pendente')
-        except Exception:
-            pass
-        return
-    threading.Thread(target=_enviar_relatorio_os_concluida, args=(banco, os_id, destinatarios),
-                     daemon=True, name='AUTOSEG-Gmail').start()
