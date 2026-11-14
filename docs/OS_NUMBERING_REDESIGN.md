@@ -91,7 +91,7 @@ Regras de relógio:
   compartilhada;
 - no futuro local+sync, a autoridade de numeração precisa ser o servidor ou um
   bloco/lease de números reservado por dispositivo;
-- Syncthing não corrige relógio. Ele pode preservar mtimes, criar conflitos e
+- Sincronização de arquivos não corrige relógio. Ela pode preservar mtimes, criar conflitos e
   sincronizar arquivos, mas não é autoridade de tempo nem de sequência.
 
 Texto de aviso previsto na UI quando o relógio estiver errado:

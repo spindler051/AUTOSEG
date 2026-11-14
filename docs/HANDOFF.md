@@ -176,7 +176,7 @@ Este é o ponto de retomada. O índice completo fica em
 - Cliente no GTK depende desse gate; a 6.5 é remote-only e não pode duplicar
   regra de OS/permissão no widget.
 - Modo remoto de dados ainda é incompleto; não prometer GTK contra celular.
-- Não sincronizar `dados.db` como arquivo (Syncthing/Dropbox).
+- Não sincronizar `dados.db` como arquivo com ferramentas de sincronização.
 - A migração de numeração não pode usar `MAX+1` nem adivinhar datas.
 
 ## Próximas três ações

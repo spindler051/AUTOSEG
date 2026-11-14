@@ -208,8 +208,12 @@ de dados.
   modo local (se aprovado) e paridade com o site;
 - **modos local/sync/serverless:** presets de `storage`/`transports`/`authority`,
   autoridade por entidade, version vectors, journal append-only e transportes
-  LAN/Syncthing/relay; ver
+  LAN/relay; ver
   [`planning/LOCAL_SYNC_MODES_ANALYSIS.md`](planning/LOCAL_SYNC_MODES_ANALYSIS.md);
+- **relay/auxiliary nodes (opt-in):** own orders, company metadata without
+  PDFs/images, or full media; off by default, consent, quotas and revocation
+  (a relay only forwards ciphertext it cannot read, so it gains nothing
+  directly and must never be enabled implicitly);
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e
   estoque (somente no modo com servidor);
 - backup/restauração verificados;

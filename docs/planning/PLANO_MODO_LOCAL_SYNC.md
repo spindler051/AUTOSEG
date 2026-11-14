@@ -13,7 +13,8 @@ mudanças para o servidor quando ele voltar.
 > [`LOCAL_SYNC_MODES_ANALYSIS.md`](LOCAL_SYNC_MODES_ANALYSIS.md) propõe quatro
 > modos como presets de um mesmo motor (`storage`, `transports`, `authority`),
 > autoridade por entidade, version vectors em mesh, assinatura de mudanças e
-> Syncthing apenas como transporte de journal/blobs. Ela foi escrita sem ler o
+> relay/transporte de arquivos apenas como journal/blobs (relay opt-in; ver
+> §8). Ela foi escrita sem ler o
 > código e sem saber da direção futura de reescrita do núcleo/protocolo em
 > Rust; confirme nomes e comportamento no checkout antes de implementar.
 
@@ -21,11 +22,10 @@ mudanças para o servidor quando ele voltar.
 
 ## 1. Resumo executivo
 
-A recomendação é **não sincronizar o arquivo `dados.db`** com Syncthing,
-Dropbox, torrent ou similar. SQLite é um arquivo local com locking/WAL; copiar
-o arquivo enquanto ele está aberto pode corromper o banco. Syncthing também
-resolve conflitos de arquivo criando cópias `.sync-conflict`, não fazendo merge
-de linhas.
+A recomendação é **não sincronizar o arquivo `dados.db`** com ferramentas
+de sincronização de arquivos, Dropbox, torrent ou similar. SQLite é um arquivo local com locking/WAL; copiar
+o arquivo enquanto ele está aberto pode corromper o banco. Ferramentas de
+arquivo também resolvem conflitos criando cópias, não fazendo merge de linhas.
 
 O caminho recomendado é:
 
@@ -35,8 +35,8 @@ O caminho recomendado é:
 4. O servidor é mais um participante/autoridade, não o único lugar onde dá
    para trabalhar.
 5. Sincronização LAN direta primeiro; P2P/WAN por último.
-6. Anexos e PDFs podem usar armazenamento por hash (e até Syncthing para
-   blobs imutáveis), mas o banco relacional não.
+6. Anexos e PDFs podem usar armazenamento por hash; blobs imutáveis podem ser
+   sincronizados por arquivo, mas o banco relacional não.
 7. Finanças, estoque e numeração de OS têm regras próprias; não usar
    “last write wins” cego.
 
@@ -72,7 +72,8 @@ Não é:
 
 ## 3. Por que não sincronizar o SQLite como arquivo
 
-Syncthing divide arquivos em blocos, compara hashes e propaga blocos. Quando o
+Ferramentas de sincronização de arquivos dividem arquivos em blocos,
+comparam hashes e propagam blocos. Quando o
 mesmo arquivo muda em dois dispositivos, ele cria uma cópia de conflito; não
 entende tabelas, linhas, chaves estrangeiras ou transações.
 
@@ -85,8 +86,8 @@ Problemas com `dados.db` compartilhado:
 - o conflito vira “arquivo 1” e “arquivo 2”, não uma linha para revisar;
 - anexos e PDFs podem ser sincronizados por arquivo, mas o banco não.
 
-Syncthing pode ser usado para uma pasta de **blobs imutáveis** (fotos e PDFs
-já publicados), com nomes por SHA-256. Nunca para o SQLite ativo.
+Uma pasta de **blobs imutáveis** (fotos e PDFs já publicados), com nomes por
+SHA-256, pode ser sincronizada por arquivo. Nunca o SQLite ativo.
 
 ---
 
@@ -98,7 +99,7 @@ já publicados), com nomes por SHA-256. Nunca para o SQLite ativo.
 | B. Local + sync com servidor | sim | média | **primeiro alvo** |
 | C. Local + sync LAN direta + servidor | sim | alta | depois de B |
 | D. P2P/WAN + relay + E2E | sim | muito alta | último |
-| E. Syncthing no `dados.db` | não seguro | baixa | **não fazer** |
+| E. Sincronização de arquivo no `dados.db` | não seguro | baixa | **não fazer** |
 
 ### A. Só local
 
@@ -199,7 +200,7 @@ attachments
 - Upload/download por hash.
 - Imutável depois de publicado.
 - PDF publicado é uma versão imutável; nunca sobrescrever.
-- Syncthing pode sincronizar a pasta de blobs, se desejado, mas o banco não.
+- A pasta de blobs pode ser sincronizada por arquivo, se desejado, mas o banco não.
 
 ### IDs de OS
 
@@ -382,7 +383,7 @@ servidor e nos dois dispositivos; conflitos ficam visíveis.
 - mDNS + pareamento;
 - troca direta de changesets;
 - fallback para servidor;
-- Syncthing opcional só para blobs.
+- transporte de arquivos opcional só para blobs.
 
 **Aceite:** dois PCs na mesma LAN sincronizam sem internet; servidor ausente
 não bloqueia.
@@ -451,7 +452,7 @@ Decisões que precisam ser tomadas antes de código:
 3. O número da OS pode ser provisório? Quem atribui o definitivo?
 4. E2E: servidor vê conteúdo ou não?
 5. Mobile: PWA ou app nativo?
-6. Syncthing só para blobs ou nem isso?
+6. Relay: modos, consentimento e limites?
 7. Qual o escopo inicial: um PC + servidor, ou LAN também?
 
 Recomendação: começar com **local + servidor**, servidor autoritativo para
@@ -464,8 +465,6 @@ dinheiro/estoque/numeração, e LAN/P2P depois.
 - Ink & Switch — Local-first software:
   <https://www.inkandswitch.com/local-first/>
 - CRDT.tech — Conflict-free Replicated Data Types: <https://crdt.tech/>
-- Syncthing — Understanding Synchronization:
-  <https://docs.syncthing.net/users/syncing.html>
 - SQLite — SQLite Over a Network:
   <https://www.sqlite.org/useovernet.html>
 - Martin Fowler — Strangler Fig:

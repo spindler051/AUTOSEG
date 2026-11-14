@@ -270,7 +270,7 @@ Pendente antes da MAIN:
 - usar Cloudflare Tunnel como se fosse autenticação;
 - criar usuários sem papel/auditoria;
 - apagar o último admin;
-- sincronizar `dados.db` por Syncthing/Dropbox;
+- sincronizar `dados.db` por ferramentas de arquivo/Dropbox;
 - implementar auth sem revisão humana.
 
 ---

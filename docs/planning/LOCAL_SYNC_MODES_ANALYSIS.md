@@ -32,17 +32,17 @@ endereçados por hash.
 - cada dispositivo escreve somente o próprio journal;
 - segmentos são selados/rotacionados, nunca reescritos;
 - o receptor aplica mudanças de forma idempotente;
-- o banco relacional não passa por Syncthing/Dropbox/torrent.
+- o banco relacional não passa por transporte de arquivos/torrent.
 
 Isso já está alinhado com `PLANO_MODO_LOCAL_SYNC.md`; a análise reforça que
-Syncthing só serve como transporte de journal/blobs, não como merge de SQLite.
+O transporte de arquivos pode levar journal/blobs, mas não faz merge de SQLite.
 
 ## 2. Modos como presets de um motor
 
 Em vez de portais/modos separados, a recomendação é um motor com três eixos:
 
 - **storage:** local ou remoto (thin client);
-- **transports:** nenhum, LAN, hub, relay, arquivos/Syncthing;
+- **transports:** nenhum, LAN, hub, relay, transporte de arquivos;
 - **authority:** o próprio dispositivo, um servidor, um dispositivo designado
   ou nenhuma autoridade (com política de conflito).
 
@@ -50,7 +50,7 @@ Em vez de portais/modos separados, a recomendação é um motor com três eixos:
 |---|---|---|---|
 | Local | local | nenhum | próprio dispositivo |
 | Local + Sync | local | hub e/ou LAN | servidor se existir; senão dispositivo designado |
-| Sync serverless | local | LAN, relay, Syncthing opcional | dispositivo designado ou política por entidade |
+| Sync serverless | local | LAN, relay, transporte de arquivos opcional | dispositivo designado ou política por entidade |
 | Server (thin client) | remoto | HTTP | servidor |
 
 `connection.json` pode guardar `{storage, transports[], authority}` e a UI
@@ -136,7 +136,7 @@ Ordem recomendada:
 
 1. **HTTP hub** — protocolo push/pull/ack já previsto;
 2. **LAN** — mDNS + pareamento + TLS mútuo/assinaturas;
-3. **Syncthing journal transport** — cada device escreve só seu journal;
+3. **transporte de arquivos (journal)** — cada device escreve só seu journal;
 4. **relay/WAN** — Tailscale/WireGuard primeiro; relay mínimo que só armazena e
    encaminha mudanças cifradas;
 5. **P2P nativo** — Iroh, Hypercore/Hyperswarm, libp2p, p2panda ou feeds
@@ -147,20 +147,93 @@ BitTorrent/torrent é adequado para blobs imutáveis e snapshots de bootstrap,
 não para estado relacional mutável. O problema difícil de WAN P2P é NAT
 traversal, não o log.
 
-## 8. Syncthing
+## 8. Relay / auxiliary node modes (opt-in)
 
-- Rodar como processo externo; não vendorizar (MPL-2.0 vs 0BSD).
-- Cada dispositivo escreve apenas seu próprio journal; assim o Syncthing não
-  vê conflito de arquivo.
-- Blobs imutáveis por SHA-256 podem ser sincronizados.
-- `.stignore` deve excluir banco, WAL, segredos e arquivos temporários.
-- REST API para status/pareamento no GTK; versionamento de arquivos como
-  segurança.
-- LGPD: journal e blobs contêm dados de clientes; criptografia de disco e
-  retenção continuam necessárias.
+A client PC can be an **auxiliary relay**: it stores and forwards encrypted
+changes and blobs for other AUTOSEG devices. It is a transport, not an
+authority. The server remains authoritative for numbering, finance,
+permissions and global state.
 
-Syncthing é um atalho de transporte para o início, não substitui assinatura,
-version vector, autorização nem resolução de conflito.
+**Status:** future; no relay code exists. This section defines the product and
+security contract.
+
+Modes are per device and mutually exclusive:
+
+| Mode | Scope | Payload | Default |
+|---|---|---|---|
+| **Off** | none | none | on |
+| **Own orders** | the signed-in account's own OS | changes and own metadata; optional own blobs | off |
+| **Company metadata** | the whole company | OS metadata and changes; **no PDFs, images or heavy media** | off |
+| **Full** | the whole company | everything, including PDFs, photos and heavy media | off |
+
+### Consent and toggles
+
+- Off by default. Every mode is an explicit opt-in.
+- **Own orders:** consent from the signed-in user.
+- **Company metadata / Full:** consent from the account/company owner.
+- **Full** shows a heavy-mode warning and requires storage/bandwidth limits.
+- A visible badge says “this device is acting as a relay”.
+- One-click revoke; remote revoke and wipe; cached data has a TTL.
+- No hidden or background relay. The device owner can see activity and bytes.
+
+### Why opt-in is mandatory
+
+A relay forwards ciphertext it cannot decrypt. It therefore gets **no direct
+product benefit** from the work it does: it only spends disk, bandwidth,
+battery, heat and legal exposure so that other devices stay in sync or
+recoverable. That asymmetry is precisely why relay mode must never be
+implicit:
+
+- no default-on relay and no "help the network" prompt during first run or
+  onboarding;
+- enabling requires an explicit confirmation naming the mode, its limits and
+  the fact that the payload is unreadable to the relay;
+- the device owner can always see bytes served, peers served and storage used;
+- disabling takes effect immediately and drops cached payloads;
+- the server records the consent and revocation, so a relay can be audited
+  without inspecting the relayed content.
+
+Example local settings screen:
+
+```text
+Relay on this device:        [ ] off (default)
+Use this device as:          ( ) My orders only
+                             ( ) Company relay — no PDFs/images/heavy media
+                             ( ) Full relay — PDFs, images and heavy media
+Only on Wi-Fi:               [x]
+Only while charging:         [x]
+Battery floor:               40%
+Storage limit:               5 GB
+Upload limit:                10 Mbps
+[ ] I understand this device may serve other AUTOSEG devices.
+    Revoke at any time; cached data expires.
+```
+
+Example config file:
+
+```ini
+[relay]
+enabled = false
+mode = own_orders          # own_orders | company_metadata | full
+only_on_wifi = true
+only_while_charging = true
+battery_floor = 40
+max_storage_gb = 5
+max_upload_mbps = 10
+consent_company = false
+consent_full = false
+```
+
+### Security and resource rules
+
+- Relay payloads are end-to-end encrypted; the relay cannot read PII or
+  financial content it forwards.
+- Minimize routing metadata; do not expose customer data to the relay.
+- The relay never merges SQLite files and never becomes an authority.
+- Pause on metered networks, low battery, thermal pressure or quota exhaustion.
+- Relay activity is audited; revocation stops new work immediately.
+- “Auxiliary endpoint” here means relay/fallback transport, not a second
+  authority. True failover requires a secondary server with a promotion rule.
 
 ## 9. Rust e o longo prazo
 
@@ -190,7 +263,7 @@ Consequências para este plano:
 - Para mesh, trocar a confiança em `base_version`/cursor por version vectors e
   causalidade.
 - Reforçar assinatura de mudanças, log de membros e triggers de captura.
-- Tratar Syncthing como transporte de journal/blobs, não como banco.
+- Tratar relay/transporte de arquivos como journal/blobs, não como banco.
 - Registrar Rust como direção de núcleo/protocolo e manter o contrato
   language-neutral.
 
@@ -201,7 +274,7 @@ Consequências para este plano:
 3. Número provisório pode ser permanente no mesh? Quem atribui o canônico?
 4. E2E: servidor vê conteúdo ou não?
 5. Mobile: PWA ou app nativo?
-6. Syncthing só para journal/blobs ou nem isso?
+6. Relay: modos, consentimento, limites e default?
 7. Qual o escopo inicial: local + servidor, ou LAN também?
 8. Quando o Rust entra: núcleo, protocolo, CLI ou módulo? Qual o contrato de
    conformidade?
@@ -212,7 +285,7 @@ Consequências para este plano:
 2. transporte hub (HTTP) e aplicação idempotente;
 3. autoridade por entidade;
 4. LAN/mDNS + pareamento assinado;
-5. Syncthing journal transport;
+5. relay/transporte de arquivos (journal);
 6. relay/WAN;
 7. avaliar P2P nativo e Rust com contrato/testes.
 
@@ -222,6 +295,5 @@ Consequências para este plano:
 - [`VISAO_MULTICLIENTE_LOCAL_FIRST.md`](VISAO_MULTICLIENTE_LOCAL_FIRST.md)
 - Ink & Switch — Local-first software
 - CRDT.tech
-- Syncthing — Understanding Synchronization
 - SQLite — SQLite Over a Network
 - p2panda — <https://github.com/p2panda/p2panda> (avaliar, não adotar agora)
