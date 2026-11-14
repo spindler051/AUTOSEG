@@ -62,6 +62,31 @@ def require_work_item_locked(connection, principal, work_id: int, action: str):
         raise PermissionError("Recurso indisponível.") from None
 
 
+def require_attachment_read_locked(connection, principal, attachment_id: int):
+    """Authorize an attachment and its OS using one read transaction snapshot."""
+    if type(attachment_id) is not int or attachment_id <= 0 or principal is None:
+        raise PermissionError('Recurso indisponível.')
+    if not connection.in_transaction:
+        raise RuntimeError('Attachment authorization requires an active transaction.')
+    try:
+        row = connection.execute('''SELECT os_id,nome_original,caminho FROM os_anexos
+                                     WHERE id=?''', (attachment_id,)).fetchone()
+        if row is None:
+            raise PermissionError('Recurso indisponível.')
+        resource = _resource(connection, int(row['os_id']))
+        policy = ObjectPolicy()
+        policy.require(principal, 'view', resource)
+        document = Resource('document', attachment_id, resource.organization_id,
+                            resource.owner_id, resource.client_id,
+                            resource.participant_ids, resource.attributes,
+                            resource.client_org_id)
+        policy.require(principal, 'download', document)
+        return row
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
+
 def resource_for_work_item(banco, work_id: int) -> Resource:
     if type(work_id) is not int or work_id <= 0:
         raise PermissionError("Recurso indisponível.")
