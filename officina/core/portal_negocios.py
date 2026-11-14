@@ -85,7 +85,7 @@ def audit(c,pid,acao,referencia,detalhes):
         (pid,acao,str(referencia),str(detalhes)[:4000],ext.agora()))
 
 
-def cliente_salvar(banco,d,pid,cliente_id=None):
+def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
     values={x:texto(d,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
     if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
     if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
@@ -94,6 +94,8 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
         c.execute('BEGIN IMMEDIATE')
         anterior=None
         if cliente_id is not None:
+            from officina.application.work_item_access import require_customer_write_locked
+            require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
             if not anterior: raise ValueError('Cliente não encontrado.')
         doc_novo=cad.digitos(values['documento'])

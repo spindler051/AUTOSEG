@@ -4563,7 +4563,7 @@ class PortalPrestador:
                             read_access.require_customer_create(actor)
                         else:
                             read_access.require_customer_write(banco,actor,editar)
-                        cid=neg.cliente_salvar(banco,d,pid,editar)
+                        cid=neg.cliente_salvar(banco,d,pid,editar,principal=actor)
                         if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)
                         if editar is None and not s.get('admin'):
                             return self.redir(f'/os/rapida?cliente={cid}')

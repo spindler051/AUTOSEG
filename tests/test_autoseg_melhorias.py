@@ -43,7 +43,11 @@ class AutoSegMelhorias(unittest.TestCase):
             self.assertEqual(org['cnpj'],doc)
         self.assertEqual(cad.organizacao_por_cnpj(self.db,doc)['id'],org['id'])
         d=self.dados_cliente('Condomínio Teste Atualizado',doc)
-        neg.cliente_salvar(self.db,d,0,cid)
+        from officina.application.object_policy import Principal
+        admin_id=ext.cadastrar(self.db,'A5b test admin','a5b-test-admin@invalid.test','Pass12345678')
+        cad.definir_admin(self.db,admin_id,True)
+        actor=Principal(admin_id,'admin',organization_id='autoseg',provider_id=admin_id)
+        neg.cliente_salvar(self.db,d,admin_id,cid,principal=actor)
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()[0],1)
             self.assertEqual(c.execute('SELECT nome FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()[0],d['nome'])
