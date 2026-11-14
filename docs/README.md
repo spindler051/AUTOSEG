@@ -40,6 +40,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Officina Web e Officina GTK](planning/OFFICINA_WEB_AND_GTK.md) — como o site e o GTK atuais originam os produtos genéricos; AUTOSEG como primeira prestadora.
 - [Unificação real dos portais — P0](planning/PROMPT_PORTAL_UNIFICATION.md) — contrato executado na P0: uma única origem e nenhum fallback legado.
 - [Cliente no GTK — peça 6.5](planning/GTK_CLIENT_MODE.md) — análise das lacunas, MVP remote-only e critérios de aceite; planejado, não implementado.
+- [Prompt — outbox como único caminho de e-mail](planning/PROMPT_P0_AUTH_OUTBOX_ONLY.md) — próxima fatia do P0-AUTH, sem fallback legado.
 - [Contrato compartilhado entre site e GTK](planning/WEB_GTK_SHARED_CONTRACT.md) — mesma tela/comando/permissão, renderização nativa em cada plataforma; documentação, não implementado.
 - [Valor negociado na OS](planning/OS_NEGOTIATED_VALUE_UX.md) — checkbox, valor final e desconto explícito no relatório; proposta, não implementado.
 - [PGP, multiassinatura e integridade criptográfica](planning/PGP_MULTISIGNATURE_ARCHITECTURE.md)
