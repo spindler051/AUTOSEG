@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from tests import test_p0_desktop_auth as base_tests
-from flavors.autoseg.modules import api_desktop
+from flavors.autoseg.modules import api_desktop, prestador_auth, accounts
 from officina.application.local_service import LocalService
 from officina.core import cadastros_v9 as cad, prestadores_ext as ext, fluxo_os as fluxo
 
@@ -16,6 +16,11 @@ from officina.core import cadastros_v9 as cad, prestadores_ext as ext, fluxo_os 
 class DesktopWriterTOCTOUTest(unittest.TestCase):
     setUp = base_tests.DesktopObjectAuthorizationTest.setUp
     request = base_tests.DesktopObjectAuthorizationTest.request
+
+    def _session_id(self, name):
+        with ext.db(self.db) as c:
+            return c.execute('SELECT id FROM desktop_sessoes WHERE prestador_id=? '
+                             'ORDER BY id DESC LIMIT 1', (self.users[name],)).fetchone()[0]
 
     def _save_payload(self, os_id=None, action='salvar'):
         return {'os_id':os_id or self.own, 'cliente_id':self.own_client,
@@ -136,7 +141,7 @@ class DesktopWriterTOCTOUTest(unittest.TestCase):
     def test_writer_lock_serializes_concurrent_revocation(self):
         principal=api_desktop._desktop_session_context(
             self.db, {'id':self.users['first']})[1]
-        real_guard=api_desktop._os_writer_authorize(principal,self.own,'start')
+        real_guard=api_desktop._os_writer_authorize(principal,self.own,'start',session_id=self._session_id('first'))
         entered=threading.Event()
         release=threading.Event()
         revocation_attempted=threading.Event()
@@ -183,7 +188,7 @@ class DesktopWriterTOCTOUTest(unittest.TestCase):
     def test_no_write_when_membership_is_revoked_before_begin(self):
         principal=api_desktop._desktop_session_context(
             self.db, {'id':self.users['first']})[1]
-        authorize=api_desktop._os_writer_authorize(principal,self.own,'edit')
+        authorize=api_desktop._os_writer_authorize(principal,self.own,'edit',session_id=self._session_id('first'))
         completed=threading.Event()
         def revoke():
             with ext.db(self.db) as c:
@@ -202,6 +207,66 @@ class DesktopWriterTOCTOUTest(unittest.TestCase):
                 api_desktop._os_input(self._save_payload()),authorize=authorize)
         self.assertIsInstance(denial.exception,(PermissionError, api_desktop.NaoEncontradoError))
         self.assertEqual(self._snapshot(self.own),before)
+
+
+    def test_session_revoked_after_preflight_denies_writer_without_mutation(self):
+        original = LocalService.salvar_os
+        for flag in ('0', '1'):
+            with self.subTest(flag=flag):
+                result = prestador_auth.login(
+                    self.db, 'first@test.invalid', 'Pass12345678')
+                self.tokens['first'] = result['token']
+                def revoked(service, data, **kwargs):
+                    self.assertTrue(prestador_auth.revogar_sessao(
+                        self.db, 'Bearer ' + self.tokens['first']))
+                    self.before = self._snapshot(self.own)
+                    return original(service, data, **kwargs)
+                with patch.dict(os.environ, {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT': flag}), \
+                     patch.object(LocalService, 'salvar_os', revoked):
+                    status, body = self.request('first', '/os', 'POST', self._save_payload())
+                self.assertEqual(status, 404, body)
+                self.assertEqual(self._snapshot(self.own), self.before)
+
+    def test_linked_account_disabled_after_preflight_denies_writer(self):
+        accounts.install(self.db)
+        with ext.db(self.db) as c:
+            acc = c.execute('''INSERT INTO accounts
+                (display_name,password_hash,active,created_at,updated_at)
+                VALUES ('first','unused',1,'2026-11-14','2026-11-14')''').lastrowid
+            c.execute('''INSERT INTO account_links
+                (account_id,provider_org_id,link_type,role,provider_id,
+                 legacy_provider_id,active,created_at)
+                VALUES (?,'autoseg','provider','employee',?,?,1,'2026-11-14')''',
+                (acc,self.users['first'],self.users['first']))
+        original = LocalService.salvar_os
+        for column, table in (('active', 'accounts'), ('active', 'account_links')):
+            with self.subTest(table=table):
+                with ext.db(self.db) as c:
+                    c.execute('UPDATE accounts SET active=1 WHERE id=?', (acc,))
+                    c.execute('UPDATE account_links SET active=1 WHERE account_id=?', (acc,))
+                def disabled(service, data, **kwargs):
+                    with ext.db(self.db) as c:
+                        c.execute(f'UPDATE {table} SET {column}=0 WHERE ' +
+                                  ('id=?' if table == 'accounts' else 'account_id=?'), (acc,))
+                    self.before = self._snapshot(self.own)
+                    return original(service, data, **kwargs)
+                with patch.object(LocalService, 'salvar_os', disabled):
+                    status, body = self.request('first', '/os', 'POST', self._save_payload())
+                self.assertEqual(status, 404, body)
+                self.assertEqual(self._snapshot(self.own), self.before)
+
+    def test_provider_disabled_after_preflight_denies_writer(self):
+        original = LocalService.salvar_os
+        def disabled(service, data, **kwargs):
+            with ext.db(self.db) as c:
+                c.execute('UPDATE prestadores SET ativo=0 WHERE id=?',
+                          (self.users['first'],))
+            self.before = self._snapshot(self.own)
+            return original(service, data, **kwargs)
+        with patch.object(LocalService, 'salvar_os', disabled):
+            status, body = self.request('first', '/os', 'POST', self._save_payload())
+        self.assertEqual(status, 404, body)
+        self.assertEqual(self._snapshot(self.own), self.before)
 
 
 if __name__=='__main__':
