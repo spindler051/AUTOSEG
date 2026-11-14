@@ -1266,6 +1266,8 @@ class PortalPrestador:
                     '<p class="muted">O cadastro de prestadores é realizado somente pelo aplicativo desktop.</p>')+v9.barra_links('prestador'))
 
             def pj_publicas(self, s):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem verificar solicitações PJ.')
                 pendentes = pj_publico.listar(banco, 'Aguardando verificação')
                 historico = pj_publico.listar(banco)
                 token = self.hidden(s)
@@ -1570,16 +1572,19 @@ class PortalPrestador:
                              +'<button class="danger" type="submit">Excluir</button></form>')
                     rows.append((esc(serv['nome']),esc(serv['descricao'][:100]),
                         catalogo.reais(valor['total']) if valor else 'Arquivado',
-                        botao('Editar',f'/servicos/{serv["id"]}/editar','secondary')+excluir))
+                        (botao('Editar',f'/servicos/{serv["id"]}/editar','secondary')+excluir)
+                        if s.get('admin') else 'Somente leitura'))
                 return self.pagina('Serviços e valores',
-                    '<p>Catálogo para propostas e preenchimento de relatórios. Os preços são editados somente por prestadores.</p>'
-                    +botao('+ Novo serviço','/servicos/novo')
+                    '<p>Catálogo para propostas e relatórios. Edição restrita à administração.</p>'
+                    +(botao('+ Novo serviço','/servicos/novo') if s.get('admin') else '')
                     +('<form method="get" action="/servicos" data-auto-submit="1">'
                       +campos_escuros('Buscar serviço por nome ou descrição','q',termo,kind='search')
                       +'</form>')
                     +card('Serviços cadastrados',tabela(['Serviço','Descrição','Preço estimado','Ação'],rows)),s)
 
             def servico_form(self,s,identificador=None,preenchimento=None,erro=None):
+                if not s.get('admin'):
+                    raise PermissionError('Somente administradores podem editar o catálogo.')
                 atual=catalogo.obter(banco,identificador) if identificador else None
                 if identificador and not atual:return self.erro('Serviço não encontrado.',404,s)
                 dados=preenchimento if preenchimento is not None else (atual or {})
@@ -1666,7 +1671,7 @@ class PortalPrestador:
                                servicos=None, materiais=None, aviso='',
                                validade='30', condicoes=''):
                 """Orçamento com cliente, vários serviços e materiais adicionais."""
-                clientes = clientes_core.listar_para_selecao(banco, limite=500)
+                clientes = clientes_core.buscar_para_criacao_os('', banco=banco, limite=500)
                 catalogo_servicos = catalogo.listar(banco, ativos=True)
                 produtos = estoque.listar(banco, ativos=True)
                 if not clientes:
@@ -1682,7 +1687,7 @@ class PortalPrestador:
                 if selecionado and not any(str(x['id']) == selecionado for x in clientes):
                     selecionado = ''
                 opcoes_clientes = [('', 'Selecione o cliente')] + [
-                    (x['id'], f'{x["nome"]} — {cad9.formatar_documento(x["documento"])}')
+                    (x['id'], str(x['nome']))
                     for x in clientes]
 
                 def total_servico(servico):
@@ -4100,8 +4105,7 @@ class PortalPrestador:
                         ))
                     pid=s['pid']
                     if path.startswith("/os/"):
-                        principal=(os_commands._provider_context(banco,s)
-                                   if object_policy_flags.enforcement_enabled(banco) else None)
+                        principal=os_commands._provider_context(banco,s)
                         return os_commands.execute_http(self,banco,principal,path,d,s,quer_json)
                     if path.startswith('/contas/') and path.endswith('/papel'):
                         if not object_policy_flags.enforcement_enabled(banco):
@@ -4428,17 +4432,21 @@ class PortalPrestador:
                             return self.servico_form(s, erro=str(erro))
                         return self.servico_form(s,preenchimento=pre)
                     if path=='/servicos/salvar':
+                        if not s.get('admin'): raise PermissionError('Somente administradores podem alterar o catálogo.')
                         sid=str(d.get('servico_id','')).strip()
                         try:catalogo.salvar(banco,d,int(sid) if sid else None)
                         except ValueError as e:return self.servico_form(s,int(sid) if sid else None,preenchimento=d,erro=str(e))
                         return self.redir('/servicos')
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='arquivar':
+                        if not s.get('admin'): raise PermissionError('Somente administradores podem alterar o catálogo.')
                         catalogo.arquivar(banco,int(partes[1]))
                         return self.redir('/servicos')
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='excluir':
+                        if not s.get('admin'): raise PermissionError('Somente administradores podem alterar o catálogo.')
                         catalogo.excluir(banco,int(partes[1]))
                         return self.redir('/servicos')
                     if len(partes)==3 and partes[0]=='servicos' and partes[1].isdigit() and partes[2]=='reativar':
+                        if not s.get('admin'): raise PermissionError('Somente administradores podem alterar o catálogo.')
                         catalogo.reativar(banco,int(partes[1]))
                         return self.redir('/servicos')
                     if path=='/clientes/yaml':
@@ -4484,7 +4492,18 @@ class PortalPrestador:
                                 s,'Informe a validade em dias (1 a 365).',cliente_id,
                                 validade=str(validade))
                         condicoes=str(d.get('condicoes','')).strip()[:1000]
-                        cliente=clientes_core.obter_para_orcamento(cliente_id, banco=banco)
+                        actor=os_commands._provider_context(banco,s)
+                        # The budget picker shares id/name only. A provider may
+                        # prepare a name-only estimate, but document/PII must
+                        # never be fetched without customer field authorization.
+                        with ext.db(banco) as c:
+                            minimo=c.execute('''SELECT nome FROM clientes WHERE id=?
+                                AND status NOT IN ('Inativo','A definir')''',
+                                (cliente_id,)).fetchone()
+                        cliente={'nome':minimo['nome'],'documento':''} if minimo else None
+                        if cliente and read_access.customer_field_allowed(
+                                banco,actor,cliente_id,'documento'):
+                            cliente=clientes_core.obter_para_orcamento(cliente_id,banco=banco)
                         if not cliente:
                             return self.orcamento_form(
                                 s,'Cliente não encontrado.',cliente_id,
@@ -4529,8 +4548,15 @@ class PortalPrestador:
                             if len(senha_nova)<10:raise ValueError('A senha do cliente deve ter pelo menos 10 caracteres.')
                             if senha_nova!=confirmar:raise ValueError('A confirmação da senha não corresponde.')
                         editar=int(partes[1]) if len(partes)==3 and partes[1].isdigit() else None
+                        actor=os_commands._provider_context(banco,s)
+                        if editar is None:
+                            read_access.require_customer_create(actor)
+                        else:
+                            read_access.require_customer_write(banco,actor,editar)
                         cid=neg.cliente_salvar(banco,d,pid,editar)
                         if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)
+                        if editar is None and not s.get('admin'):
+                            return self.redir(f'/os/rapida?cliente={cid}')
                         return self.redir(f'/clientes/{cid}')
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='excluir':
                         if not s.get('admin'):
@@ -4547,6 +4573,7 @@ class PortalPrestador:
                         cad9.mesclar_clientes(banco,int(partes[1]),destino,str(s['nome']))
                         return self.redir(f'/clientes/{destino}')
                     if len(partes)==3 and partes[0]=='pj-publicas' and partes[1].isdigit() and partes[2] in ('aceitar','recusar'):
+                        if not s.get('admin'): raise PermissionError('Somente administradores podem verificar solicitações PJ.')
                         sid=int(partes[1])
                         if partes[2]=='aceitar':
                             resultado=pj_publico.aceitar(banco,sid,ator=s['nome'])

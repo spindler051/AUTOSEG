@@ -232,6 +232,91 @@ class ReadAuthorizationTest(unittest.TestCase):
         self.assertEqual(rows[0]['email'],'')
         self.assertEqual(rows[0]['documento'],'')
 
+    def _csrf_for(self,name):
+        status,html=self.http(name,'/clientes/novo')
+        self.assertEqual(status,200)
+        return re.search(r'name="csrf" value="([^"]+)"',html).group(1)
+
+    def test_portal_customer_create_and_edit_have_separate_permissions(self):
+        token=self._csrf_for('first')
+        novo={field:'' for field in __import__('officina.core.portal_negocios',fromlist=['CLIENTE_CAMPOS']).CLIENTE_CAMPOS}
+        novo.update({'csrf':token,'nome':'New Client Authorization',
+                     'status':'Ativo','tipo_pessoa':'Física'})
+        status,body=request(self.browsers['first'],self.base,'/clientes/novo/salvar',novo)
+        self.assertEqual(status,200,body[:400])
+        with ext.db(self.banco) as c:
+            created=c.execute("SELECT id FROM clientes WHERE nome='New Client Authorization'").fetchone()
+        self.assertIsNotNone(created)
+        # A customer created without an OS is not implicitly writable by the creator.
+        status,body=request(self.browsers['first'],self.base,
+                            f'/clientes/{created[0]}/salvar',novo)
+        self.assertIn(status,(403,404),body[:200])
+        before=clientes_core.obter_linha(self.c2,banco=self.banco)['nome']
+        status,body=request(self.browsers['first'],self.base,f'/clientes/{self.c2}/salvar',novo)
+        self.assertIn(status,(403,404),body[:200])
+        self.assertEqual(clientes_core.obter_linha(self.c2,banco=self.banco)['nome'],before)
+
+    def test_portal_budget_picker_has_no_pii_and_pdf_checks_customer(self):
+        from officina.core import catalogo_servicos as catalogue
+        catalogue.instalar(self.banco)
+        item=catalogue.salvar(self.banco,{'nome':'Orcamento Access Test',
+                                           'descricao':'Serviço teste','preco_servico':'10,00'})
+        try:
+            status,body=self.http('first','/orcamento')
+            self.assertEqual(status,200,body[:400])
+            self.assertIn('Secret Customer',body)
+            self.assertNotIn('22222222222',body)
+            self.assertNotIn('secret@customer.invalid',body)
+            token=self._csrf_for('first')
+            import io
+            from pypdf import PdfReader
+            params=urllib.parse.urlencode({'csrf':token,'cliente_id':self.c2,
+                 'servico_id':item,'quantidade':'1','validade':'30'}).encode()
+            with self.browsers['first'].open(urllib.request.Request(
+                    self.base+'/orcamento/pdf',params),timeout=20) as result:
+                self.assertEqual(result.status,200)
+                pdf=result.read()
+            text=' '.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
+            self.assertIn('Secret Customer',text)
+            self.assertNotIn('22222222222',text)
+            self.assertNotIn('secret@customer.invalid',text)
+        finally:
+            catalogue.excluir(self.banco,item)
+
+    def test_portal_catalogue_mutations_and_pj_verification_are_admin_only(self):
+        token=self._csrf_for('first')
+        status,listing=self.http('first','/servicos')
+        self.assertEqual(status,200)
+        self.assertNotIn('+ Novo serviço',listing)
+        self.assertNotIn('data-confirm="Excluir',listing)
+        for route in ('/servicos/salvar','/servicos/1/arquivar',
+                      '/servicos/1/excluir','/servicos/1/reativar',
+                      '/pj-publicas/1/aceitar','/pj-publicas/1/recusar'):
+            with self.subTest(route=route):
+                status,_=request(self.browsers['first'],self.base,route,{'csrf':token})
+                self.assertEqual(status,403)
+        self.assertEqual(self.http('first','/pj-publicas')[0],403)
+        self.assertEqual(self.http('admin','/pj-publicas')[0],200)
+        token_admin=self._csrf_for('admin')
+        from unittest.mock import patch
+        from flavors.autoseg.modules import portal_prestador
+        with patch.object(portal_prestador.catalogo,'salvar',return_value=99) as save:
+            status,_=request(self.browsers['admin'],self.base,'/servicos/salvar',
+                             {'csrf':token_admin,'nome':'Admin Catalog Item'})
+            self.assertEqual(status,200)
+            save.assert_called_once()
+        with patch.object(portal_prestador.pj_publico,'aceitar',
+                          return_value={'os_id':self.own}) as approve:
+            status,_=request(self.browsers['admin'],self.base,'/pj-publicas/1/aceitar',
+                             {'csrf':token_admin})
+            self.assertEqual(status,200)
+            approve.assert_called_once()
+        with patch.object(portal_prestador.pj_publico,'recusar') as deny:
+            status,_=request(self.browsers['admin'],self.base,'/pj-publicas/1/recusar',
+                             {'csrf':token_admin,'motivo':'Invalid'})
+            self.assertEqual(status,200)
+            deny.assert_called_once()
+
     def test_z_claim_from_reduced_view(self):
         status,html=self.http('first','/os/SHARED-RD-5')
         self.assertEqual(status,200)

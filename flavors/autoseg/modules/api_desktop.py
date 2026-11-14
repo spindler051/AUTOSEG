@@ -218,9 +218,12 @@ def _require_object(banco, principal, os_id, action='view'):
         _hidden_resource()
 
 
-def _require_customer(banco, principal, customer_id):
+def _require_customer(banco, principal, customer_id, action='view'):
     try:
-        access.require_customer_read(banco, principal, customer_id)
+        if action == 'edit':
+            access.require_customer_write(banco, principal, customer_id)
+        else:
+            access.require_customer_read(banco, principal, customer_id)
     except PermissionError:
         _hidden_resource()
 
@@ -420,7 +423,9 @@ def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal
             dados = _corpo(handler)
             existing = _int(dados.get('cliente_id', dados.get('id')))
             if existing is not None:
-                _require_customer(servico.banco, principal, existing)
+                _require_customer(servico.banco, principal, existing, 'edit')
+            else:
+                access.require_customer_create(principal)
             return _enviar(handler, 200, servico.salvar_cliente(
                 existing,
                 dict(dados.get('dados') or {})))
@@ -442,7 +447,8 @@ def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal
 
 
 def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, principal=None):
-    _require_customer(servico.banco, principal, cliente_id)
+    _require_customer(servico.banco, principal, cliente_id,
+                      'edit' if not resto and metodo == 'PUT' else 'view')
     if not resto and metodo == 'GET':
         registro = _scoped_customer_detail(servico.banco, principal, cliente_id)
         if registro is None:
@@ -482,7 +488,14 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
     if partes == ['os'] and metodo == 'POST':
         payload = _os_input(_corpo(handler))
         if payload.os_id:
-            _require_object(banco, principal, int(payload.os_id), 'edit')
+            status = str(payload.acao or '').strip() if hasattr(payload, 'acao') else ''
+            if status in ('Concluída', 'Concluida'):
+                permission = 'conclude'
+            elif status == 'Cancelada':
+                permission = 'cancel'
+            else:
+                permission = 'edit'
+            _require_object(banco, principal, int(payload.os_id), permission)
         else:
             access.require_create(banco, principal)
         return _enviar(handler, 200, servico.salvar_os(payload))

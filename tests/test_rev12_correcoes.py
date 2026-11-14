@@ -1223,7 +1223,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertFalse(any(x['id'] == servico for x in cat.listar(self.db)))
 
     def test_portal_servicos_exclui_com_botao_e_confirmacao(self):
-        self._prestador()
+        pid=self._prestador()
+        cad.definir_admin(self.db,pid,True)
         servico = cat.salvar(self.db, {'nome': 'Serviço do portal',
                                        'descricao': 'Teste',
                                        'preco_servico': '100'})
