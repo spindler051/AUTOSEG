@@ -110,25 +110,25 @@ class RolesHttpTest(unittest.TestCase):
         oid=self._unassigned_employee_os()
         employee=self.login('employee@example.test')
         admin=self.login('admin@example.test')
-        with patch.dict(os.environ, {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'1'}):
-            for route in (f'/os/{oid}', f'/os/{oid}/pdf'):
-                with self.subTest(route=route):
-                    status,_,_=self.req(employee,route)
-                    self.assertIn(status,(403,404))
-            self.assertEqual(200,self.req(admin,'/contas')[0])
-            self.assertIn(self.req(employee,'/contas')[0],(403,404))
-        with patch.dict(os.environ, {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'0'}):
-            status,headers,body=self.req(employee,f'/os/{oid}')
-            if status==303:
-                status,_,body=self.req(employee,headers['Location'])
-            self.assertEqual(200,status)
-            self.assertIn(b'OS-919',body)
-            # PDF is absent, but the legacy endpoint is reached (409), not policy 404.
-            status,headers,_=self.req(employee,f'/os/{oid}/pdf')
-            if status==303:
-                status,_,_=self.req(employee,headers['Location'])
-            self.assertNotEqual(404,status)
-            self.assertEqual(404,self.req(admin,'/contas')[0])
+        for flag in ('0','1'):
+            with self.subTest(flag=flag),patch.dict(
+                    os.environ, {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':flag}):
+                status,headers,body=self.req(employee,f'/os/{oid}')
+                if status==303:
+                    status,_,body=self.req(employee,headers['Location'])
+                self.assertEqual(200,status)
+                self.assertIn(b'OS-919',body)
+                self.assertIn(b'fila compartilhada',body)
+                self.assertNotIn(b'Permission test item',body)
+                status,headers,_=self.req(employee,f'/os/{oid}/pdf')
+                if status==303:
+                    status,_,_=self.req(employee,headers['Location'])
+                self.assertEqual(404,status)
+                if flag=='1':
+                    self.assertEqual(200,self.req(admin,'/contas')[0])
+                    self.assertIn(self.req(employee,'/contas')[0],(403,404))
+                else:
+                    self.assertEqual(404,self.req(admin,'/contas')[0])
 
     def test_switch_http_write_routes_and_role_assignment(self):
         from unittest.mock import Mock
@@ -218,7 +218,13 @@ class RolesHttpTest(unittest.TestCase):
         ext.atribuir(self.db,oid,self.admin)
         browser=self.login('employee@example.test')
         csrf=self.csrf(browser)
-        for route,body in ((f'/os/{oid}',None),(f'/os/{oid}/relatorio.yaml',None),
+        status,headers,contents=self.req(browser,f'/os/{oid}')
+        if status==303:
+            status,_,contents=self.req(browser,headers['Location'])
+        self.assertEqual(status,200)
+        self.assertIn(b'fila compartilhada',contents)
+        self.assertNotIn(b'Private description',contents)
+        for route,body in ((f'/os/{oid}/relatorio.yaml',None),
                            (f'/os/{oid}/pdf',None),
                            (f'/os/{oid}/salvar',{'csrf':csrf,'acao_status':'Concluída'}),
                            (f'/os/{oid}/cancelar',{'csrf':csrf}),
