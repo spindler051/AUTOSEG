@@ -90,6 +90,69 @@ snapshot; this ledger is curated by a human.
 - Do not delete history. Mark superseded items as such.
 - Do not include production data, secrets or personal documents.
 
+## 4.1 Quality gate — no test hacks
+
+A feedback item is only **Corrigido na DEV** when the fix is in the production
+path and the test proves it. The following are review blockers.
+
+1. **Failing test first.** Reproduce the report with a test that fails on the
+   current code. The same test must pass after the fix without changing its
+   expected behavior.
+2. **No test-only branches.** Do not add `if TESTING`, `if DEBUG`, hidden test
+   flags or code paths that exist only for the suite. Tests create real rows,
+   real users and call the real function. Mock only external services (Gmail,
+   Cloudflare, PDF provider, clock).
+3. **Do not mock the boundary under test.** For permissions, state transitions
+   and SQL scoping, do not patch the policy, the query or the helper. Create
+   provider A/B, admin, revoked membership and assert the real result.
+4. **Hide at the source.** If a field or row is restricted, the SQL/service must
+   not fetch or serialize it. Removing it only from HTML while the JSON still
+   returns it is not a fix. `SELECT *` followed by `del` is not a fix.
+5. **One rule, one place.** Role and state rules belong in the policy or a
+   transition guard, not scattered `if role == ...` checks. A new exception
+   must be written where the next change can find it.
+6. **No silent failure.** No `except: pass`, no “saved” page after a required
+   write failed, no partial success presented as complete. Fail closed or report
+   the partial result explicitly.
+7. **Classify before coding.**
+   - visibility/permission detail → policy entry + read helper + test;
+   - state transition (for example reopen) → domain rule + transactional guard
+     + test;
+   - data bug → regression test + root-cause fix;
+   - temporary workaround → explicit debt entry (see item 9).
+8. **Negative cases are mandatory.** Test unauthorized access, revoked
+   membership, flag off and on, empty/invalid input and the “not found” path.
+   A happy-path test alone does not close a feedback item.
+9. **Temporary workaround is explicit debt.** If a proper fix is genuinely too
+   large, record it in the item as:
+
+   ```text
+   HACK(area): what is temporary
+   Why: why the proper fix is deferred
+   Risk: what can leak or break
+   Owner: who removes it
+   Remove by: condition or date
+   ```
+
+   No untracked `TODO`, no silent bypass.
+10. **Full validation.** Run the focused tests and the full suite; record exact
+    pass/fail/error/skip counts. Also run `py_compile`, `git diff --check` and
+    `audit_comments --strict`. State explicitly that `main`, schema, flags and
+    data were not changed.
+
+### Review checklist
+
+- [ ] Does this patch change production behavior, or only the test?
+- [ ] Did a failing test exist before the fix?
+- [ ] Is any authorization, state or SQL rule bypassed for convenience?
+- [ ] Is any restricted field still fetched, serialized or logged?
+- [ ] Is the negative case covered, not only the happy path?
+- [ ] Is any temporary workaround recorded with owner and removal condition?
+- [ ] Is the rule in one place, or duplicated in the UI and the service?
+
+If any answer is unclear, the item stays **Em correção**, not **Corrigido na
+DEV**.
+
 ## 5. Current cycle
 
 ## Cycle 2026-11 — DEV

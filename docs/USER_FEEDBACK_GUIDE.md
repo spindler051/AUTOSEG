@@ -88,9 +88,12 @@ Trust or data-safety concern:
 4. For reversible changes, build a prototype or feature flag.
 5. For irreversible choices, write an ADR using
    `docs/HUMAN_CENTERED_DECISIONS.md`.
-6. Update `docs/PLATFORM_MIGRATION_LEDGER.md` if the feedback changes the next
+6. Before marking an item fixed, apply the quality gate in
+   `docs/feedback/PENDENCIAS_DEV.md` §4.1 (failing test first, no test-only
+   branches, no silent failure, explicit debt).
+7. Update `docs/PLATFORM_MIGRATION_LEDGER.md` if the feedback changes the next
    slice.
-7. Tell the participant what changed, if they agreed to follow-up.
+8. Tell the participant what changed, if they agreed to follow-up.
 
 ## 5. Pilot group
 
