@@ -1,6 +1,6 @@
 # Prompt — P0-AUTH outbox only (v2, correções da revisão)
 
-**Base:** `7cb63c1` · **Branch:** `dev` · **MAIN:** `3892e7b`, intocada.
+**Base:** `f49bb5d` (inclui o guard de ambiente corrigido) · **Branch:** `dev` · **MAIN:** `3892e7b`, intocada.
 **Flags:** `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`,
 `AUTOSEG_UNIFIED_LOGIN=0`, `AUTOSEG_WEB_SESSION_DURABLE=0`.
 **Outbox:** o código existe, mas a tabela NÃO está instalada no DEV nem na MAIN.
@@ -31,8 +31,17 @@ reintroduzir compatibilidade.
    - Se o checkbox não estiver marcado e nenhum contato tiver e-mail válido,
      falhar antes de qualquer mutação da OS, com erro claro.
    - Não criar um “pendente” vazio nem um fallback silencioso.
+   - Não gravar linha em `produtividade_email` quando não houver envio.
+     `test_feedback_dev` exige zero linhas em `Pendente` e em
+     `sem_destinatario`.
 
-3. **Testes legados**
+3. **Rascunhos**
+   - O patch só rejeita `emails_adicionais` em `_write_action_salvar`.
+   - `_write_save_draft` e `_write_autosave_draft` também precisam rejeitar o
+     campo antes de gravar rascunho, com 400/JSON, sem persistir nada.
+   - `test_rascunho_rejeita_email_adicional` deve voltar a passar.
+
+4. **Testes legados**
    - Atualizar `tests/test_gmail_integracao.py` para o caminho da outbox:
      instalar a outbox no banco temporário, enfileirar com `recipient_refs`,
      despachar por `gmail_service.enviar_operacao_outbox` e manter a cobertura
@@ -45,22 +54,28 @@ reintroduzir compatibilidade.
    - Atualizar `tests/test_rev12_melhorias.py` da mesma forma.
    - Atualizar `tests/test_p0_auth_dispatcher.py` para passar
      `recipient_refs=['cliente']` em `enqueue_email`.
+   - Atualizar `tests/test_feedback_dev.py`: `Pendente` e `sem_destinatario`
+     não podem criar linha em `produtividade_email`.
+   - Rodar também `tests/test_rev12_correcoes.py`; o caso de rascunho com
+     `emails_adicionais` deve retornar 400.
    - Corrigir `tests/test_p0_auth_close_gate.py::test_close_without_recipients_does_not_require_email_outbox`:
      o payload precisa de `descricao` ou usar a OS já existente. O teste atual
      falha antes de exercitar a outbox.
    - Não manter testes do caminho antigo só para “compatibilidade”.
 
-4. **API de reenvio**
+5. **API de reenvio**
    - `manual_email_retry` deve exigir `recipient_refs` sem default `None`.
    - Atualizar chamadas e testes.
    - `enqueue_email` não pode aceitar lista vazia.
    - `enviar_operacao_outbox` continua rejeitando refs desconhecidas,
      duplicadas e vazias.
 
-5. **Validação**
+6. **Validação**
    - Rodar a suíte completa no repositório inteiro, não só os 5 testes da
      outbox.
    - Reportar contagem exata, incluindo skips.
+   - A suíte completa do v1 deu **706 testes, 13 erros, 3 falhas e 1 skip**;
+     o v2 só é aceitável com suíte completa verde.
    - Rodar `py_compile`, `git diff --check`, `audit_comments --strict`.
    - Confirmar por busca que o writer de OS não chama Gmail direto e que
      `enviar_relatorio_os_concluida`/`destinatarios_*` não têm consumidores
