@@ -2221,11 +2221,21 @@ class PortalPrestador:
                         except (TypeError,ValueError):
                             comp_salva={}
                         if isinstance(comp_salva,dict) and comp_salva.get('declarativa'):
-                            d['composicao_yaml']=[
-                                {'id':x.get('id'),'nome':x.get('nome'),
-                                 'valor':f'{int(x.get("valor_centavos") or 0)/100:.2f}'.replace('.',',')}
-                                for x in comp_salva.get('componentes',[])
-                                if isinstance(x,dict)]
+                            def _componentes_yaml(itens):
+                                saida=[]
+                                for x in itens or []:
+                                    if not isinstance(x,dict):
+                                        continue
+                                    item={'id':x.get('id'),'nome':x.get('nome'),
+                                          'valor':f'{int(x.get("valor_centavos") or 0)/100:.2f}'.replace('.',',')}
+                                    if x.get('saldo_pai'):
+                                        item['saldo_pai']=True
+                                    filhos=_componentes_yaml(x.get('filhos') or [])
+                                    if filhos:
+                                        item['filhos']=filhos
+                                    saida.append(item)
+                                return saida
+                            d['composicao_yaml']=_componentes_yaml(comp_salva.get('componentes',[]))
                 if app:
                     corpo+='<div class="os-layout"><div class="os-main">'
                 if not oid:
