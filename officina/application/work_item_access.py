@@ -246,3 +246,19 @@ def involved_customer_field_scopes(principal):
     policy.require(principal, 'view', scope)
     return frozenset(field for field in ('nome','documento','telefone','email','endereco')
                      if policy.can_view_field(principal,scope,'customer.'+field).allowed)
+
+
+def require_customer_create(principal):
+    """Customer creation has no preexisting OS involvement."""
+    return ObjectPolicy().require(principal, 'create',
+                                  Resource('customer', organization_id='autoseg'))
+
+
+def require_customer_write(banco, principal, customer_id: int):
+    """Edit only a current SQL-involved customer or an authorized administrator."""
+    try:
+        with ext.db(banco) as connection:
+            resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().require(principal, 'edit', resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None

@@ -154,11 +154,11 @@ class RolesHttpTest(unittest.TestCase):
                     status,_,_=self.req(employee,route,dict(fields,csrf=employee_csrf))
                     self.assertIn(status,(403,404))
                     mocked.assert_not_called()
+                # Sensitive object writes are now protected even with rollout off.
                 with patch.dict(os.environ,{'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'0'}):
                     status,headers,_=self.req(employee,route,dict(fields,csrf=employee_csrf))
-                    self.assertEqual(303,status)
-                    self.assertEqual('/os',headers.get('Location'))
-                    mocked.assert_called_once()
+                    self.assertIn(status,(403,404))
+                    mocked.assert_not_called()
         with patch.dict(os.environ,{'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'0'}):
             code,_,_=self.req(admin,f'/contas/{self.client_account}/papel',
                               {'csrf':admin_csrf,'papel':'zelador'})

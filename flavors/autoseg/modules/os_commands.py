@@ -66,11 +66,9 @@ def _provider_context(banco, session):
 def _transaction_guard(banco, principal, os_id, action):
     """Validate current OS/account state inside the caller's BEGIN IMMEDIATE.
 
-    Existing legacy permission scope remains opt-in; current account activity,
-    cached role and archived/state constraints are never trusted from preflight.
+    Sensitive OS mutations enforce object policy even with the rollout flag off;
+    account activity, current role and OS state are checked before the write.
     """
-    enforce = object_policy_flags.enforcement_enabled(banco)
-
     def verify(connection):
         if not connection.in_transaction:
             raise RuntimeError('Writer authorization requires a transaction.')
@@ -88,9 +86,13 @@ def _transaction_guard(banco, principal, os_id, action):
             current_role = 'admin' if ext.administrador(connection,principal.provider_id) else 'employee'
             if principal.role != current_role:
                 raise PermissionError('Papel alterado desde a autenticação.')
-        if enforce:
-            return require_work_item_locked(connection, principal, os_id, action)
-        return None
+        if principal is None:
+            raise PermissionError('Identidade obrigatória para alterar OS.')
+        if action == 'assume':
+            if principal.provider_id is None or not ext.pode_assumir(connection, os_id, principal.provider_id):
+                raise PermissionError('OS indisponível para assumir.')
+            return None
+        return require_work_item_locked(connection, principal, os_id, action)
 
     return verify
 
@@ -131,10 +133,16 @@ def _flush_staged_files(banco, os_id):
 
 
 def _authorize(banco, principal, os_id, permission):
-    if not object_policy_flags.enforcement_enabled(banco):
-        return None
+    if principal is None:
+        raise PermissionError('Identidade obrigatória para alterar OS.')
     if permission == 'create':
         return require_create(banco, principal)
+    if permission == 'assume':
+        # The shared queue deliberately permits claiming before involvement.
+        # The claim and active-state checks are repeated inside ext.assumir's transaction.
+        if principal.provider_id is None or not principal.active or principal.organization_id != 'autoseg':
+            raise PermissionError('Operação indisponível.')
+        return None
     return require_work_item(banco, principal, os_id, permission)
 
 
@@ -802,8 +810,6 @@ def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, que
         action = 'reopen' if o['status'] == 'Pendente' else 'edit'
         guard = _transaction_guard(banco, principal, oid, action)
         guard(c)
-        if o['status'] == 'Pendente' and not object_policy_flags.enforcement_enabled(banco):
-            require_work_item_locked(c, principal, oid, 'reopen')
         # Client selection is part of this transaction, not an earlier write.
         # A new provisional customer is a separate domain operation and is not
         # implicitly created as part of a privileged reopen.
@@ -1316,6 +1322,8 @@ def _permission(action, data):
     if permission is None:
         raise PermissionError('Operação indisponível.')
     if action=='salvar':
+        if data.get('modo_envio') in ('rascunho', 'salvar'):
+            return 'edit'
         # Status transitions are a distinct privilege from ordinary editing.
         status=str(data.get('acao_status','')).strip()
         if str(data.get('cancelar_os','')).lower() in ('1','on','true','sim'):

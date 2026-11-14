@@ -207,6 +207,46 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
         self.assertEqual(status,200,result)
         self.assertEqual(result['data']['total'],2)
 
+    def test_customer_creation_and_edit_require_distinct_permissions(self):
+        # The picker does not imply that the record can be modified.
+        self.assertEqual(self.request('first',f'/clientes/{self.other_client}',
+                                      'PUT',{'dados':{'nome':'Hacked Client'}})[0],404)
+        status,created=self.request('first','/clientes','POST',
+                          {'dados':{'nome':'New Customer Via Desktop',
+                                    'tipo_pessoa':'Física','status':'Ativo','documento':''}})
+        self.assertEqual(status,200,created)
+        new_id=created['data']['id']
+        self.assertEqual(self.request('first',f'/clientes/{new_id}',
+                                      'PUT',{'dados':{'nome':'No Unrelated Edit'}})[0],404)
+        status,record=self.request('first',f'/clientes/{self.own_client}',
+                         'PUT',{'dados':{'nome':'Involved Customer Updated'}})
+        self.assertEqual(status,200,record)
+
+    def test_existing_os_status_mapping_does_not_promote_edit_to_conclude(self):
+        from flavors.autoseg.modules import api_desktop
+        from unittest.mock import patch
+        fields={'os_id':self.other,'cliente_id':self.other_client,'tecnico':'',
+                'descricao':'Existing OS with participant','valor_mao_obra':0,
+                'valor_materiais':0,'custo_materiais':0,'valor_total':0,
+                'forma_pagamento':'PIX','urgencia':'Normal','observacoes':'',
+                'texto_adicional':'','dados_incompletos':0,'tempo_horas':0,
+                'composicao_json':'','base_percentuais':'total','materiais':[],
+                'acao':'','relato':'','motivo':''}
+        for flag in ('0','1'):
+            with patch.dict(os.environ,{'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':flag}):
+                for status in ('Concluída','Cancelada'):
+                    with self.subTest(flag=flag,status=status):
+                        with patch.object(api_desktop.LocalService,'salvar_os') as service:
+                            code,_=self.request('participant','/os','POST',
+                                            {**fields,'acao':status})
+                            self.assertEqual(code,403)
+                            service.assert_not_called()
+                with patch.object(api_desktop.LocalService,'salvar_os',return_value={'os_id':self.other}) as service:
+                    code,_=self.request('participant','/os','POST',
+                                       {**fields,'acao':'Pendente'})
+                    self.assertEqual(code,200)
+                    service.assert_called_once()
+
     def test_catalogue_global_and_stock_admin(self):
         self.assertEqual(self.request('first','/catalogo/servicos')[0],200)
         self.assertEqual(self.request('first','/estoque/materiais')[0],403)

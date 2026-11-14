@@ -8,6 +8,7 @@ runtime without restarting the process.
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -16,6 +17,8 @@ PASTA_APP = Path(__file__).resolve().parents[2]
 from officina.paths import AUTOSEG_DIR
 SCOPES = ('none', 'own', 'involved', 'organization', 'all')
 RELATIONSHIPS = ('none', 'own', 'involved', 'organization', 'other', 'all')
+LOG = logging.getLogger('autoseg.policy')
+_EXTERNAL_POLICY_WARNED = set()
 
 PADRAO = {
     'versao': 1,
@@ -30,6 +33,7 @@ PADRAO = {
             'work_item.start.own', 'work_item.publish.own',
             'work_item.send.own',
             'finance.view.own', 'stock.view',
+            'customer.create', 'customer.edit.involved',
             'customer.view.involved', 'customer.pii.view.involved',
             'customer.contact.view.involved',
         ]},
@@ -137,7 +141,15 @@ def load_policy(path: str | Path | None = None) -> Policy:
         dados = yaml.safe_load(destino.read_text(encoding='utf-8'))
     except Exception as erro:
         raise PolicyError(f'policy.yaml inválido ({destino}): {erro}') from erro
-    return _policy_from_dict(dados)
+    effective = _policy_from_dict(dados)
+    external = Path(os.environ.get('AUTOSEG_BASE', '')).expanduser() / 'policy.yaml' if os.environ.get('AUTOSEG_BASE') else None
+    if (external is not None and destino.resolve() == external.resolve()
+            and not effective.allows('employee', 'customer.edit.involved')
+            and str(external) not in _EXTERNAL_POLICY_WARNED):
+        _EXTERNAL_POLICY_WARNED.add(str(external))
+        LOG.warning('External AUTOSEG_BASE/policy.yaml overrides repository permissions; '
+                    'update it manually to enable employee customer.edit.involved: %s', external)
+    return effective
 
 
 def _policy_from_dict(dados) -> Policy:

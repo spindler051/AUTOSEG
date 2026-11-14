@@ -57,6 +57,12 @@ class OrcamentoMultiplo(unittest.TestCase):
         dados.update(nome='Condomínio Orçamento Teste', tipo_pessoa='Jurídica',
                      status='Ativo', documento='12345678000195')
         self.cid = neg.cliente_salvar(self.db, dados, self.pid)
+        with ext.db(self.db) as c:
+            oid=c.execute("INSERT INTO ordens_servico(numero_os,cliente_id,status,descricao) "
+                          "VALUES('ORC-VINCULO-1',?,'Aberta','Orçamento autorizado')",
+                          (self.cid,)).lastrowid
+            c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) '
+                      'VALUES(?,?,?)',(oid,self.pid,ext.agora()))
         self.s1 = catalogo.salvar(self.db, {
             'nome': 'Serviço Um', 'descricao': 'Primeiro serviço',
             'preco_servico': '100,00', 'materiais': 'Cabo | 1 | 20,00'})
@@ -120,7 +126,7 @@ class OrcamentoMultiplo(unittest.TestCase):
         self.assertIn('Validade: 45 dia(s)', texto)
         self.assertIn('Pagamento em 30 dias após a aprovação', texto)
         with ext.db(self.db) as c:
-            self.assertEqual(c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0], 0)
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM ordens_servico').fetchone()[0], 1)
             self.assertEqual(c.execute('SELECT COUNT(*) FROM financeiro').fetchone()[0], 0)
 
     def test_yaml_preenche_formulario_e_gera_pdf(self):
