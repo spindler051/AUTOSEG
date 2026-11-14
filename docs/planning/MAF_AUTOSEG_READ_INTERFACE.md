@@ -37,6 +37,12 @@ A read-only finance API already exists (`/api/v1`, bearer tokens, scope
 `financeiro:read`, rate limit, access audit) and is already served on port 8766.
 MAF simply does not use it.
 
+**Target: `/api/v2`, not `/api/v1`.** v1 is a table-shaped finance read built for
+the GTK desktop; it cannot express MAF's predicate, has no credential-to-token
+exchange and no consistency token. Patching it would create permanent
+compatibility debt. The boundary this item consumes is specified in
+[`API_V2.md`](API_V2.md). v1 stays frozen for its existing consumers.
+
 ## 2. Dependency inventory
 
 Every AUTOSEG fact MAF consumes, and what the API offers.
@@ -89,6 +95,9 @@ Non-negotiable, and the acceptance criterion for the whole item:
 5. No new user-visible screen, setting or state.
 
 ## 5. Interface requirements
+
+These requirements target **`/api/v2`** (see [`API_V2.md`](API_V2.md)); `/api/v1`
+is not the boundary for this migration.
 
 - **Linking:** an endpoint that exchanges AUTOSEG credentials for a scoped,
   revocable token, so the password flow is unchanged for the user. A device/authorization

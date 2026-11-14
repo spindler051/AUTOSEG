@@ -211,9 +211,15 @@ mesmas mensagens, sem nova configuração ou tela.
 
 - inventário de dependências, evidência da produção e contrato de paridade em
   [`planning/MAF_AUTOSEG_READ_INTERFACE.md`](planning/MAF_AUTOSEG_READ_INTERFACE.md);
+- alvo **`/api/v2`**, não `/api/v1`: a v1 tem forma de tabela, não tem troca de
+  credencial por token e não tem snapshot de consistência; remendar a v1 deixaria
+  dívida permanente. Contrato em
+  [`planning/API_V2.md`](planning/API_V2.md);
 - a interface financeira `/api/v1` já existe e é somente leitura, por prestador,
   com token revogável e auditoria de acesso;
 - posição: **P1**, logo após a fila A5 (A5b, A5c) e antes da extração Workaholic;
+  primeiro passo executável é só o contrato da v2 (OpenAPI + fixtures de
+  paridade), sem handler;
 - ganho: o MAF deixa de precisar de acesso ao arquivo do banco e o AUTOSEG pode
   voltar a negar acesso de escrita ao diretório de dados.
 

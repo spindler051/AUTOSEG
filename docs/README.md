@@ -53,7 +53,8 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Plano de modo local e sincronização](planning/PLANO_MODO_LOCAL_SYNC.md)
 - [Modos local/sync/serverless — análise externa](planning/LOCAL_SYNC_MODES_ANALYSIS.md) — quatro presets, autoridade por entidade, version vectors, relay opt-in e direção Rust; análise não implementada.
 - [Centralization profiles and change disclosure](planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md) — approval, visibility and authority as separate axes; legal floor per change class; signed snapshots; planning only.
-- [MAF ⇄ AUTOSEG read interface](planning/MAF_AUTOSEG_READ_INTERFACE.md) — replace MAF's direct SQLite reads with the versioned `/api/v1` projection, transparently; P1 after the A5 queue.
+- [MAF ⇄ AUTOSEG read interface](planning/MAF_AUTOSEG_READ_INTERFACE.md) — replace MAF's direct SQLite reads with the versioned `/api/v2` projection, transparently; P1 after the A5 queue.
+- [API 2.0](planning/API_V2.md) — use-case projections, credential-to-token exchange, snapshot deltas, explicit filters; v1 frozen beside it; planning only.
 
 ## Qualidade e processo
 
