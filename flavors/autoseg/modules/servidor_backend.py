@@ -22,6 +22,7 @@ if __package__ in (None, ''):
     _sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
 
 import argparse
+import os
 import signal
 import time
 from pathlib import Path
@@ -33,7 +34,9 @@ runtime_config.configure_server()
 def _validar_ambiente():
     """Impede que DEV e MAIN abram o banco um do outro."""
     banco = runtime_config.database_path().resolve()
-    dev_root = (runtime_config.user_data_dir() / 'server-dev').resolve()
+    raw_root = os.environ.get('AUTOSEG_SERVER_DATA')
+    dev_root = (Path(raw_root).expanduser().resolve() if raw_root
+                else (runtime_config.user_data_dir() / 'server-dev').resolve())
     if runtime_config.is_dev() and dev_root not in banco.parents:
         raise SystemExit(f'DEV recusou banco fora de {dev_root}: {banco}')
     if not runtime_config.is_dev() and dev_root in banco.parents:
