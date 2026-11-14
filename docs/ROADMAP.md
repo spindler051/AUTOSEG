@@ -214,6 +214,10 @@ de dados.
   PDFs/images, or full media; off by default, consent, quotas and revocation
   (a relay only forwards ciphertext it cannot read, so it gains nothing
   directly and must never be enabled implicitly);
+- **centralization profiles and change disclosure:** approval, visibility and
+  authority per change class, with a legal floor the profile cannot cross;
+  planned in
+  [`planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md`](planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md);
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e
   estoque (somente no modo com servidor);
 - backup/restauração verificados;
