@@ -24,6 +24,9 @@ def csrf(html):
 class FeedbackDevTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='feedback_dev_')
+        self.old_reports = ext.RELATORIOS
+        ext.RELATORIOS = Path(self.tmp.name) / 'relatorios_pdf'
+        ext.RELATORIOS.mkdir(parents=True, exist_ok=True)
         self.old_base = os.environ.get('AUTOSEG_BASE')
         os.environ['AUTOSEG_BASE'] = self.tmp.name
         self.db = str(Path(self.tmp.name) / 'dev.db')
@@ -54,6 +57,7 @@ class FeedbackDevTest(unittest.TestCase):
 
     def tearDown(self):
         self.server.parar()
+        ext.RELATORIOS = self.old_reports
         if self.old_base is None:
             os.environ.pop('AUTOSEG_BASE', None)
         else:
