@@ -62,19 +62,28 @@ def require_work_item_locked(connection, principal, work_id: int, action: str):
         raise PermissionError("Recurso indisponível.") from None
 
 
-def require_pj_admin_locked(connection, provider_id: int):
-    """Enforce the current provider/admin identity in a PJ writer transaction."""
+def require_admin_locked(connection, principal, *, message='Recurso indisponível.'):
+    """Require a live administrator inside the existing writer transaction.
+
+    Locked helpers follow one convention: ``(connection, principal, ...)``,
+    an active ``BEGIN IMMEDIATE`` transaction, and ``PermissionError`` on any
+    failure. The database is the authority; ``principal.role`` is not trusted.
+    """
     if not connection.in_transaction:
-        raise RuntimeError('PJ decision authorization requires a writer transaction.')
-    if type(provider_id) is not int or provider_id <= 0:
-        raise PermissionError('Somente administradores podem verificar solicitações PJ.')
+        raise RuntimeError('Administrator authorization requires a writer transaction.')
+    if (principal is None or not principal.active
+            or principal.organization_id != 'autoseg'
+            or type(principal.provider_id) is not int or principal.provider_id <= 0):
+        raise PermissionError(message)
     try:
-        active = connection.execute('''SELECT 1 FROM prestadores
-            WHERE id=? AND ativo=1 AND excluido=0''', (provider_id,)).fetchone()
-        if not active or not ext.administrador(connection, provider_id):
-            raise PermissionError('Somente administradores podem verificar solicitações PJ.')
+        row = connection.execute('''SELECT 1 FROM prestadores
+            WHERE id=? AND ativo=1 AND excluido=0''',
+            (principal.provider_id,)).fetchone()
+        if row is None or not ext.administrador(connection, principal.provider_id):
+            raise PermissionError(message)
     except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
-        raise PermissionError('Somente administradores podem verificar solicitações PJ.') from None
+        raise PermissionError(message) from None
+    return principal.provider_id
 
 
 def require_attachment_read_locked(connection, principal, attachment_id: int):

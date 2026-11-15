@@ -44,6 +44,7 @@ from officina.application.connection import (
 )
 from officina.application.http_service import HttpService
 from officina.application.local_service import LocalService
+from officina.application.object_policy import Principal
 from officina.application.session import Sessao, carregar_sessao, limpar_sessao
 from flavors.autoseg.modules.gtk_login import LoginWindow
 from flavors.autoseg.modules.web_access import WebAccessManager
@@ -764,9 +765,10 @@ class Janela(Adw.ApplicationWindow):
         acoes_cliente = [
             ui.botao("Abrir / editar", self._editar_cliente),
             ui.botao("Nova OS do cliente", self._nova_os_cliente),
-            ui.botao("Excluir / desativar", self._excluir_cliente,
-                     css="destructive-action"),
         ]
+        if self.sessao is not None and self.sessao.admin:
+            acoes_cliente.append(ui.botao("Excluir / desativar", self._excluir_cliente,
+                                          css="destructive-action"))
         if self.web.enabled:
             acoes_cliente.extend([
                 ui.botao("Acesso web / senha", self._senha_cliente),
@@ -818,6 +820,13 @@ class Janela(Adw.ApplicationWindow):
         if valores:
             self.nova_os(cliente_id=valores[0])
 
+    def _cliente_admin_actor(self):
+        if self.sessao is None:
+            return None
+        pid = self.sessao.prestador_id
+        role = self.sessao.role or ('admin' if self.sessao.admin else 'employee')
+        return Principal(pid, role, organization_id='autoseg', provider_id=pid)
+
     def _excluir_cliente(self):
         valores = self._cliente_selecionado()
         if not valores:
@@ -827,7 +836,8 @@ class Janela(Adw.ApplicationWindow):
         if total:
             def desativar():
                 try:
-                    self.service.desativar_cliente(cliente_id, "AUTOSEG desktop")
+                    kwargs = {} if self.remote_mode else {'principal':self._cliente_admin_actor()}
+                    self.service.desativar_cliente(cliente_id, "AUTOSEG desktop", **kwargs)
                 except Exception as erro:
                     ui.aviso_erro(self, "Cadastro", str(erro))
                     return
@@ -842,7 +852,8 @@ class Janela(Adw.ApplicationWindow):
 
         def excluir():
             try:
-                self.service.excluir_cliente(cliente_id)
+                kwargs = {} if self.remote_mode else {'principal':self._cliente_admin_actor()}
+                self.service.excluir_cliente(cliente_id, **kwargs)
             except Exception as erro:
                 ui.aviso_erro(self, "Exclusão bloqueada", str(erro))
                 return

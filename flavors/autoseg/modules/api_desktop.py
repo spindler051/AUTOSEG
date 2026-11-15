@@ -516,11 +516,11 @@ def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, pri
     if resto == ['desativar'] and metodo == 'POST':
         _exigir_admin(info)
         servico.desativar_cliente(
-            cliente_id, str(_corpo(handler).get('motivo') or ''))
+            cliente_id, str(_corpo(handler).get('motivo') or ''), principal=principal)
         return _enviar(handler, 200, {'ok': True})
     if resto == ['excluir'] and metodo == 'POST':
         _exigir_admin(info)
-        servico.excluir_cliente(cliente_id)
+        servico.excluir_cliente(cliente_id, principal=principal)
         return _enviar(handler, 200, {'ok': True})
     if resto == ['senha'] and metodo == 'POST':
         _exigir_admin(info)

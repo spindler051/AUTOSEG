@@ -409,5 +409,10 @@ def post(h,path,d,banco,prestador):
     if path=='/organizacoes/mesclar':
         cad.mesclar_organizacoes(banco,int(d['origem']),int(d['destino']),prestador['nome']);return h.redir('/organizacoes')
     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='desativar':
-        cad.desativar_cliente(banco,int(partes[1]),prestador['nome']);return h.redir('/clientes')
+        from officina.application.object_policy import Principal
+        pid=int(prestador['pid'])
+        role='admin' if prestador.get('admin') else 'employee'
+        actor=Principal(pid,role,organization_id='autoseg',provider_id=pid)
+        cad.desativar_cliente(banco,int(partes[1]),principal=actor)
+        return h.redir('/clientes')
     raise ValueError('Operação desconhecida.')
