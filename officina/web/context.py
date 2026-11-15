@@ -13,6 +13,9 @@ class NavItem:
     icon: str = "info"
     top: bool = False
     top_order: int = 100
+    gtk_page: str | None = None
+    surfaces: tuple[str, ...] = ("web", "gtk")
+    surface_reason: str = ""
 
 @dataclass(frozen=True)
 class PageContext:

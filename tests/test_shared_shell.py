@@ -197,8 +197,9 @@ class FlavorBoundaryTest(unittest.TestCase):
         for kind in ('provider', 'client'):
             ctx = _context(kind)
             with self.subTest(kind=kind):
-                self.assertEqual(registry.navigation_for(ctx),
-                                 generic_filter(ctx, registry.ITEMS))
+                shared = tuple(i for i in registry.ITEMS if 'web' in i.surfaces)
+                self.assertEqual(set(registry.navigation_for(ctx)),
+                                 set(generic_filter(ctx, shared)))
         self.assertIn('/financeiro', [item.href for item in registry.ITEMS])
         self.assertIn('/em-rota', [item.href for item in registry.ITEMS])
 
@@ -255,7 +256,7 @@ class SharedNavigationSingleSourceTest(unittest.TestCase):
 
     def test_employee_admin_only_item_absent_in_top_and_sidebar(self):
         html = self._render(_context('provider', 'employee'))
-        for title in ('Prestadores', 'Estoque', 'Composição de valores', 'Feedbacks'):
+        for title in ('Prestadores', 'Composição de valores', 'Feedbacks'):
             self.assertNotIn(f'>{title}</a>', html)
             self.assertNotIn(f'>{title}</span>', html)
         self.assertIn('>Ordens de serviço</a>', html)

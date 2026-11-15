@@ -27,6 +27,7 @@ class Sessao:
     role: str = ''
     context_label: str = ''
     permissions: frozenset[str] = frozenset()
+    navigation_ids: frozenset[str] = frozenset()
 
     def can(self, permission: str) -> bool:
         return ('*' in self.permissions or permission in self.permissions
@@ -40,6 +41,7 @@ class Sessao:
     def to_dict(self) -> dict:
         data = asdict(self)
         data['permissions'] = sorted(self.permissions)
+        data['navigation_ids'] = sorted(self.navigation_ids)
         return data
 
     @classmethod
@@ -61,17 +63,42 @@ class Sessao:
                 role=str(dados.get('role') or ('admin' if dados.get('admin') else 'employee')),
                 context_label=str(dados.get('context_label') or 'Portal do prestador'),
                 permissions=frozenset(str(p) for p in (dados.get('permissions') or ())),
+                navigation_ids=frozenset(str(n) for n in (dados.get('navigation_ids') or ())),
             )
         except (TypeError, ValueError):
             return None
 
 
-def navigation_for_session(items, sessao: Sessao | None):
-    """GTK navigation projection; requires explicit policy permission, never bool(admin)."""
+def navigation_for_session(sections=None, sessao: Sessao | None = None, *, web_enabled=False):
+    """Project supplied canonical sections; generic core never imports a flavor."""
     if sessao is None:
-        return list(items)
-    return [item for item in items if item[0] != 'prestadores'
-            or sessao.can('provider.manage.all')]
+        return list(sections or ())
+    # The AUTOSEG adapter owns the canonical ITEMS registry and passes the
+    # ordered provider sections. Missing registry fails closed by showing none.
+    allowed = []
+    for item in sections or ():
+        if 'gtk' not in item.surfaces or not item.gtk_page:
+            continue
+        permission = item.permission
+        if permission == '*' and not sessao.can('provider.manage.all'):
+            continue
+        if permission and permission != '*' and not sessao.can(permission):
+            continue
+        if sessao.remote and sessao.navigation_ids and item.id not in sessao.navigation_ids:
+            continue
+        if not web_enabled and item.gtk_page == 'portal':
+            continue
+        allowed.append(item)
+    # The GNOME mapping only changes presentation; permission and ordering
+    # come solely from the caller's already-resolved registry entries.
+    icons = {'home':'go-home-symbolic', 'users':'system-users-symbolic',
+             'clipboard':'document-edit-symbolic', 'history':'document-open-recent-symbolic',
+             'wallet':'accessories-calculator-symbolic', 'receipt':'x-office-document-symbolic',
+             'mail':'mail-send-symbolic', 'wrench':'view-list-symbolic',
+             'layout':'emblem-important-symbolic', 'building':'view-grid-symbolic',
+             'network':'network-wired-symbolic'}
+    return [(item.gtk_page, item.label, icons.get(item.icon,'package-x-generic-symbolic'))
+            for item in allowed]
 
 
 def session_path() -> Path:

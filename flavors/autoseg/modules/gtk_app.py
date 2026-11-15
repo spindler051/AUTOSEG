@@ -173,29 +173,15 @@ class Janela(Adw.ApplicationWindow):
         self.lista_navegacao = Gtk.ListBox()
         self.lista_navegacao.add_css_class("navigation-sidebar")
         self.lista_navegacao.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.nav_itens = [
-            ("inicio", "Início", "go-home-symbolic"),
-            ("clientes", "Clientes", "system-users-symbolic"),
-            ("os", "Ordens de serviço", "document-edit-symbolic"),
-            ("historico", "Histórico e relatórios", "document-open-recent-symbolic"),
-            ("financeiro", "Financeiro", "accessories-calculator-symbolic"),
-            ("notas", "Notas fiscais", "x-office-document-symbolic"),
-            ("emails", "E-mails", "mail-send-symbolic"),
-            ("prestadores", "Prestadores", "avatar-default-symbolic"),
-        ]
-        if self.web.enabled:
-            self.nav_itens.append(
-                ("portal", "Officina Web", "network-server-symbolic"))
-        self.nav_itens.extend([
-            ("pj", "Condomínios e chamados", "view-grid-symbolic"),
-            ("catalogo", "Serviços e valores", "view-list-symbolic"),
-            ("composicao", "Composição de valores", "emblem-important-symbolic"),
-            ("estoque", "Materiais e estoque", "package-x-generic-symbolic"),
-            ("conexao", "Conexões", "network-wired-symbolic"),
-        ])
-        # A single shared helper projects the policy context for GTK navigation.
         from officina.application.session import navigation_for_session
-        self.nav_itens = navigation_for_session(self.nav_itens, self.sessao)
+        from flavors.autoseg.modules.autoseg_web_navigation import gtk_navigation_for
+        from types import SimpleNamespace
+        # GTK's adapter supplies the canonical server-compatible sections;
+        # the generic session module does not import the AUTOSEG flavor.
+        context = SimpleNamespace(kind='provider',
+                                  permissions=self.sessao.permissions if self.sessao else ())
+        self.nav_itens = navigation_for_session(gtk_navigation_for(context),
+                                                self.sessao, web_enabled=self.web.enabled)
         for _nome, titulo_texto, icone in self.nav_itens:
             linha = Adw.ActionRow(title=titulo_texto, icon_name=icone)
             linha.set_activatable(True)

@@ -987,7 +987,15 @@ def _desktop_session_context(banco, info):
 
 
 def _context_api(context):
+    from types import SimpleNamespace
+    from flavors.autoseg.modules.autoseg_web_navigation import gtk_navigation_for
+    visible = gtk_navigation_for(SimpleNamespace(kind=context.identity_kind,
+                                                permissions=context.permissions))
     return {
+        'navigation': [
+            {'id': item.id, 'title': item.label, 'group': item.group,
+             'order': item.top_order, 'icon': item.icon,
+             'gtk_page': item.gtk_page} for item in visible],
         'role': context.role,
         'context_label': context.context_label,
         'permissions': sorted(context.permissions),

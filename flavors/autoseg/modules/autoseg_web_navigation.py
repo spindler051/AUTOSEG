@@ -6,32 +6,57 @@ from officina.web import NavItem, WebRoute
 from officina.web.navigation import navigation_for as filter_navigation, active_for
 
 ITEMS = (
-    NavItem("home", "Início", "/", contexts=("provider",), group="Operação", icon="home", top=True, top_order=0),
-    NavItem("work", "Ordens de serviço", "/os", contexts=("provider",), group="Operação", icon="clipboard", top=True, top_order=2),
-    NavItem("customers", "Clientes", "/clientes", contexts=("provider",), group="Operação", icon="users", top=True, top_order=1),
-    NavItem("services", "Serviços e valores", "/servicos", contexts=("provider",), group="Gestão", icon="wrench", top=True, top_order=3),
-    NavItem("finance", "Financeiro", "/financeiro", contexts=("provider",), group="Gestão", icon="wallet", top=True, top_order=4),
-    NavItem("invoices", "Notas fiscais", "/notas", contexts=("provider",), group="Gestão", icon="receipt", top=True, top_order=6),
-    NavItem("email", "E-mails", "/emails", contexts=("provider",), group="Gestão", icon="mail", top=True, top_order=7),
-    NavItem("providers", "Prestadores", "/prestadores", permission="*", contexts=("provider",), group="Gestão", icon="users", top=True, top_order=9),
-    NavItem("stock", "Estoque", "/estoque", permission="*", contexts=("provider",), group="Gestão", icon="wrench", top=True, top_order=10),
-    NavItem("composition", "Composição de valores", "/composicao", permission="*", contexts=("provider",), group="Gestão", icon="layout", top=True, top_order=11),
-    NavItem("history", "Histórico e relatórios", "/historico", contexts=("provider",), group="Registros", icon="history", top=True, top_order=8),
-    NavItem("public", "Solicitações PJ", "/pj-publicas", contexts=("provider",), group="Registros", icon="building", top=True, top_order=5),
-    NavItem("settings", "Configurações", "/configuracoes", contexts=("provider",), group="Registros", icon="settings"),
-    NavItem("feedback", "Feedbacks", "/feedback/recebidos", permission="*", contexts=("provider",), group="Registros", icon="message", top=True, top_order=12),
-    NavItem("client-home", "Painel", "/", contexts=("client",), group="Minha conta", icon="home", top=True, top_order=0),
-    NavItem("client-work", "Minhas OS", "/os", permission="work_item.view", contexts=("client",), group="Minha conta", icon="clipboard", top=True, top_order=1),
-    NavItem("client-documents", "Documentos", "/documentos", permission="document.view", contexts=("client",), group="Minha conta", icon="file", top=True, top_order=2),
-    NavItem("client-request", "Solicitar serviço", "/solicitar", permission="work_item.create.request", contexts=("client",), group="Minha conta", icon="plus", top=True, top_order=3),
-    NavItem("client-route", "Em rota", "/em-rota", permission="work_item.view", contexts=("client",), group="Minha conta", icon="arrow-right", top=True, top_order=4),
-    NavItem("client-profile", "Meu perfil", "/cliente/perfil", contexts=("client",), group="Minha conta", icon="user"),
-    NavItem("client-organizations", "Organizações", "/cliente/organizacoes", contexts=("client",), group="Minha conta", icon="building"),
-    NavItem("client-quote", "Orçamento", "/cliente/orcamento", contexts=("client",), group="Minha conta", icon="receipt"),
+    NavItem("home", "Início", "/", contexts=("provider",), group="Operação", icon="home", top=True, top_order=0, gtk_page="inicio"),
+    NavItem("work", "Ordens de serviço", "/os", contexts=("provider",), group="Operação", icon="clipboard", top=True, top_order=2, gtk_page="os"),
+    NavItem("customers", "Clientes", "/clientes", contexts=("provider",), group="Operação", icon="users", top=True, top_order=1, gtk_page="clientes"),
+    NavItem("services", "Serviços e valores", "/servicos", contexts=("provider",), group="Gestão", icon="wrench", top=True, top_order=3, gtk_page="catalogo"),
+    NavItem("finance", "Financeiro", "/financeiro", contexts=("provider",), group="Gestão", icon="wallet", top=True, top_order=4, gtk_page="financeiro"),
+    NavItem("invoices", "Notas fiscais", "/notas", contexts=("provider",), group="Gestão", icon="receipt", top=True, top_order=6, gtk_page="notas"),
+    NavItem("email", "E-mails", "/emails", contexts=("provider",), group="Gestão", icon="mail", top=True, top_order=7, gtk_page="emails"),
+    NavItem("providers", "Prestadores", "/prestadores", permission="*", contexts=("provider",), group="Gestão", icon="users", top=True, top_order=9, gtk_page="prestadores"),
+    NavItem("stock", "Estoque", "/estoque", permission="stock.view", contexts=("provider",), group="Gestão", icon="wrench", top=True, top_order=10, gtk_page="estoque"),
+    NavItem("composition", "Composição de valores", "/composicao", permission="*", contexts=("provider",), group="Gestão", icon="layout", top=True, top_order=11, gtk_page="composicao"),
+    NavItem("history", "Histórico e relatórios", "/historico", contexts=("provider",), group="Registros", icon="history", top=True, top_order=8, gtk_page="historico"),
+    NavItem("public", "Solicitações PJ", "/pj-publicas", permission="provider.manage.all", contexts=("provider",), group="Registros", icon="building", top=True, top_order=5, gtk_page="pj"),
+    NavItem("settings", "Configurações", "/configuracoes", contexts=("provider",), group="Registros", icon="settings", surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("feedback", "Feedbacks", "/feedback/recebidos", permission="*", contexts=("provider",), group="Registros", icon="message", top=True, top_order=12, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-home", "Painel", "/", contexts=("client",), group="Minha conta", icon="home", top=True, top_order=0, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-work", "Minhas OS", "/os", permission="work_item.view", contexts=("client",), group="Minha conta", icon="clipboard", top=True, top_order=1, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-documents", "Documentos", "/documentos", permission="document.view", contexts=("client",), group="Minha conta", icon="file", top=True, top_order=2, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-request", "Solicitar serviço", "/solicitar", permission="work_item.create.request", contexts=("client",), group="Minha conta", icon="plus", top=True, top_order=3, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-route", "Em rota", "/em-rota", permission="work_item.view", contexts=("client",), group="Minha conta", icon="arrow-right", top=True, top_order=4, surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-profile", "Meu perfil", "/cliente/perfil", contexts=("client",), group="Minha conta", icon="user", surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-organizations", "Organizações", "/cliente/organizacoes", contexts=("client",), group="Minha conta", icon="building", surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
+    NavItem("client-quote", "Orçamento", "/cliente/orcamento", contexts=("client",), group="Minha conta", icon="receipt", surfaces=("web",), surface_reason="Client portal or web-only section, outside GTK provider phase"),
 )
 
+# GTK-only device configuration and local server control. Explicit exceptions
+# live next to the web items, never in a second permission registry.
+ITEMS += (
+    NavItem("desktop-web", "Officina Web", "", permission="provider.manage.all",
+            contexts=("provider",), group="Dispositivo", icon="network", top_order=0,
+            gtk_page="portal", surfaces=("gtk",),
+            surface_reason="Local web server launcher is a GTK device control"),
+    NavItem("desktop-connect", "Conexões", "", permission="provider.manage.all",
+            contexts=("provider",), group="Dispositivo", icon="network", top_order=1,
+            gtk_page="conexao", surfaces=("gtk",),
+            surface_reason="Connection preferences are configured on the GTK device"),
+)
+
+
+def _ordered(items):
+    groups = list(dict.fromkeys(item.group for item in ITEMS))
+    return tuple(sorted(items, key=lambda item: (groups.index(item.group), item.top_order, item.id)))
+
+
 def navigation_for(context):
-    return filter_navigation(context, ITEMS)
+    return _ordered(filter_navigation(context,
+                    tuple(item for item in ITEMS if "web" in item.surfaces)))
+
+
+def gtk_navigation_for(context):
+    return _ordered(filter_navigation(context,
+                    tuple(item for item in ITEMS if "gtk" in item.surfaces)))
 
 
 def top_navigation_for(context, navigation=None):

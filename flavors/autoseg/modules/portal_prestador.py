@@ -3388,8 +3388,8 @@ class PortalPrestador:
                         ['ID','Nome','E-mail','Especialidade','Ativo','Admin','Ações'],linhas)),s)
 
             def estoque_admin(self,s):
-                if not s.get('admin'):
-                    raise PermissionError('Somente administradores podem gerenciar o estoque.')
+                if not _policy_allows(banco,s,'stock.view'):
+                    raise PermissionError('Estoque indisponível.')
                 itens=estoque.listar(banco)
                 linhas=[]
                 for item in itens:
@@ -3398,20 +3398,33 @@ class PortalPrestador:
                                    dinheiro(item['venda_centavos']/100),
                                    botao('Abrir',f'/estoque/{item["id"]}','secondary')))
                 return self.pagina('Estoque',
-                    card('Novo material',botao('Cadastrar material','/estoque/novo',''))
+                    (card('Novo material',botao('Cadastrar material','/estoque/novo',''))
+                     if _policy_allows(banco,s,'provider.manage.all') else '')
                     +card('Materiais',tabela(
                         ['ID','Material','Código','Unidade','Saldo','Mínimo','Venda','Ação'],
                         linhas)),s)
 
             def estoque_item(self,s,produto_id=None):
-                if not s.get('admin'):
-                    raise PermissionError('Somente administradores podem gerenciar o estoque.')
+                if not _policy_allows(banco,s,'stock.view'):
+                    raise PermissionError('Estoque indisponível.')
+                if produto_id is None and not _policy_allows(banco,s,'provider.manage.all'):
+                    raise PermissionError('Somente administradores podem cadastrar material.')
                 item=None
                 if produto_id is not None:
                     item=next((x for x in estoque.listar(banco)
                                if int(x['id'])==int(produto_id)),None)
                     if item is None:
                         raise ValueError('Material não encontrado.')
+                if item is not None and not _policy_allows(banco,s,'provider.manage.all'):
+                    linhas=[('Material',esc(item['nome'])),
+                            ('Código',esc(item['sku'] or '—')),
+                            ('Unidade',esc(item['unidade'] or 'un')),
+                            ('Saldo',esc(str(item['saldo']))),
+                            ('Mínimo',esc(str(item['minimo']))),
+                            ('Venda',dinheiro(item['venda_centavos']/100))]
+                    return self.pagina('Material de estoque',
+                        card('Material (somente leitura)',tabela(['Campo','Valor'],linhas))
+                        +botao('Voltar ao estoque','/estoque','secondary'),s)
                 dados=item or {'nome':'','sku':'','unidade':'un','custo_centavos':0,
                                'venda_centavos':0,'minimo':0}
                 form=(f'<form method="post" action="/estoque/salvar">{self.hidden(s)}'

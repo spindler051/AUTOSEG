@@ -33,13 +33,19 @@ class SessionContextTest(unittest.TestCase):
         self.assertTrue(employee.has('work_item.view.own'))
 
     def test_gtk_navigation_uses_context_without_gi(self):
-        items=[('inicio','Início','home'),('prestadores','Prestadores','users')]
+        from flavors.autoseg.modules.autoseg_web_navigation import gtk_navigation_for
+        employee_sections = gtk_navigation_for(SimpleNamespace(
+            kind='provider', permissions=self.context('employee').permissions))
+        admin_sections = gtk_navigation_for(SimpleNamespace(
+            kind='provider', permissions=self.context('admin').permissions))
+        employee_sections = [s for s in employee_sections if s.gtk_page in ('inicio','prestadores')]
+        admin_sections = [s for s in admin_sections if s.gtk_page in ('inicio','prestadores')]
         guest=Sessao('remote',14,'Employee','',False,role='employee',
                      permissions=self.context('employee').permissions)
         admin=Sessao('remote',14,'Admin','',True,role='admin',
                      permissions=self.context('admin').permissions)
-        self.assertEqual([i[0] for i in navigation_for_session(items,guest)],['inicio'])
-        self.assertEqual(len(navigation_for_session(items,admin)),2)
+        self.assertEqual([i[0] for i in navigation_for_session(employee_sections,guest)],['inicio'])
+        self.assertEqual(len(navigation_for_session(admin_sections,admin)),2)
         self.assertFalse(guest.can('provider.manage.all'))
 
     def test_legacy_saved_gtk_context_is_conservative(self):

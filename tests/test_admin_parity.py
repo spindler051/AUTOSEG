@@ -88,13 +88,17 @@ class AdminParityTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_admin_pages_are_visible_and_employee_is_denied(self):
-        for path in ('/prestadores', '/estoque', '/estoque/novo',
+        for path in ('/prestadores', '/estoque/novo',
                      '/caixa', '/composicao'):
             status, html = request(self.admin_browser, self.base, path)
             self.assertEqual(status, 200, path)
             self.assertNotIn('Falha interna', html)
             status, _html = request(self.func_browser, self.base, path)
             self.assertEqual(status, 403, path)
+        status, html = request(self.func_browser, self.base, '/estoque')
+        self.assertEqual(status, 200)
+        self.assertNotIn('Cadastrar material',html)
+        self.assertNotIn('action="/estoque/salvar"',html)
 
     def test_admin_creates_provider_stock_cash_and_composition(self):
         status, html = request(self.admin_browser, self.base,

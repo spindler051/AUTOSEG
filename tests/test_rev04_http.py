@@ -68,8 +68,15 @@ class Rev04Http(unittest.TestCase):
                 # but mutation screens are restricted to admin users.
                 regular=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
                 fetch(regular,base+'/login',{'email':'comum@example.invalid','senha':'SenhaSegura123456'})
-                with self.assertRaises(urllib.error.HTTPError) as ctx:regular.open(base+'/estoque',timeout=10)
+                # Employee stock.view permits read-only inventory, not mutations.
+                estoque_html = fetch(regular,base+'/estoque')
+                self.assertIn('Estoque',estoque_html)
+                self.assertNotIn('action="/estoque/salvar"',estoque_html)
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    fetch(regular,base+'/estoque/salvar',{
+                        'csrf':campo_csrf(estoque_html),'nome':'Forbidden Inventory'})
                 self.assertEqual(ctx.exception.code,403)
+                self.assertFalse(any(m['nome']=='Forbidden Inventory' for m in est.listar(db)))
                 with self.assertRaises(urllib.error.HTTPError) as ctx:regular.open(base+'/servicos/novo',timeout=10)
                 self.assertEqual(ctx.exception.code,403)
                 os_form=fetch(regular,base+'/os/nova')

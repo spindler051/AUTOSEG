@@ -375,7 +375,9 @@ class LoginWindow(Adw.ApplicationWindow):
             expira_em=str(resultado.get('expira_em') or ''),
             role=str(pessoa.get('role') or ('admin' if pessoa.get('admin') else 'employee')),
             context_label=str(pessoa.get('context_label') or 'Portal do prestador'),
-            permissions=frozenset(pessoa.get('permissions') or ()))
+            permissions=frozenset(pessoa.get('permissions') or ()),
+            navigation_ids=frozenset(item.get('id') for item in (pessoa.get('navigation') or ())
+                                      if isinstance(item, dict) and item.get('id')))
         if self.lembrar.get_active():
             salvar_sessao(sessao)
         else:
