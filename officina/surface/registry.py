@@ -51,6 +51,7 @@ class SurfaceAction:
     object_action: Optional[str]
     web_markers: tuple[str, ...]
     api_markers: tuple[str, ...]
+    gtk_markers: tuple[str, ...]
     negative_tests: tuple[str, ...]
     source_markers: tuple[SourceMarker, ...]
     negative_markers: tuple[SourceMarker, ...]
@@ -125,7 +126,7 @@ def _parse_action(raw: object, root: Path) -> SurfaceAction:
     required = {
         "id", "family", "risk", "affordance", "state", "service",
         "required_params", "capability", "admin_only", "object_action",
-        "web_markers", "api_markers", "negative_tests", "source_markers",
+        "web_markers", "api_markers", "gtk_markers", "negative_tests", "source_markers",
         "negative_markers", "writer_guard",
     }
     allowed = required | {"variant"}
@@ -197,6 +198,7 @@ def _parse_action(raw: object, root: Path) -> SurfaceAction:
         object_action=object_action,
         web_markers=_strings(raw["web_markers"], f"{action_id}.web_markers"),
         api_markers=_strings(raw["api_markers"], f"{action_id}.api_markers"),
+        gtk_markers=_strings(raw["gtk_markers"], f"{action_id}.gtk_markers"),
         negative_tests=negative_tests,
         source_markers=source_markers,
         negative_markers=negative_markers,

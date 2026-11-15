@@ -24,6 +24,8 @@ actions:
     api_markers:
       - "access.require_customer_create(principal)"
       - "servico.salvar_cliente("
+    gtk_markers:
+      - ui.botao("Novo cliente", self.novo_cliente
     source_markers:
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: "read_access.require_customer_create(actor)"
@@ -53,6 +55,8 @@ actions:
     api_markers:
       - "if not resto and metodo == 'PUT':"
       - "_require_customer(servico.banco, principal, existing, 'edit')"
+    gtk_markers:
+      - ui.botao("Abrir / editar", self._editar_cliente)
     source_markers:
       - file: officina/core/portal_negocios.py
         contains: "require_customer_write_locked(c,principal,cliente_id)"
@@ -79,6 +83,8 @@ actions:
       - "path.endswith('/desativar')"
     api_markers:
       - "if resto == ['desativar'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Excluir / desativar", self._excluir_cliente,
     source_markers:
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: 'action="/clientes/{cid}/desativar"'
@@ -105,6 +111,8 @@ actions:
       - "partes[2]=='excluir'"
     api_markers:
       - "if resto == ['excluir'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Excluir / desativar", self._excluir_cliente,
     source_markers:
       - file: officina/core/portal_negocios.py
         contains: "pid = require_admin_locked(c, principal)"
@@ -131,6 +139,7 @@ actions:
       - "partes[2]=='mesclar'"
       - 'action="/clientes/{cid}/mesclar"'
     api_markers: []  # No desktop API or GTK merge operation in phase 0A inventory.
+    gtk_markers: []
     source_markers:
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: "if s.get('admin'):"
@@ -158,6 +167,8 @@ actions:
       - "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)"
     api_markers:
       - "if resto == ['senha'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Acesso web / senha", self._senha_cliente)
     source_markers:
       - file: flavors/autoseg/modules/api_desktop.py
         contains: "if resto == ['senha'] and metodo == 'POST':"
@@ -184,6 +195,8 @@ actions:
       - "read_access.involved_customer_field_scopes(principal)"
     api_markers:
       - "_scoped_customer_list(servico.banco, principal,"
+    gtk_markers:
+      - 'for registro in self.service.listar_clientes(termo):'
     source_markers:
       - file: officina/application/local_service.py
         contains: "return [self._resumo(registro)"
@@ -211,6 +224,8 @@ actions:
       - "read_access.require_customer_read("
     api_markers:
       - "_scoped_customer_detail(servico.banco, principal, cliente_id)"
+    gtk_markers:
+      - registro = self.servico.obter_cliente(cliente_id)
     source_markers:
       - file: flavors/autoseg/modules/gtk_dialogos.py
         contains: "registro = self.servico.obter_cliente(cliente_id)"
