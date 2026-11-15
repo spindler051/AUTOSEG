@@ -218,6 +218,13 @@ mesmas mensagens, sem nova configuração ou tela.
   paridade), sem handler;
 - ganho: o MAF deixa de precisar de acesso ao arquivo do banco e o AUTOSEG pode
   voltar a negar acesso de escrita ao diretório de dados.
+- **client grants e capabilities (P1):** autoridade é a concessão da sessão, não
+  o papel nem a superfície. Cada cliente (`gtk`, `web`, `api`) recebe um teto de
+  capabilities; o papel vira um pacote; a sessão carrega `client_app`
+  (asserido pelo tipo de token) e o conjunto efetivo. Permite “admin no GTK e
+  funcionário no site” sem exceção de superfície. Depende do surface registry e
+  do item anterior. Contrato em
+  [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
 - **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
   61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
