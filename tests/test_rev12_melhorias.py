@@ -87,6 +87,14 @@ class MelhoriasRev12(unittest.TestCase):
         for pasta in (ext.ANEXOS, ext.RELATORIOS, ext.RASCUNHOS, ext.NOTAS):
             pasta.mkdir(parents=True, exist_ok=True)
 
+    def _creation_actor(self):
+        from officina.application.object_policy import Principal
+        if not hasattr(self, '_create_pid'):
+            self._create_pid = ext.cadastrar(
+                self.db, 'Fixture creator', 'rev12-fixture@invalid.test', 'Pass12345678')
+        return Principal(self._create_pid, 'employee', organization_id='autoseg',
+                         provider_id=self._create_pid)
+
     def tearDown(self):
         self.tmp.cleanup()
 
@@ -142,7 +150,7 @@ class MelhoriasRev12(unittest.TestCase):
         dados_cli = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados_cli.update(nome='Condomínio Teste', tipo_pessoa='Jurídica',
                          status='Ativo', documento='12345678000195')
-        cid = neg.cliente_salvar(self.db, dados_cli, 0)
+        cid = neg.cliente_salvar(self.db, dados_cli, 0, principal=self._creation_actor())
         with ext.db(self.db) as c:
             org = c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',
                             (cid,)).fetchone()['id']
@@ -175,7 +183,7 @@ class MelhoriasRev12(unittest.TestCase):
         dados.update(nome='Condomínio Multi', tipo_pessoa='Jurídica', status='Ativo',
                      email='cliente@example.org', sindico_email='sindico@example.org',
                      administradora_email='adm@example.org')
-        cid = neg.cliente_salvar(self.db, dados, pid)
+        cid = neg.cliente_salvar(self.db, dados, pid, principal=self._creation_actor())
         d = {'cliente_id': str(cid), 'descricao': 'Serviço multi', 'tecnico': 'T',
              'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
              'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}
@@ -190,7 +198,7 @@ class MelhoriasRev12(unittest.TestCase):
         pid = ext.cadastrar(self.db, 'Técnico', 'tec@example.org', 'senha-bem-segura-2026')
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Cliente PDF', tipo_pessoa='Física', status='Ativo')
-        cid = neg.cliente_salvar(self.db, dados, pid)
+        cid = neg.cliente_salvar(self.db, dados, pid, principal=self._creation_actor())
         d = {'cliente_id': str(cid), 'descricao': 'Serviço longo', 'tecnico': 'T',
              'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
              'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}
@@ -229,7 +237,7 @@ class MelhoriasRev12(unittest.TestCase):
         pid = ext.cadastrar(self.db, 'Prestador NF', 'nf@example.org', 'senha-bem-segura-2026')
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Cliente NF', tipo_pessoa='Física', status='Ativo')
-        cid = neg.cliente_salvar(self.db, dados, pid)
+        cid = neg.cliente_salvar(self.db, dados, pid, principal=self._creation_actor())
         d = {'cliente_id': str(cid), 'descricao': 'Serviço NF', 'tecnico': 'T',
              'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
              'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}
@@ -270,7 +278,7 @@ class MelhoriasRev12(unittest.TestCase):
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Condomínio Síndico', tipo_pessoa='Jurídica', status='Ativo',
                      documento='11222333000181')
-        cid = neg.cliente_salvar(self.db, dados, 0)
+        cid = neg.cliente_salvar(self.db, dados, 0, principal=self._creation_actor())
         with ext.db(self.db) as c:
             org = c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?', (cid,)).fetchone()['id']
         uid = fluxo_pf.criar_conta(self.db, cpf(545678901), 'Senha-Boa-123456')
@@ -294,7 +302,7 @@ class MelhoriasRev12(unittest.TestCase):
         pid = ext.cadastrar(self.db, 'Prestador Rápido', 'rapido@example.org', 'senha-bem-segura-2026')
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Condomínio Rápido', tipo_pessoa='Jurídica', status='Ativo')
-        cid = neg.cliente_salvar(self.db, dados, pid)
+        cid = neg.cliente_salvar(self.db, dados, pid, principal=self._creation_actor())
         servidor = PortalPrestador(self.db, '127.0.0.1', 0)
         servidor.iniciar()
         self.addCleanup(servidor.parar)
@@ -349,7 +357,7 @@ class MelhoriasRev12(unittest.TestCase):
         pid = ext.cadastrar(self.db, 'Prestador Form', 'form@example.org', 'senha-bem-segura-2026')
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Cliente Form', tipo_pessoa='Física', status='Ativo')
-        cid = neg.cliente_salvar(self.db, dados, pid)
+        cid = neg.cliente_salvar(self.db, dados, pid, principal=self._creation_actor())
         d = {'cliente_id': str(cid), 'descricao': 'Serviço do formulário', 'tecnico': 'T',
              'forma_pagamento': 'PIX', 'valor_mao_obra': '10', 'valor_materiais_manual': '0',
              'relatorio_tecnico': 'x', 'materiais_presentes': '1', 'acao_status': 'salvar'}

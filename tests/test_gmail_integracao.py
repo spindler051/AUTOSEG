@@ -8,6 +8,7 @@ import time
 import unittest
 from pathlib import Path
 
+from officina.application.object_policy import Principal
 from officina.core import os_effect_outbox as outbox
 from officina.core import atendimento_os as aten
 from officina.core import cadastros_v9 as cad9
@@ -47,7 +48,8 @@ class GmailIntegracao(unittest.TestCase):
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Cliente Email', tipo_pessoa='Física', status='Ativo',
                      email='cliente@example.org', cidade='Porto Alegre')
-        cid = neg.cliente_salvar(self.banco, dados, pid)
+        actor = Principal(pid, 'employee', organization_id='autoseg', provider_id=pid)
+        cid = neg.cliente_salvar(self.banco, dados, pid, principal=actor)
         d = {'cliente_id': str(cid), 'descricao': 'Serviço de teste Gmail',
              'tecnico': 'Técnico Teste', 'forma_pagamento': 'PIX',
              'valor_mao_obra': '100', 'valor_materiais_manual': '0',

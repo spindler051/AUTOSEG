@@ -27,11 +27,11 @@ EXPECTED = {
     'customer.list', 'customer.detail',
 }
 EXPECTED_MAPPING = {
-    'customer.create': ('officina.core.portal_negocios.cliente_salvar', 'customer.create', False, 'known_gap'),
+    'customer.create': ('officina.core.portal_negocios.cliente_salvar', 'customer.create', False, 'active'),
     'customer.edit': ('officina.core.portal_negocios.cliente_salvar', 'customer.edit.involved', False, 'known_gap'),
     'customer.deactivate': ('officina.core.cadastros_v9.desativar_cliente', None, True, 'active'),
     'customer.delete': ('officina.core.portal_negocios.cliente_excluir', None, True, 'active'),
-    'customer.merge': ('officina.core.cadastros_v9.mesclar_clientes', None, True, 'known_gap'),
+    'customer.merge': ('officina.core.cadastros_v9.mesclar_clientes', None, True, 'active'),
     'customer.password': ('officina.core.fluxo_os.definir_senha_cliente', None, True, 'active'),
     'customer.list': ('officina.integration.clientes.listar_paginado', 'customer.view.involved', False, 'implemented_not_deployed'),
     'customer.detail': ('officina.integration.clientes.obter_linha', 'customer.view.involved', False, 'known_gap'),
@@ -71,7 +71,10 @@ class SurfaceRegistryTest(unittest.TestCase):
                     EXPECTED_MAPPING[row.id])
         self.assertEqual(self.registry.by_id('customer.create').variant, 'create')
         self.assertEqual(self.registry.by_id('customer.edit').variant, 'edit')
-        self.assertEqual(self.registry.by_id('customer.merge').api_markers, ())
+        merge = self.registry.by_id('customer.merge')
+        self.assertEqual(merge.api_markers,
+                         ("if resto == ['mesclar'] and metodo == 'POST':",))
+        self.assertTrue(merge.gtk_markers)
 
     def test_04_service_signatures_and_parameter_variants(self):
         for row in self.registry.actions:

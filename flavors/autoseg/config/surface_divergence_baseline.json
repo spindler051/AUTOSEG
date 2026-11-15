@@ -2,24 +2,12 @@
   "version": 1,
   "accepted": [
     {
-      "id": "customer.create:web:create_preflight_outside_writer",
-      "justification": "Customer create permission is checked before the writer transaction, not within it."
-    },
-    {
       "id": "customer.detail:gtk_local:read_scope_divergence",
       "justification": "GTK local detail uses generic client lookup; Web/API require scoped access."
     },
     {
       "id": "customer.list:gtk_local:read_scope_divergence",
       "justification": "GTK local list reads clients via generic LocalService; Web/API use scoped views."
-    },
-    {
-      "id": "customer.merge:api:missing_surface",
-      "justification": "Customer merge exists on Web only; Desktop API has no registered endpoint."
-    },
-    {
-      "id": "customer.merge:gtk:missing_surface",
-      "justification": "Customer merge has no registered GTK action or dialog."
     }
   ]
 }

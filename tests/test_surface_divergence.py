@@ -27,11 +27,8 @@ REPORT = 'docs/planning/SURFACE_DIVERGENCE_REPORT.md'
 SCRIPT = ROOT / 'scripts/surface_divergence.py'
 
 EXPECTED_FINDINGS = {
-    'customer.merge:api:missing_surface': 'medium',
-    'customer.merge:gtk:missing_surface': 'medium',
     'customer.list:gtk_local:read_scope_divergence': 'medium',
     'customer.detail:gtk_local:read_scope_divergence': 'medium',
-    'customer.create:web:create_preflight_outside_writer': 'medium',
 }
 
 
@@ -106,13 +103,15 @@ class SurfaceDivergenceTest(unittest.TestCase):
 
     def test_05_rederived_api_and_gtk_missing_surface(self):
         for surface in ('api', 'gtk'):
-            self.assertIn(f'customer.merge:{surface}:missing_surface', self.by_id)
-        # A synthetic new marker that does not exist must also be reported.
+            self.assertNotIn(f'customer.merge:{surface}:missing_surface', self.by_id)
+        # A synthetic missing route or button must still be reported.
         modified = deepcopy(document())
         merge = next(row for row in modified['actions'] if row['id'] == 'customer.merge')
         merge['api_markers'] = ['__impossible_phase1_route_marker__']
-        results = analyze(ROOT, registry_data=modified)
-        self.assertIn('customer.merge:api:missing_surface', {item.id for item in results})
+        merge['gtk_markers'] = ['__impossible_phase1_gtk_marker__']
+        results = {item.id for item in analyze(ROOT, registry_data=modified)}
+        self.assertIn('customer.merge:api:missing_surface', results)
+        self.assertIn('customer.merge:gtk:missing_surface', results)
 
     def test_06_report_deterministic_exact_bytes(self):
         once = render_report(self.findings, self.baseline).encode('utf-8')
@@ -152,18 +151,17 @@ class SurfaceDivergenceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='phase1_resolved_') as temp:
             dest = Path(temp)
             fixture_tree(dest)
-            path = dest / 'officina/core/portal_negocios.py'
+            path = dest / 'officina/application/local_service.py'
             source = path.read_text(encoding='utf-8')
-            anchor = 'def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):\n'
+            anchor = 'clientes_core.listar('
             self.assertIn(anchor, source)
-            # Simulate adding a creation guard inside the writer source.
-            path.write_text(source.replace(anchor,
-                anchor + '    require_customer_create(None)\n', 1), encoding='utf-8')
+            path.write_text(source.replace(anchor, 'clientes_core.listar_paginado(', 1),
+                            encoding='utf-8')
             result = cli(dest, '--check')
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn('RESOLVED customer.create:web:create_preflight_outside_writer', result.stderr)
+            self.assertIn('RESOLVED customer.list:gtk_local:read_scope_divergence', result.stderr)
 
-    def test_11_gtk_markers_are_real_and_merge_is_unexposed(self):
+    def test_11_gtk_markers_are_real_and_merge_is_exposed(self):
         app = (ROOT / GTK[0]).read_text(encoding='utf-8')
         dialogs = (ROOT / GTK[1]).read_text(encoding='utf-8')
         for row in document()['actions']:
@@ -171,7 +169,7 @@ class SurfaceDivergenceTest(unittest.TestCase):
                 for marker in row['gtk_markers']:
                     self.assertTrue(marker in app or marker in dialogs, marker)
         merge = next(row for row in document()['actions'] if row['id'] == 'customer.merge')
-        self.assertEqual(merge['gtk_markers'], [])
+        self.assertTrue(merge['gtk_markers'])
 
     def test_12_no_runtime_imports_divergence_or_registry(self):
         for section in ('flavors', 'officina'):

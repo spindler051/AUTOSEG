@@ -56,7 +56,10 @@ class OrcamentoMultiplo(unittest.TestCase):
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome='Condomínio Orçamento Teste', tipo_pessoa='Jurídica',
                      status='Ativo', documento='12345678000195')
-        self.cid = neg.cliente_salvar(self.db, dados, self.pid)
+        from officina.application.object_policy import Principal
+        actor = Principal(self.pid, 'employee', organization_id='autoseg',
+                          provider_id=self.pid)
+        self.cid = neg.cliente_salvar(self.db, dados, self.pid, principal=actor)
         with ext.db(self.db) as c:
             oid=c.execute("INSERT INTO ordens_servico(numero_os,cliente_id,status,descricao) "
                           "VALUES('ORC-VINCULO-1',?,'Aberta','Orçamento autorizado')",

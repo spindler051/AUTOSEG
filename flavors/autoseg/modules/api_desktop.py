@@ -474,7 +474,7 @@ def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal
                 access.require_customer_create(principal)
             return _enviar(handler, 200, servico.salvar_cliente(
                 existing,
-                dict(dados.get('dados') or {})))
+                dict(dados.get('dados') or {}), principal=principal))
     if partes == ['clientes', 'ativo'] and metodo == 'GET':
         _exigir_admin(info)
         return _enviar(handler, 200, servico.obter_cliente_ativo_por_documento(
@@ -493,6 +493,13 @@ def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal
 
 
 def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, principal=None):
+    if resto == ['mesclar'] and metodo == 'POST':
+        _exigir_admin(info)
+        destino_id = _int(_corpo(handler).get('destino_id'))
+        if destino_id is None or destino_id <= 0:
+            raise ValueError('Informe um cliente de destino válido.')
+        servico.mesclar_clientes(cliente_id, destino_id, principal=principal)
+        return _enviar(handler, 200, {'ok': True})
     _require_customer(servico.banco, principal, cliente_id,
                       'edit' if not resto and metodo == 'PUT' else 'view')
     if not resto and metodo == 'GET':
@@ -503,7 +510,7 @@ def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, pri
     if not resto and metodo == 'PUT':
         dados = _corpo(handler)
         return _enviar(handler, 200, servico.salvar_cliente(
-            cliente_id, dict(dados.get('dados') or dados)))
+            cliente_id, dict(dados.get('dados') or dados), principal=principal))
     if resto == ['ativo'] and metodo == 'GET':
         registro = _scoped_customer_detail(servico.banco, principal, cliente_id)
         if str(registro.campos.get('status') or '') == 'Inativo':

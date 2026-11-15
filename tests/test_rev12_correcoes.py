@@ -123,10 +123,12 @@ class CorrecoesRev12(unittest.TestCase):
                              (oid,)).fetchone()[0]
 
     def _cliente(self, pid, nome='Condomínio Alfa', **extras):
+        from officina.application.object_policy import Principal
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome=nome, tipo_pessoa='Jurídica', status='Ativo')
         dados.update(extras)
-        return neg.cliente_salvar(self.db, dados, pid)
+        actor = Principal(pid, 'employee', organization_id='autoseg', provider_id=pid)
+        return neg.cliente_salvar(self.db, dados, pid, principal=actor)
 
     def _os_concluida(self, pid, cid):
         dados = {'cliente_id': str(cid), 'descricao': 'Manutenção preventiva',

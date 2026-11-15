@@ -254,7 +254,8 @@ class DestructiveCustomerAuthorizationTest(unittest.TestCase):
                              carregar_clientes=noop,_importar_cliente_yaml=noop,
                              _modelo_cliente_yaml=noop,_atribuir_responsavel=noop,
                              novo_cliente=noop,_editar_cliente=noop,
-                             _nova_os_cliente=noop,_excluir_cliente=noop)
+                             _nova_os_cliente=noop,_excluir_cliente=noop,
+                             _mesclar_cliente=noop)
         rendered=globals_['_pagina_clientes'](fake)
         return [control['label'] for control in rendered.children[-1]]
 

@@ -57,7 +57,7 @@ def render_customer_actions(*, admin: bool, web_enabled: bool = True) -> list[st
         carregar_clientes=noop, _importar_cliente_yaml=noop,
         _modelo_cliente_yaml=noop, _atribuir_responsavel=noop,
         novo_cliente=noop, _editar_cliente=noop, _nova_os_cliente=noop,
-        _excluir_cliente=noop, _senha_cliente=noop,
+        _excluir_cliente=noop, _mesclar_cliente=noop, _senha_cliente=noop,
         _abrir_portal_navegador=noop,
     )
     page_widget = namespace['_pagina_clientes'](window_instance)

@@ -769,6 +769,8 @@ class Janela(Adw.ApplicationWindow):
         if self.sessao is not None and self.sessao.admin:
             acoes_cliente.append(ui.botao("Excluir / desativar", self._excluir_cliente,
                                           css="destructive-action"))
+            acoes_cliente.append(ui.botao("Mesclar cliente", self._mesclar_cliente,
+                                          css="destructive-action"))
         if self.web.enabled:
             if self.sessao is not None and self.sessao.admin:
                 acoes_cliente.append(ui.botao("Acesso web / senha", self._senha_cliente))
@@ -866,6 +868,15 @@ class Janela(Adw.ApplicationWindow):
         valores = self._cliente_selecionado()
         if valores:
             dialogos.DialogoSenhaCliente(self, valores[0], valores[1]).present(self)
+
+    def _mesclar_cliente(self):
+        valores = self._cliente_selecionado()
+        if not valores or self.sessao is None or not self.sessao.admin:
+            return
+        try:
+            dialogos.DialogoMesclarCliente(self, valores[0], valores[1]).present(self)
+        except Exception as erro:
+            ui.aviso_erro(self, "Mesclagem de clientes", str(erro))
 
     def _escolher_yaml(self, titulo_texto, callback):
         dialogo = Gtk.FileDialog(title=titulo_texto)

@@ -303,6 +303,21 @@ def require_customer_create(principal):
                                   Resource('customer', organization_id='autoseg'))
 
 
+def require_customer_create_locked(connection, principal):
+    """Authorize creation while the writer owns the SQLite transaction."""
+    if not connection.in_transaction:
+        raise RuntimeError('Customer creation requires an active writer transaction.')
+    if (principal is None or not principal.active
+            or principal.organization_id != 'autoseg'
+            or type(principal.provider_id) is not int or principal.provider_id <= 0):
+        raise PermissionError('Recurso indisponível.')
+    try:
+        return ObjectPolicy().require(
+            principal, 'create', Resource('customer', organization_id='autoseg'))
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
 def require_customer_write_locked(connection, principal, customer_id: int):
     """Check current customer involvement inside the existing writer transaction."""
     if not connection.in_transaction:

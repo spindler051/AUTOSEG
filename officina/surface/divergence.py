@@ -228,7 +228,7 @@ def analyze(root: Path = ROOT, *,
             if ('read_access.require_customer_create(actor)' in web
                     and 'neg.cliente_salvar(banco,d,pid,editar,principal=actor)' in web
                     and 'BEGIN IMMEDIATE' in func_body
-                    and 'require_customer_create(' not in func_body):
+                    and 'require_customer_create_locked(' not in func_body):
                 record(action, 'web', 'create_preflight_outside_writer', 'medium',
                        f'{WEB}:read_access.require_customer_create(actor); '
                        f'{service_file}:BEGIN IMMEDIATE without require_customer_create')

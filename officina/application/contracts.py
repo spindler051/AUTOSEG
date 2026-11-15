@@ -427,6 +427,9 @@ class AppService(Protocol):
     def excluir_cliente(self, cliente_id: int) -> None:
         ...
 
+    def mesclar_clientes(self, origem_id: int, destino_id: int) -> None:
+        ...
+
     def definir_senha_cliente(self, cliente_id: int,
                               senha: str | None = None) -> str:
         ...
