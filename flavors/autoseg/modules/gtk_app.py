@@ -110,7 +110,7 @@ class Janela(Adw.ApplicationWindow):
                 self.web = WebAccessManager(
                     BANCO, ui.PASTA_APP, enabled=False)
                 return
-            self.service = LocalService(BANCO)
+            self.service = LocalService(BANCO, principal=self._cliente_admin_actor())
             ui.BASE.mkdir(parents=True, exist_ok=True)
             preparar_banco_local(BANCO)
             self.web = WebAccessManager(
@@ -122,7 +122,7 @@ class Janela(Adw.ApplicationWindow):
                     self.service = HttpService(
                         self.sessao.server_url if self.sessao else settings.server_url)
                 else:
-                    self.service = LocalService(BANCO)
+                    self.service = LocalService(BANCO, principal=self._cliente_admin_actor())
                 print("Falha no serviço configurado:", erro)
             if self.web is None:
                 self.web = WebAccessManager(
@@ -2429,23 +2429,26 @@ class Janela(Adw.ApplicationWindow):
         pagina.append(ui.barra(self.rotulo_estoque))
         self.rotulo_caixa = ui.legenda("Empresa: sem lançamentos.")
         self.rotulo_caixa.set_hexpand(True)
-        pagina.append(ui.barra(
-            self.rotulo_caixa,
-            ui.botao("Caixa e investimentos", self._abrir_caixa_empresa,
-                     css="suggested-action")))
+        empresa_botoes = [ui.botao("Caixa e investimentos", self._abrir_caixa_empresa,
+                                   css="suggested-action")] if self.sessao and self.sessao.can('provider.manage.all') else []
+        if empresa_botoes:
+            pagina.append(ui.barra(self.rotulo_caixa, *empresa_botoes))
         self.busca_estoque = Gtk.SearchEntry(placeholder_text="Buscar por nome ou código")
         self.busca_estoque.set_hexpand(True)
         self.busca_estoque.connect("search-changed", lambda *_args: self.carregar_estoque())
-        pagina.append(ui.barra(
-            self.busca_estoque,
-            ui.botao("Cadastrar material", self._novo_material, icone="list-add-symbolic",
-                     css="suggested-action"),
-            ui.botao("Editar", self._editar_material),
-            ui.botao("Entrada / ajuste", self._ajustar_material),
-            ui.botao("Histórico", self._historico_material),
-            ui.botao("Excluir material", self._excluir_material, css="destructive-action"),
-            ui.botao("Importar YAML", self._importar_materiais),
-            ui.botao("Modelo YAML", self._modelo_materiais)))
+        controles = [ui.botao("Histórico", self._historico_material)]
+        if self.sessao and self.sessao.can('provider.manage.all'):
+            controles = [
+                ui.botao("Cadastrar material", self._novo_material,
+                         icone="list-add-symbolic", css="suggested-action"),
+                ui.botao("Editar", self._editar_material),
+                ui.botao("Entrada / ajuste", self._ajustar_material),
+                *controles,
+                ui.botao("Excluir material", self._excluir_material,
+                         css="destructive-action"),
+                ui.botao("Importar YAML", self._importar_materiais),
+                ui.botao("Modelo YAML", self._modelo_materiais)]
+        pagina.append(ui.barra(self.busca_estoque, *controles))
         self.tabela_estoque = ui.Tabela([
             ("ID", 65, False, 0.5),
             ("Material", 0, True, 0.0),
@@ -2454,7 +2457,7 @@ class Janela(Adw.ApplicationWindow):
             ("Saldo", 80, False, 0.5),
             ("Mínimo", 80, False, 0.5),
             ("Venda", 110, False, 0.5),
-        ], ao_ativar=self._editar_material)
+        ], ao_ativar=(self._editar_material if self.sessao and self.sessao.can('provider.manage.all') else self._historico_material))
         pagina.append(self.tabela_estoque.widget)
         return pagina
 

@@ -362,7 +362,7 @@ def _scoped_customer_detail(banco, principal, customer_id):
 
 def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
           info: dict | None = None, principal=None):
-    servico = LocalService(banco)
+    servico = LocalService(banco, principal=principal)
     admin = bool(principal and principal.role == 'admin')
     if not partes:
         return _enviar(handler, 200, {
@@ -390,7 +390,7 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
             'os_pendentes': counts['pendentes'],
             'financeiro_recebido': finance['recebido'],
             'financeiro_a_receber': finance['a_receber']})
-    if recurso in ('prestadores', 'estoque', 'empresa', 'composicao') and not admin:
+    if recurso in ('prestadores', 'empresa', 'composicao') and not admin:
         raise PermissionError('Somente administradores podem acessar esta área.')
     if recurso == 'clientes':
         return _rota_clientes(handler, partes, query, servico, metodo, info, principal)
@@ -422,6 +422,12 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
             _exigir_admin(info)
         return _rota_catalogo(handler, partes, query, servico, metodo)
     if recurso == 'estoque':
+        from officina.application.policy import load_policy
+        if metodo == 'GET':
+            if not load_policy().allows(principal.role, 'stock.view'):
+                raise PermissionError('Estoque indisponível.')
+        else:
+            _exigir_admin(info)
         return _rota_estoque(handler, partes, query, servico, metodo)
     if recurso == 'empresa':
         return _rota_empresa(handler, partes, servico, metodo)

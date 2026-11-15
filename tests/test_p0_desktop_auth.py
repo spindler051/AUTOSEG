@@ -13,7 +13,7 @@ from unittest.mock import patch
 from flavors.autoseg.modules import api_server, prestador_auth
 from officina.application.http_service import HttpService
 from officina.core import (banco, prestadores_ext as ext, cadastros_v9 as cad,
-                           fluxo_os, atendimento_os, catalogo_servicos)
+                           fluxo_os, atendimento_os, catalogo_servicos, estoque_materiais)
 
 
 class DesktopObjectAuthorizationTest(unittest.TestCase):
@@ -24,7 +24,7 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
         banco.criar_banco(self.db)
         for installer in (ext.instalar, cad.instalar, fluxo_os.instalar,
                           atendimento_os.instalar, prestador_auth.instalar,
-                          catalogo_servicos.instalar):
+                          catalogo_servicos.instalar, estoque_materiais.instalar):
             installer(self.db)
         self.users = {}
         for name in ('first','second','participant','admin'):
@@ -312,7 +312,13 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
 
     def test_catalogue_global_and_stock_admin(self):
         self.assertEqual(self.request('first','/catalogo/servicos')[0],200)
-        self.assertEqual(self.request('first','/estoque/materiais')[0],403)
+        self.assertEqual(self.request('first','/estoque/materiais')[0],200)
+        for path,payload in (('/estoque/produtos', {'dados': {'nome':'Proibido'}}),
+                             ('/catalogo/servicos', {'dados': {'nome':'Proibido'}}),
+                             ('/empresa/movimentos', {'tipo':'aporte'}),
+                             ('/composicao/recalcular', {})):
+            with self.subTest(path=path):
+                self.assertEqual(self.request('first',path,'POST',payload)[0],403)
 
 
 if __name__ == '__main__':

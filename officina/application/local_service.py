@@ -61,8 +61,9 @@ class LocalService:
 
     mode = 'local'
 
-    def __init__(self, banco=None):
+    def __init__(self, banco=None, *, principal=None):
         self.banco = str(banco or BANCO)
+        self._principal = principal
 
     def health(self) -> Health:
         try:
@@ -212,7 +213,8 @@ class LocalService:
     def contar_clientes_ativos(self) -> int:
         return int(clientes_core.contar_ativos(self.banco))
 
-    def listar_prestadores(self) -> list[PrestadorResumo]:
+    def listar_prestadores(self, *, principal=None) -> list[PrestadorResumo]:
+        self._company_admin(principal)
         with ext.db(self.banco) as conexao:
             linhas = conexao.execute(
                 "SELECT id,nome,documento,email,especialidade,ativo FROM prestadores "
@@ -226,19 +228,22 @@ class LocalService:
             ativo=bool(linha['ativo']),
         ) for linha in linhas]
 
-    def alternar_prestador(self, prestador_id: int) -> None:
+    def alternar_prestador(self, prestador_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         with ext.db(self.banco) as conexao:
             conexao.execute(
                 'UPDATE prestadores SET ativo=1-ativo WHERE id=?',
                 (int(prestador_id),))
 
-    def arquivar_prestador(self, prestador_id: int) -> None:
+    def arquivar_prestador(self, prestador_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         with ext.db(self.banco) as conexao:
             conexao.execute(
                 'UPDATE prestadores SET ativo=0,excluido=1 WHERE id=?',
                 (int(prestador_id),))
 
-    def obter_contato_sindico(self, organizacao_id: int) -> SindicoContato:
+    def obter_contato_sindico(self, organizacao_id: int, *, principal=None) -> SindicoContato:
+        self._company_admin(principal)
         with ext.db(self.banco) as conexao:
             linha = conexao.execute(
                 'SELECT sindico_nome,sindico_telefone FROM v9_organizacoes WHERE id=?',
@@ -266,6 +271,17 @@ class LocalService:
                 raise PermissionError('Prestador não encontrado ou inativo.')
             return (None if ext.administrador(connection, principal.provider_id)
                     else principal.provider_id)
+
+    def _company_actor(self, principal=None, *, permission='provider.manage.all'):
+        actor = self._local_actor(principal if principal is not None
+                                  else self._principal)
+        from officina.application.policy import load_policy
+        if not load_policy().allows(actor.role, permission):
+            raise PermissionError('Configuração restrita ao administrador.')
+        return actor
+
+    def _company_admin(self, principal=None):
+        return self._company_actor(principal, permission='provider.manage.all')
 
     def listar_relatorios(self, termo: str = '', *, principal=None) -> list[RelatorioOS]:
         scope = self._os_read_scope(principal)
@@ -349,8 +365,9 @@ class LocalService:
             valor_aberto=float(linha['valor_aberto'] or 0),
         )
 
-    def painel_pj(self) -> tuple[list[ChamadoPJ], list[OrganizacaoPJ],
+    def painel_pj(self, *, principal=None) -> tuple[list[ChamadoPJ], list[OrganizacaoPJ],
                                  list[VinculoPJ]]:
+        self._company_admin(principal)
         with ext.db(self.banco) as conexao:
             chamados = conexao.execute(
                 """SELECT h.id,h.os_id,o.nome organizacao,u.nome solicitante,h.status,h.descricao
@@ -452,7 +469,8 @@ class LocalService:
         return neg.financeiro_definir_vencimento(
             self.banco, int(lancamento_id), principal.provider_id, vencimento)
 
-    def resumo_portal(self) -> ResumoPortal:
+    def resumo_portal(self, *, principal=None) -> ResumoPortal:
+        self._company_admin(principal)
         dados = ordens_repo.resumo_portal(self.banco)
         return ResumoPortal(
             total=dados['total'],
@@ -461,8 +479,9 @@ class LocalService:
         )
 
     def listar_solicitacoes_portal(
-        self, limite: int = 50
+        self, limite: int = 50, *, principal=None
     ) -> list[SolicitacaoPortal]:
+        self._company_admin(principal)
         return [
             SolicitacaoPortal(
                 id=int(linha['id']),
@@ -509,35 +528,42 @@ class LocalService:
         return {'url': url, 'destino': destino}
 
     def analisar_chamado(self, chamado_id: int, decisao: str,
-                         observacao: str = '') -> None:
+                         observacao: str = '', *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.analisar(self.banco, int(chamado_id), 'Desktop AUTOSEG',
                       str(decisao), str(observacao or ''))
 
-    def confirmar_chamado(self, chamado_id: int, confirmacao: str) -> None:
+    def confirmar_chamado(self, chamado_id: int, confirmacao: str, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.confirmar(self.banco, int(chamado_id),
                        'Desktop AUTOSEG — ' + str(confirmacao).strip(), True)
 
-    def gerar_os_chamado(self, chamado_id: int) -> int:
+    def gerar_os_chamado(self, chamado_id: int, *, principal=None) -> int:
+        self._company_admin(principal)
         return int(cad9.gerar_os(self.banco, int(chamado_id),
                                  'Desktop AUTOSEG'))
 
     def validar_organizacao(self, organizacao_id: int,
-                            cliente_id: int) -> None:
+                            cliente_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.validar_organizacao(
             self.banco, int(organizacao_id), int(cliente_id),
             'Desktop AUTOSEG')
 
     def atualizar_sindico(self, organizacao_id: int, nome: str,
-                          telefone: str) -> None:
+                          telefone: str, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.atualizar_sindico(
             self.banco, int(organizacao_id), str(nome or ''),
             str(telefone or ''), 'Desktop AUTOSEG')
 
-    def mesclar_organizacoes(self, origem: int, destino: int) -> None:
+    def mesclar_organizacoes(self, origem: int, destino: int, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.mesclar_organizacoes(
             self.banco, int(origem), int(destino), 'Desktop AUTOSEG')
 
-    def alterar_vinculo(self, vinculo_id: int, aprovar: bool) -> None:
+    def alterar_vinculo(self, vinculo_id: int, aprovar: bool, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.alterar_vinculo(
             self.banco, int(vinculo_id), bool(aprovar), 'Desktop AUTOSEG')
 
@@ -611,12 +637,13 @@ class LocalService:
         from officina.application.desktop_context import documento_prestador
         return documento_prestador(self.banco, prestador_id)
 
-    def contexto_responsavel(self) -> dict:
+    def contexto_responsavel(self, *, principal=None) -> dict:
+        self._company_admin(principal)
         from officina.application.desktop_context import contexto_responsavel
         return contexto_responsavel(self.banco)
 
     def contexto_os_rapida(self, *, principal=None) -> dict:
-        actor = self._local_actor(principal)
+        actor = self._local_actor(principal if principal is not None else self._principal)
         from officina.application.desktop_context import contexto_os_rapida
         items = contexto_os_rapida(self.banco)
         if actor.role != 'admin':
@@ -631,8 +658,7 @@ class LocalService:
         return items
 
     def contexto_movimento_empresa(self, *, principal=None) -> dict:
-        if self._os_read_scope(principal) is not None:
-            raise PermissionError('Movimentos da empresa restritos ao administrador.')
+        self._company_admin(principal)
         from officina.application.desktop_context import contexto_movimento_empresa
         return contexto_movimento_empresa(self.banco)
 
@@ -679,16 +705,19 @@ class LocalService:
             authorize(connection)
             return aten.iniciar(self.banco, int(os_id), connection=connection)
 
-    def atribuir_responsavel(self, organizacao_id: int, usuario_id: int) -> str:
+    def atribuir_responsavel(self, organizacao_id: int, usuario_id: int, *, principal=None) -> str:
+        self._company_admin(principal)
         return cad9.atribuir_responsavel(
             self.banco, int(organizacao_id), int(usuario_id),
             'Desktop AUTOSEG')
 
-    def remover_responsavel(self, organizacao_id: int) -> None:
+    def remover_responsavel(self, organizacao_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.remover_responsavel(self.banco, int(organizacao_id),
                                  'Desktop AUTOSEG')
 
-    def criar_prestador(self, dados: Mapping[str, Any]) -> int:
+    def criar_prestador(self, dados: Mapping[str, Any], *, principal=None) -> int:
+        self._company_admin(principal)
         return int(ext.cadastrar(
             self.banco,
             nome=str(dados.get('nome') or ''),
@@ -698,19 +727,23 @@ class LocalService:
             documento=str(dados.get('documento') or ''),
             especialidade=str(dados.get('especialidade') or '')))
 
-    def redefinir_senha_prestador(self, prestador_id: int, senha: str) -> None:
+    def redefinir_senha_prestador(self, prestador_id: int, senha: str, *, principal=None) -> None:
+        self._company_admin(principal)
         ext.redefinir_senha_prestador_desktop(
             self.banco, int(prestador_id), str(senha))
 
-    def obter_config_prestador(self, prestador_id: int) -> dict:
+    def obter_config_prestador(self, prestador_id: int, *, principal=None) -> dict:
+        self._company_admin(principal)
         return dict(ext.obter_config_prestador(self.banco, int(prestador_id)))
 
     def salvar_config_prestador(self, prestador_id: int,
-                                dados: Mapping[str, Any]) -> None:
+                                dados: Mapping[str, Any], *, principal=None) -> None:
+        self._company_admin(principal)
         ext.salvar_config_prestador(self.banco, int(prestador_id), dict(dados))
 
     def definir_documento_prestador(self, prestador_id: int,
-                                    documento: str) -> str:
+                                    documento: str, *, principal=None) -> str:
+        self._company_admin(principal)
         return ext.definir_documento_prestador(
             self.banco, int(prestador_id), str(documento))
 
@@ -751,7 +784,8 @@ class LocalService:
             raise ValueError('PDF ainda não encontrado. Use Republicar PDF.')
         return str(fluxo.validar_pdf_publicado(publicado))
 
-    def listar_materiais_estoque(self, ativos: bool = False) -> list[dict]:
+    def listar_materiais_estoque(self, ativos: bool = False, *, principal=None) -> list[dict]:
+        self._company_actor(principal, permission='stock.view')
         return [dict(item) for item in estoque.listar(
             self.banco, ativos=bool(ativos))]
 
@@ -763,20 +797,24 @@ class LocalService:
         return catalogo.obter(self.banco, int(servico_id))
 
     def catalogo_salvar(self, dados: Mapping[str, Any],
-                        servico_id: int | None = None) -> int:
+                        servico_id: int | None = None, *, principal=None) -> int:
+        self._company_admin(principal)
         return int(catalogo.salvar(
             self.banco, dict(dados),
             None if servico_id is None else int(servico_id)))
 
-    def catalogo_excluir(self, servico_id: int) -> None:
+    def catalogo_excluir(self, servico_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         catalogo.excluir(self.banco, int(servico_id))
 
-    def catalogo_definir_ativo(self, servico_id: int, ativo: bool) -> None:
+    def catalogo_definir_ativo(self, servico_id: int, ativo: bool, *, principal=None) -> None:
+        self._company_admin(principal)
         acao = catalogo.reativar if ativo else catalogo.arquivar
         acao(self.banco, int(servico_id))
 
     def estoque_cadastrar(self, dados: Mapping[str, Any],
-                          produto_id: int | None = None) -> int:
+                          produto_id: int | None = None, *, principal=None) -> int:
+        self._company_admin(principal)
         return int(estoque.cadastrar(
             self.banco,
             nome=str(dados.get('nome') or ''),
@@ -787,34 +825,42 @@ class LocalService:
             minimo=dados.get('minimo', '0'),
             identificador=None if produto_id is None else int(produto_id)))
 
-    def estoque_obter(self, produto_id: int) -> dict | None:
+    def estoque_obter(self, produto_id: int, *, principal=None) -> dict | None:
+        self._company_actor(principal, permission='stock.view')
         alvo = int(produto_id)
         return next((dict(item) for item in estoque.listar(self.banco)
                      if int(item['id']) == alvo), None)
 
-    def estoque_ajuste(self, produto_id: int, delta, motivo: str) -> None:
+    def estoque_ajuste(self, produto_id: int, delta, motivo: str, *, principal=None) -> None:
+        self._company_admin(principal)
         estoque.ajuste(self.banco, int(produto_id), delta, str(motivo or ''),
                        ator='Desktop')
 
     def estoque_movimentos(self, produto_id: int,
-                           limite: int = 300) -> list[dict]:
+                           limite: int = 300, *, principal=None) -> list[dict]:
+        self._company_actor(principal, permission='stock.view')
         return [dict(item) for item in estoque.movimentos(
             self.banco, int(produto_id), int(limite))]
 
-    def estoque_excluir(self, produto_id: int) -> str:
+    def estoque_excluir(self, produto_id: int, *, principal=None) -> str:
+        self._company_admin(principal)
         return estoque.excluir(self.banco, int(produto_id))
 
-    def estoque_importar_lote(self, materiais: list[Mapping[str, Any]]) -> dict:
+    def estoque_importar_lote(self, materiais: list[Mapping[str, Any]], *, principal=None) -> dict:
+        self._company_admin(principal)
         ids = estoque.importar_lote(self.banco, list(materiais))
         return {'ids': list(ids or []), 'total': len(ids or [])}
 
-    def empresa_resumo(self) -> dict:
+    def empresa_resumo(self, *, principal=None) -> dict:
+        self._company_admin(principal)
         return dict(empresa.resumo(self.banco))
 
-    def empresa_listar(self) -> list[dict]:
+    def empresa_listar(self, *, principal=None) -> list[dict]:
+        self._company_admin(principal)
         return [dict(item) for item in empresa.listar(self.banco)]
 
-    def empresa_registrar(self, dados: Mapping[str, Any]) -> int:
+    def empresa_registrar(self, dados: Mapping[str, Any], *, principal=None) -> int:
+        self._company_admin(principal)
         return int(empresa.registrar(
             self.banco,
             tipo=dados.get('tipo', ''),
@@ -828,23 +874,29 @@ class LocalService:
             observacao=dados.get('observacao', ''),
             criado_por='Desktop AUTOSEG'))
 
-    def empresa_arquivar(self, movimento_id: int) -> None:
+    def empresa_arquivar(self, movimento_id: int, *, principal=None) -> None:
+        self._company_admin(principal)
         empresa.arquivar(self.banco, int(movimento_id), ator='Desktop AUTOSEG')
 
-    def composicao_config(self) -> dict:
+    def composicao_config(self, *, principal=None) -> dict:
+        self._company_admin(principal)
         composicao.instalar()
         return dict(composicao.carregar())
 
-    def composicao_salvar(self, config: Mapping[str, Any]) -> None:
+    def composicao_salvar(self, config: Mapping[str, Any], *, principal=None) -> None:
+        self._company_admin(principal)
         composicao.salvar(dict(config))
 
-    def composicao_recalcular(self) -> dict:
+    def composicao_recalcular(self, *, principal=None) -> dict:
+        self._company_admin(principal)
         return dict(composicao.recalcular_tudo(self.banco))
 
-    def prestador_admin(self, prestador_id: int) -> bool:
+    def prestador_admin(self, prestador_id: int, *, principal=None) -> bool:
+        self._company_admin(principal)
         return bool(cad9.prestador_admin(self.banco, int(prestador_id)))
 
-    def definir_admin(self, prestador_id: int, ativo: bool) -> None:
+    def definir_admin(self, prestador_id: int, ativo: bool, *, principal=None) -> None:
+        self._company_admin(principal)
         cad9.definir_admin(self.banco, int(prestador_id), bool(ativo))
 
     def salvar_cliente(

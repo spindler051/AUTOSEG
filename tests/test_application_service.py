@@ -44,7 +44,7 @@ class LocalServiceClientTest(unittest.TestCase):
         cad9.definir_admin(self.db, pid, True)
         self.actor = Principal(pid, 'admin', organization_id='autoseg',
                                provider_id=pid)
-        self.service = LocalService(self.db)
+        self.service = LocalService(self.db, principal=self.actor)
 
     def tearDown(self):
         self.tmp.cleanup()
