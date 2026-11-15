@@ -230,7 +230,13 @@ mesmas mensagens, sem nova configuração ou tela.
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
   uma declaração + um motor genérico. Invariante (parte bem formada) e
   autorização (quem pode agir) ficam separados de propósito. Primeiro passo:
-  declaração + relatório em modo sombra, sem enforcement. Contrato em
+  declaração + relatório em modo sombra, sem enforcement.
+  **Escopo maior que PJ:** o Tier 2 (formato declarado) continua em Python e
+  deve cobrir também status de OS, tipos de documento, composição e ações de
+  superfície — a mesma pergunta vale para qualquer módulo. O Tier 3
+  (comportamento declarado) fica para a reescrita em Rust, que é também a
+  varredura natural por outras regras embutidas. As declarações são o contrato
+  que consumidores Officina leem, sem importar Python do AUTOSEG. Contrato em
   [`planning/PARTY_AND_REPRESENTATION_MODEL.md`](planning/PARTY_AND_REPRESENTATION_MODEL.md).
 
 ## Depois

@@ -34,20 +34,51 @@ The rule exists 29 times. Adding a third kind (supplier, condo, tenant) means
 editing 29 places and hoping none is missed. That is the maintenance cost this
 item removes.
 
-## 2. Three tiers, not one
+## 2. Three tiers, and where each one happens
 
-"Data-driven" is not a single decision. The three tiers have very different
-cost/benefit:
+"Data-driven" is not a single decision. The tiers differ in cost and in the
+moment they belong to:
 
-| Tier | What becomes data | Decision |
+| Tier | What becomes data | Where |
 |---|---|---|
-| 1. Centralize | one module owns "what a PJ is" | do first, cheapest |
-| 2. Declare the shape | required fields, link cardinality, role→capability | **this item** |
-| 3. Declare the behavior | conditions, hooks, computed rules, workflows | only with a second real consumer |
+| 1. Centralize | one module owns "what a PJ is" | Python, first |
+| 2. Declare the shape | required fields, link cardinality, role→capability | Python, this item |
+| 3. Declare the behavior | conditions, hooks, computed rules, workflows | Rust rewrite |
 
 Tier 3 is where a data-driven system turns into an interpreter that must be
-maintained, tested and versioned itself. Tier 2 is a bounded declaration and is
-what this document specifies.
+maintained, tested and versioned itself. It should not be improvised in Python:
+it belongs to the core/protocol rewrite in Rust, which is also the right moment
+to sweep the whole codebase for other hardcoded variation.
+
+### 2.1 Tier 2 is bigger than party types
+
+Party types are the first case, not the only one. The same pattern applies
+wherever a business rule is duplicated as branches instead of declared once.
+While we are still on Python, the audit should cover at least:
+
+- customer kinds and their required relationships (this document);
+- work-item statuses and the transitions each one allows;
+- document kinds and which surface may publish, download or retain them;
+- composition and pricing rules that live in code today;
+- fiscal variations that belong in `flavors/autoseg/br/`;
+- surface actions and their permissions (the surface registry, phases 0B–1).
+
+Each one becomes a declaration plus a generic evaluator. The list is a starting
+point for an audit, not a commitment to implement all of them at once, and it is
+not limited to it: the question to ask of every module is "is this variation a
+rule that should be declared, or a genuine piece of behavior?".
+
+### 2.2 The declarations are the Officina contract
+
+The purpose is not only AUTOSEG maintainability. Every declaration is data that a
+consumer can read without importing AUTOSEG Python: another flavor, the GTK and
+Web clients, API v2, and eventually the Rust implementation itself. That is what
+makes Officina a product with consumers instead of a rename of one deployment.
+
+The rewrite in Rust is also a review pass: it is the point where remaining
+hardcoded variation is easiest to see, because the contract has to be restated
+outside Python. Finding those cases there is expected, not a failure.
+
 
 ## 3. Invariant ≠ authorization
 
