@@ -29,6 +29,7 @@ to the surface.** A registry is that rule made executable.
   family: customer
   permission: customer.delete
   risk: destructive            # normal | financial | destructive | read
+  affordance: absent           # absent | disabled | confirm
   confirmation: required
   handler: officina.modules.customer.deactivate
   input:
@@ -46,6 +47,7 @@ to the surface.** A registry is that rule made executable.
 | `family` | grouping used to split the god file and to scope reviews |
 | `permission` | policy key resolved by role; absence of a match means denied |
 | `risk` | drives confirmation UI and which generated tests apply |
+| `affordance` | `absent` when the principal lacks the permission on this object; `disabled` only for transient state; `confirm` for destructive |
 | `handler` | the single function that performs the action |
 | `input` / `output` | the contract both surfaces validate against |
 | `audit` | what must be recorded, with which target |
@@ -97,6 +99,57 @@ generated suite.
 `family` is the seam. Extracting `customer`, then `finance`, then `orders`, each
 becomes a mechanical move of declared handlers plus their renderers, with the
 registry proving nothing was lost: an action without a handler fails fast.
+
+### 3.5 Affordance rule
+
+**Never offer an action the principal cannot perform. It should not exist.**
+
+Showing a control and answering with an authorization error is a UX defect: the
+user did nothing wrong, followed the interface, and got a rejection screen. It
+also trains people to ignore permission checks.
+
+| Case | UI | Example |
+|---|---|---|
+| Principal lacks the permission (role **or** object) | **absent** | employee on `customer.deactivate`; provider not involved with this OS on `work_item.edit` |
+| Principal has it, but transient state blocks it | **disabled + reason** | finalizer confirming a receipt on an OS still open |
+| Allowed and destructive | **visible + confirmation** | admin deleting a customer without OS |
+| Allowed and normal | visible | admin editing a customer |
+
+Rules:
+
+1. The adapter asks the registry, not its own `if admin`. This is not an admin
+   rule: it applies to every permission key, including `own`/`involved` scopes.
+2. The control **does not exist** when the principal cannot perform the action —
+   not hidden behind a click, not disabled with "no permission". Absent.
+3. `disabled` is only for temporary context (status, lock, missing prerequisite)
+   and always carries a stated reason. If the reason is "you are not allowed",
+   the control is absent.
+4. Absence is **UX**, never the control. The service still authorizes inside the
+   transaction; a direct URL or API call still returns `403`.
+5. A deep link to an action the principal cannot run returns the neutral error —
+   no stack trace, no existence leak — but the interface never routes the user
+   there.
+6. Object-dependent actions are resolved per object, not per role
+   (`for_surface(surface, principal, resource)`). A provider who may confirm
+   receipt on OS A but not OS B sees the control on A and not on B.
+
+Where this stands today:
+
+- **web**: already correct for customer operations —
+  `portal_prestador.py:1887-1891` wraps the deactivate/exclude forms in
+  `if s.get('admin')`. The same shape is required for non-admin scopes: an
+  involved provider must not see an action on an OS they are not part of;
+- **GTK**: the destructive button was absent, but gated on a permission string
+  that remote sessions never carry, so admins also lost it. The gate must come
+  from the same capability the service enforces — for this action that is the
+  admin flag, which both local and remote sessions carry;
+- **API**: should omit unauthorized actions from any `available_actions` payload
+  rather than returning a list that fails on use.
+
+Test obligation: for every action, a renderer test with a principal lacking the
+permission — by role or by object — must produce **no control**, and with the
+permission must produce one. That test is what prevents this rule from
+regressing into "show then 403".
 
 ## 4. Inventory snapshot
 
