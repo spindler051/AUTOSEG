@@ -1,3 +1,12 @@
+## Branding — 2026-11-15
+
+- Replaced the MAIN and DEV application icons with the hand-made Blender
+  artwork (2048x2048 PNG, 2026-11-14); the previous AI-generated icon was
+  retired. The Blender source is intentionally not versioned (`.blend` is
+  ignored); only the exported PNGs live in `flavors/autoseg/branding/`.
+- Documented the branding files and their resolution paths in
+  `flavors/autoseg/branding/README.md`. No code, schema or flag change.
+
 ## P0-AUTH-CLOSE-GATE-HARDENING — DEV, 2026-11-12
 
 - PDF cleanup after a failed publication now holds `BEGIN IMMEDIATE`, verifies

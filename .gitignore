@@ -84,3 +84,7 @@ dados_remoto*.db
 
 # Notas fiscais enviadas (dados operacionais)
 notas_fiscais/
+
+# Hand-made artwork source (Blender); only exported PNGs are versioned
+*.blend
+*.blend1
