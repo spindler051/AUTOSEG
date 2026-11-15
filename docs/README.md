@@ -57,6 +57,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [MAF ⇄ AUTOSEG read interface](planning/MAF_AUTOSEG_READ_INTERFACE.md) — replace MAF's direct SQLite reads with the versioned `/api/v2` projection, transparently; P1 after the A5 queue.
 - [API 2.0](planning/API_V2.md) — use-case projections, credential-to-token exchange, snapshot deltas, explicit filters; v1 frozen beside it; planning only.
 - [Relative file storage](planning/RELATIVE_FILE_STORAGE.md) — store file paths relative to a neutral data root and resolve at read time; retire the absolute-path migrations. P1.
+- [Audit completeness and activity view](planning/AUDIT_AND_ACTIVITY.md) — one transactional writer with actor id, role and surface; coverage gaps; admin activity view; append-only later. P1.
 - [Party types and representation model](planning/PARTY_AND_REPRESENTATION_MODEL.md) — declare fields, link cardinality and role→capability instead of 29 `Jurídica` branches; invariant vs authorization kept separate; last priority.
 
 ## Qualidade e processo

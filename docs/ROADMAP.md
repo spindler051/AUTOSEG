@@ -241,6 +241,15 @@ mesmas mensagens, sem nova configuração ou tela.
   funcionalidades continua obrigatória: só o papel muda. Ver
   [`SURFACE_PARITY.md`](SURFACE_PARITY.md) e
   [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
+- **Auditoria completa e visão de atividades (P1):** o registro existe em
+  `portal_auditoria`, `os_eventos` e `v9_historico_clientes`, mas é só escrita:
+  não há consulta, o ator aparece ora como id, ora como nome, faltam senha,
+  concessão/revogação de admin, desativação e mesclagem, e não há
+  append-only. Alvo: um único `log_action(principal, ação, alvo, before/after)`
+  gravado na mesma transação, com `actor_role` e `client_app`; visão de
+  atividades por usuário/cliente no Web e no GTK; depois cadeia de hash. Também
+  é o que torna auditável o “admin apenas no desktop”. Contrato em
+  [`planning/AUDIT_AND_ACTIVITY.md`](planning/AUDIT_AND_ACTIVITY.md).
 - **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
   61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
