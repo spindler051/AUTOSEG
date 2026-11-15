@@ -33,9 +33,13 @@ usuário que executa o serviço.
 | `composicao.yaml` efetivo | `<pasta de dados do modo>/composicao.yaml` (fora do Git) |
 | Preferência de conexão do GTK | `~/.config/autoseg/connection.json` |
 | Configuração local do feedback com IA | `<dados do usuário>/feedback_ia.local.json` |
-| Banco do Meu Auto Financeiro | `<pasta local>/meu_auto_financeiro.db` |
 | Credenciais fictícias de DEV | `<pasta do servidor DEV>/dados_teste/CREDENCIAIS_FICTICIAS_DEV.txt` |
 | Anexos, relatórios, rascunhos, notas e logs | subpastas da pasta de dados do modo |
+
+> O Meu Auto Financeiro é um produto separado, com banco, login e túnel
+> próprios em `~/AUTOSEG_MAF`. O bridge de empréstimos usa esse banco para
+> exibir e operar os empréstimos no financeiro do prestador; ele não faz parte
+> dos dados do AUTOSEG.
 
 ## Conferir os caminhos
 
@@ -59,7 +63,7 @@ Precedência: variável específica > `AUTOSEG_BASE` > padrão do modo.
 | `GESTAO_BANCO` | caminho exato do arquivo SQLite |
 | `AUTOSEG_COMPANY_CNPJ` | CNPJ exibido em PDFs e orçamentos; o padrão público é fictício |
 | `AUTOSEG_WHATSAPP` | número comercial dos links `wa.me`; o padrão público é fictício |
-| `AUTOSEG_DEV=1` | portas 8865/8866 e banco `dados_teste/autoseg_teste.db` |
+| `AUTOSEG_DEV=1` | portas 8866 e banco `dados_teste/autoseg_teste.db` |
 
 Exemplo para um servidor de teste rodando com o usuário comum:
 
@@ -125,12 +129,12 @@ O conteúdo que estava em `data/` na raiz foi movido para:
   tuneis/ e tuneis_dev/
   composicao.yaml
 
-~/Library/Application Support/AUTOSEG/local/
-  meu_auto_financeiro.db
-
 ~/Library/Application Support/AUTOSEG/
   feedback_ia.local.json
 ```
+
+O banco do Meu Auto Financeiro não fica mais na pasta do AUTOSEG; o produto
+separado usa `~/AUTOSEG_MAF/meu_auto_financeiro.db`.
 
 A pasta `data/` deixou de existir. As entradas `data/` e `dados_teste/` no
 `.gitignore` ficam como proteção contra recriação acidental.

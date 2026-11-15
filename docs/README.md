@@ -38,9 +38,11 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 
 - [Site único, identidade e permissões por objeto](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md) — auditoria do estado atual + arquitetura-alvo; 5.1–5.5 e 6.1–6.4 integradas atrás de flags, com ativação de produção pendente.
 - [Officina Web e Officina GTK](planning/OFFICINA_WEB_AND_GTK.md) — como o site e o GTK atuais originam os produtos genéricos; AUTOSEG como primeira prestadora.
-- [Unificação real dos portais — P0](planning/PROMPT_PORTAL_UNIFICATION.md) — prompt para remover `servidor_web.py`/8765, deixar uma origem só e proibir fallback legado.
 - [Cliente no GTK — peça 6.5](planning/GTK_CLIENT_MODE.md) — análise das lacunas, MVP remote-only e critérios de aceite; planejado, não implementado.
+- [Prompt — outbox como único caminho de e-mail](planning/PROMPT_P0_AUTH_OUTBOX_ONLY.md) — próxima fatia do P0-AUTH, sem fallback legado.
 - [Contrato compartilhado entre site e GTK](planning/WEB_GTK_SHARED_CONTRACT.md) — mesma tela/comando/permissão, renderização nativa em cada plataforma; documentação, não implementado.
+- [Surface registry](planning/SURFACE_REGISTRY.md) — uma tabela de ações (id, permissão, handler, contrato de entrada/saída) que serve de base para o contrato GTK/site, para os testes de autorização gerados e para dividir o portal_prestador; fase 0 sem mudança de comportamento.
+- [Client grants and capabilities](planning/CLIENT_GRANTS_AND_CAPABILITIES.md) — autoridade como concessão da sessão por cliente (gtk/web/api), com teto por cliente, papéis como pacotes e override por conta; substitui “papel por superfície”.
 - [Valor negociado na OS](planning/OS_NEGOTIATED_VALUE_UX.md) — checkbox, valor final e desconto explícito no relatório; proposta, não implementado.
 - [PGP, multiassinatura e integridade criptográfica](planning/PGP_MULTISIGNATURE_ARCHITECTURE.md)
 - [Anti-tampering financeiro com assinaturas PGP](planning/ANTI_TAMPERING_FINANCIAL_LEDGER.md)
@@ -50,7 +52,15 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Condomínios, compartilhamento e tenancy](planning/CONDO_SHARING_AND_TENANCY.md)
 - [Visão multicliente e local-first](planning/VISAO_MULTICLIENTE_LOCAL_FIRST.md)
 - [Plano de modo local e sincronização](planning/PLANO_MODO_LOCAL_SYNC.md)
-- [Modos local/sync/serverless — análise externa](planning/LOCAL_SYNC_MODES_ANALYSIS.md) — quatro presets, autoridade por entidade, version vectors, Syncthing e direção Rust; análise não implementada.
+- [Modos local/sync/serverless — análise externa](planning/LOCAL_SYNC_MODES_ANALYSIS.md) — quatro presets, autoridade por entidade, version vectors, relay opt-in e direção Rust; análise não implementada.
+- [Centralization profiles and change disclosure](planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md) — approval, visibility and authority as separate axes; legal floor per change class; signed snapshots; planning only.
+- [MAF ⇄ AUTOSEG read interface](planning/MAF_AUTOSEG_READ_INTERFACE.md) — replace MAF's direct SQLite reads with the versioned `/api/v2` projection, transparently; P1 after the A5 queue.
+- [API 2.0](planning/API_V2.md) — use-case projections, credential-to-token exchange, snapshot deltas, explicit filters; v1 frozen beside it; planning only.
+- [Relative file storage](planning/RELATIVE_FILE_STORAGE.md) — store file paths relative to a neutral data root and resolve at read time; retire the absolute-path migrations. P1.
+- [Audit completeness and activity view](planning/AUDIT_AND_ACTIVITY.md) — one transactional writer with actor id, role and surface; coverage gaps; admin activity view; append-only later. P1.
+- [nura kernel and host firewall](operations/NURA_KERNEL_AND_FIREWALL.md) — the Wi-Fi kernel lacks `nf_tables`; rebuild, default-deny policy, acceptance and rollback. P1 operational security.
+- [MAF product and architecture](planning/MAF_ARCHITECTURE.md) — own core, versioned API, CLI, UI contract, canonical ledger, replaceable adapters; personal/family first, company later. Planning only, P2.
+- [Party types and representation model](planning/PARTY_AND_REPRESENTATION_MODEL.md) — declare fields, link cardinality and role→capability instead of 29 `Jurídica` branches; invariant vs authorization kept separate; last priority.
 
 ## Qualidade e processo
 
@@ -74,11 +84,13 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 ## Operação
 
 - [Onde ficam banco e dados](operations/DATA_STORAGE.md)
+- [P0-AUTH — estado DEV e congelamento](operations/P0_AUTH_DEV_FREEZE.md)
+- [Modelo de branches: main e dev](operations/BRANCH_MODEL.md)
+- [Feedbacks da MAIN resolvidos na DEV](operations/MAIN_FEEDBACKS_DEV.md)
 - [Separação banco de produção × teste](operations/BANCO_TESTE_PRODUCAO.md)
 - [Túnel fixo Cloudflare](operations/TUNEL_FIXO.md)
 - [Ações da auditoria de segurança](operations/SECURITY_AUDIT_2026-11-08.md)
 - [Preparação da Gmail API](operations/GMAIL_API.md)
-- [Meu Auto Financeiro](operations/MEU_AUTO_FINANCEIRO.md)
 - [Padrões YAML](operations/PADROES_YAML.md)
 
 ## Feedback e backlog

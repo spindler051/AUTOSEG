@@ -1,3 +1,39 @@
+## P0-AUTH-CLOSE-GATE-FIXES — evidence (2026-11-12)
+
+- HTTP provider evidence publication on closed orders uses the same locked
+  authorization and write path as active orders, with negative archival and
+  unrelated-provider coverage.
+- Publication of a reserved PDF version holds a single writer transaction
+  across status/archival check, filesystem link and outbox/document/projection
+  confirmation. An orphan file is never trusted without hash verification.
+- Per-operation recipient references are stored in the outbox only; the domain
+  e-mail projection remains compatible with legacy re-send and safe downgrade.
+- Manual quarantine recovery is an explicit DEV command, not an automatic
+  shortening of the safe cleanup interval. Object enforcement remains off.
+
+
+
+## P0-AUTH-CLOSE-GATE — migration evidence
+
+The outbox is still opt-in on the DEV database. This slice converts the five
+attachment and invoice edit commands to a shared SQLite writer connection,
+uses durable stage/trash metadata for file effects, and introduces a
+reconciliation/inspection CLI. Both mail delivery projections now finalize
+atomically with the outbox state. No generic Workaholic core imports the AUTOSEG
+flavor, and no additional schema or user-data migration is introduced. The
+next gate is controlled DEV verification and explicit production authorization.
+
+### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
+
+Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
+reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
+foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
+fechado: os caminhos HTTP de anexos/nota já usam guarda e efeitos
+recuperáveis, porém efeitos de filesystem e consumidores legados diretos
+precisam de homologação e reconciliação operacional antes da ativação. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
+`NOTES.md` desta entrega; não habilitar na MAIN.
+
 # Platform migration ledger
 
 **Status values:** `legacy only`, `adapter read`, `adapter write`, `source of
@@ -19,7 +55,7 @@ Current session handoff: `docs/HANDOFF.md`.
 | Finance | `financeiro`, `produtividade_rateios`, `produtividade_repasses` | Generic receivable/payment/commission contracts | **legacy only** | Separate generic receivable/payment from AUTOSEG commission rules; define locale payment adapter. |
 | Providers / teams | `prestadores`, `os_prestadores`, `os_responsaveis` | Generic actor/assignment contracts | **legacy only** | Define person/provider/team boundary; migrate reads first. |
 | Identity / access | `prestadores`, `v9_usuarios`, `cliente_acessos`, `v9_admin_prestadores`, web cookies/sessions, desktop/API tokens | `accounts`, `account_links`, `provider_orgs`, `ObjectPolicy` | **5.1–5.5 + 6.1–6.4 integrated; production activation pending** | `identity.py` resolves identities; `accounts.py` adds the opt-in schema, dry-run legacy import, focused client PF link sync and `client_role`; `auth.py` authenticates by configurable identifiers with legacy fallback and returns `LoginResult`; `login_flags.py` keeps the rollout off by default; `web_session.py` supports memory and opt-in SQLite durable sessions with hashed token/credential, shared across processes/restart; `web_cookie.py` owns the unified cookie/CSRF; `login_web.py`/portal serve provider+client `/login` and `/entrar` is removed; `officina/web` provides the generic shell and `autoseg_web_navigation` owns the AUTOSEG navigation/routes; `client_service`/`client_web` provide the client module; 6.2 adds client roles, `/contas`, `work_item_access`, extracted `os_commands` and the independent `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` flag (off by default); 6.3 adds `SessionContext`, `/api/v1/desktop/me` permissions and GTK navigation; 6.4 unifies the web chrome, top nav/sidebar and `/cliente` aliases. See `docs/operations/UNIFIED_LOGIN_ROLLOUT.md`, `OBJECT_POLICY_ROLLOUT.md` and `WEB_SESSION_DURABLE.md`. |
-| Portals | `flavors/autoseg/modules/portal_prestador.py`, `servidor_web.py`, `portal_cliente_v94.py` | AUTOSEG flavor modules | **provider portal + unified client shell + OS command boundary behind flags** | The provider handler is still the single web origin, with client modules in `client_web.py`, OS writes in `os_commands.py`, and one presentation shell in `officina/web`. Object-policy enforcement and durable web sessions remain opt-in. Next: production activation decisions, TOCTOU fix/acceptance, 6.5 remote-only client GTK and later extraction of generic portal modules. |
+| Portals | `flavors/autoseg/modules/portal_prestador.py`, `client_web.py`, `client_extended_web.py` | AUTOSEG flavor modules | **single Officina Web origin; retired client server deleted; OS command boundary behind flags** | The provider handler is still the single web origin, with client modules in `client_web.py`, OS writes in `os_commands.py`, and one presentation shell in `officina/web`. Object-policy enforcement and durable web sessions remain opt-in. Next: finish P0-AUTH transactional revalidation across multi-connection OS writers (partial reopen/assignment/route guards only), production activation decision, 6.5 remote-only client GTK and later extraction of generic portal modules. |
 | Web/GTK presentation contract | portal templates + GTK dialogs | shared screen/action/view-model contract | **generic web shell + client roles + shared session context; GTK consumer started** | `officina/web` provides generic Brand/PageContext/NavItem/ShellPage/WebRoute and receives the flavor renderer by injection; `autoseg_web_navigation` owns AUTOSEG labels/routes. 6.2 adds client roles; 6.3 adds `SessionContext`; 6.4 unifies provider/client chrome and navigation. Next: broaden the GTK contract and eventually client mode. See `docs/planning/WEB_GTK_SHARED_CONTRACT.md`. |
 | Reports / PDFs | `pdf_cliente_v9.py`, `marca.py`, report templates | Generic document contracts + AUTOSEG templates | **flavor/locale module (current)** | Define generic document metadata; keep visual templates in AUTOSEG. |
 | Fiscal / NF-e / NFS-e | `officina/core/prestadores_ext.py`, `pdf`/fiscal drafts, future integrations | Brazilian locale module | **flavor/locale module (planned)** | Define tax-document provider contract; do not put fiscal rules in core. |

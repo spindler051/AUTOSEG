@@ -2,6 +2,7 @@
 Migrações aditivas em SQLite, sem rede externa e sem mover dados antigos.
 """
 import json
+from contextlib import nullcontext
 import re
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from hashlib import sha256
@@ -11,7 +12,7 @@ CAMPOS = (
     'valor_mao_obra','valor_materiais_manual','valor_total_override',
     'forma_pagamento','tecnico','motivo_encerramento',
     'material_item[]','material_qtd[]','material_unit[]',
-    'destinatario_sel[]','emails_adicionais'
+    'destinatario_sel[]'
 )
 
 
@@ -100,9 +101,11 @@ def em_rota(banco,os_id):
         return dict(r) if r else {'em_rota':0,'prestador_id':None,'atualizado_em':None}
 
 
-def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False):
+def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False,authorize=None):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ext.ATIVAS:
             raise ValueError('Somente OS ativas podem estar em rota.')
@@ -121,8 +124,8 @@ def marcar_em_rota(banco,os_id,pid,ativo=True,admin=False):
         return novo
 
 
-def limpar_rota_ao_iniciar(banco,os_id):
-    with ext.db(banco) as c:
+def limpar_rota_ao_iniciar(banco,os_id,*,connection=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         c.execute('UPDATE produtividade_deslocamentos SET em_rota=0, atualizado_em=? WHERE os_id=?',
                   (ext.agora(),os_id))
 
@@ -143,10 +146,11 @@ def _payload(d):
     return conteudo
 
 
-def salvar_rascunho(banco,os_id,pid,d,versao_esperada=None):
+def salvar_rascunho(banco,os_id,pid,d,versao_esperada=None,*,connection=None):
     conteudo=_payload(d)
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         _os_ativa_responsavel(c,os_id,pid)
         atual=c.execute('SELECT versao FROM produtividade_rascunhos WHERE os_id=?',(os_id,)).fetchone()
         if versao_esperada is not None and int(versao_esperada)!=(atual['versao'] if atual else 0):
@@ -170,13 +174,14 @@ def recuperar_rascunho(banco,os_id,pid):
                 'atualizado_em':r['atualizado_em'],'dados':json.loads(r['dados_json'])}
 
 
-def registrar_etapa(banco,os_id,pid,situacao,d):
+def registrar_etapa(banco,os_id,pid,situacao,d,*,connection=None):
     if situacao not in ('Pendente','Concluída'):
         raise ValueError('Etapa de atendimento inválida.')
     conteudo=_payload(d)
     digest=sha256(conteudo.encode('utf-8')).hexdigest()
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         if ext.responsavel_atual(c,os_id)!=pid and not ext.administrador(c,pid):
             raise PermissionError('Somente o responsável ou administrador registra etapa.')
         anterior=c.execute("""SELECT id FROM produtividade_etapas
@@ -218,36 +223,6 @@ def contatos_email_os(banco,os_id):
     }
 
 
-def destinatarios_para_os(banco,os_id,selecionados=None,adicionais=''):
-    """Monta a lista final a partir das caixas marcadas + e-mails manuais.
-
-    Seleção explícita nunca é sobrescrita pelo síndico. Quando `selecionados`
-    é None (desktop legado), usa o comportamento anterior: cliente + síndico.
-    """
-    import re as _re
-    contatos=contatos_email_os(banco,os_id)
-    if selecionados is None:
-        chaves=['cliente'] if contatos['tipo_pessoa']=='Física' else ['sindico','cliente']
-    else:
-        if isinstance(selecionados,str):selecionados=[selecionados]
-        chaves=[str(x) for x in selecionados]
-    resultado=[]
-    for chave in chaves:
-        e=_email_validado(contatos.get(chave,''))
-        if e and e not in resultado:resultado.append(e)
-    for valor in _re.split(r'[,;\s]+',str(adicionais or '')):
-        e=_email_validado(valor)
-        if e and e not in resultado:resultado.append(e)
-    if not resultado:
-        raise ValueError('Selecione ao menos um destinatário válido para finalizar esta OS.')
-    return resultado
-
-
-def destinatarios_conclusao(banco,os_id,adicional=''):
-    """Compatibilidade: cliente + síndico (desktop) + e-mail adicional."""
-    return destinatarios_para_os(banco,os_id,None,adicional)
-
-
 def participou(c,os_id,pid):
     if ext.responsavel_atual(c,os_id)==pid:return True
     if c.execute('SELECT 1 FROM os_prestadores WHERE os_id=? AND prestador_id=?',(os_id,pid)).fetchone():return True
@@ -261,9 +236,9 @@ def controlar_pdf(banco,os_id,pid):
             raise PermissionError('Este prestador não participou da OS.')
 
 
-def registrar_envio(banco,os_id,destinatarios,status='pendente',message_id=None,erro=''):
-    if status not in ('pendente','enviado','falhou'):raise ValueError('Estado de e-mail inválido.')
-    with ext.db(banco) as c:
+def registrar_envio(banco,os_id,destinatarios,status='pendente',message_id=None,erro='',*,connection=None):
+    if status not in ('pendente','enviado','falhou','unknown','sem_destinatario'):raise ValueError('Estado de e-mail inválido.')
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         c.execute("""INSERT INTO produtividade_email
         (os_id,destinatarios_json,status,message_id,erro,atualizado_em)
         VALUES(?,?,?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
@@ -370,15 +345,16 @@ def registrar_rateios_na_transacao(c,os_id,finalizador_id,valor_bruto,d):
     return bruto-sum(parcelas.values())
 
 
-def definir_rateio_manual(banco,os_id,ator_id,tecnico_id,valor):
+def definir_rateio_manual(banco,os_id,ator_id,tecnico_id,valor,*,connection=None):
     """Inclui/edita um rateio depois da conclusão, com auditoria.
 
     Não altera o valor cobrado do cliente. Bloqueia alteração se o repasse
     já tiver sido enviado ou confirmado.
     """
     cents=_centavos(valor)
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT numero_os,status,valor_total,arquivada FROM ordens_servico WHERE id=?',
                     (os_id,)).fetchone()
         if not o:

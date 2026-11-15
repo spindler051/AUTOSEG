@@ -69,7 +69,7 @@ GTK, Qt, web, iOS, Android — é um cliente do mesmo contrato de aplicação.
 
 **Não é:**
 
-- sincronizar o arquivo `dados.db` com Syncthing, Dropbox ou cópia de arquivo;
+- sincronizar o arquivo `dados.db` com ferramentas de arquivo, Dropbox ou cópia;
 - dois processos escrevendo no mesmo SQLite pela rede;
 - garantir que todos os dispositivos vejam a mesma informação no mesmo instante;
 - escolher “o certo” automaticamente em conflito de dinheiro, estoque ou status;
@@ -96,7 +96,7 @@ em `docs/planning/PLANO_MODO_LOCAL_SYNC.md`.
 materiais, fotos, PDFs, financeiro pessoal, backup e restauração. Não pode
 depender de login remoto, porta aberta ou servidor.
 
-### 3.2 Grupo local (estilo Syncthing, mas de registros)
+### 3.2 Grupo local (registros, não arquivos)
 
 Vários dispositivos na mesma rede trocam **mudanças de registro**, não o arquivo
 do banco. Descoberta por mDNS, pareamento por QR/código, transporte autenticado.
@@ -326,7 +326,7 @@ telinha”.
    - content-addressed storage, deduplicação, upload resumível;
    - criptografia em repouso e em trânsito;
    - coleta de lixo e integridade;
-   - Syncthing pode servir para blobs imutáveis, não para o banco.
+   - O transporte de arquivos pode servir para blobs imutáveis, não para o banco; relay é opt-in.
 
 8. **Evolução de schema**
    - um dispositivo pode ficar meses offline;
@@ -396,7 +396,7 @@ Esta seção existe para evitar promessas impossíveis. “Inviável” aqui sig
 “inviável no escopo atual, com este tamanho de equipe e este nível de risco”, não
 “impossível em teoria”.
 
-1. **Sincronizar o SQLite ativo com Syncthing/Dropbox.** O arquivo pode ser
+1. **Sincronizar o SQLite ativo com ferramentas de arquivo/Dropbox.** O arquivo pode ser
    copiado no meio de uma transação; locks não funcionam em rede; conflito vira
    cópia de arquivo, não merge de registros.
 
@@ -576,7 +576,7 @@ perda; conflitos aparecem para revisão.
 - mDNS, pareamento, TLS/assinatura;
 - troca direta de mudanças;
 - fallback para servidor;
-- Syncthing opcional só para blobs.
+- transporte de arquivos opcional só para blobs; relay opt-in.
 
 **Saída:** dois PCs na mesma LAN sincronizam sem internet; servidor ausente não
 bloqueia.

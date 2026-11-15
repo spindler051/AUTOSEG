@@ -116,7 +116,8 @@ if __name__ == '__main__':
 class ClientWebRenderingTest(unittest.TestCase):
     def test_escapes_untrusted_descriptions(self):
         from flavors.autoseg.modules import client_web
-        with (patch.object(client_web.client_service, 'list_calls', return_value=()),
+        with (patch('flavors.autoseg.modules.client_extended_web.extra_home', return_value=''),
+              patch.object(client_web.client_service, 'list_calls', return_value=()),
               patch.object(client_web.client_service, 'list_work_items', return_value=(
             client_service.ClientWorkItem(1, 'OS-1', 'Aberta', '<script>', '', '', False),
         ))):

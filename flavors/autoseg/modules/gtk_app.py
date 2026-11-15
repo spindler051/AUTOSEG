@@ -44,6 +44,7 @@ from officina.application.connection import (
 )
 from officina.application.http_service import HttpService
 from officina.application.local_service import LocalService
+from officina.application.object_policy import Principal
 from officina.application.session import Sessao, carregar_sessao, limpar_sessao
 from flavors.autoseg.modules.gtk_login import LoginWindow
 from flavors.autoseg.modules.web_access import WebAccessManager
@@ -184,7 +185,7 @@ class Janela(Adw.ApplicationWindow):
         ]
         if self.web.enabled:
             self.nav_itens.append(
-                ("portal", "Portal do cliente", "network-server-symbolic"))
+                ("portal", "Officina Web", "network-server-symbolic"))
         self.nav_itens.extend([
             ("pj", "Condomínios e chamados", "view-grid-symbolic"),
             ("catalogo", "Serviços e valores", "view-list-symbolic"),
@@ -273,7 +274,7 @@ class Janela(Adw.ApplicationWindow):
         self.stack.add_titled(self._pagina_notas(), "notas", "Notas fiscais")
         self.stack.add_titled(self._pagina_emails(), "emails", "E-mails")
         self.stack.add_titled(self._pagina_prestadores(), "prestadores", "Prestadores")
-        self.stack.add_titled(self._pagina_portal(), "portal", "Portal do cliente")
+        self.stack.add_titled(self._pagina_portal(), "portal", "Officina Web")
         self.stack.add_titled(self._pagina_pj(), "pj", "Condomínios e chamados")
         self.stack.add_titled(self._pagina_catalogo(), "catalogo", "Serviços e valores")
         self.stack.add_titled(self._pagina_composicao(), "composicao", "Composição de valores")
@@ -402,7 +403,7 @@ class Janela(Adw.ApplicationWindow):
         atalhos.append(ui.botao("Novo cliente", lambda: self.novo_cliente(), icone="list-add-symbolic"))
         atalhos.append(ui.botao("Nova OS", lambda: self.nova_os_rapida(), icone="document-new-symbolic"))
         if self.web.enabled:
-            atalhos.append(ui.botao("Abrir portal do cliente", self._abrir_portal_navegador,
+            atalhos.append(ui.botao("Abrir Officina Web", self._abrir_portal_navegador,
                                     icone="web-browser-symbolic"))
         atalhos.append(ui.botao("Preparar e-mail", self._email_admin))
         atalhos.append(ui.botao("Rascunho fiscal", self._nota_admin))
@@ -443,17 +444,11 @@ class Janela(Adw.ApplicationWindow):
         caixa.append(grupo)
         if self.web.enabled:
             self.linha_portal = Adw.ActionRow(
-                title="Portal do cliente", subtitle="Verificando…",
+                title="Officina Web", subtitle="Verificando…",
                 icon_name="network-server-symbolic")
             self.linha_portal.set_activatable(True)
             self.linha_portal.connect("activated", lambda *_args: self._abrir_portal_navegador())
             grupo.add(self.linha_portal)
-            self.linha_prestador = Adw.ActionRow(
-                title="Portal do prestador", subtitle="Verificando…",
-                icon_name="network-workgroup-symbolic")
-            self.linha_prestador.set_activatable(True)
-            self.linha_prestador.connect("activated", lambda *_args: self._abrir_portal_prestador())
-            grupo.add(self.linha_prestador)
         if self.remote_mode:
             self.linha_servidor = Adw.ActionRow(
                 title="Servidor", subtitle="—", icon_name="network-server-symbolic")
@@ -507,7 +502,8 @@ class Janela(Adw.ApplicationWindow):
         self._os_inicio = list(recentes)
         if getattr(self, "tabela_inicio", None) is not None:
             self.tabela_inicio.definir_linhas([
-                (r.numero_os, r.cliente, r.status, ui.brl(r.valor_total),
+                (r.numero_os, r.cliente, r.status,
+                 '—' if r.origem == 'Compartilhada' else ui.brl(r.valor_total),
                  str(r.data_abertura or '')[:10])
                 for r in recentes
             ])
@@ -524,7 +520,7 @@ class Janela(Adw.ApplicationWindow):
             return
 
         if getattr(self, "linha_portal", None) is not None:
-            info = self.web.client_info()
+            info = self.web.site_info()
             if info["ativo"]:
                 rede = self._url_rede_portal(info)
                 self.linha_portal.set_subtitle(
@@ -532,11 +528,7 @@ class Janela(Adw.ApplicationWindow):
             else:
                 self.linha_portal.set_subtitle(
                     f"Offline • {info.get('erro') or 'clique para abrir o portal'}")
-            if self.web.provider_url:
-                self.linha_prestador.set_subtitle(f"Online • {self.web.provider_url}")
-            else:
-                self.linha_prestador.set_subtitle(
-                    self.web.provider_error or "Offline • porta 8766 indisponível")
+
 
         try:
             uso = shutil.disk_usage(ui.BASE)
@@ -735,9 +727,9 @@ class Janela(Adw.ApplicationWindow):
 
         ui.alerta(
             self, "Cloudflare — publicação na internet",
-            "Os dois portais serão publicados na internet sem Cloudflare Access.\n\n"
+            "A Officina Web será publicada na internet sem Cloudflare Access.\n\n"
             "Não utilize dados reais até revisar login e permissões.\n\n"
-            "Ativar o início automático dos dois túneis de teste?",
+            "Ativar o início automático do túnel de teste?",
             ativar, destrutivo=True, rotulo_ok="Ativar")
 
     # ------------------------------------------------------------------
@@ -773,14 +765,16 @@ class Janela(Adw.ApplicationWindow):
         acoes_cliente = [
             ui.botao("Abrir / editar", self._editar_cliente),
             ui.botao("Nova OS do cliente", self._nova_os_cliente),
-            ui.botao("Excluir / desativar", self._excluir_cliente,
-                     css="destructive-action"),
         ]
+        if self.sessao is not None and self.sessao.admin:
+            acoes_cliente.append(ui.botao("Excluir / desativar", self._excluir_cliente,
+                                          css="destructive-action"))
+            acoes_cliente.append(ui.botao("Mesclar cliente", self._mesclar_cliente,
+                                          css="destructive-action"))
         if self.web.enabled:
-            acoes_cliente.extend([
-                ui.botao("Acesso web / senha", self._senha_cliente),
-                ui.botao("Abrir portal do cliente", self._abrir_portal_navegador),
-            ])
+            if self.sessao is not None and self.sessao.admin:
+                acoes_cliente.append(ui.botao("Acesso web / senha", self._senha_cliente))
+            acoes_cliente.append(ui.botao("Abrir Officina Web", self._abrir_portal_navegador))
         pagina.append(ui.barra(*acoes_cliente))
         return pagina
 
@@ -802,7 +796,10 @@ class Janela(Adw.ApplicationWindow):
     def carregar_clientes(self):
         termo = self.busca_clientes.get_text().strip() if hasattr(self, "busca_clientes") else ""
         linhas = []
-        for registro in self.service.listar_clientes(termo):
+        # Remote mode derives its principal from the server token; local GTK
+        # sends the same authenticated principal that the desktop API receives.
+        kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+        for registro in self.service.listar_clientes(termo, **kwargs):
             linhas.append((
                 registro.id, registro.nome or "(sem nome)",
                 cad9.formatar_documento(registro.documento),
@@ -820,12 +817,24 @@ class Janela(Adw.ApplicationWindow):
     def _editar_cliente(self):
         valores = self._cliente_selecionado()
         if valores:
-            dialogos.DialogoCliente(self, valores[0]).present(self)
+            try:
+                dialogos.DialogoCliente(self, valores[0]).present(self)
+            except PermissionError:
+                ui.aviso_erro(self, "Cliente", "Recurso indisponível.")
+            except Exception as erro:
+                ui.aviso_erro(self, "Cliente", str(erro))
 
     def _nova_os_cliente(self):
         valores = self._cliente_selecionado()
         if valores:
             self.nova_os(cliente_id=valores[0])
+
+    def _cliente_admin_actor(self):
+        if self.sessao is None:
+            return None
+        pid = self.sessao.prestador_id
+        role = self.sessao.role or ('admin' if self.sessao.admin else 'employee')
+        return Principal(pid, role, organization_id='autoseg', provider_id=pid)
 
     def _excluir_cliente(self):
         valores = self._cliente_selecionado()
@@ -836,7 +845,8 @@ class Janela(Adw.ApplicationWindow):
         if total:
             def desativar():
                 try:
-                    self.service.desativar_cliente(cliente_id, "AUTOSEG desktop")
+                    kwargs = {} if self.remote_mode else {'principal':self._cliente_admin_actor()}
+                    self.service.desativar_cliente(cliente_id, "AUTOSEG desktop", **kwargs)
                 except Exception as erro:
                     ui.aviso_erro(self, "Cadastro", str(erro))
                     return
@@ -851,7 +861,8 @@ class Janela(Adw.ApplicationWindow):
 
         def excluir():
             try:
-                self.service.excluir_cliente(cliente_id)
+                kwargs = {} if self.remote_mode else {'principal':self._cliente_admin_actor()}
+                self.service.excluir_cliente(cliente_id, **kwargs)
             except Exception as erro:
                 ui.aviso_erro(self, "Exclusão bloqueada", str(erro))
                 return
@@ -865,6 +876,15 @@ class Janela(Adw.ApplicationWindow):
         valores = self._cliente_selecionado()
         if valores:
             dialogos.DialogoSenhaCliente(self, valores[0], valores[1]).present(self)
+
+    def _mesclar_cliente(self):
+        valores = self._cliente_selecionado()
+        if not valores or self.sessao is None or not self.sessao.admin:
+            return
+        try:
+            dialogos.DialogoMesclarCliente(self, valores[0], valores[1]).present(self)
+        except Exception as erro:
+            ui.aviso_erro(self, "Mesclagem de clientes", str(erro))
 
     def _escolher_yaml(self, titulo_texto, callback):
         dialogo = Gtk.FileDialog(title=titulo_texto)
@@ -964,9 +984,12 @@ class Janela(Adw.ApplicationWindow):
         termo = self.busca_os.get_text().strip() if hasattr(self, "busca_os") else ""
         registros = self.service.listar_os_ativas(termo)
         self.tabela_os.definir_linhas([
-            (r.id, r.numero_os, r.cliente, r.data_abertura, ui.brl(r.valor_total),
-             r.forma_pagamento, r.origem, r.responsavel, r.status,
-             "Incompletos" if r.incompleto else "OK")
+            (r.id, r.numero_os, r.cliente, r.data_abertura,
+             '—' if r.origem == 'Compartilhada' else ui.brl(r.valor_total),
+             '—' if r.origem == 'Compartilhada' else r.forma_pagamento,
+             r.origem, r.responsavel, r.status,
+             'Restritos' if r.origem == 'Compartilhada' else
+             ('Incompletos' if r.incompleto else 'OK'))
             for r in registros
         ])
 
@@ -1039,11 +1062,11 @@ class Janela(Adw.ApplicationWindow):
             try:
                 caminho = self.service.publicar_pdf(os_id)
                 if enviar_email and not self.remote_mode:
-                    try:
-                        from flavors.autoseg.modules import gmail_service
-                        gmail_service.enviar_relatorio_os_concluida(BANCO, os_id)
-                    except Exception:
-                        pass
+                    GLib.idle_add(self._pdf_publicado, True, caminho)
+                    GLib.idle_add(ui.aviso_erro, self, 'E-mail não enviado',
+                        'O PDF foi publicado. O envio local pelo GTK está indisponível; '
+                        'use o fluxo da outbox no portal.')
+                    return False
                 GLib.idle_add(self._pdf_publicado, True, caminho)
             except Exception as erro:
                 GLib.idle_add(self._pdf_publicado, False, str(erro))
@@ -1356,10 +1379,8 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_prestadores(self):
         if hasattr(self, "rotulo_portais") and self.web.enabled:
-            cliente = self.web.client_info()
-            texto = ("Portais: "
-                     f"prestador {self.web.provider_url or 'offline'} • "
-                     f"cliente {cliente.get('url_local') or 'offline'}")
+            site = self.web.site_info()
+            texto = f"Officina Web: {site.get('url_local') or 'offline'}"
             if self.web.provider_error:
                 texto += " • " + self.web.provider_error
             self.rotulo_portais.set_text(texto)
@@ -1459,7 +1480,7 @@ class Janela(Adw.ApplicationWindow):
 
     def _abrir_portal_prestador(self):
         if not self.web.provider_url:
-            ui.aviso_erro(self, "Portal do prestador",
+            ui.aviso_erro(self, "Officina Web",
                           self.web.provider_error or "Servidor do prestador indisponível (porta 8766).")
             return
         ui.abrir_uri(self.web.provider_url, self)
@@ -1597,7 +1618,7 @@ class Janela(Adw.ApplicationWindow):
         ui.toast(self, "Endereço do servidor salvo.")
 
     # ------------------------------------------------------------------
-    # Portal do cliente
+    # Officina Web
     # ------------------------------------------------------------------
 
     def _pagina_portal(self):
@@ -1668,7 +1689,7 @@ class Janela(Adw.ApplicationWindow):
         linha.add_suffix(botao)
 
     def carregar_portal(self):
-        info = self.web.client_info()
+        info = self.web.site_info()
         if info["ativo"]:
             self.portal_status.set_subtitle(
                 f"Online desde {info['iniciado_em']} • porta {info['porta']}")
@@ -1680,7 +1701,7 @@ class Janela(Adw.ApplicationWindow):
         self.portal_local.set_subtitle(info.get("url_local") or "—")
         rede = self._url_rede_portal(info)
         self.portal_rede.set_subtitle(
-            rede or "Somente este computador (defina CLIENTE_BIND=0.0.0.0 para a rede local)")
+            rede or "Somente este computador (defina PRESTADOR_BIND=0.0.0.0 para a rede local)")
         if hasattr(self, "botao_portal"):
             self.botao_portal.set_label("Desligar servidor" if info["ativo"] else "Ligar servidor")
             if info["ativo"]:
@@ -1708,20 +1729,20 @@ class Janela(Adw.ApplicationWindow):
         self.abrir_os_id(valores[0])
 
     def _abrir_portal_navegador(self):
-        info = self.web.client_info()
+        info = self.web.site_info()
         if not info.get("ativo"):
             ui.aviso_erro(self, "Portal desligado",
-                          "Ligue o servidor do Portal do Cliente antes de abrir no navegador.")
+                          "Ligue o servidor da Officina Web antes de abrir no navegador.")
             return
         ui.abrir_uri(info["url_local"], self)
 
     def _url_rede_portal(self, info):
-        if info.get("ativo") and self.web.client_on_network():
+        if info.get("ativo") and self.web.site_on_network():
             return info.get("url_rede") or ""
         return ""
 
     def _copiar_link(self, local):
-        info = self.web.client_info()
+        info = self.web.site_info()
         link = info.get("url_local") if local else (self._url_rede_portal(info) or info.get("url_local"))
         if not link:
             ui.aviso_erro(self, "Portal desligado",
@@ -1734,24 +1755,24 @@ class Janela(Adw.ApplicationWindow):
             ui.aviso_erro(self, "Portal",
                           "Modo local: este app usa apenas o banco local.")
             return
-        if self.web.client_info().get("ativo"):
+        if self.web.site_info().get("ativo"):
             def desligar():
-                self.web.stop_client()
+                self.web.stop()
                 self.carregar_portal()
                 self._atualizar_inicio()
-                ui.toast(self, "Portal do cliente desligado.")
+                ui.toast(self, "Officina Web desligado.")
             ui.alerta(self, "Desligar portal",
                       "Enquanto o portal estiver desligado, os clientes não conseguirão acessar.\n\n"
                       "Deseja desligar?", desligar, destrutivo=True, rotulo_ok="Desligar")
         else:
             try:
-                self.web.start_client()
+                self.web.start()
             except Exception as erro:
                 ui.aviso_erro(self, "Erro no portal", str(erro))
                 return
             self.carregar_portal()
             self._atualizar_inicio()
-            ui.toast(self, "Portal do cliente ligado.")
+            ui.toast(self, "Officina Web ligado.")
 
     def _processar_eventos_portal(self):
         if not self._ativo:
@@ -1859,7 +1880,7 @@ class Janela(Adw.ApplicationWindow):
         try:
             dados = self.service.url_whatsapp_chamado(
                 valores[0],
-                self._links_estado.get(str(links9.PORTAS[1]), {}).get("url", ""))
+                self._links_estado.get(str(links9.PORTA_SITE), {}).get("url", ""))
             ui.abrir_uri(dados["url"], self)
             ui.toast(self, f"WhatsApp aberto para o {dados['destino']}.")
         except Exception as erro:

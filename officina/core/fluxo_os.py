@@ -61,11 +61,14 @@ def instalar(banco):
     composicao.instalar_banco(banco)
 
 
-def definir_senha_cliente(banco,cliente_id,senha=None):
-    """Usar somente do desktop. Retorna a senha uma ÚNICA vez."""
-    senha = senha or secrets.token_urlsafe(16)
-    if len(senha)<10:raise ValueError('A senha deve ter pelo menos 10 caracteres.')
+def definir_senha_cliente(banco,cliente_id,senha=None,*,principal=None):
+    """Redefine o acesso legado do cliente; exige administrador ativo no writer."""
     with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        from officina.application.work_item_access import require_admin_locked
+        require_admin_locked(c, principal)
+        senha = senha or secrets.token_urlsafe(16)
+        if len(senha)<10:raise ValueError('A senha deve ter pelo menos 10 caracteres.')
         cliente=c.execute("SELECT id FROM clientes WHERE id=? AND status!='Inativo'",(cliente_id,)).fetchone()
         if not cliente: raise ValueError('Cliente inexistente ou inativo.')
         h=ext.senha_hash(senha)
@@ -229,42 +232,61 @@ def ultimo_documento(banco,os_id):
         return dict(r) if r else None
 
 
-def publicar_relatorio(banco,os_id):
-    """Cria uma cópia imutável do PDF que será servida ao cliente e prestador.
-    Invocar depois de commit do status. Se falhar, OS permanece encerrada e
-    administrador pode republicar sem modificar status.
+def publicar_relatorio(banco,os_id,*,authorize=None):
+    """Publish a PDF only after authorization in the document writer transaction.
+
+    Generation stays outside the lock; the final path is created exclusively
+    under BEGIN IMMEDIATE. On rollback, remove only this attempt's new file.
     """
     instalar(banco)
     with LOCK_PDF:
-        with ext.db(banco) as c:
-            o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
-            if not o or o['status'] not in PUBLICAVEIS:
-                raise ValueError('O relatório só é publicado após um encerramento final ou pendência registrada.')
-            proximo=c.execute("SELECT COALESCE(MAX(versao),0)+1 FROM os_documentos WHERE os_id=? AND tipo='relatorio_pdf'",(os_id,)).fetchone()[0]
         arq=Path(ext.gerar_pdf(banco,os_id))
-        if not arq.is_file() or arq.stat().st_size<100: raise ValueError('PDF não foi gerado corretamente.')
-        pasta=ext.RELATORIOS/'publicados';pasta.mkdir(parents=True,exist_ok=True)
-        nome_limpo=re.sub(r'[^A-Za-z0-9_-]','_',str(o['numero_os'] or '')).strip('_')
-        if not nome_limpo:
-            raise ValueError('OS sem número público; não é possível publicar o relatório.')
-        destino=pasta/f'{nome_limpo}_relatorio_v{proximo}.pdf'
+        if not arq.is_file() or arq.stat().st_size<100:
+            raise ValueError('PDF não foi gerado corretamente.')
+        pasta=ext.RELATORIOS/'publicados'
+        pasta.mkdir(parents=True,exist_ok=True)
         temp=pasta/f'.{secrets.token_hex(12)}.tmp'
+        destino=None
+        promoted=False
         try:
             shutil.copyfile(arq,temp)
-            os.replace(temp,destino)
-            sha=hashlib.sha256(destino.read_bytes()).hexdigest()
+            sha=hashlib.sha256(temp.read_bytes()).hexdigest()
             with ext.db(banco) as c:
+                c.execute('BEGIN IMMEDIATE')
+                if authorize is not None:
+                    authorize(c)
+                o=c.execute('SELECT numero_os,status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+                if not o or o['status'] not in PUBLICAVEIS:
+                    raise ValueError('O relatório só é publicado após um encerramento final ou pendência registrada.')
+                proximo=c.execute("SELECT COALESCE(MAX(versao),0)+1 FROM os_documentos WHERE os_id=? AND tipo='relatorio_pdf'",(os_id,)).fetchone()[0]
+                nome_limpo=re.sub(r'[^A-Za-z0-9_-]','_',str(o['numero_os'] or '')).strip('_')
+                if not nome_limpo:
+                    raise ValueError('OS sem número público; não é possível publicar o relatório.')
+                destino=pasta/f'{nome_limpo}_relatorio_v{proximo}.pdf'
+                # Exclusive promotion preserves unrelated or orphaned published files.
+                os.link(temp,destino)
+                promoted=True
                 cur=c.execute('INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) VALUES(?,?,?,?,?,?)',
-                          (os_id,'relatorio_pdf',proximo,str(destino),sha,ext.agora()))
+                              (os_id,'relatorio_pdf',proximo,str(destino),sha,ext.agora()))
                 cliente=c.execute('SELECT cl.email,o.status FROM clientes cl JOIN ordens_servico o ON o.cliente_id=cl.id WHERE o.id=?',(os_id,)).fetchone()
                 email=(cliente['email'] or '').strip() if cliente else ''
-                c.execute('''INSERT INTO os_entregas(os_id,documento_id,destinatario,email_status,nf_status,atualizado_em)
+                c.execute("""INSERT INTO os_entregas(os_id,documento_id,destinatario,email_status,nf_status,atualizado_em)
                     VALUES(?,?,?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
                     documento_id=excluded.documento_id,destinatario=excluded.destinatario,
-                    email_status=excluded.email_status,nf_status=excluded.nf_status,atualizado_em=excluded.atualizado_em''',
+                    email_status=excluded.email_status,nf_status=excluded.nf_status,atualizado_em=excluded.atualizado_em""",
                     (os_id,cur.lastrowid,email,'aguardando_api' if email else 'email_nao_cadastrado',
                      'aguardando_api' if cliente and cliente['status']=='Concluída' else 'nao_aplicavel',ext.agora()))
             return str(destino)
+        except BaseException:
+            if promoted and destino is not None:
+                # Do not erase a PDF whose metadata may have committed despite a
+                # later failure. A confirmed rollback is safe to clean up.
+                with ext.db(banco) as verify:
+                    recorded=verify.execute('SELECT 1 FROM os_documentos WHERE caminho=?',
+                                            (str(destino),)).fetchone()
+                if not recorded:
+                    destino.unlink(missing_ok=True)
+            raise
         finally:
             temp.unlink(missing_ok=True)
 

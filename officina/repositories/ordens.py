@@ -173,3 +173,68 @@ def url_os(banco, token, sufixo: str = '') -> str:
     registro = obter_por_token(banco, token)
     numero = str(registro['numero_os'] or '') if registro else str(token or '')
     return '/os/' + quote(numero, safe='') + (sufixo or '')
+
+# Read aggregates must be scoped in SQL to avoid materializing other providers' data.
+_INVOLVED = """(EXISTS (SELECT 1 FROM os_responsaveis r
+                       WHERE r.os_id=o.id AND r.prestador_id=?)
+                OR EXISTS (SELECT 1 FROM os_prestadores op
+                       WHERE op.os_id=o.id AND op.prestador_id=? AND op.ativo=1))"""
+
+
+def resumo_scoped(banco, provider_id):
+    with ext.db(_banco(banco)) as connection:
+        row = connection.execute(f"""SELECT COUNT(*) total,
+             SUM(CASE WHEN status='Aberta' THEN 1 ELSE 0 END) abertas,
+             SUM(CASE WHEN status='Iniciada' THEN 1 ELSE 0 END) iniciadas,
+             SUM(CASE WHEN status='Pendente' THEN 1 ELSE 0 END) pendentes,
+             SUM(CASE WHEN status='Concluída' THEN 1 ELSE 0 END) concluidas
+             FROM ordens_servico o WHERE COALESCE(o.arquivada,0)=0
+             AND {_INVOLVED}""", (provider_id, provider_id)).fetchone()
+    return {k: int(row[k] or 0) for k in
+            ('total','abertas','iniciadas','pendentes','concluidas')}
+
+
+def financeiro_resumo_scoped(banco, provider_id):
+    with ext.db(_banco(banco)) as connection:
+        row = connection.execute(f"""SELECT
+          SUM(CASE WHEN f.status='Recebido' THEN f.valor ELSE 0 END) recebido,
+          SUM(CASE WHEN f.status='Aguardando pagamento' THEN f.valor ELSE 0 END) pendente
+          FROM financeiro f JOIN ordens_servico o ON o.id=f.os_id
+          WHERE {_INVOLVED}""", (provider_id,provider_id)).fetchone()
+    recebido = float(row['recebido'] or 0)
+    pendente = float(row['pendente'] or 0)
+    return {'recebido':recebido,'pendente':pendente,'a_receber':pendente}
+
+
+def recentes_scoped(banco, provider_id, limite=6):
+    with ext.db(_banco(banco)) as connection:
+        rows = connection.execute(f"""SELECT o.id,o.numero_os,o.status,o.valor_total,
+          o.data_abertura,o.cliente_id,cl.nome cliente
+          FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
+          WHERE COALESCE(o.arquivada,0)=0 AND {_INVOLVED}
+          ORDER BY o.id DESC LIMIT ?""", (provider_id,provider_id,int(limite))).fetchall()
+    return [dict(row) for row in rows]
+
+
+def clientes_ativos_scoped(banco, provider_id):
+    with ext.db(_banco(banco)) as connection:
+        return int(connection.execute("""SELECT COUNT(*) FROM clientes cl
+          WHERE cl.status NOT IN ('Inativo','A definir') AND EXISTS (
+          SELECT 1 FROM ordens_servico o WHERE o.cliente_id=cl.id
+          AND (EXISTS (SELECT 1 FROM os_responsaveis r WHERE r.os_id=o.id AND r.prestador_id=?)
+          OR EXISTS (SELECT 1 FROM os_prestadores op WHERE op.os_id=o.id
+                     AND op.prestador_id=? AND op.ativo=1)))""",
+          (provider_id,provider_id)).fetchone()[0])
+
+
+def listar_historico_scoped(banco, provider_id, limite=500):
+    with ext.db(_banco(banco)) as connection:
+        rows = connection.execute(f"""SELECT o.id,o.numero_os,o.status,o.descricao,
+          o.data_abertura,o.valor_total,cl.nome cliente,MAX(d.versao) versao
+          FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
+          LEFT JOIN os_documentos d ON d.os_id=o.id AND d.tipo='relatorio_pdf'
+          WHERE o.status NOT IN ('Aberta','Iniciada','Pendente')
+          AND COALESCE(o.arquivada,0)=0 AND {_INVOLVED}
+          GROUP BY o.id ORDER BY o.id DESC LIMIT ?""",
+          (provider_id,provider_id,int(limite))).fetchall()
+    return [dict(row) for row in rows]

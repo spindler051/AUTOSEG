@@ -3,6 +3,7 @@
 Não altera a definição das tabelas originais. Cada operação sensível gera auditoria.
 """
 import re
+from contextlib import nullcontext
 import sqlite3
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
@@ -84,7 +85,7 @@ def audit(c,pid,acao,referencia,detalhes):
         (pid,acao,str(referencia),str(detalhes)[:4000],ext.agora()))
 
 
-def cliente_salvar(banco,d,pid,cliente_id=None):
+def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
     values={x:texto(d,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
     if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
     if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
@@ -92,7 +93,13 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         anterior=None
-        if cliente_id is not None:
+        if cliente_id is None:
+            from officina.application.work_item_access import require_customer_create_locked
+            require_customer_create_locked(c, principal)
+            pid = principal.provider_id
+        else:
+            from officina.application.work_item_access import require_customer_write_locked
+            require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
             if not anterior: raise ValueError('Cliente não encontrado.')
         doc_novo=cad.digitos(values['documento'])
@@ -124,9 +131,11 @@ def cliente_salvar(banco,d,pid,cliente_id=None):
     return cid
 
 
-def cliente_excluir(banco,cid,pid):
+def cliente_excluir(banco,cid,pid,*,principal=None):
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        pid = require_admin_locked(c, principal)
         row=c.execute('SELECT nome FROM clientes WHERE id=?',(cid,)).fetchone()
         if not row: raise ValueError('Cliente inexistente.')
         if c.execute('SELECT 1 FROM ordens_servico WHERE cliente_id=?',(cid,)).fetchone():
@@ -146,7 +155,7 @@ def cliente_excluir(banco,cid,pid):
         c.execute('DELETE FROM clientes WHERE id=?',(cid,))
 
 
-def os_salvar(banco,d,pid,oid=None,silent=False):
+def os_salvar(banco,d,pid,oid=None,silent=False,*,connection=None,authorize=None,staged_attachments=False):
     """Insere/edita uma OS, materiais, relatório e estado numa transação SQLite."""
     try: cliente_id=int(d['cliente_id'])
     except (KeyError,ValueError,TypeError): raise ValueError('Selecione o cliente.')
@@ -158,7 +167,7 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
     tecnico=texto(d,'tecnico',250)  # Pessoa atendida no local; coluna legada mantida.
     forma=texto(d,'forma_pagamento',60)
     if not forma and oid is not None:
-        with ext.db(banco) as conexao:
+        with (nullcontext(connection) if connection is not None else ext.db(banco)) as conexao:
             atual=conexao.execute('SELECT forma_pagamento FROM ordens_servico WHERE id=?',
                                   (oid,)).fetchone()
         if atual and not str(atual['forma_pagamento'] or '').strip():
@@ -284,11 +293,16 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
         # discard it or mistake a modular composition for a frozen total.
         comp['valor_total_override']=round(float(total_negociado),2)
     comp_json=composicao.para_json(comp)
-    composicao.instalar_banco(banco)
-    # Valor total é calculado do serviço + materiais; não aceita divergência silenciosa.
-    aten.instalar(banco)
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    if connection is None:
+        composicao.instalar_banco(banco)
+        aten.instalar(banco)
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
+        elif not c.in_transaction:
+            raise RuntimeError('Shared OS connection must already be locked.')
+        if authorize is not None:
+            authorize(c)
         if not c.execute('SELECT 1 FROM clientes WHERE id=?',(cliente_id,)).fetchone():
             raise ValueError('Cliente não encontrado.')
         if oid is None:
@@ -434,7 +448,8 @@ def os_salvar(banco,d,pid,oid=None,silent=False):
             legenda=legendas_fotos[indice] if indice<len(legendas_fotos) else ''
             visivel=str(visiveis_fotos[indice])!='0' if indice<len(visiveis_fotos) else True
             ext.registrar_imagem_transacao(c,oid,pid,item[0],item[1],permitir_colaboracao=True,
-                                           chave=chave,legenda=legenda,visivel=visivel)
+                                           chave=chave,legenda=legenda,visivel=visivel,
+                                           staged=staged_attachments)
         for indice,anexo_id in enumerate(anexo_ids):
             try:anexo_id=int(anexo_id)
             except (TypeError,ValueError):continue
@@ -505,6 +520,13 @@ def financeiro_receber(banco,fid,pid):
         f=c.execute('SELECT os_id,status,valor FROM financeiro WHERE id=?',(fid,)).fetchone()
         if not f: raise ValueError('Lançamento não encontrado.')
         if f['status']=='Recebido': raise ValueError('Este lançamento já está recebido.')
+        final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
+        tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                 "AND name='v9_admin_prestadores'").fetchone())
+        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
+                             (pid,)).fetchone()) if tem_admin and pid is not None else False
+        if (not final or pid is None or int(final['prestador_id'])!=int(pid)) and not admin:
+            raise PermissionError('Somente o finalizador ou administrador pode confirmar recebimento.')
         c.execute("UPDATE financeiro SET status='Recebido',data_pagamento=? WHERE id=?",
             (datetime.now().strftime('%d/%m/%Y'),fid))
         ext.evento(c,f['os_id'],'Pagamento recebido',f'Recebimento confirmado no portal: {dinheiro(f["valor"])}',pid,'Prestador')

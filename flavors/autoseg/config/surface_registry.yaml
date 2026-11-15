@@ -1,0 +1,254 @@
+# AUTOSEG phase 0B — customer surface registry (static, not wired to runtime).
+# Source inventory: docs/planning/SURFACE_REGISTRY_CUSTOMER_INVENTORY.md
+# Source base: 3dd71710307b3a9d905e491513a0e44cbef0ffb6
+# Markers are exact, quoted source substrings — not executable policy or routes.
+# `affordance` describes evidenced UI protection, not a new authorization rule.
+# `writer_guard: edge_only_gap` is NOT a verified writer guard.
+version: 1
+actions:
+  - id: customer.create
+    family: customer
+    risk: normal
+    affordance: absent
+    state: active
+    service: officina.core.portal_negocios.cliente_salvar
+    variant: create
+    required_params: [banco, d, pid]
+    capability: customer.create
+    admin_only: false
+    object_action: create
+    writer_guard: null
+    web_markers:
+      - "if path=='/clientes/novo':return self.cliente_form(s)"
+      - "if path=='/clientes/novo/salvar' or"
+    api_markers:
+      - "access.require_customer_create(principal)"
+      - "servico.salvar_cliente("
+    gtk_markers:
+      - ui.botao("Novo cliente", self.novo_cliente
+    source_markers:
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: "read_access.require_customer_create(actor)"
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: "botao('+ Novo cliente','/clientes/novo')"
+    negative_tests:
+      - tests/test_p0_direct_auth.py
+    negative_markers:
+      - file: tests/test_p0_direct_auth.py
+        contains: "access.require_customer_create(Principal("
+
+  - id: customer.edit
+    family: customer
+    risk: normal
+    affordance: absent
+    state: known_gap
+    service: officina.core.portal_negocios.cliente_salvar
+    variant: edit
+    required_params: [banco, d, pid, cliente_id, principal]
+    capability: customer.edit.involved
+    admin_only: false
+    object_action: edit
+    writer_guard: null
+    web_markers:
+      - "partes[2]=='salvar'"
+      - "read_access.require_customer_write(banco,actor,editar)"
+    api_markers:
+      - "if not resto and metodo == 'PUT':"
+      - "_require_customer(servico.banco, principal, existing, 'edit')"
+    gtk_markers:
+      - ui.botao("Abrir / editar", self._editar_cliente)
+    source_markers:
+      - file: officina/core/portal_negocios.py
+        contains: "require_customer_write_locked(c,principal,cliente_id)"
+      - file: flavors/autoseg/modules/gtk_app.py
+        contains: 'ui.botao("Abrir / editar", self._editar_cliente)'
+    negative_tests:
+      - tests/test_p0_customer_write_a5b.py
+    negative_markers:
+      - file: tests/test_p0_customer_write_a5b.py
+        contains: "self._deny_unchanged(self.other_actor)"
+
+  - id: customer.deactivate
+    family: customer
+    risk: destructive
+    affordance: confirm
+    state: active
+    service: officina.core.cadastros_v9.desativar_cliente
+    required_params: [banco, cliente_id, principal]
+    capability: null
+    admin_only: true
+    object_action: null
+    writer_guard: locked
+    web_markers:
+      - "path.endswith('/desativar')"
+    api_markers:
+      - "if resto == ['desativar'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Excluir / desativar", self._excluir_cliente,
+    source_markers:
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: 'action="/clientes/{cid}/desativar"'
+      - file: flavors/autoseg/modules/gtk_app.py
+        contains: "if self.sessao is not None and self.sessao.admin:"
+    negative_tests:
+      - tests/test_p0_customer_destructive_a5b2.py
+    negative_markers:
+      - file: tests/test_p0_customer_destructive_a5b2.py
+        contains: "def test_employee_cannot_deactivate_delete_or_merge(self):"
+
+  - id: customer.delete
+    family: customer
+    risk: destructive
+    affordance: confirm
+    state: active
+    service: officina.core.portal_negocios.cliente_excluir
+    required_params: [banco, cid, pid, principal]
+    capability: null
+    admin_only: true
+    object_action: null
+    writer_guard: locked
+    web_markers:
+      - "partes[2]=='excluir'"
+    api_markers:
+      - "if resto == ['excluir'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Excluir / desativar", self._excluir_cliente,
+    source_markers:
+      - file: officina/core/portal_negocios.py
+        contains: "pid = require_admin_locked(c, principal)"
+      - file: flavors/autoseg/modules/gtk_app.py
+        contains: "if self.sessao is not None and self.sessao.admin:"
+    negative_tests:
+      - tests/test_p0_customer_destructive_a5b2.py
+    negative_markers:
+      - file: tests/test_p0_customer_destructive_a5b2.py
+        contains: "def test_direct_calls_without_actor_fail_closed(self):"
+
+  - id: customer.merge
+    family: customer
+    risk: destructive
+    affordance: confirm
+    state: active
+    service: officina.core.cadastros_v9.mesclar_clientes
+    required_params: [banco, origem_id, destino_id, principal]
+    capability: null
+    admin_only: true
+    object_action: null
+    writer_guard: locked
+    web_markers:
+      - "partes[2]=='mesclar'"
+      - 'action="/clientes/{cid}/mesclar"'
+    api_markers:
+      - "if resto == ['mesclar'] and metodo == 'POST':"
+    gtk_markers:
+      - 'ui.botao("Mesclar cliente", self._mesclar_cliente,'
+    source_markers:
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: "if s.get('admin'):"
+      - file: officina/core/cadastros_v9.py
+        contains: "admin_id=require_admin_locked(c, principal)"
+    negative_tests:
+      - tests/test_p0_customer_destructive_a5b2.py
+      - tests/test_p3_234_customer_security.py
+    negative_markers:
+      - file: tests/test_p0_customer_destructive_a5b2.py
+        contains: "def test_employee_cannot_deactivate_delete_or_merge(self):"
+      - file: tests/test_p3_234_customer_security.py
+        contains: "def test_employee_merge_denied_without_mutation(self):"
+
+  - id: customer.password
+    family: customer
+    risk: destructive
+    affordance: absent
+    state: active
+    service: officina.core.fluxo_os.definir_senha_cliente
+    required_params: [banco, cliente_id, principal]
+    capability: null  # No explicit customer.password policy key.
+    admin_only: true
+    object_action: null
+    writer_guard: locked
+    web_markers:
+      - "if (senha_nova or confirmar) and not s.get('admin'):"
+      - "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova,principal=actor)"
+    api_markers:
+      - "if resto == ['senha'] and metodo == 'POST':"
+    gtk_markers:
+      - ui.botao("Acesso web / senha", self._senha_cliente)
+    source_markers:
+      - file: flavors/autoseg/modules/api_desktop.py
+        contains: "if resto == ['senha'] and metodo == 'POST':"
+      - file: flavors/autoseg/modules/gtk_app.py
+        contains: 'ui.botao("Acesso web / senha", self._senha_cliente)'
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova,principal=actor)"
+    negative_tests:
+      - tests/test_p0_customer_password_a5d.py
+    negative_markers:
+      - file: tests/test_p0_customer_password_a5d.py
+        contains: "def test_employee_cannot_change_password(self):"
+      - file: tests/test_p0_customer_password_a5d.py
+        contains: "with self.assertRaises(PermissionError):"
+
+  - id: customer.list
+    family: customer
+    risk: read
+    affordance: absent
+    state: active
+    service: officina.integration.clientes.listar_paginado
+    required_params: [banco, termo]
+    capability: customer.view.involved
+    admin_only: false
+    object_action: view
+    writer_guard: null
+    web_markers:
+      - "if path=='/clientes':return self.clientes_lista(s)"
+      - "read_access.involved_customer_field_scopes(principal)"
+    api_markers:
+      - "_scoped_customer_list(servico.banco, principal,"
+    gtk_markers:
+      - 'for registro in self.service.listar_clientes(termo, **kwargs):'
+    source_markers:
+      - file: officina/application/local_service.py
+        contains: "return listar_clientes_scoped(self.banco, principal, termo)"
+      - file: flavors/autoseg/modules/portal_prestador.py
+        contains: "if 'nome' not in allowed_fields:"
+    negative_tests:
+      - tests/test_p0_read_auth.py
+      - tests/test_p3_5_customer_list.py
+    negative_markers:
+      - file: tests/test_p0_read_auth.py
+        contains: "self.assertNotIn('Secret Customer',body)"
+      - file: tests/test_p3_5_customer_list.py
+        contains: "def test_local_list_without_actor_denied(self):"
+
+  - id: customer.detail
+    family: customer
+    risk: read
+    affordance: absent
+    state: active
+    service: officina.integration.clientes.obter_linha
+    required_params: [banco, cliente_id]
+    capability: customer.view.involved
+    admin_only: false
+    object_action: view
+    writer_guard: null
+    web_markers:
+      - "return self.cliente_form(s,int(partes[1]))"
+      - "read_access.require_customer_read("
+    api_markers:
+      - "_scoped_customer_detail(servico.banco, principal, cliente_id)"
+    gtk_markers:
+      - 'registro = self.servico.obter_cliente(cliente_id, **kwargs)'
+    source_markers:
+      - file: flavors/autoseg/modules/gtk_dialogos.py
+        contains: "registro = self.servico.obter_cliente(cliente_id, **kwargs)"
+      - file: officina/application/local_service.py
+        contains: "return obter_cliente_scoped(self.banco, principal, cliente_id)"
+    negative_tests:
+      - tests/test_p0_read_auth.py
+      - tests/test_p3_6_customer_detail.py
+    negative_markers:
+      - file: tests/test_p0_read_auth.py
+        contains: "self.assertEqual(self.http('first',f'/clientes/{self.c2}')[0],404)"
+      - file: tests/test_p3_6_customer_detail.py
+        contains: "def test_local_detail_without_principal_denied(self):"

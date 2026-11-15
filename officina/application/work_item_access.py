@@ -44,6 +44,73 @@ def _resource(c, work_id: int) -> Resource:
     )
 
 
+def require_work_item_locked(connection, principal, work_id: int, action: str):
+    """Authorize using the writer's current SQLite transaction.
+
+    The caller must acquire BEGIN IMMEDIATE before this check and must not
+    mutate the order or its relationships before it. This helper never starts
+    or commits a second transaction.
+    """
+    if type(work_id) is not int or work_id <= 0:
+        raise PermissionError("Recurso indisponível.")
+    if not connection.in_transaction:
+        raise RuntimeError("Authorization requires an active writer transaction.")
+    try:
+        resource = _resource(connection, work_id)
+        return ObjectPolicy().require(principal, action, resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError("Recurso indisponível.") from None
+
+
+def require_admin_locked(connection, principal, *, message='Recurso indisponível.'):
+    """Require a live administrator inside the existing writer transaction.
+
+    Locked helpers follow one convention: ``(connection, principal, ...)``,
+    an active ``BEGIN IMMEDIATE`` transaction, and ``PermissionError`` on any
+    failure. The database is the authority; ``principal.role`` is not trusted.
+    """
+    if not connection.in_transaction:
+        raise RuntimeError('Administrator authorization requires a writer transaction.')
+    if (principal is None or not principal.active
+            or principal.organization_id != 'autoseg'
+            or type(principal.provider_id) is not int or principal.provider_id <= 0):
+        raise PermissionError(message)
+    try:
+        row = connection.execute('''SELECT 1 FROM prestadores
+            WHERE id=? AND ativo=1 AND excluido=0''',
+            (principal.provider_id,)).fetchone()
+        if row is None or not ext.administrador(connection, principal.provider_id):
+            raise PermissionError(message)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError(message) from None
+    return principal.provider_id
+
+
+def require_attachment_read_locked(connection, principal, attachment_id: int):
+    """Authorize an attachment and its OS using one read transaction snapshot."""
+    if type(attachment_id) is not int or attachment_id <= 0 or principal is None:
+        raise PermissionError('Recurso indisponível.')
+    if not connection.in_transaction:
+        raise RuntimeError('Attachment authorization requires an active transaction.')
+    try:
+        row = connection.execute('''SELECT os_id,nome_original,caminho FROM os_anexos
+                                     WHERE id=?''', (attachment_id,)).fetchone()
+        if row is None:
+            raise PermissionError('Recurso indisponível.')
+        resource = _resource(connection, int(row['os_id']))
+        policy = ObjectPolicy()
+        policy.require(principal, 'view', resource)
+        document = Resource('document', attachment_id, resource.organization_id,
+                            resource.owner_id, resource.client_id,
+                            resource.participant_ids, resource.attributes,
+                            resource.client_org_id)
+        policy.require(principal, 'download', document)
+        return row
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
+
 def resource_for_work_item(banco, work_id: int) -> Resource:
     if type(work_id) is not int or work_id <= 0:
         raise PermissionError("Recurso indisponível.")
@@ -116,3 +183,160 @@ def resource_for_call(banco, call_id: int) -> Resource:
 
 def require_call(banco, principal, call_id: int, action: str = "view"):
     return ObjectPolicy().require(principal, action, resource_for_call(banco,call_id))
+
+def can_read_all(principal, kind: str = "work_item") -> bool:
+    """Resolve global read permission through the policy, not the web session."""
+    return ObjectPolicy().can(
+        principal, 'view', Resource(kind, organization_id='autoseg')
+    ).allowed
+
+
+def require_read_work_item(banco, principal, work_id: int, action: str = 'view'):
+    """Enforce read authorization regardless of write-enforcement flags."""
+    if action not in ('view', 'read'):
+        raise ValueError('Unsupported read action.')
+    resource = resource_for_work_item(banco, work_id)
+    return ObjectPolicy().require(principal, 'view', resource)
+
+
+def shared_queue_item(banco, principal, work_id: int, *, enforce_assume_policy=False):
+    """Read only shareable fields of an active OS without loading its form."""
+    if not principal.active or principal.organization_id != 'autoseg' or principal.provider_id is None:
+        raise PermissionError('Recurso indisponível.')
+    with ext.db(banco) as c:
+        item = c.execute('''SELECT o.id,o.numero_os,o.status,o.data_abertura,
+                   COALESCE(o.atualizado_em,o.data_abertura) AS atualizado_em,
+                   cl.nome AS cliente,p.nome AS responsavel,
+                   (SELECT GROUP_CONCAT(nome, ', ') FROM (
+                     SELECT DISTINCT p2.nome AS nome FROM os_prestadores op
+                     JOIN prestadores p2 ON p2.id=op.prestador_id
+                     WHERE op.os_id=o.id AND op.ativo=1 ORDER BY p2.nome
+                   )) AS participantes
+                FROM ordens_servico o JOIN clientes cl ON cl.id=o.cliente_id
+                LEFT JOIN os_responsaveis r ON r.os_id=o.id
+                LEFT JOIN prestadores p ON p.id=r.prestador_id
+                WHERE o.id=? AND o.status IN ('Aberta','Iniciada','Pendente')
+                  AND COALESCE(o.arquivada,0)=0''', (work_id,)).fetchone()
+        if item is None:
+            raise PermissionError('Recurso indisponível.')
+        decision = ObjectPolicy().can(principal, 'view', _resource(c, work_id))
+        if decision.relationship != 'other' or decision.reason != 'Sem vínculo com o recurso.':
+            raise PermissionError('Recurso indisponível.')
+        may_assume = ext.pode_assumir(c, work_id, principal.provider_id)
+        if may_assume and enforce_assume_policy:
+            may_assume = ObjectPolicy().can(principal, 'assume',
+                                            _resource(c, work_id)).allowed
+        return dict(item), may_assume
+
+
+def _customer_resource(connection, principal, customer_id: int) -> Resource:
+    if type(customer_id) is not int or customer_id <= 0:
+        raise PermissionError('Recurso indisponível.')
+    if can_read_all(principal, 'customer'):
+        row = connection.execute('SELECT id FROM clientes WHERE id=?', (customer_id,)).fetchone()
+        participant_ids = frozenset()
+    else:
+        pid = principal.provider_id
+        if pid is None:
+            raise PermissionError('Recurso indisponível.')
+        row = connection.execute('''SELECT cl.id FROM clientes cl WHERE cl.id=? AND EXISTS (
+            SELECT 1 FROM ordens_servico o WHERE o.cliente_id=cl.id AND (
+                EXISTS (SELECT 1 FROM os_responsaveis r
+                        WHERE r.os_id=o.id AND r.prestador_id=?) OR
+                EXISTS (SELECT 1 FROM os_prestadores op
+                        WHERE op.os_id=o.id AND op.prestador_id=? AND op.ativo=1)
+            ))''', (customer_id,pid,pid)).fetchone()
+        participant_ids = frozenset((pid,)) if row else frozenset()
+    if row is None:
+        raise PermissionError('Recurso indisponível.')
+    return Resource('customer', customer_id, organization_id='autoseg',
+                    participant_ids=participant_ids)
+
+
+def require_customer_read(banco, principal, customer_id: int, action: str = 'view'):
+    if action != 'view':
+        raise ValueError('Unsupported customer read action.')
+    try:
+        with ext.db(banco) as connection:
+            resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().require(principal, 'view', resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
+def customer_field_allowed(banco, principal, customer_id: int, field: str) -> bool:
+    try:
+        with ext.db(banco) as connection:
+            resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().can_view_field(principal, resource, 'customer.' + field).allowed
+    except PermissionError:
+        return False
+
+
+def require_customer_contact(banco, principal, customer_id: int):
+    try:
+        with ext.db(banco) as connection:
+            resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().require(
+            principal, 'view', Resource('customer.contact', resource.id,
+                                       resource.organization_id,
+                                       participant_ids=resource.participant_ids))
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+def involved_customer_field_scopes(principal):
+    """Field scopes for customers selected by SQL involvement predicates."""
+    if not principal.active or principal.organization_id != 'autoseg':
+        raise PermissionError('Recurso indisponível.')
+    scope = Resource('customer', organization_id='autoseg',
+                     participant_ids=frozenset((principal.provider_id,))
+                     if principal.provider_id is not None else frozenset())
+    policy = ObjectPolicy()
+    policy.require(principal, 'view', scope)
+    return frozenset(field for field in ('nome','documento','telefone','email','endereco')
+                     if policy.can_view_field(principal,scope,'customer.'+field).allowed)
+
+
+def require_customer_create(principal):
+    """Customer creation has no preexisting OS involvement."""
+    return ObjectPolicy().require(principal, 'create',
+                                  Resource('customer', organization_id='autoseg'))
+
+
+def require_customer_create_locked(connection, principal):
+    """Authorize creation while the writer owns the SQLite transaction."""
+    if not connection.in_transaction:
+        raise RuntimeError('Customer creation requires an active writer transaction.')
+    if (principal is None or not principal.active
+            or principal.organization_id != 'autoseg'
+            or type(principal.provider_id) is not int or principal.provider_id <= 0):
+        raise PermissionError('Recurso indisponível.')
+    try:
+        return ObjectPolicy().require(
+            principal, 'create', Resource('customer', organization_id='autoseg'))
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
+def require_customer_write_locked(connection, principal, customer_id: int):
+    """Check current customer involvement inside the existing writer transaction."""
+    if not connection.in_transaction:
+        raise RuntimeError('Customer authorization requires an active writer transaction.')
+    if (type(customer_id) is not int or customer_id <= 0 or principal is None
+            or not principal.active or principal.provider_id is None):
+        raise PermissionError('Recurso indisponível.')
+    try:
+        resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().require(principal, 'edit', resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None
+
+
+def require_customer_write(banco, principal, customer_id: int):
+    """Edit only a current SQL-involved customer or an authorized administrator."""
+    try:
+        with ext.db(banco) as connection:
+            resource = _customer_resource(connection, principal, customer_id)
+        return ObjectPolicy().require(principal, 'edit', resource)
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Recurso indisponível.') from None

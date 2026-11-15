@@ -7,9 +7,9 @@ Atalhos de operação. A raiz do repositório tem `autoseg` (MAIN) e
 
 ```bash
 # MAIN (produção local)
-./autoseg start site      # site 8765/8766; a API vai embutida
+./autoseg start site      # site 8766; a API vai embutida
 ./autoseg start server    # API 8766 separada; use com o site parado
-./autoseg start tunnel    # túneis 8765/8766
+./autoseg start tunnel    # túneis 8766
 ./autoseg stop site
 ./autoseg stop server
 ./autoseg stop tunnel
@@ -21,9 +21,9 @@ Atalhos de operação. A raiz do repositório tem `autoseg` (MAIN) e
 ./autoseg update         # MAIN e depois DEV
 
 # DEV (dados fictícios)
-./autoseg-dev start site      # site 8865/8866
+./autoseg-dev start site      # site 8866
 ./autoseg-dev start server    # API 8766; só com a MAIN parada
-./autoseg-dev start tunnel    # túneis 8865/8866
+./autoseg-dev start tunnel    # túneis 8866
 ./autoseg-dev stop site
 ./autoseg-dev stop server
 ./autoseg-dev stop tunnel
@@ -50,8 +50,8 @@ Os comandos antigos continuam funcionando:
 ./autoseg app-local  # GTK sem portas
 ./autoseg api        # API headless produção
 ./autoseg server     # API headless DEV (8766)
-./autoseg site       # site DEV (8865/8866), em primeiro plano
-./autoseg site-prod  # site produção (8765/8766), em primeiro plano
+./autoseg site       # site DEV (8866), em primeiro plano
+./autoseg site-prod  # site produção (8766), em primeiro plano
 ./autoseg stop       # para os túneis DEV
 ./autoseg check
 ./autoseg paths

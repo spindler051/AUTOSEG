@@ -1,9 +1,57 @@
+## P0-AUTH-CLOSE-GATE-HARDENING — DEV freeze (2026-11-12)
+
+Branch `feat/p0-auth-close-gate`, commit `fafcd8e`; base do hardening
+`2ba7d46`. Suíte completa: **724 OK · 1 skip**. O reenvio manual tem um único
+caminho, dependente da outbox; sem outbox ele falha antes de enviar. O
+dispatcher exige `recipient_refs`; o rollback recusa projeções com referências
+simbólicas; o cleanup do PDF é limitado ao worker que ainda tem o lease.
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0`. MAIN em `3892e7b`, intocada.
+
+Ainda há três caminhos antigos fora do contrato do reenvio manual: o campo
+`emails_adicionais` no formulário de conclusão, o envio automático no branch
+`not use_outbox` e chamadas diretas aos serviços sem `connection`. Antes da
+MAIN, falta homologar a branch no DEV 8866 com a outbox instalada, ensaiar
+migração/rollback e autorizar a outbox em produção. Estado detalhado em
+[`operations/P0_AUTH_DEV_FREEZE.md`](operations/P0_AUTH_DEV_FREEZE.md).
+
+## P0-AUTH-CLOSE-GATE-FIXES — validação DEV (2026-11-12)
+
+O fechamento adicional corrige `publico` em OS encerrada, faz a verificação de
+status e confirmação de PDF na mesma `BEGIN IMMEDIATE`, preserva e-mails
+válidos na projeção de rollback e permite restauração operacional explícita da
+quarentena com idade zero. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` permanece;
+não foi feita integração com MAIN ou aprovação de implantação.
+
+
+
+## P0-AUTH-CLOSE-GATE — DEV handoff
+
+The close-gate review extends transaction-guarded attachment/invoice commands
+with staged rotation, recoverable quarantine and a DEV-only worker. Manual
+email retry requires a fresh operation ID plus duplicate acknowledgment;
+recipient identities remain references and are resolved at dispatch. PDF
+publication validates hashes before adopting an orphan. The original
+`AUTOSEG_OBJECT_POLICY_ENFORCEMENT=0` default remains unchanged. Deploy only
+after reviewing the attached test report and any residual issues; MAIN is
+not part of this change.
+
+### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
+
+Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
+reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
+foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
+fechado: os caminhos HTTP de anexos/nota já usam guarda e efeitos
+recuperáveis, porém efeitos de filesystem e consumidores legados diretos
+precisam de homologação e reconciliação operacional antes da ativação. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
+`NOTES.md` desta entrega; não habilitar na MAIN.
+
 # Handoff — estado atual
 
-**Atualizado:** 2026-11-11
+**Atualizado:** 2026-11-12
 **Versão:** `9.6.0-dev.73`
-**Branch de trabalho:** `main` (HEAD após `15ddcd0`)
-**Produção:** MAIN intocada; servidor e túneis parados.
+**Branch de trabalho:** `feat/p0-auth-close-gate` (`fafcd8e`); MAIN em `3892e7b`.
+**Produção:** MAIN intocada; 8765/8766 continuam no código antigo.
 
 Este é o ponto de retomada. O índice completo fica em
 [`docs/README.md`](README.md); o histórico de mudanças no
@@ -18,11 +66,20 @@ Este é o ponto de retomada. O índice completo fica em
 > [`planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md`](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md)
 > e [`planning/OFFICINA_WEB_AND_GTK.md`](planning/OFFICINA_WEB_AND_GTK.md).
 
+## P0-AUTH — implementação parcial em revisão
+
+- Reabertura de OS `Pendente`: permissão `work_item.reopen` exige admin
+  mesmo com a flag de enforcement desligada; rechecagem dentro de
+  `BEGIN IMMEDIATE` para o comando `abrir`.
+- Guardas adicionais de vínculo/status foram inseridas nos writers de
+  atribuição, assunção, arquivamento, rota, cancelamento e fotos.
+- **Gate não concluído:** outros writers ainda fazem escritas em transações
+  independentes. A flag deve permanecer `0`; conferir `BLOCKED.md` da peça.
+
 ## O que está funcionando
 
 - App desktop GTK4/libadwaita em macOS e Linux.
-- Site único do Officina Web para prestador e cliente; o portal antigo do
-  cliente continua em processo separado na 8765.
+- Site único do Officina Web para prestador e cliente; sem segundo processo web.
 - Banco SQLite fora do repositório; API headless e GUI do site em comandos separados.
 - Cadastros, OS, materiais, fotos, relatórios, PDF, financeiro, estoque,
   orçamento, notas fiscais e e-mails em rascunho.
@@ -119,7 +176,7 @@ Este é o ponto de retomada. O índice completo fica em
 - Cliente no GTK depende desse gate; a 6.5 é remote-only e não pode duplicar
   regra de OS/permissão no widget.
 - Modo remoto de dados ainda é incompleto; não prometer GTK contra celular.
-- Não sincronizar `dados.db` como arquivo (Syncthing/Dropbox).
+- Não sincronizar `dados.db` como arquivo com ferramentas de sincronização.
 - A migração de numeração não pode usar `MAX+1` nem adivinhar datas.
 
 ## Próximas três ações
@@ -139,7 +196,7 @@ Este é o ponto de retomada. O índice completo fica em
 ./autoseg dev        # app DEV
 ./autoseg app-local  # local-only, sem portas
 ./autoseg server     # servidor de dados DEV (8766)
-./autoseg site       # GUI do site DEV (8865/8866)
+./autoseg site       # GUI do site DEV (8866)
 ./autoseg api        # servidor headless de produção
 ./autoseg paths      # onde ficam banco e dados
 ```

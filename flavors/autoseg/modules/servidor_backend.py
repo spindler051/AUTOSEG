@@ -12,9 +12,8 @@ proxy reverso com domínio próprio.
 
 Variáveis:
   GESTAO_BANCO / AUTOSEG_BASE   banco e pastas de dados
-  CLIENTE_PORT / CLIENTE_BIND   portal do cliente (modo --web)
   PRESTADOR_PORT / PRESTADOR_BIND
-  AUTOSEG_DEV=1                 portas 8865/8866 por padrão
+  AUTOSEG_DEV=1                 porta única 8866 por padrão
 """
 from __future__ import annotations
 import sys as _sys
@@ -23,12 +22,28 @@ if __package__ in (None, ''):
     _sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
 
 import argparse
+import os
 import signal
 import time
 from pathlib import Path
 
 from officina.core import runtime_config
 runtime_config.configure_server()
+
+
+def _validar_ambiente():
+    """Impede que DEV e MAIN abram o banco um do outro."""
+    banco = runtime_config.database_path().resolve()
+    raw_root = os.environ.get('AUTOSEG_SERVER_DATA')
+    dev_root = (Path(raw_root).expanduser().resolve() if raw_root
+                else (runtime_config.user_data_dir() / 'server-dev').resolve())
+    if runtime_config.is_dev() and dev_root not in banco.parents:
+        raise SystemExit(f'DEV recusou banco fora de {dev_root}: {banco}')
+    if not runtime_config.is_dev() and dev_root in banco.parents:
+        raise SystemExit(f'MAIN recusou banco de DEV: {banco}')
+
+
+_validar_ambiente()
 
 from officina.core.banco import BANCO, criar_banco
 from officina.core import prestadores_ext as ext
@@ -71,45 +86,23 @@ def _esperar():
 
 
 def run_site():
-    from flavors.autoseg.modules.servidor_web import ServidorPortal
+    """Officina Web has one HTTP origin for both client and provider."""
     from flavors.autoseg.modules.portal_prestador import PortalPrestador
 
     _instalar_base()
-    cliente_cfg = runtime_config.client_server()
-    prestador_cfg = runtime_config.provider_server()
-    cliente = ServidorPortal(
-        BANCO, PASTA_APP,
-        porta=cliente_cfg.port,
-        host=cliente_cfg.host)
-    prestador = PortalPrestador(
-        BANCO,
-        host=prestador_cfg.host,
-        porta=prestador_cfg.port)
+    cfg = runtime_config.provider_server()
+    portal = PortalPrestador(BANCO, host=cfg.host, porta=cfg.port)
     try:
-        cliente.iniciar()
-        prestador.iniciar()
-        info = cliente.info()
-        print("Officina Web — GUI do site")
-        print("Banco:", BANCO)
-        host_prestador = ("127.0.0.1" if prestador.host in ("0.0.0.0", "::")
-                          else prestador.host)
-        print("Cliente:", info.get("url_local"))
-        print("Prestador:", f"http://{host_prestador}:{prestador.porta}")
-        print("API embutida no mesmo processo (temporário):",
-              f"http://{host_prestador}:{prestador.porta}/api/v1")
-        print("Para servidor separado, use --api.")
-        print("Cloudflare: opcional, iniciado separadamente.")
-        print("Ctrl+C para encerrar.")
+        portal.iniciar()
+        host = '127.0.0.1' if portal.host in ('0.0.0.0', '::') else portal.host
+        print('Officina Web — origem única')
+        print('Banco:', BANCO)
+        print('Site:', f'http://{host}:{portal.porta}')
+        print('API:', f'http://{host}:{portal.porta}/api/v1')
+        print('Ctrl+C para encerrar.')
         _esperar()
     finally:
-        try:
-            prestador.parar()
-        except Exception:
-            pass
-        try:
-            cliente.parar()
-        except Exception:
-            pass
+        portal.parar()
 
 
 def run_api(host='127.0.0.1', port=None):

@@ -476,10 +476,10 @@ class LocalService:
         cad9.alterar_vinculo(
             self.banco, int(vinculo_id), bool(aprovar), 'Desktop AUTOSEG')
 
-    def salvar_os(self, dados: OSInput) -> OSResultado:
+    def salvar_os(self, dados: OSInput, *, authorize=None) -> OSResultado:
         from officina.application.os_write import salvar_os
         try:
-            return salvar_os(self.banco, dados)
+            return salvar_os(self.banco, dados, authorize=authorize)
         except ValidacaoError:
             raise
         except ValueError as erro:
@@ -513,36 +513,46 @@ class LocalService:
         from officina.application.desktop_context import contexto_movimento_empresa
         return contexto_movimento_empresa(self.banco)
 
-    def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:
-        return [self._resumo(registro)
-                for registro in clientes_core.listar(termo, banco=self.banco)]
+    def listar_clientes(self, termo: str = '', *, principal=None) -> list[ClienteResumo]:
+        from officina.application.customer_reads import listar_clientes_scoped
+        return listar_clientes_scoped(self.banco, principal, termo)
 
-    def obter_cliente(self, cliente_id: int) -> Cliente | None:
-        registro = clientes_core.obter(cliente_id, banco=self.banco)
-        if registro is None:
-            return None
-        return self._cliente(registro)
+    def obter_cliente(self, cliente_id: int, *, principal=None) -> Cliente | None:
+        from officina.application.customer_reads import obter_cliente_scoped
+        return obter_cliente_scoped(self.banco, principal, cliente_id)
 
-    def desativar_cliente(self, cliente_id: int, motivo: str = '') -> None:
-        cad9.desativar_cliente(self.banco, int(cliente_id),
-                               motivo or 'Desktop AUTOSEG')
+    def desativar_cliente(self, cliente_id: int, motivo: str = '', *, principal=None) -> None:
+        # `motivo` stays in the transport contract; the history records the
+        # authenticated administrator, not a caller-supplied string.
+        cad9.desativar_cliente(self.banco, int(cliente_id), principal=principal)
 
-    def excluir_cliente(self, cliente_id: int) -> None:
-        neg.cliente_excluir(self.banco, int(cliente_id), 0)
+    def excluir_cliente(self, cliente_id: int, *, principal=None) -> None:
+        neg.cliente_excluir(self.banco, int(cliente_id),
+                            principal.provider_id if principal is not None else None,
+                            principal=principal)
 
-    def definir_senha_cliente(self, cliente_id: int, senha: str | None = None) -> str:
-        return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha)
+    def mesclar_clientes(self, origem_id: int, destino_id: int, *, principal=None) -> None:
+        cad9.mesclar_clientes(self.banco, int(origem_id), int(destino_id),
+                             principal=principal)
 
-    def atribuir_os(self, os_id: int, prestador_id: int) -> bool:
+    def definir_senha_cliente(self, cliente_id: int, senha: str | None = None, *, principal=None) -> str:
+        return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha, principal=principal)
+
+    def atribuir_os(self, os_id: int, prestador_id: int, *, authorize=None) -> bool:
         return bool(ext.atribuir(self.banco, int(os_id), int(prestador_id),
-                                 ator='Desktop AUTOSEG'))
+                                 ator='Desktop AUTOSEG', authorize=authorize))
 
-    def desatribuir_os(self, os_id: int) -> bool:
+    def desatribuir_os(self, os_id: int, *, authorize=None) -> bool:
         return bool(ext.desatribuir(self.banco, int(os_id),
-                                    ator='Desktop AUTOSEG'))
+                                    ator='Desktop AUTOSEG', authorize=authorize))
 
-    def iniciar_os(self, os_id: int) -> None:
-        aten.iniciar(self.banco, int(os_id))
+    def iniciar_os(self, os_id: int, *, authorize=None) -> None:
+        if authorize is None:
+            return aten.iniciar(self.banco, int(os_id))
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return aten.iniciar(self.banco, int(os_id), connection=connection)
 
     def atribuir_responsavel(self, organizacao_id: int, usuario_id: int) -> str:
         return cad9.atribuir_responsavel(
@@ -579,18 +589,31 @@ class LocalService:
         return ext.definir_documento_prestador(
             self.banco, int(prestador_id), str(documento))
 
-    def publicar_pdf(self, os_id: int) -> str:
-        return str(fluxo.publicar_relatorio(self.banco, int(os_id)))
+    def publicar_pdf(self, os_id: int, *, authorize=None) -> str:
+        return str(fluxo.publicar_relatorio(self.banco, int(os_id),
+                                           authorize=authorize))
 
-    def preparar_email(self, os_id: int) -> str:
-        publicado = fluxo.ultimo_documento(self.banco, int(os_id))
-        if not publicado:
-            raise ValueError('Esta OS não possui PDF publicado.')
-        pdf = fluxo.validar_pdf_publicado(publicado)
-        return str(ext.criar_email_rascunho(self.banco, int(os_id), pdf))
+    def preparar_email(self, os_id: int, *, authorize=None) -> str:
+        def prepare():
+            publicado = fluxo.ultimo_documento(self.banco, int(os_id))
+            if not publicado:
+                raise ValueError('Esta OS não possui PDF publicado.')
+            pdf = fluxo.validar_pdf_publicado(publicado)
+            return str(ext.criar_email_rascunho(self.banco, int(os_id), pdf))
+        if authorize is None:
+            return prepare()
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return prepare()
 
-    def preparar_nota(self, os_id: int) -> str:
-        return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+    def preparar_nota(self, os_id: int, *, authorize=None) -> str:
+        if authorize is None:
+            return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            authorize(connection)
+            return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
 
     def pdf_publicado(self, os_id: int) -> str:
         publicado = fluxo.ultimo_documento(self.banco, int(os_id))
@@ -698,11 +721,39 @@ class LocalService:
         cad9.definir_admin(self.banco, int(prestador_id), bool(ativo))
 
     def salvar_cliente(
-        self, cliente_id: int | None, dados: Mapping[str, Any]
+        self, cliente_id: int | None, dados: Mapping[str, Any], *, principal=None
     ) -> Cliente:
         try:
-            registro = clientes_core.salvar(
-                cliente_id, dict(dados), banco=self.banco)
+            if cliente_id is None:
+                from officina.application.work_item_access import require_customer_create_locked
+                with ext.db(self.banco) as connection:
+                    connection.execute('BEGIN IMMEDIATE')
+                    require_customer_create_locked(connection, principal)
+                    registro = clientes_core.salvar(
+                        cliente_id, dict(dados), banco=self.banco, connection=connection)
+            else:
+                from officina.application import work_item_access as access
+                with ext.db(self.banco) as connection:
+                    connection.execute('BEGIN IMMEDIATE')
+                    access.require_customer_write_locked(connection, principal, int(cliente_id))
+                    current = connection.execute('SELECT * FROM clientes WHERE id=?',
+                                                 (int(cliente_id),)).fetchone()
+                    if current is None:
+                        raise ValueError('Cliente não encontrado.')
+                    if access.can_read_all(principal, 'customer'):
+                        payload = dict(dados)
+                    else:
+                        allowed = access.involved_customer_field_scopes(principal)
+                        editable = {'nome', 'status'} | {
+                            field for field in ('documento', 'telefone', 'email', 'cidade', 'endereco')
+                            if (field if field != 'cidade' else 'endereco') in allowed}
+                        payload = {field: current[field] for field in clientes_core.CAMPOS
+                                   if field != 'dados_incompletos'}
+                        for field, value in dados.items():
+                            if field in editable:
+                                payload[field] = value
+                    registro = clientes_core.salvar(
+                        cliente_id, payload, banco=self.banco, connection=connection)
         except clientes_core.ErroCliente as erro:
             raise ValidacaoError(str(erro), erro.titulo) from erro
         except WorkaholicConflictError as erro:

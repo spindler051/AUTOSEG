@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from email.message import EmailMessage
 from email.policy import SMTP
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 from officina.core import runtime_config
 BASE = runtime_config.base_dir()
@@ -280,8 +280,12 @@ def listar_os_compartilhadas(banco, ordem='status', pid=None):
     clausula = ordens.get(str(ordem or ''), ordens['status'])
     with db(banco) as c:
         return [dict(x) for x in c.execute(f"""
-            SELECT o.id, o.numero_os, o.status, o.descricao, o.data_abertura,
+            SELECT o.id, o.numero_os, o.status, o.data_abertura,
                    o.cliente_id, cl.nome AS cliente,
+                   (r.prestador_id=? OR EXISTS(
+                     SELECT 1 FROM os_prestadores own
+                     WHERE own.os_id=o.id AND own.prestador_id=? AND own.ativo=1
+                   )) AS involved,
                    r.prestador_id AS responsavel_id,
                    p.nome AS responsavel,
                    (SELECT GROUP_CONCAT(nome, ', ') FROM (
@@ -297,7 +301,7 @@ def listar_os_compartilhadas(banco, ordem='status', pid=None):
             WHERE o.status IN ('Aberta','Iniciada','Pendente')
               AND COALESCE(o.arquivada,0)=0
             ORDER BY {clausula}
-        """, (int(pid or 0),)).fetchall()]
+        """, (int(pid or 0),int(pid or 0),int(pid or 0))).fetchall()]
 
 def responsavel_atual(c, os_id):
     x = c.execute('SELECT prestador_id FROM os_responsaveis WHERE os_id=?', (os_id,)).fetchone()
@@ -305,15 +309,17 @@ def responsavel_atual(c, os_id):
 
 def pode_assumir(c,os_id,pid):
     """Somente OS ativa sem responsável pode ser assumida por outro prestador."""
-    o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
+    o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
     p=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
     if not o or not p: return False
-    return o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
+    return not o['arquivada'] and o['status'] in ATIVAS and responsavel_atual(c,os_id) is None
 
-def atribuir(banco,os_id,prestador_id,ator='Administrador'):
+def atribuir(banco,os_id,prestador_id,ator='Administrador',authorize=None):
     """Atribuição administrativa define responsável; preserva participantes históricos."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(prestador_id,)).fetchone()
         if not o or not p: raise ValueError('OS ou prestador ativo não encontrado.')
@@ -331,10 +337,13 @@ def atribuir(banco,os_id,prestador_id,ator='Administrador'):
                f'Responsável atual: {p["nome"]}. Responsável anterior (ID): {anterior or "nenhum"}.',prestador_id,ator)
         return True
 
-def assumir(banco,os_id,pid):
+def assumir(banco,os_id,pid,authorize=None,*,connection=None):
     """Assunção atômica de OS ativa desatribuída, sem iniciar execução."""
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not p or not o: raise PermissionError('Prestador ou OS inválida.')
@@ -357,10 +366,12 @@ def assumir(banco,os_id,pid):
                f'{p["nome"]} assumiu a OS. Responsável anterior (ID): {anterior or "nenhum"}.',pid,p['nome'])
         return True
 
-def arquivar_os(banco,os_id,pid,ator=None,motivo=''):
+def arquivar_os(banco,os_id,pid,ator=None,motivo='',authorize=None):
     """Arquiva uma OS ativa sem apagar dados; admin only, com evento."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         if pid is None or not c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',(pid,)).fetchone():
             raise PermissionError('Somente administradores podem arquivar OS.')
         o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
@@ -415,11 +426,13 @@ def validar_imagem(conteudo):
     return formato, {'JPEG':'.jpg','PNG':'.png','WEBP':'.webp'}[formato]
 
 
-def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador', *, connection=None):
     """Gira uma foto existente em 90° no sentido horário, sem duplicá-la."""
     from PIL import Image, ImageOps
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    from io import BytesIO
+    from officina.core import os_effect_outbox as outbox
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -429,25 +442,42 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
         if pid is not None:
             p=c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1',(pid,)).fetchone()
             if not p:raise PermissionError('Prestador inativo.')
-        a=c.execute('SELECT caminho,nome_original FROM os_anexos WHERE id=? AND os_id=?',
+            if responsavel_atual(c,os_id)!=pid and not administrador(c,pid):
+                raise PermissionError('Somente o responsável ou administrador edita fotos.')
+        a=c.execute('SELECT caminho,nome_original,sha256 FROM os_anexos WHERE id=? AND os_id=?',
                     (anexo_id,os_id)).fetchone()
         if not a:raise ValueError('Foto não encontrada.')
         caminho=Path(a['caminho'])
         if not caminho.is_file():raise ValueError('Arquivo da foto não encontrado.')
-        temporario=caminho.with_name(caminho.name+'.girando')
-        try:
+        if connection is not None and outbox.installed(c):
             with Image.open(caminho) as original:
                 formato=original.format or 'JPEG'
-                imagem=ImageOps.exif_transpose(original)
-                imagem=imagem.rotate(-90,expand=True)
-                if formato=='JPEG':
-                    imagem=imagem.convert('RGB')
-                imagem.save(temporario,format=formato)
-            os.replace(temporario,caminho)
-        except Exception as erro:
-            temporario.unlink(missing_ok=True)
-            raise ValueError('Não foi possível girar a foto.') from erro
-        digest=hashlib.sha256(caminho.read_bytes()).hexdigest()
+                imagem=ImageOps.exif_transpose(original).rotate(-90,expand=True)
+                if formato=='JPEG': imagem=imagem.convert('RGB')
+                stream=BytesIO()
+                imagem.save(stream,format=formato)
+            content=stream.getvalue()
+            digest=hashlib.sha256(content).hexdigest()
+            event_id=c.execute('SELECT COALESCE(MAX(id),0) FROM os_eventos WHERE os_id=?',
+                               (os_id,)).fetchone()[0]
+            revision=f'{anexo_id}:{event_id}:{a["sha256"]}:{digest}'
+            key=outbox.operation_key(os_id,revision,'attachment-rotate','file')
+            outbox.stage_bytes(ANEXOS,key,content)
+            outbox.enqueue_file(c,os_id,revision,'attachment-rotate',anexo_id,digest,
+                                previous_sha256=a['sha256'])
+        else:
+            temporario=caminho.with_name(caminho.name+'.girando')
+            try:
+                with Image.open(caminho) as original:
+                    formato=original.format or 'JPEG'
+                    imagem=ImageOps.exif_transpose(original).rotate(-90,expand=True)
+                    if formato=='JPEG': imagem=imagem.convert('RGB')
+                    imagem.save(temporario,format=formato)
+                os.replace(temporario,caminho)
+            except Exception as erro:
+                temporario.unlink(missing_ok=True)
+                raise ValueError('Não foi possível girar a foto.') from erro
+            digest=hashlib.sha256(caminho.read_bytes()).hexdigest()
         c.execute('UPDATE os_anexos SET sha256=? WHERE id=?',(digest,anexo_id))
         nome_ator=ator
         if pid is not None:
@@ -457,13 +487,13 @@ def girar_imagem(banco, os_id, anexo_id, pid=None, ator='Prestador'):
         return str(caminho)
 
 
-def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
+def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador', *, connection=None):
     """Move uma foto uma posição para cima/baixo dentro da mesma OS."""
     direcao=str(direcao or '').strip().lower()
     if direcao not in ('up','down'):
         raise ValueError('Direção de ordenação inválida.')
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -498,10 +528,10 @@ def mover_anexo(banco, os_id, anexo_id, direcao, pid=None, ator='Prestador'):
         return True
 
 
-def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador'):
+def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador', *, connection=None):
     """Remove uma foto da OS ativa, com permissão e evento de auditoria."""
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status,arquivada FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:raise ValueError('OS não existe.')
         if o['status'] not in ATIVAS:
@@ -521,10 +551,11 @@ def remover_anexo(banco, os_id, anexo_id, pid=None, ator='Prestador'):
             p=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()
             if p:nome_ator=p['nome']
         evento(c,os_id,'Foto removida',Path(foto['nome_original']).name[:150],pid,nome_ator)
-    try:
-        Path(foto['caminho']).unlink(missing_ok=True)
-    except OSError:
-        pass
+    if connection is None:
+        try:
+            Path(foto['caminho']).unlink(missing_ok=True)
+        except OSError:
+            pass
     return True
 
 
@@ -569,7 +600,7 @@ def atualizar_legenda_anexo(banco, os_id, anexo_id, legenda, visivel=1, ator='Pr
 
 
 def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=False,
-                               chave=None,legenda='',visivel=1):
+                               chave=None,legenda='',visivel=1,*,staged=False):
     """Anexa ou atualiza uma foto sem duplicar; a legenda fica ligada à chave/hash."""
     formato,extensao=validar_imagem(conteudo)
     if pid is not None:
@@ -600,8 +631,14 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
                    (c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome'] if pid else 'Administrador'))
         return str(existente['caminho'])
     ANEXOS.mkdir(parents=True,exist_ok=True)
-    destino=ANEXOS/(secrets.token_hex(16)+extensao)
-    destino.write_bytes(conteudo)
+    if staged:
+        from officina.core import os_effect_outbox as effects
+        effects.require_installed(c)
+        # Assign the final operation key after insertion, using its record ID.
+        destino=ANEXOS/('pending-'+secrets.token_hex(16)+extensao)
+    else:
+        destino=ANEXOS/(secrets.token_hex(16)+extensao)
+        destino.write_bytes(conteudo)
     try:
         ordem=c.execute('SELECT COALESCE(MAX(ordem),0)+1 FROM os_anexos WHERE os_id=?',
                         (os_id,)).fetchone()[0]
@@ -609,17 +646,28 @@ def registrar_imagem_transacao(c,os_id,pid,nome,conteudo,permitir_colaboracao=Fa
                          VALUES(?,?,?,?,?,?,?,?,?)''',
                   (os_id,pid,Path(nome).name[:150],str(destino),formato,agora(),chave,digest,ordem))
         definir_legenda_anexo_c(c,os_id,cur.lastrowid,legenda,visivel)
+        if staged:
+            revision=f'{cur.lastrowid}:{digest}'
+            operation=effects.operation_key(os_id,revision,'attachment-add','file')
+            destino=ANEXOS/(operation+extensao)
+            c.execute('UPDATE os_anexos SET caminho=? WHERE id=?',
+                      (str(destino),cur.lastrowid))
+            effects.stage_bytes(ANEXOS,operation,conteudo)
+            effects.enqueue_file(c,os_id,revision,'attachment-add',cur.lastrowid,digest)
         ator='Administrador'
         if pid is not None:
             ator=c.execute('SELECT nome FROM prestadores WHERE id=?',(pid,)).fetchone()['nome']
         evento(c,os_id,'Imagem anexada',Path(nome).name[:150],pid,ator)
     except Exception:
-        destino.unlink(missing_ok=True);raise
+        if not staged:
+            destino.unlink(missing_ok=True)
+        raise
     # Warm the thumbnail cache so the first OS page load does not decode the original.
-    try:
-        thumb_imagem(destino)
-    except Exception:
-        pass
+    if not staged:
+        try:
+            thumb_imagem(destino)
+        except Exception:
+            pass
     return str(destino)
 
 
@@ -791,7 +839,7 @@ def salvar_config_prestador(banco,pid,dados):
 
 def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     with db(banco) as c:
-        r=c.execute('SELECT o.numero_os,c.email,c.nome FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
+        r=c.execute('SELECT o.numero_os,c.email,c.nome,o.valor_total FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?',(os_id,)).fetchone()
         if prestador_id is None:
             prestador_id=responsavel_atual(c,os_id)
     if not r: raise ValueError('OS inválida.')
@@ -809,7 +857,8 @@ def criar_email_rascunho(banco,os_id,pdf,prestador_id=None):
     if texto_bancario:
         pagamento.append('Dados bancários e cadastrais:\n'+texto_bancario)
     corpo=f'Olá, {r["nome"]}.\n\nSegue em anexo o relatório da ordem de serviço {r["numero_os"]}.'
-    if pagamento:corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
+    if pagamento and float(r['valor_total'] or 0)>0:
+        corpo+='\n\nDados para pagamento (confira antes de enviar):\n'+'\n'.join(pagamento)
     corpo+='\n\nAtenciosamente,\n'+(config.get('banco_titular') or 'AUTOSEG')
     nota=ultima_nota_fiscal(banco,os_id)
     caminho_nf=None
@@ -841,10 +890,12 @@ def criar_rascunho_fiscal(banco,os_id):
         raise ValueError('OS sem número público; não é possível preparar a nota fiscal.')
     path=RASCUNHOS/f'nota_fiscal_rascunho_{nome_os}.json';path.write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding='utf-8');return str(path)
 
-def desatribuir(banco, os_id, ator='Administrador'):
+def desatribuir(banco, os_id, ator='Administrador', authorize=None):
     """Remove apenas o responsável atual. Histórico e participantes são preservados."""
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o or o['status'] not in ATIVAS:
             raise ValueError('Selecione uma OS ativa.')
@@ -873,9 +924,12 @@ def administrador(c, pid):
                           (pid,)).fetchone())
 
 
-def marcar_em_rota(banco, os_id, pid, ator=None, admin=False):
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+def marcar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None,*,connection=None):
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
         if not p or not o:
@@ -898,7 +952,7 @@ def finalizar_em_rota(c, os_id):
               (agora(), os_id))
 
 
-def salvar_rascunho_web(banco, os_id, pid, dados):
+def salvar_rascunho_web(banco, os_id, pid, dados, *, connection=None):
     import json
     limpos = {}
     for chave, valor in dados.items():
@@ -906,7 +960,7 @@ def salvar_rascunho_web(banco, os_id, pid, dados):
         if chave.startswith('imagens_') or isinstance(valor, (bytes, tuple)):
             continue
         limpos[chave] = valor
-    with db(banco) as c:
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
         c.execute('''INSERT INTO os_rascunhos_web(os_id, prestador_id, dados_json, atualizado_em)
                      VALUES(?,?,?,?) ON CONFLICT(os_id, prestador_id) DO UPDATE SET
                      dados_json=excluded.dados_json, atualizado_em=excluded.atualizado_em''',
@@ -933,9 +987,11 @@ def obter_rascunho_web(banco, os_id, pid=None):
         return dados
 
 
-def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False):
+def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False, authorize=None):
     with db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        if authorize is not None:
+            authorize(c)
         p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
         if not p:
             raise PermissionError('Prestador inválido.')
@@ -949,7 +1005,7 @@ def cancelar_em_rota(banco, os_id, pid, ator=None, admin=False):
         return True
 
 
-def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
+def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo, *, connection=None, staged=False):
     """Anexa um PDF de nota fiscal à OS, com deduplicação por SHA-256."""
     if not isinstance(conteudo, bytes) or not conteudo.startswith(b'%PDF-'):
         raise ValueError('A nota fiscal deve ser um arquivo PDF válido.')
@@ -957,8 +1013,9 @@ def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
         raise ValueError('A nota fiscal deve ter no máximo 20 MB.')
     import hashlib
     digest = hashlib.sha256(conteudo).hexdigest()
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None:
+            c.execute('BEGIN IMMEDIATE')
         o = c.execute('SELECT status FROM ordens_servico WHERE id=?', (os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
@@ -973,20 +1030,35 @@ def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo):
         if existente:
             return int(existente['id'])
         NOTAS.mkdir(parents=True, exist_ok=True)
-        destino = NOTAS / (secrets.token_hex(16) + '.pdf')
-        destino.write_bytes(conteudo)
+        use_stage = bool(staged)
+        if use_stage:
+            from officina.core import os_effect_outbox as effects
+            effects.require_installed(c)
+            destino = NOTAS / ('pending-' + secrets.token_hex(16) + '.pdf')
+        else:
+            destino = NOTAS / (secrets.token_hex(16) + '.pdf')
+            destino.write_bytes(conteudo)
         try:
             cur = c.execute('''INSERT INTO os_notas_fiscais
                 (os_id,prestador_id,nome_original,caminho,sha256,criado_em)
                 VALUES(?,?,?,?,?,?)''',
                 (os_id, pid, Path(nome).name[:150], str(destino), digest, agora()))
+            if use_stage:
+                revision=f'{cur.lastrowid}:{digest}'
+                operation=effects.operation_key(os_id,revision,'invoice-attach','file')
+                destino=NOTAS/(operation+'.pdf')
+                c.execute('UPDATE os_notas_fiscais SET caminho=? WHERE id=?',
+                          (str(destino),cur.lastrowid))
+                effects.stage_bytes(NOTAS,operation,conteudo)
+                effects.enqueue_file(c,os_id,revision,'invoice-attach',cur.lastrowid,digest)
             ator = 'Administrador'
             if pid is not None:
                 ator = c.execute('SELECT nome FROM prestadores WHERE id=?', (pid,)).fetchone()['nome']
             evento(c, os_id, 'Nota fiscal anexada', Path(nome).name[:150], pid, ator)
             return int(cur.lastrowid)
         except Exception:
-            destino.unlink(missing_ok=True)
+            if not use_stage:
+                destino.unlink(missing_ok=True)
             raise
 
 
@@ -1012,30 +1084,33 @@ def obter_nota_fiscal(banco, os_id, nota_id):
     return dict(r), str(caminho)
 
 
-def remover_nota_fiscal(banco, os_id, nota_id, pid=None, ator=None):
+def remover_nota_fiscal(banco, os_id, nota_id, pid=None, ator=None, *, connection=None):
     """Remove o PDF anexado e preserva o histórico da OS.
 
     A permissão (responsável ou administrador) é conferida pela camada web.
     """
-    with db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
+    with (nullcontext(connection) if connection is not None else db(banco)) as c:
+        if connection is None: c.execute('BEGIN IMMEDIATE')
         o=c.execute('SELECT status FROM ordens_servico WHERE id=?',(os_id,)).fetchone()
         if not o:
             raise ValueError('OS não encontrada.')
         if o['status'] not in ATIVAS:
             raise ValueError('A nota fiscal só pode ser removida enquanto a OS está ativa.')
+        if pid is not None and responsavel_atual(c,os_id)!=pid and not administrador(c,pid):
+            raise PermissionError('Somente o responsável ou administrador remove nota fiscal.')
         r=c.execute('SELECT nome_original,caminho FROM os_notas_fiscais WHERE id=? AND os_id=?',
                     (nota_id,os_id)).fetchone()
         if not r:
             raise ValueError('Nota fiscal não encontrada.')
         c.execute('DELETE FROM os_notas_fiscais WHERE id=? AND os_id=?',(nota_id,os_id))
         evento(c,os_id,'Nota fiscal removida',Path(r['nome_original']).name[:150],pid,ator or 'Prestador')
-    try:
-        caminho=Path(r['caminho']).resolve()
-        if caminho.is_relative_to(NOTAS.resolve()) and caminho.is_file():
-            caminho.unlink()
-    except OSError:
-        pass
+    if connection is None:
+        try:
+            caminho=Path(r['caminho']).resolve()
+            if caminho.is_relative_to(NOTAS.resolve()) and caminho.is_file():
+                caminho.unlink()
+        except OSError:
+            pass
     return True
 
 

@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+from contextlib import nullcontext
 from datetime import datetime
 from officina.core import prestadores_ext as ext
 SITUACOES = ('Aguardando AUTOSEG', 'Aguardando síndico', 'Autorizado', 'Recusado', 'Mais informações', 'Cancelado')
@@ -387,33 +388,38 @@ def listar_os_organizacao(banco, organizacao_id, usuario_id):
     with ext.db(banco) as c:
         if not responsavel_ativo(c,usuario_id,organizacao_id):
             raise PermissionError('Apenas o responsável nomeado pela AUTOSEG pode consultar as OS do local.')
-        org=c.execute('SELECT id,cliente_id,nome,tipo FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
-        if not org:raise ValueError('Organização não encontrada.')
-        n=0
-        compat=True
-        if org['cliente_id'] is not None:
-            n=c.execute('''SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=? AND mesclado_em IS NULL''',
-                        (org['cliente_id'],)).fetchone()[0]
-            cliente=c.execute('SELECT tipo_pessoa,nome,documento FROM clientes WHERE id=?',
-                              (org['cliente_id'],)).fetchone()
-            doc_org=digitos(c.execute('SELECT cnpj FROM v9_organizacoes WHERE id=?',
-                                     (organizacao_id,)).fetchone()['cnpj'])
-            doc_cliente=digitos(cliente['documento']) if cliente else ''
-            compat=bool(cliente and cliente['tipo_pessoa']=='Jurídica' and (
-                (len(doc_org)==14 and len(doc_cliente)==14 and doc_org==doc_cliente) or
-                (not doc_org and not doc_cliente and
-                 org['nome'].strip().casefold()==cliente['nome'].strip().casefold())))
-        usar_cliente=bool(org['cliente_id'] is not None and n==1 and compat)
-        registros=c.execute('''SELECT os.id,os.numero_os,os.status,os.descricao,os.data_abertura,
-            ch.id chamado_id,ch.usuario_id,u.nome solicitante
-            FROM ordens_servico os
-            LEFT JOIN v9_chamados ch ON ch.os_id=os.id AND ch.organizacao_id=?
-            LEFT JOIN v9_usuarios u ON u.id=ch.usuario_id
-            WHERE ch.id IS NOT NULL OR (?=1 AND os.cliente_id=?)
-            ORDER BY os.id DESC''',
-            (organizacao_id,int(usar_cliente),org['cliente_id'] if org['cliente_id'] is not None else -1)).fetchall()
-        return {'organizacao':dict(org),'os':[dict(r) for r in registros],
-                'cadastro_ambiguo':bool(org['cliente_id'] is not None and (n>1 or not compat))}
+        return _os_organizacao_rows(c, organizacao_id)
+
+
+def _os_organizacao_rows(c, organizacao_id):
+    """Unrestricted *query*; caller must authorize the organization before use."""
+    org=c.execute('SELECT id,cliente_id,nome,tipo FROM v9_organizacoes WHERE id=? AND mesclado_em IS NULL',(organizacao_id,)).fetchone()
+    if not org:raise ValueError('Organização não encontrada.')
+    n=0
+    compat=True
+    if org['cliente_id'] is not None:
+        n=c.execute('''SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=? AND mesclado_em IS NULL''',
+                    (org['cliente_id'],)).fetchone()[0]
+        cliente=c.execute('SELECT tipo_pessoa,nome,documento FROM clientes WHERE id=?',
+                          (org['cliente_id'],)).fetchone()
+        doc_org=digitos(c.execute('SELECT cnpj FROM v9_organizacoes WHERE id=?',
+                                 (organizacao_id,)).fetchone()['cnpj'])
+        doc_cliente=digitos(cliente['documento']) if cliente else ''
+        compat=bool(cliente and cliente['tipo_pessoa']=='Jurídica' and (
+            (len(doc_org)==14 and len(doc_cliente)==14 and doc_org==doc_cliente) or
+            (not doc_org and not doc_cliente and
+             org['nome'].strip().casefold()==cliente['nome'].strip().casefold())))
+    usar_cliente=bool(org['cliente_id'] is not None and n==1 and compat)
+    registros=c.execute('''SELECT os.id,os.numero_os,os.status,os.descricao,os.data_abertura,
+        ch.id chamado_id,ch.usuario_id,u.nome solicitante
+        FROM ordens_servico os
+        LEFT JOIN v9_chamados ch ON ch.os_id=os.id AND ch.organizacao_id=?
+        LEFT JOIN v9_usuarios u ON u.id=ch.usuario_id
+        WHERE ch.id IS NOT NULL OR (?=1 AND os.cliente_id=?)
+        ORDER BY os.id DESC''',
+        (organizacao_id,int(usar_cliente),org['cliente_id'] if org['cliente_id'] is not None else -1)).fetchall()
+    return {'organizacao':dict(org),'os':[dict(r) for r in registros],
+            'cadastro_ambiguo':bool(org['cliente_id'] is not None and (n>1 or not compat))}
 
 
 def autorizar_pdf_os_organizacao(banco, organizacao_id, usuario_id, os_id):
@@ -706,13 +712,17 @@ def mesclar_organizacoes(banco,origem,destino,autor):
                   (b['cliente_id'],origem,'Mesclagem',f'{origem} -> {destino}',autor,ext.agora()))
         return destino
 
-def mesclar_clientes(banco, origem_id, destino_id, autor):
+def mesclar_clientes(banco, origem_id, destino_id, *, principal=None):
     """Mescla dois cadastros de cliente, movendo OS/financeiro e inativando a origem."""
-    origem_id=int(origem_id); destino_id=int(destino_id)
-    if origem_id==destino_id:
-        raise ValueError('Escolha dois clientes diferentes.')
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        admin_id=require_admin_locked(c, principal)
+        # The actor is the authenticated admin, never a caller-supplied string.
+        autor=c.execute('SELECT nome FROM prestadores WHERE id=?', (admin_id,)).fetchone()['nome']
+        origem_id=int(origem_id); destino_id=int(destino_id)
+        if origem_id==destino_id:
+            raise ValueError('Escolha dois clientes diferentes.')
         a=c.execute('SELECT * FROM clientes WHERE id=?',(origem_id,)).fetchone()
         b=c.execute('SELECT * FROM clientes WHERE id=?',(destino_id,)).fetchone()
         if not a or not b:
@@ -748,27 +758,33 @@ def mesclar_clientes(banco, origem_id, destino_id, autor):
         return destino_id
 
 
-def desativar_cliente(banco,cliente_id,autor):
+def desativar_cliente(banco,cliente_id,*,principal=None):
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        admin_id=require_admin_locked(c, principal)
+        # The actor is the authenticated admin, never a caller-supplied string.
+        autor=c.execute('SELECT nome FROM prestadores WHERE id=?', (admin_id,)).fetchone()['nome']
         cl=c.execute('SELECT nome FROM clientes WHERE id=?',(cliente_id,)).fetchone()
         if not cl:raise ValueError('Cliente não encontrado.')
         c.execute("UPDATE clientes SET status='Inativo' WHERE id=?",(cliente_id,))
         c.execute('INSERT INTO v9_historico_clientes(cliente_id,origem_id,acao,descricao,autor,criado_em) VALUES(?,?,?,?,?,?)',
                   (cliente_id,None,'Desativação',cl['nome'],autor,ext.agora()))
 
-def salvar_detalhes(banco,os_id,diagnostico,execucao,resultado):
-    with ext.db(banco) as c:
+def salvar_detalhes(banco,os_id,diagnostico,execucao,resultado,*,connection=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         c.execute('''INSERT INTO v9_detalhes_os(os_id,diagnostico,execucao,resultado,alterado_em)
                     VALUES(?,?,?,?,?) ON CONFLICT(os_id) DO UPDATE SET
                     diagnostico=excluded.diagnostico,execucao=excluded.execucao,
                     resultado=excluded.resultado,alterado_em=excluded.alterado_em''',
                   (os_id,diagnostico[:5000],execucao[:5000],resultado[:5000],ext.agora()))
 
-def aprovar_anexo(banco,anexo_id,visivel,legenda,ator):
-    with ext.db(banco) as c:
+def aprovar_anexo(banco,anexo_id,visivel,legenda,ator,*,connection=None,pid=None):
+    with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
         a=c.execute('SELECT os_id FROM os_anexos WHERE id=?',(anexo_id,)).fetchone()
         if not a:raise ValueError('Anexo não encontrado.')
+        if pid is not None and ext.responsavel_atual(c,a['os_id'])!=pid and not ext.administrador(c,pid):
+            raise PermissionError('Somente o responsável ou administrador publica fotos.')
         c.execute('''INSERT INTO v9_anexos_visiveis(anexo_id,visivel,legenda,autorizado_em)
                      VALUES(?,?,?,?) ON CONFLICT(anexo_id) DO UPDATE SET
                      visivel=excluded.visivel,legenda=excluded.legenda,autorizado_em=excluded.autorizado_em''',

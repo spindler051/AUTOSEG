@@ -4,10 +4,13 @@ Estrutura-alvo do monorepo:
 
 ```text
 workaholic/                 motor genérico: schemas, validação, persistência
+  locales/
+    pt_BR/                  regras brasileiras: fiscal, CPF/CNPJ, PIX/boleto, CEP, texto legal
 officina/                   plataforma genérica: contratos e serviços
   contracts/                contratos estáveis (destino)
   application/              serviços de aplicação (destino)
 flavors/autoseg/            distribuição AUTOSEG
+  br/                       adaptadores brasileiros específicos do AUTOSEG (staging)
   branding/                 logo e ícones
   config/                   policy, numeração, completude, composição, texto
   templates/                modelos YAML de cliente, serviço, orçamento e relatório
@@ -30,7 +33,9 @@ packaging/                  empacotamento Linux/macOS
 - `officina/repositories/` — consultas de OS.
 - `officina/telemetry/` — telemetria genérica.
 - `flavors/autoseg/modules/` — portais, GTK, API, auth, feedback, fiscal,
-  e-mail, túneis e integrações brasileiras.
+  e-mail, túneis e integrações brasileiras. O código fiscal/brasileiro deve
+  migrar para `flavors/autoseg/br/` e, quando reutilizável, para
+  `workaholic/locales/pt_BR/`.
 - `flavors/autoseg/web/` — `portal.js` e site estático.
 - `flavors/autoseg/scripts/` — geração de dados fictícios e reset DEV.
 - `tests/` — suíte de testes.

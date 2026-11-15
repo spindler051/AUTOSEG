@@ -43,6 +43,70 @@ It does **not** mean:
 8. **Do not rename and migrate the same module in the same change.** One PR
    moves the slice; another renames it.
 
+## 2.1 Portuguese by design — locale and legal boundary
+
+English is the **codebase** language, not the product language. Keep three
+layers separate:
+
+| Layer | Language | Examples |
+|---|---|---|
+| Code and contracts | English | identifiers, types, APIs, tests, commit messages |
+| Domain vocabulary | bilingual glossary | `service order` ↔ `ordem de serviço`; `invoice` ↔ `nota fiscal` |
+| User-facing and legal content | Portuguese by default | UI labels, PDFs, e-mails, contracts, NF-e text |
+
+Portuguese is not a legacy accident. It is the correct language for Brazilian
+legal, fiscal and customer-facing material.
+
+### Target layout
+
+```text
+workaholic/
+  locales/
+    pt_BR/
+      fiscal/          NF-e/NFS-e, municipal service codes, tax regimes
+      tax_id/          CPF/CNPJ validation and formatting
+      payments/        PIX, boleto, bank slips
+      address/         CEP, address and phone formatting
+      legal/           canonical Portuguese legal text and templates
+
+flavors/autoseg/
+  br/                  AUTOSEG-specific Brazil adapters (staging)
+```
+
+Start locale code in `flavors/autoseg/br/` while AUTOSEG is the only consumer.
+Promote a slice to `workaholic/locales/pt_BR/` when a second consumer exists.
+Do not create a generic abstraction before the second real use.
+
+### Code rules
+
+- New generic code: English identifiers, comments, tests, docs.
+- Locale modules: English class/function/module names; Portuguese only for
+  legal field names and canonical terms with a glossary entry.
+- Do not translate NF-e/NFS-e XML fields, municipal service descriptions, tax
+  codes, boleto/PIX terminology, contracts, receipts or legal notices.
+- Database columns, public routes, environment variables and launchers remain
+  compatible; adapters map English domain names to legacy Portuguese columns.
+- User-visible strings stay Portuguese. New source strings use English keys and
+  a `pt_BR` catalog; legal documents may keep Portuguese source text as the
+  canonical version.
+- No mass rename. Rename a module only when touched and covered by tests.
+
+### Nota fiscal
+
+Nota fiscal generation is a **Brazil locale feature**, not core platform logic:
+
+- English port: `FiscalDocumentIssuer` (issue, cancel, query, validate).
+- `pt_BR` adapter: NF-e/NFS-e, municipal rules, tax codes, legal wording.
+- Provider-specific integrations (city gateways, certificate providers) are
+  adapters behind the port.
+- Tests use fixtures and a fake issuer; no real certificate or production
+  taxpayer data in the repository.
+- The generic core knows only “issue a fiscal document for this service order”.
+  It does not know ICMS, ISS, CFOP, NCM or municipal service codes.
+
+This is also where CPF/CNPJ, CEP, PIX and boleto belong: English interfaces,
+Portuguese legal data.
+
 ## 3. Phases
 
 ### Phase 0 — Policy and glossary (current)
@@ -126,7 +190,7 @@ slice migration. One module at a time.
 | `produtividade_os.py` | `productivity.py` | commissions/rateios |
 | `portal_negocios.py` | `business_rules.py` or `portal_business.py` | high coupling |
 | `portal_prestador.py` | `provider_portal.py` | public routes unchanged |
-| `servidor_web.py` | `client_portal_server.py` | public routes unchanged |
+| `servidor_web.py` (retired in P0) | removed | client routes moved to `client_web.py` |
 | `portal_cliente_v94.py` | `client_portal_v94.py` | public routes unchanged |
 | `cliente_fluxo_v94.py` | `client_flow_v94.py` | public routes unchanged |
 | `pdf_cliente_v9.py` | `client_pdf_v9.py` | PDF output unchanged |

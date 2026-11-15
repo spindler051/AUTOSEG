@@ -9,7 +9,7 @@ macOS.
 - Versão vigente: `versao.json` (fonte única)
 - Backend compartilhado: `banco.py`, `cadastros_v9.py`, `prestadores_ext.py`,
   `fluxo_os.py`, `atendimento_os.py`, `estoque_materiais.py`,
-  `catalogo_servicos.py`, `portal_negocios.py`, `servidor_web.py`,
+  `catalogo_servicos.py`, `portal_negocios.py`, `client_web.py`,
   `portal_prestador.py`
 - Frontend desktop: `gtk_app.py` — GTK4 + libadwaita. O frontend Tkinter foi
   removido do código.
@@ -30,9 +30,8 @@ Variáveis úteis:
 |---|---|
 | `AUTOSEG_BASE` | pasta de dados (banco, anexos, PDFs, rascunhos). Modo local: `~/Library/Application Support/AUTOSEG/local` (macOS) ou `~/.local/share/autoseg/local` (Linux). Servidor: pasta do sistema |
 | `GESTAO_BANCO` | caminho explícito do SQLite; tem prioridade sobre `AUTOSEG_BASE` |
-| `CLIENTE_PORT` / `CLIENTE_BIND` | portal do cliente (padrão 8765 / 127.0.0.1). Use `CLIENTE_BIND=0.0.0.0` para a rede local |
-| `PRESTADOR_PORT` / `PRESTADOR_BIND` | portal do prestador (padrão 8766 / 127.0.0.1). Use `PRESTADOR_BIND=0.0.0.0` para a rede local |
-| `AUTOSEG_DEV=1` | portas 8865/8866, banco de teste e túneis de desenvolvimento |
+| `PRESTADOR_PORT` / `PRESTADOR_BIND` | site único Officina Web (padrão 8766 / 127.0.0.1). Use `PRESTADOR_BIND=0.0.0.0` para a rede local |
+| `AUTOSEG_DEV=1` | porta 8866, banco de teste e túneis de desenvolvimento |
 | `GTK_USE_PORTAL=0` | evita a espera de ~25 s do portal XDG em ambientes sem sessão gráfica completa |
 | `AUTOSEG_SMOKE=1` | abre e fecha a janela em 3 s; usado em teste de fumaça |
 
@@ -179,7 +178,7 @@ Não há Cage no macOS: a janela é nativa. O frontend Tkinter foi removido.
   fonte `.AppleSystemUIFont 12`, tema de ícones Adwaita, modo escuro do
   sistema e todos os ícones usados presentes.
 - PDF gerado no Mac com reportlab: `%PDF-` válido, 2,8 KB.
-- Produção antiga em `~/gestaoservicos_MAIN` rodando no GTK, portas 8765/8766,
+- Registro histórico de produção anterior à P0 em `~/gestaoservicos_MAIN`,
   460 clientes e 3 OS. O backend antigo (`servidor_backend.py`) foi encerrado.
 - Pendente: conferir a janela no desktop após desbloquear a tela e exercitar
   os diálogos nativos de arquivo. A validação acima foi feita por render
@@ -206,7 +205,7 @@ No Linux:
 
 ```bash
 ./scripts/tunel_mac.sh
-# abra http://127.0.0.1:8765 e http://127.0.0.1:8766
+# site único: http://127.0.0.1:8766
 ```
 
 Isso usa os dados ao vivo e permite escrita nos portais. A interface GTK

@@ -20,13 +20,14 @@ class AuthorizedCommandTest(unittest.TestCase):
         self.db=str(Path(self.tmp.name)/'db.sqlite')
         with sqlite3.connect(self.db) as c:
             c.executescript("""CREATE TABLE ordens_servico(id INTEGER PRIMARY KEY,
-                prestador_id INTEGER,cliente_id INTEGER,descricao TEXT);
+                prestador_id INTEGER,cliente_id INTEGER,descricao TEXT,
+                status TEXT DEFAULT 'Aberta', arquivada INTEGER DEFAULT 0);
                 CREATE TABLE os_responsaveis(os_id INTEGER,prestador_id INTEGER);
                 CREATE TABLE os_prestadores(os_id INTEGER,prestador_id INTEGER,ativo INTEGER);
                 CREATE TABLE v9_organizacoes(id INTEGER,cliente_id INTEGER,mesclado_em INTEGER);
                 CREATE TABLE v9_chamados(id INTEGER,usuario_id INTEGER,
                     organizacao_id INTEGER,os_id INTEGER);
-                INSERT INTO ordens_servico VALUES(1,99,42,'Original');
+                INSERT INTO ordens_servico(id,prestador_id,cliente_id,descricao) VALUES(1,99,42,'Original');
                 INSERT INTO os_responsaveis VALUES(1,2);
                 INSERT INTO os_prestadores VALUES(1,3,1);
             """)

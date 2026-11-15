@@ -1,3 +1,61 @@
+## Branding — 2026-11-15
+
+- Replaced the MAIN and DEV application icons with the hand-made Blender
+  artwork (2048x2048 PNG, 2026-11-14); the previous AI-generated icon was
+  retired. The Blender source is intentionally not versioned (`.blend` is
+  ignored); only the exported PNGs live in `flavors/autoseg/branding/`.
+- Documented the branding files and their resolution paths in
+  `flavors/autoseg/branding/README.md`. No code, schema or flag change.
+
+## P0-AUTH-CLOSE-GATE-HARDENING — DEV, 2026-11-12
+
+- PDF cleanup after a failed publication now holds `BEGIN IMMEDIATE`, verifies
+  the original processing claim token and checks document registration before
+  deleting a newly linked target; a replacement worker's file is preserved.
+- Manual OS e-mail resend is outbox-only. Without the DEV outbox, the request
+  fails closed and does not send. The extra-address control is removed from
+  the resend form; only registered contact references are accepted.
+- Email dispatch without `recipient_refs` fails before provider entry; DEV
+  rollback refuses unresolved reference projections instead of rewriting them.
+- No schema, production flag, MAIN, GTK or production port changes.
+
+## P0-AUTH-CLOSE-GATE-FIXES — DEV, 2026-11-12
+
+- Corrected evidence visibility for concluded OS, with the existing locked
+  authorization guard and archival restrictions.
+- Removed the PDF link→document commit gap and reset delivery status only for
+  a newly published document version.
+- Outbox e-mail references now live in minimal operation payloads; the legacy
+  projection stores validated addresses and DEV rollback repairs older rows.
+- Added controlled immediate quarantine cleanup (`--minimum-age 0`), tests
+  and operational guidance. Enforcement stays disabled; MAIN untouched.
+
+
+
+## P0-AUTH-CLOSE-GATE — DEV review (2026-11-11)
+
+- Attachment move, hide/show, rotate and removal, plus invoice removal, now
+  share the command transaction and authorization guard. Image rotation
+  promotes staged bytes only after commit; removal uses recoverable quarantine.
+- PDF publication verifies candidate digests before accepting pre-existing
+  deterministic paths; mismatches fail without overwriting published files.
+- Manual Gmail retries require a unique operation key and explicit warning;
+  recipient references are resolved at dispatch, and sent/failed/unknown/no
+  recipient projections commit with outbox state. Unknown is never resent
+  automatically.
+- Added DEV-only effect dispatcher and guarded outbox rollback with verified
+  backup. No change to production flags, GTK, financial logic or legacy ports.
+
+### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
+
+Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
+reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
+foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
+fechado: arquivos removidos/rotacionados, reenvio legado e fluxos restantes
+precisam ser cobertos antes de aprovar a flag. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
+`BLOCKED.md` desta entrega; não habilitar na MAIN.
+
 # AUTOSEG — Changelog
 
 ## Branding — 2026-11-15
@@ -9,6 +67,19 @@
 - Documented the branding files and their resolution paths in
   `flavors/autoseg/branding/README.md`. No code, schema or flag change.
 
+## P0-AUTH (DEV only) — transactional authorization, partial
+
+- Reopening a `Pendente` OS now requires `work_item.reopen` even with object
+  enforcement disabled. The writer rechecks the rule under `BEGIN IMMEDIATE`.
+- Added in-transaction guard injection to assignment, assumption, archive,
+  route and cancel operations, plus the existing photo transaction.
+- Remaining multi-transaction flows still need refactoring; enforcement stays
+  off by default and production activation is not approved.
+
+## Não lançado — limpeza do Meu Auto Financeiro no AUTOSEG
+
+- **Meu Auto Financeiro:** removido o módulo embutido (`meu_auto_financeiro.py`), seus testes e a documentação do modo integrado. O produto continua separado em `~/AUTOSEG_MAF`, na porta 8967, com banco, login e túnel próprios.
+- **Empréstimos MAF:** mantido apenas o bridge `maf_loans.py` no financeiro do prestador, que usa o banco do site separado para exibir e operar os empréstimos; a rota `/auto-financeiro` e os atalhos antigos não existem mais no AUTOSEG.
 
 ## 9.6.0-dev.73 — preparação da primeira publicação pública — 2026-11-09 — develop
 

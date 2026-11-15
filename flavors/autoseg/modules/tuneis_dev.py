@@ -1,7 +1,7 @@
 """Cloudflare Quick Tunnels DEV sob demanda, sem PIN/Access adicional.
 
 Os endereços são públicos: os portais exigem seus próprios logins.
-Publica somente cliente 8865 e prestador 8866, sem expor desktop/produção.
+Publica somente Officina Web 8866, sem expor desktop/produção.
 NUNCA use informações reais no banco de testes.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ if os.environ.get('AUTOSEG_DEV') == '1':
 BASE=runtime_config.base_dir()
 DIR=BASE/'tuneis_dev'
 ESTADO=DIR/'estado.json'
-PORTAS=(8865,8866)
+PORTAS=(8866,)
 
 
 def verificar_ambiente():
@@ -104,7 +104,7 @@ def iniciar():
     e=links.estado()
     for porta in PORTAS:
         inf=e.get(str(porta))
-        print(f'[DEV] {"Cliente" if porta==8865 else "Prestador"}: '+(inf['url'] if inf else 'sem link disponível; confira o log'))
+        print(f'[DEV] Officina Web: '+(inf['url'] if inf else 'sem link disponível; confira o log'))
     print('ATENÇÃO: URL pública, sem PIN Cloudflare. Login do AUTOSEG continua obrigatório. Use somente dados fictícios.')
 
 
@@ -123,7 +123,7 @@ def parar():
 
 
 if __name__=='__main__':
-    cli=argparse.ArgumentParser(description='Compartilhar portais AUTOSEG DEV com login próprio')
+    cli=argparse.ArgumentParser(description='Compartilhar Officina Web DEV na porta única' )
     cli.add_argument('acao',choices=('iniciar','parar','status'))
     op=cli.parse_args()
     try:

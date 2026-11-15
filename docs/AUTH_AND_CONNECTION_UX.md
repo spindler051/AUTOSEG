@@ -200,7 +200,7 @@ officina-server --api
   sem HTML, sem GUI
 
 officina-web
-  GUI do site: Portal do Prestador + Portal do Cliente
+  GUI do site: Officina Web único com visões prestador e cliente
   hoje ainda compartilha o processo com a API; separação futura
 ```
 
@@ -270,7 +270,7 @@ Pendente antes da MAIN:
 - usar Cloudflare Tunnel como se fosse autenticação;
 - criar usuários sem papel/auditoria;
 - apagar o último admin;
-- sincronizar `dados.db` por Syncthing/Dropbox;
+- sincronizar `dados.db` por ferramentas de arquivo/Dropbox;
 - implementar auth sem revisão humana.
 
 ---

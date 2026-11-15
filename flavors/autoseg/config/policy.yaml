@@ -4,6 +4,7 @@ roles:
   admin:
     permissions:
     - '*'
+    - work_item.reopen.all
   employee:
     permissions:
     - work_item.view.own
@@ -24,6 +25,8 @@ roles:
     - work_item.send.own
     - finance.view.own
     - stock.view
+    - customer.create
+    - customer.edit.involved
     - customer.view.involved
     - customer.pii.view.involved
     - customer.contact.view.involved

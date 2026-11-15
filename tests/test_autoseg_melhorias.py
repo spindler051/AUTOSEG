@@ -23,6 +23,14 @@ class AutoSegMelhorias(unittest.TestCase):
         aten.instalar(self.db)
         cad.instalar(self.db)
 
+    def _creation_actor(self):
+        from officina.application.object_policy import Principal
+        if not hasattr(self, '_create_pid'):
+            self._create_pid = ext.cadastrar(
+                self.db, 'Fixture creator', 'fixture-creator@invalid.test', 'Pass12345678')
+        return Principal(self._create_pid, 'employee', organization_id='autoseg',
+                         provider_id=self._create_pid)
+
     def tearDown(self):
         self.tmp.cleanup()
 
@@ -36,14 +44,18 @@ class AutoSegMelhorias(unittest.TestCase):
     def test_cliente_pj_sincroniza_no_mesmo_banco_sem_reiniciar(self):
         doc='12345678000195'
         self.assertTrue(cad.cnpj_valido(doc))
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Teste Um',doc),0)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Teste Um',doc),0,principal=self._creation_actor())
         with ext.db(self.db) as c:
             org=c.execute('SELECT id,cliente_id,cnpj FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()
             self.assertIsNotNone(org)
             self.assertEqual(org['cnpj'],doc)
         self.assertEqual(cad.organizacao_por_cnpj(self.db,doc)['id'],org['id'])
         d=self.dados_cliente('Condomínio Teste Atualizado',doc)
-        neg.cliente_salvar(self.db,d,0,cid)
+        from officina.application.object_policy import Principal
+        admin_id=ext.cadastrar(self.db,'A5b test admin','a5b-test-admin@invalid.test','Pass12345678')
+        cad.definir_admin(self.db,admin_id,True)
+        actor=Principal(admin_id,'admin',organization_id='autoseg',provider_id=admin_id)
+        neg.cliente_salvar(self.db,d,admin_id,cid,principal=actor)
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT COUNT(*) FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()[0],1)
             self.assertEqual(c.execute('SELECT nome FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()[0],d['nome'])
@@ -52,7 +64,7 @@ class AutoSegMelhorias(unittest.TestCase):
         doc='12345678000195'
         doc2='11222333000181'
         self.assertTrue(cad.cnpj_valido(doc2))
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Alfa',doc),0)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Alfa',doc),0,principal=self._creation_actor())
         with ext.db(self.db) as c:
             org=c.execute('INSERT INTO v9_organizacoes(nome,tipo,cnpj,criado_em) VALUES(?,?,?,?)',
                           ('Condomínio Beta','Condomínio',doc2,ext.agora())).lastrowid
@@ -62,23 +74,27 @@ class AutoSegMelhorias(unittest.TestCase):
             self.assertIsNone(c.execute('SELECT cliente_id FROM v9_organizacoes WHERE id=?',(org,)).fetchone()[0])
 
     def test_exclusao_sem_os_e_protecao_de_historico(self):
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Provisório'),0)
-        neg.cliente_excluir(self.db,cid,0)
+        from officina.application.object_policy import Principal
+        admin_id=ext.cadastrar(self.db,'Admin exclusão','admin-exclusao@invalid.test','Pass12345678')
+        cad.definir_admin(self.db,admin_id,True)
+        actor=Principal(admin_id,'admin',organization_id='autoseg',provider_id=admin_id)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Provisório'),0,principal=self._creation_actor())
+        neg.cliente_excluir(self.db,cid,admin_id,principal=actor)
         with ext.db(self.db) as c:
             self.assertFalse(c.execute('SELECT 1 FROM clientes WHERE id=?',(cid,)).fetchone())
             self.assertFalse(c.execute('SELECT 1 FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone())
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio com OS'),0)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio com OS'),0,principal=self._creation_actor())
         with ext.db(self.db) as c:
             c.execute("INSERT INTO ordens_servico(numero_os,cliente_id,status) VALUES('OS-0001',?,'Pendente')",(cid,))
         with self.assertRaisesRegex(ValueError,'OS vinculada'):
-            neg.cliente_excluir(self.db,cid,0)
+            neg.cliente_excluir(self.db,cid,admin_id,principal=actor)
 
     def test_solicitacao_cliente_vira_os_pendente_idempotente(self):
         uid=0
         with ext.db(self.db) as c:
             uid=c.execute('''INSERT INTO v9_usuarios(nome,cpf,telefone,senha_hash,criado_em)
                              VALUES(?,?,?,?,?)''',('Teste Usuário','52998224725','','hash',ext.agora())).lastrowid
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Portal','12345678000195'),0)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Portal','12345678000195'),0,principal=self._creation_actor())
         with ext.db(self.db) as c:
             org=c.execute('SELECT id FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone()['id']
         ch=cad.registrar_chamado(self.db,uid,org,'Interfone não está funcionando','Normal','Portaria','Funcionário','Teste Usuário','51999998888')
@@ -140,7 +156,7 @@ class AutoSegMelhorias(unittest.TestCase):
 
     def test_editar_os_sem_materiais_remove_linhas_antigas(self):
         pid=ext.cadastrar(self.db,'Técnico Teste','tec@example.org','senha-bem-segura-2026')
-        cid=neg.cliente_salvar(self.db,self.dados_cliente('Cliente OS de Teste'),pid)
+        cid=neg.cliente_salvar(self.db,self.dados_cliente('Cliente OS de Teste'),pid,principal=self._creation_actor())
         d={'cliente_id':str(cid), 'descricao':'Troca de sensor', 'tecnico':'Técnico Teste',
            'forma_pagamento':'PIX','valor_mao_obra':'100', 'valor_materiais_manual':'0',
            'material_item[]':['Sensor'], 'material_qtd[]':['1'],
@@ -164,9 +180,9 @@ class AutoSegMelhorias(unittest.TestCase):
         ext.salvar_config_prestador(self.db,p2,{'banco_titular':'Titular B','chave_pix':'pix-beta'})
         dados=self.dados_cliente('Cliente Email')
         dados['email']='teste@example.org'
-        cid=neg.cliente_salvar(self.db,dados,p1)
+        cid=neg.cliente_salvar(self.db,dados,p1,principal=self._creation_actor())
         d={'cliente_id':str(cid),'descricao':'Serviço fictício','forma_pagamento':'PIX',
-           'valor_mao_obra':'0','valor_materiais_manual':'0','acao_status':'salvar'}
+           'valor_mao_obra':'100','valor_materiais_manual':'0','acao_status':'salvar'}
         oid=neg.os_salvar(self.db,d,p1)
         pdf=Path(self.tmp.name)/'relatorio.pdf'
         pdf.write_bytes(b'%PDF-1.4\n%%EOF')

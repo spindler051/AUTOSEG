@@ -41,6 +41,10 @@ def csrf(html):
 
 class FeedbackPortalTest(unittest.TestCase):
     def setUp(self):
+        # Legacy provider-login fixture: request the temporary rollback path.
+        self._old_login_flag = os.environ.get('AUTOSEG_UNIFIED_LOGIN')
+        os.environ['AUTOSEG_UNIFIED_LOGIN'] = '0'
+        self.addCleanup(self._restore_login_flag)
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_feedback_')
         self.db = str(Path(self.tmp.name) / 'teste.db')
         criar_banco(self.db)
@@ -63,6 +67,12 @@ class FeedbackPortalTest(unittest.TestCase):
     def tearDown(self):
         self.servidor.parar()
         self.tmp.cleanup()
+
+    def _restore_login_flag(self):
+        if self._old_login_flag is None:
+            os.environ.pop('AUTOSEG_UNIFIED_LOGIN', None)
+        else:
+            os.environ['AUTOSEG_UNIFIED_LOGIN'] = self._old_login_flag
 
     def _browser(self):
         return urllib.request.build_opener(

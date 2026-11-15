@@ -13,13 +13,12 @@ Linux** (por exemplo, um celular com Nura/Alpine).
 ## 1. Situação atual
 
 - `gtk_app.py` ainda abre o SQLite local diretamente para OS, PJ, financeiro e
-  estoque, mas a primeira fatia de clientes, painel e Portal do Cliente já usa
+  estoque, mas a primeira fatia de clientes, painel e apresentação do cliente no Officina Web já usa
   `AppService`/`LocalService`.
-- O `WebAccessManager` inicia e para os dois portais. O padrão continua com o
+- O `WebAccessManager` inicia e para o site Officina Web único. O padrão continua com o
   acesso web ligado; `--no-web`/`AUTOSEG_WEB_ACCESS=0` abre o modo local-only
-  sem importar os portais.
-- O Portal do Cliente tem botão “Ligar/Desligar servidor”; o Portal do
-  Prestador ainda não tem controle visual próprio.
+  sem importar o servidor web.
+- O controle de acesso web do GTK gerencia somente a origem única; não existe segundo listener de cliente.
 - O banco é global (`banco.BANCO`), definido no import.
 - Existe uma API JSON read-only de financeiro (`api_financeiro.py`,
   `/api/v1`) com bearer token, paginação, auditoria e OpenAPI. Ela é um bom
@@ -154,7 +153,7 @@ Token no Keychain/libsecret/Keystore.
 
 ### 4.1 Regras de ouro
 
-- O modo local **não** importa `portal_prestador` nem `servidor_web` no início.
+- O modo local **não** importa `portal_prestador` no início.
 - O modo remoto **não** abre o SQLite local para escrita.
 - Um servidor web só sobe por ação explícita (ou preferência salva).
 - Cloudflare é gerenciado pelo **dono do servidor**:
@@ -208,29 +207,26 @@ Primeira fatia da API: **health + login + clientes (listar/obter)**. Depois OS
 
 ### Fase 0 — Tirar o servidor do caminho local (implementada)
 
-- `--no-web` e `AUTOSEG_WEB_ACCESS=0` abrem o GTK sem subir os portais e sem
-  importar `portal_prestador`/`servidor_web` no início.
+- `--no-web` e `AUTOSEG_WEB_ACCESS=0` abrem o GTK sem subir o site e sem importar `portal_prestador` no início.
 - `INICIAR_AUTOSEG_SEM_WEB.command` é o atalho local-only.
-- `web_access.py` agora concentra o ciclo de vida dos dois portais. O GTK não
-  importa as classes dos portais nem chama `iniciar`/`parar` diretamente.
-- O padrão agora é **local-only**: o GTK abre sem subir os portais. Para o
+- `web_access.py` agora concentra o ciclo de vida do site Officina Web. O GTK não
+  importa as classe do servidor nem chama `iniciar`/`parar` diretamente.
+- O padrão agora é **local-only**: o GTK abre sem subir o site. Para o
   comportamento antigo, use `AUTOSEG_WEB_ACCESS=1` ou
   `INICIAR_AUTOSEG_COM_WEB.command`.
-- O botão “Ligar servidor” do Portal do Cliente continua existindo, mas o
-  caminho recomendado é subir o site pelo terminal.
+- O controle do site é único; não há ação para iniciar um portal cliente separado.
 - Ainda falta uma preferência visual “Ativar acesso web” e o controle do
-  portal do prestador na tela de configurações.
+  site único na tela de configurações.
 
-**Resultado:** GTK abre e funciona sem porta 8765/8766 e sem Cloudflare.
+**Resultado:** GTK abre e funciona sem iniciar o site nem Cloudflare.
 
 ### Fase 1 — `AppService` + `LocalService` (primeira fatia implementada)
 
 - `application/contracts.py` define o contrato de casos de uso, DTOs e erros
   estáveis.
 - `application/local_service.py` implementa saúde, resumo do início, listar,
-  obter e salvar clientes, além do resumo e da lista de solicitações do Portal
-  do Cliente.
-- O GTK usa o serviço em clientes, painel, Portal do Cliente, financeiro,
+  obter e salvar clientes, além do resumo e da lista de solicitações da visão cliente do Officina Web.
+- O GTK usa o serviço em clientes, painel, visão cliente, financeiro,
   histórico, PJ e lista de OS ativas. `gtk_app.py` está sem SQL direto.
 - `gtk_dialogos.py` ainda concentra a leitura/gravação da OS, materiais e
   anexos; é a última fatia grande do desktop.

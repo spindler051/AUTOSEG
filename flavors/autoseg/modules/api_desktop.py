@@ -16,7 +16,8 @@ import json
 import logging
 import os
 import sqlite3
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any, Mapping
@@ -31,9 +32,13 @@ from officina.application.contracts import (
     ValidacaoError,
 )
 from officina.application.local_service import LocalService
-from flavors.autoseg.modules import policy_shadow
 from flavors.autoseg.modules import prestador_auth, identity
-from officina.application.contracts import SessionContext
+from officina.application.contracts import SessionContext, ClienteResumo, Cliente, ClienteOpcao
+from officina.application import work_item_access as access
+from officina.application.object_policy import ObjectPolicy, Resource, PermissionDenied
+from officina.core import prestadores_ext as ext
+from officina.integration import clientes as clientes_core
+from officina.repositories import ordens as ordens_repo
 LOG = logging.getLogger('autoseg.api_desktop')
 PREFIX = '/api/v1/desktop'
 MAX_BODY = 32 * 1024 * 1024
@@ -182,10 +187,178 @@ def _os_input(dados: Mapping[str, Any]) -> OSInput:
         raise ValidacaoError('Dados da OS inválidos.') from erro
 
 
+def _hidden_resource():
+    raise NaoEncontradoError('Recurso não encontrado.')
+
+
+def _require_object(banco, principal, os_id, action='view'):
+    """The API gate authenticates transport, not access to a service order.
+
+    Preflight is read-only. Mutating OS routes additionally supply a
+    transaction-local guard to their writer.
+    """
+    if type(os_id) is not int or os_id <= 0:
+        _hidden_resource()
+    try:
+        access.require_read_work_item(banco, principal, os_id)
+        if action not in ('view', 'download'):
+            access.require_work_item(banco, principal, os_id, action)
+        elif action == 'download':
+            work = access.resource_for_work_item(banco, os_id)
+            doc = Resource('document', os_id, work.organization_id,
+                           work.owner_id, work.client_id,
+                           work.participant_ids, work.attributes,
+                           work.client_org_id)
+            ObjectPolicy().require(principal, 'download', doc)
+    except PermissionDenied as error:
+        if error.decision.relationship == 'other':
+            _hidden_resource()
+        raise
+    except PermissionError:
+        _hidden_resource()
+
+
+def _os_writer_authorize(principal, os_id, action, *, session_id):
+    """Revalidate session, account, role and OS inside the writer transaction."""
+    def authorize(connection):
+        if (not principal.active or type(principal.provider_id) is not int
+                or type(session_id) is not int or session_id <= 0):
+            _hidden_resource()
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        session = connection.execute('''SELECT 1 FROM desktop_sessoes
+            WHERE id=? AND prestador_id=? AND revogado_em IS NULL AND expira_em>?''',
+            (session_id, principal.provider_id, now)).fetchone()
+        if session is None:
+            _hidden_resource()
+        provider = connection.execute(
+            'SELECT ativo,excluido FROM prestadores WHERE id=?',
+            (principal.provider_id,)).fetchone()
+        if provider is None or not provider['ativo'] or provider['excluido']:
+            _hidden_resource()
+        tables = {row[0] for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('accounts','account_links')")}
+        if 'account_links' in tables:
+            if 'accounts' not in tables:
+                _hidden_resource()
+            linked = connection.execute('''SELECT a.active AS account_active,
+                l.active AS membership_active,l.provider_org_id
+                FROM account_links l LEFT JOIN accounts a ON a.id=l.account_id
+                WHERE l.link_type='provider' AND
+                      (l.provider_id=? OR l.legacy_provider_id=?)''',
+                (principal.provider_id, principal.provider_id)).fetchall()
+            if any(not row['account_active'] or not row['membership_active']
+                   or row['provider_org_id'] != 'autoseg' for row in linked):
+                _hidden_resource()
+        current = replace(principal,
+                          role=('admin' if ext.administrador(connection, principal.provider_id)
+                                else 'employee'), active=True)
+        try:
+            access.require_work_item_locked(connection, current, os_id, action)
+        except PermissionDenied as error:
+            if error.decision.relationship == 'other':
+                _hidden_resource()
+            raise
+        except PermissionError:
+            _hidden_resource()
+    return authorize
+
+
+def _require_customer(banco, principal, customer_id, action='view'):
+    try:
+        if action == 'edit':
+            access.require_customer_write(banco, principal, customer_id)
+        else:
+            access.require_customer_read(banco, principal, customer_id)
+    except PermissionError:
+        _hidden_resource()
+
+
+def _scoped_os_rows(banco, principal, *, recent=False, termo='', limite=250):
+    """Full involved rows and safe shared rows are separate SQL projections."""
+    if access.can_read_all(principal):
+        service = LocalService(banco)
+        return (service.listar_os_recentes(limite) if recent
+                else service.listar_os_ativas(termo))
+    pid = principal.provider_id
+    if pid is None or not principal.active or principal.organization_id != 'autoseg':
+        raise PermissionError('Contexto indisponível.')
+    involved = """(EXISTS (SELECT 1 FROM os_responsaveis r WHERE r.os_id=os.id
+                 AND r.prestador_id=?) OR EXISTS (SELECT 1 FROM os_prestadores op
+                 WHERE op.os_id=os.id AND op.prestador_id=? AND op.ativo=1))"""
+    active = "os.status IN ('Aberta','Iniciada','Pendente') AND COALESCE(os.arquivada,0)=0"
+    service = LocalService(banco)
+    safe_sql = """SELECT os.id,os.numero_os,c.nome AS cliente,os.status,
+           os.data_abertura,COALESCE(os.atualizado_em,os.data_abertura) AS atualizado_em,
+           p.nome AS responsavel,
+           (SELECT GROUP_CONCAT(nome, ', ') FROM (
+              SELECT DISTINCT pp.nome AS nome FROM os_prestadores op
+              JOIN prestadores pp ON pp.id=op.prestador_id
+              WHERE op.os_id=os.id AND op.ativo=1 ORDER BY pp.nome
+           )) AS participantes
+           FROM ordens_servico os JOIN clientes c ON c.id=os.cliente_id
+           LEFT JOIN os_responsaveis r ON r.os_id=os.id
+           LEFT JOIN prestadores p ON p.id=r.prestador_id"""
+    bound = max(1, min(int(limite), 500))
+    limit_sql = ' LIMIT ?' if recent else ''
+    params = (pid, pid, bound) if recent else (pid, pid)
+    with ext.db(banco) as c:
+        full = c.execute(service._SQL_OS_RESUMO + ' WHERE ' + involved +
+             ((' AND '+ active) if not recent else '') +
+             ' ORDER BY os.id DESC' + limit_sql, params).fetchall()
+        safe = c.execute(safe_sql + ' WHERE NOT '+involved+' AND '+active+
+             ' ORDER BY os.id DESC' + limit_sql, params).fetchall()
+    full_rows = [asdict(item) for item in service._mapear_os(full)]
+    safe_rows = [dict(item) for item in safe]
+    if termo:
+        search = str(termo).casefold().strip()
+        safe_rows = [item for item in safe_rows if search in
+                     ' '.join(str(v or '') for v in item.values()).casefold()]
+    merged = sorted(full_rows + safe_rows, key=lambda item:int(item['id']),reverse=True)
+    return merged[:bound] if recent else merged
+
+
+def _minimal_customer_picker(banco, termo=''):
+    pattern = '%' + str(termo or '').strip()[:100].replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    with ext.db(banco) as connection:
+        return [dict(row) for row in connection.execute(
+            "SELECT id,nome FROM clientes WHERE status NOT IN ('Inativo','A definir')"
+            " AND nome LIKE ? ESCAPE '!' ORDER BY nome LIMIT 250", (pattern,))]
+
+
+def _minimal_providers(banco):
+    with ext.db(banco) as connection:
+        return [dict(row) for row in connection.execute(
+            'SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome')]
+
+
+def _scoped_customer_list(banco, principal, termo=''):
+    from officina.application.customer_reads import listar_clientes_scoped
+    return listar_clientes_scoped(banco, principal, termo)
+
+
+def _scoped_customer_os_count(banco, principal, customer_id):
+    if access.can_read_all(principal, 'work_item'):
+        return LocalService(banco).contar_os_cliente(customer_id)
+    with ext.db(banco) as connection:
+        return int(connection.execute('''SELECT COUNT(*) FROM ordens_servico os
+            WHERE os.cliente_id=? AND (EXISTS (
+                SELECT 1 FROM os_responsaveis r WHERE r.os_id=os.id AND r.prestador_id=?)
+                OR EXISTS (SELECT 1 FROM os_prestadores p WHERE p.os_id=os.id
+                           AND p.prestador_id=? AND p.ativo=1))''',
+                (customer_id, principal.provider_id, principal.provider_id)).fetchone()[0])
+
+
+def _scoped_customer_detail(banco, principal, customer_id):
+    _require_customer(banco, principal, customer_id)
+    from officina.application.customer_reads import obter_cliente_scoped
+    return obter_cliente_scoped(banco, principal, customer_id)
+
+
 def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
-          info: dict | None = None):
+          info: dict | None = None, principal=None):
     servico = LocalService(banco)
-    admin = bool(info and info.get('admin'))
+    admin = bool(principal and principal.role == 'admin')
     if not partes:
         return _enviar(handler, 200, {
             'name': 'desktop',
@@ -202,34 +375,48 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
             'detail': info.detail,
         })
     if recurso == 'resumo' and metodo == 'GET':
-        return _enviar(handler, 200, servico.resumo_inicio())
+        if admin:
+            return _enviar(handler, 200, servico.resumo_inicio())
+        counts = ordens_repo.resumo_scoped(banco, principal.provider_id)
+        finance = ordens_repo.financeiro_resumo_scoped(banco, principal.provider_id)
+        return _enviar(handler, 200, {
+            'clientes_ativos': ordens_repo.clientes_ativos_scoped(banco, principal.provider_id),
+            'os_abertas': counts['abertas'], 'os_iniciadas': counts['iniciadas'],
+            'os_pendentes': counts['pendentes'],
+            'financeiro_recebido': finance['recebido'],
+            'financeiro_a_receber': finance['a_receber']})
     if recurso in ('prestadores', 'estoque', 'empresa', 'composicao') and not admin:
         raise PermissionError('Somente administradores podem acessar esta área.')
     if recurso == 'clientes':
-        return _rota_clientes(handler, partes, query, servico, metodo, info)
+        return _rota_clientes(handler, partes, query, servico, metodo, info, principal)
     if recurso == 'os':
-        return _rota_os(handler, partes, query, servico, metodo, banco, info)
+        return _rota_os(handler, partes, query, servico, metodo, banco, info, principal)
     if recurso == 'prestadores':
         return _rota_prestadores(handler, partes, servico, metodo)
     if recurso == 'organizacoes':
         _exigir_admin(info)
         return _rota_organizacoes(handler, partes, servico, metodo)
     if recurso == 'relatorios':
+        _exigir_admin(info)
         if metodo == 'GET' and partes == ['relatorios']:
             return _enviar(handler, 200, servico.listar_relatorios(
                 str(query.get('termo', [''])[0])))
         raise NaoEncontradoError('Rota não encontrada.')
     if recurso == 'historico':
+        _exigir_admin(info)
         return _rota_historico(handler, partes, query, servico, metodo)
     if recurso == 'pj':
+        _exigir_admin(info)
         return _rota_pj(handler, partes, query, servico, metodo)
     if recurso == 'financeiro':
-        if metodo != 'GET':
-            _exigir_admin(info)
+        _exigir_admin(info)
         return _rota_financeiro(handler, partes, query, servico, metodo)
     if recurso == 'portal':
+        _exigir_admin(info)
         return _rota_portal(handler, partes, query, servico, metodo)
     if recurso == 'catalogo':
+        if metodo != 'GET':
+            _exigir_admin(info)
         return _rota_catalogo(handler, partes, query, servico, metodo)
     if recurso == 'estoque':
         return _rota_estoque(handler, partes, query, servico, metodo)
@@ -238,112 +425,156 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
     if recurso == 'composicao':
         return _rota_composicao(handler, partes, servico, metodo)
     if recurso == 'contexto':
+        if partes == ['contexto','os-rapida'] and metodo == 'GET' and not admin:
+            return _enviar(handler, 200, {
+                'clientes': _minimal_customer_picker(banco),
+                'prestadores': _minimal_providers(banco)})
+        _exigir_admin(info)
         return _rota_contexto(handler, partes, servico, metodo)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_clientes(handler, partes, query, servico, metodo, info=None):
+def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal=None):
+    if partes == ['clientes','busca'] and metodo == 'GET':
+        return _enviar(handler, 200, _minimal_customer_picker(servico.banco,
+                      str(query.get('termo', [''])[0])))
     if len(partes) == 1:
         if metodo == 'GET':
-            return _enviar(handler, 200, servico.listar_clientes(
+            return _enviar(handler, 200, _scoped_customer_list(servico.banco, principal,
                 str(query.get('termo', [''])[0])))
         if metodo == 'POST':
             dados = _corpo(handler)
+            existing = _int(dados.get('cliente_id', dados.get('id')))
+            if existing is not None:
+                _require_customer(servico.banco, principal, existing, 'edit')
+            else:
+                access.require_customer_create(principal)
             return _enviar(handler, 200, servico.salvar_cliente(
-                _int(dados.get('cliente_id', dados.get('id'))),
-                dict(dados.get('dados') or {})))
+                existing,
+                dict(dados.get('dados') or {}), principal=principal))
     if partes == ['clientes', 'ativo'] and metodo == 'GET':
+        _exigir_admin(info)
         return _enviar(handler, 200, servico.obter_cliente_ativo_por_documento(
             str(query.get('documento', [''])[0])))
     if partes == ['clientes', 'ativos', 'contar'] and metodo == 'GET':
         return _enviar(handler, 200, {
-            'total': servico.contar_clientes_ativos()})
+            'total': (servico.contar_clientes_ativos() if info.get('admin') else
+                      ordens_repo.clientes_ativos_scoped(servico.banco, principal.provider_id))})
     if len(partes) >= 2:
         cliente_id = _int(partes[1])
         if cliente_id is None:
             raise NaoEncontradoError('Cliente não encontrado.')
         return _rota_cliente_id(handler, cliente_id, partes[2:],
-                                servico, metodo, info)
+                                servico, metodo, info, principal)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None):
+def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, principal=None):
+    if resto == ['mesclar'] and metodo == 'POST':
+        _exigir_admin(info)
+        destino_id = _int(_corpo(handler).get('destino_id'))
+        if destino_id is None or destino_id <= 0:
+            raise ValueError('Informe um cliente de destino válido.')
+        servico.mesclar_clientes(cliente_id, destino_id, principal=principal)
+        return _enviar(handler, 200, {'ok': True})
+    _require_customer(servico.banco, principal, cliente_id,
+                      'edit' if not resto and metodo == 'PUT' else 'view')
     if not resto and metodo == 'GET':
-        registro = servico.obter_cliente(cliente_id)
+        registro = _scoped_customer_detail(servico.banco, principal, cliente_id)
         if registro is None:
             raise NaoEncontradoError('Cliente não encontrado.')
         return _enviar(handler, 200, registro)
     if not resto and metodo == 'PUT':
         dados = _corpo(handler)
         return _enviar(handler, 200, servico.salvar_cliente(
-            cliente_id, dict(dados.get('dados') or dados)))
+            cliente_id, dict(dados.get('dados') or dados), principal=principal))
     if resto == ['ativo'] and metodo == 'GET':
-        registro = servico.obter_cliente_ativo(cliente_id)
-        if registro is None:
+        registro = _scoped_customer_detail(servico.banco, principal, cliente_id)
+        if str(registro.campos.get('status') or '') == 'Inativo':
             raise NaoEncontradoError('Cliente não encontrado.')
-        return _enviar(handler, 200, registro)
+        return _enviar(handler, 200, ClienteOpcao(id=cliente_id,
+                           nome=str(registro.campos.get('nome') or '')))
     if resto == ['os', 'contar'] and metodo == 'GET':
         return _enviar(handler, 200, {
-            'total': servico.contar_os_cliente(cliente_id)})
+            'total': _scoped_customer_os_count(servico.banco, principal, cliente_id)})
     if resto == ['desativar'] and metodo == 'POST':
         _exigir_admin(info)
         servico.desativar_cliente(
-            cliente_id, str(_corpo(handler).get('motivo') or ''))
+            cliente_id, str(_corpo(handler).get('motivo') or ''), principal=principal)
         return _enviar(handler, 200, {'ok': True})
     if resto == ['excluir'] and metodo == 'POST':
         _exigir_admin(info)
-        servico.excluir_cliente(cliente_id)
+        servico.excluir_cliente(cliente_id, principal=principal)
         return _enviar(handler, 200, {'ok': True})
     if resto == ['senha'] and metodo == 'POST':
         _exigir_admin(info)
         servico.definir_senha_cliente(
-            cliente_id, _corpo(handler).get('senha'))
+            cliente_id, _corpo(handler).get('senha'), principal=principal)
         return _enviar(handler, 200, {'ok': True})
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None):
+def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, principal=None):
     if partes == ['os'] and metodo == 'POST':
-        return _enviar(handler, 200,
-                       servico.salvar_os(_os_input(_corpo(handler))))
+        payload = _os_input(_corpo(handler))
+        if payload.os_id:
+            status = str(payload.acao or '').strip() if hasattr(payload, 'acao') else ''
+            if status in ('Concluída', 'Concluida'):
+                permission = 'conclude'
+            elif status == 'Cancelada':
+                permission = 'cancel'
+            else:
+                permission = 'edit'
+            _require_object(banco, principal, int(payload.os_id), permission)
+        else:
+            access.require_create(banco, principal)
+        return _enviar(handler, 200, servico.salvar_os(
+            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')))
+            if payload.os_id else servico.salvar_os(payload))
     if partes == ['os', 'ativas'] and metodo == 'GET':
-        return _enviar(handler, 200, servico.listar_os_ativas(
-            str(query.get('termo', [''])[0])))
+        return _enviar(handler, 200, _scoped_os_rows(banco, principal,
+            termo=str(query.get('termo', [''])[0])))
     if partes == ['os', 'recentes'] and metodo == 'GET':
         limite = _int(query.get('limite', ['6'])[0], 6) or 6
-        return _enviar(handler, 200, servico.listar_os_recentes(limite))
+        return _enviar(handler, 200, _scoped_os_rows(banco, principal,
+            recent=True, limite=limite))
     if partes == ['os', 'escolha'] and metodo == 'GET':
+        _exigir_admin(info)
         limite = _int(query.get('limite', ['250'])[0], 250) or 250
         return _enviar(handler, 200, servico.listar_os_para_escolha(limite))
     if partes == ['os', 'atribuicao'] and metodo == 'GET':
+        _exigir_admin(info)
         return _enviar(handler, 200, servico.listar_os_para_atribuicao())
     if partes == ['os', 'contexto'] and metodo == 'GET':
         os_id = _int(query.get('os_id', [None])[0])
+        _require_object(banco, principal, os_id)
         return _enviar(handler, 200, servico.contexto_os(os_id))
     if len(partes) >= 3:
         os_id = _int(partes[1])
         if os_id is None:
             raise NaoEncontradoError('OS não encontrada.')
         return _rota_os_id(handler, os_id, partes[2:], servico, metodo,
-                           banco, info)
+                           banco, info, principal)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None):
-    if banco and info and info.get('id') is not None:
-        acao = 'view'
-        if metodo == 'GET':
-            acao = 'download' if resto == ['pdf', 'arquivo'] else 'view'
-        elif resto in (['atribuir'], ['desatribuir']):
-            acao = 'assign'
-        elif resto == ['iniciar']:
-            acao = 'start'
-        elif resto == ['pdf', 'publicar']:
-            acao = 'publish'
-        # The desktop API currently performs no object/role check on these
-        # routes; record that actual behavior without changing it.
-        policy_shadow.evaluate_os(
-            banco, int(info['id']), os_id, acao, True, 'api_desktop')
+def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, principal=None):
+    actions = {
+        ('GET', ('contexto',)): 'view',
+        ('GET', ('contexto-atribuicao',)): 'assign',
+        ('GET', ('anexos','contar')): 'view',
+        ('GET', ('pdf','arquivo')): 'download',
+        ('POST', ('atribuir',)): 'assign',
+        ('POST', ('desatribuir',)): 'assign',
+        ('POST', ('iniciar',)): 'start',
+        ('POST', ('pdf','publicar')): 'publish',
+        ('POST', ('email','preparar')): 'send',
+        ('POST', ('nota','preparar')): 'send',
+    }
+    action = actions.get((metodo,tuple(resto)))
+    if action is None:
+        raise NaoEncontradoError('Rota não encontrada.')
+    _require_object(banco, principal, os_id, action)
     if resto == ['contexto'] and metodo == 'GET':
         return _enviar(handler, 200, servico.contexto_os(os_id))
     if resto == ['anexos', 'contar'] and metodo == 'GET':
@@ -356,25 +587,30 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None):
         if prestador_id is None:
             raise ValidacaoError('Informe o prestador.')
         return _enviar(handler, 200, {
-            'mudou': servico.atribuir_os(os_id, prestador_id)})
+            'mudou': servico.atribuir_os(os_id, prestador_id,
+                             authorize=_os_writer_authorize(principal, os_id, 'assign', session_id=info.get('sessao_id')))})
     if resto == ['desatribuir'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'mudou': servico.desatribuir_os(os_id)})
+            'mudou': servico.desatribuir_os(os_id,
+                             authorize=_os_writer_authorize(principal, os_id, 'assign', session_id=info.get('sessao_id')))})
     if resto == ['iniciar'] and metodo == 'POST':
-        servico.iniciar_os(os_id)
+        servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start', session_id=info.get('sessao_id')))
         return _enviar(handler, 200, {'ok': True})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id)})
     if resto == ['pdf', 'publicar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.publicar_pdf(os_id)})
+            'arquivo': servico.publicar_pdf(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'publish', session_id=info.get('sessao_id')))})
     if resto == ['email', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.preparar_email(os_id)})
+            'arquivo': servico.preparar_email(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'send', session_id=info.get('sessao_id')))})
     if resto == ['nota', 'preparar'] and metodo == 'POST':
         return _enviar(handler, 200, {
-            'arquivo': servico.preparar_nota(os_id)})
+            'arquivo': servico.preparar_nota(os_id,
+                              authorize=_os_writer_authorize(principal, os_id, 'send', session_id=info.get('sessao_id')))})
     raise NaoEncontradoError('Rota não encontrada.')
 
 
@@ -725,8 +961,9 @@ def _desktop_session_context(banco, info):
     if len(memberships) != 1:
         raise PermissionError('Contexto do prestador indisponível.')
     membership = memberships[0]
-    principal = identity.to_principal(ident, membership)
-    return SessionContext.from_identity(ident, membership, principal)
+    principal = replace(identity.to_principal(ident, membership),
+                        organization_id='autoseg')
+    return SessionContext.from_identity(ident, membership, principal), principal
 
 
 def _context_api(context):
@@ -772,7 +1009,7 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
                   'Sessão expirada ou não autenticada.')
             return True
         if caminho == PREFIX + '/me' and method == 'GET':
-            context = _desktop_session_context(banco, info)
+            context, principal = _desktop_session_context(banco, info)
             _enviar(handler, 200, {**info, **_context_api(context)})
             return True
         if caminho == PREFIX + '/logout' and method == 'POST':
@@ -780,7 +1017,9 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
                 banco, handler.headers.get('Authorization', ''))
             _enviar(handler, 200, {'ok': True})
             return True
-        _rota(handler, partes, query, banco, method, info)
+        context, principal = _desktop_session_context(banco, info)
+        info = {**info, 'admin': principal.role == 'admin'}
+        _rota(handler, partes, query, banco, method, info, principal)
     except prestador_auth.MuitasTentativasError as erro:
         _erro(handler, 429, 'rate_limited', str(erro))
     except AppError as erro:
@@ -788,8 +1027,13 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
               erro.mensagem)
     except ValueError as erro:
         _erro(handler, 400, 'validation', str(erro))
-    except PermissionError as erro:
-        _erro(handler, 403, 'forbidden', str(erro))
+    except PermissionDenied as erro:
+        if erro.decision.relationship == 'other':
+            _erro(handler, 404, 'not_found', 'Recurso não encontrado.')
+        else:
+            _erro(handler, 403, 'forbidden', 'Operação não permitida.')
+    except PermissionError:
+        _erro(handler, 403, 'forbidden', 'Operação não permitida.')
     except sqlite3.Error:
         LOG.exception('Falha de banco na API desktop')
         _erro(handler, 500, 'internal_error',

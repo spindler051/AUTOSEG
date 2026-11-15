@@ -1,120 +1,63 @@
-"""Lifecycle tests for the optional local web access manager."""
+"""A single Officina Web server is owned by the GTK web manager."""
 import unittest
-from pathlib import Path
-
+from unittest.mock import patch
 from flavors.autoseg.modules.web_access import WebAccessManager
 
 
-class FakeProvider:
+class FakeSite:
     def __init__(self, banco, host, porta):
-        self.banco = banco
-        self.host = host
-        self.porta = porta
-        self.started = False
-        self.stopped = False
+        self.host, self.porta = host, porta
+        self.started = self.stopped = False
 
     def iniciar(self):
         self.started = True
-        return 'http://127.0.0.1:9999'
+        return f'http://127.0.0.1:{self.porta}'
 
     def parar(self):
         self.stopped = True
-
-
-class FakeClient:
-    def __init__(self, banco, pasta_app, host, porta):
-        self.banco = banco
-        self.pasta_app = pasta_app
-        self.host = host
-        self.porta = porta
-        self.ativo = False
-        self.stopped = False
-
-    def iniciar(self):
-        self.ativo = True
-        return self.info()
-
-    def parar(self):
-        self.ativo = False
-        self.stopped = True
-
-    def info(self):
-        return {
-            'ativo': self.ativo,
-            'porta': self.porta,
-            'url_local': f'http://127.0.0.1:{self.porta}' if self.ativo else '',
-            'url_rede': '',
-            'iniciado_em': '06/11/2026 18:00' if self.ativo else '',
-            'erro': '',
-        }
-
-    def consumir_eventos(self):
-        return [{'tipo': 'nova_os', 'numero': 'OS-1'}]
 
 
 class WebAccessManagerTest(unittest.TestCase):
-    def test_local_only_does_not_create_servers(self):
-        manager = WebAccessManager('/tmp/nao-usado.db', enabled=False)
-        estado = manager.start()
-        self.assertFalse(estado['enabled'])
-        self.assertFalse(estado['provider']['ativo'])
-        self.assertIn('Modo local', manager.provider_error)
-        self.assertFalse(manager.client_info()['ativo'])
+    def test_local_mode_does_not_create_site(self):
+        manager = WebAccessManager('unused.db', enabled=False,
+                                   provider_factory=lambda *args: self.fail('factory called'))
+        status = manager.start()
+        self.assertFalse(status['enabled'])
+        self.assertFalse(status['site']['ativo'])
+        self.assertFalse(manager.provider_active)
+        manager.stop()
+
+    def test_one_server_serves_client_and_provider(self):
+        servers = []
+        def create(*args):
+            item = FakeSite(*args)
+            servers.append(item)
+            return item
+        manager = WebAccessManager('unused.db', provider_factory=create)
+        with patch('flavors.autoseg.modules.web_access.runtime_config.provider_server') as config:
+            config.return_value.host, config.return_value.port = '127.0.0.1', 8866
+            self.assertTrue(manager.start()['site']['ativo'])
+            self.assertEqual(manager.start()['site']['url_local'], 'http://127.0.0.1:8866')
+        self.assertEqual(len(servers), 1)
+        self.assertEqual(manager.site_info()['porta'], 8866)
         self.assertEqual(manager.consume_events(), [])
         manager.stop()
+        self.assertTrue(servers[0].stopped)
+        self.assertFalse(manager.site_info()['ativo'])
 
-    def test_start_and_stop_are_delegated_to_servers(self):
-        providers = []
-        clients = []
+    def test_failure_starts_no_second_listener(self):
+        def fail(*args):
+            raise OSError('port busy')
+        manager = WebAccessManager('unused.db', provider_factory=fail)
+        status = manager.start()
+        self.assertFalse(status['site']['ativo'])
+        self.assertIn('port busy', manager.provider_error)
 
-        def provider_factory(banco, host, porta):
-            item = FakeProvider(banco, host, porta)
-            providers.append(item)
-            return item
-
-        def client_factory(banco, pasta_app, host, porta):
-            item = FakeClient(banco, pasta_app, host, porta)
-            clients.append(item)
-            return item
-
-        manager = WebAccessManager(
-            '/tmp/nao-usado.db', Path('/tmp'),
-            provider_factory=provider_factory, client_factory=client_factory)
-        estado = manager.start()
-        self.assertEqual(len(providers), 1)
-        self.assertEqual(len(clients), 1)
-        self.assertTrue(providers[0].started)
-        self.assertTrue(clients[0].ativo)
-        self.assertEqual(estado['provider']['url'], 'http://127.0.0.1:9999')
-        self.assertTrue(manager.client_info()['ativo'])
-        self.assertEqual(manager.consume_events()[0]['numero'], 'OS-1')
-
-        manager.stop()
-        self.assertTrue(providers[0].stopped)
-        self.assertTrue(clients[0].stopped)
-        self.assertFalse(manager.provider_active)
-
-    def test_provider_failure_does_not_block_client(self):
-        clients = []
-
-        def provider_factory(banco, host, porta):
-            raise RuntimeError('porta ocupada')
-
-        def client_factory(banco, pasta_app, host, porta):
-            item = FakeClient(banco, pasta_app, host, porta)
-            clients.append(item)
-            return item
-
-        manager = WebAccessManager(
-            '/tmp/nao-usado.db', Path('/tmp'),
-            provider_factory=provider_factory, client_factory=client_factory)
-        estado = manager.start()
-        self.assertFalse(estado['provider']['ativo'])
-        self.assertEqual(manager.provider_error, 'porta ocupada')
-        self.assertTrue(manager.client_info()['ativo'])
-        self.assertEqual(len(clients), 1)
-        manager.stop()
+    def test_legacy_second_server_contract_does_not_exist(self):
+        for name in ('client_info','client_on_network','start_client',
+                     'stop_client','client_error','_criar_cliente'):
+            self.assertFalse(hasattr(WebAccessManager, name), name)
 
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main()

@@ -1,7 +1,11 @@
 # Cliente no GTK — análise e MVP da peça 6.5
 
-**Status:** planejado; não implementado.
-**Dependência:** fechar o gate P0 de autorização por objeto.
+**Status:** planejado; não implementado. O código do P0-AUTH está completo
+para DEV em `feat/p0-auth-close-gate` (`fafcd8e`), mas a homologação DEV e a
+migração da outbox para a MAIN ainda não aconteceram. Nenhum código de cliente
+no GTK foi iniciado.
+**Dependência:** homologar o P0-AUTH em DEV e decidir a migração da outbox para
+a MAIN. O código do gate, sozinho, não libera o cliente no GTK.
 **Objetivo:** permitir que uma conta cliente entre no app GTK e veja apenas os
 próprios dados, reutilizando autenticação, sessão e política do site, sem
 duplicar regra de negócio no widget.
@@ -34,6 +38,11 @@ O que já existe e deve ser reutilizado:
   site;
 - `ObjectPolicy`/`work_item_access` já modelam o acesso por objeto;
 - o site já tem login único em `/login` e home do cliente.
+
+**Resumo do que falta:** login desktop de cliente, sessão desktop genérica,
+`/me` com contexto cliente, API client-safe para home e próprias OS, bloqueio
+das rotas de prestador, projeção cliente da `Janela`, flag de rollout e testes
+de revogação. O modo local cliente fica fora do MVP 6.5.
 
 ## 2. Lacunas por camada
 

@@ -19,12 +19,15 @@ from officina.core.banco import proximo_numero_os
 from officina.application.contracts import OSInput, OSResultado, ValidacaoError
 
 
-def salvar_os(banco, dados: OSInput) -> OSResultado:
+def salvar_os(banco, dados: OSInput, *, authorize=None) -> OSResultado:
     if dados.acao == 'Concluída' and not str(dados.forma_pagamento or '').strip():
         raise ValidacaoError('Selecione a forma de pagamento antes de concluir a OS.')
     anterior = None
     status_anterior = ''
     with ext.db(banco) as conexao:
+        if dados.os_id is not None and authorize is not None:
+            conexao.execute('BEGIN IMMEDIATE')
+            authorize(conexao)
         cursor = conexao.cursor()
         if dados.os_id is not None:
             anterior = cursor.execute(

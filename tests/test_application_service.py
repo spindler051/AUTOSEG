@@ -38,6 +38,12 @@ class LocalServiceClientTest(unittest.TestCase):
         banco.criar_banco(self.db)
         ext.instalar(self.db)
         cad9.instalar(self.db)
+        from officina.application.object_policy import Principal
+        pid = ext.cadastrar(self.db, 'Fixture creator',
+                            'app-service-fixture@invalid.test', 'Pass12345678')
+        cad9.definir_admin(self.db, pid, True)
+        self.actor = Principal(pid, 'admin', organization_id='autoseg',
+                               provider_id=pid)
         self.service = LocalService(self.db)
 
     def tearDown(self):
@@ -51,7 +57,7 @@ class LocalServiceClientTest(unittest.TestCase):
             'status': 'Ativo',
         }
         base.update(dados)
-        return self.service.salvar_cliente(None, base)
+        return self.service.salvar_cliente(None, base, principal=self.actor)
 
     def test_health_reports_local_mode(self):
         info = self.service.health()
@@ -66,9 +72,9 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(criado.campos['nome'], 'Alfa')
         self.assertFalse(criado.incompleto)
 
-        lista = self.service.listar_clientes('porto')
+        lista = self.service.listar_clientes('porto', principal=self.actor)
         self.assertEqual([item.nome for item in lista], ['Alfa'])
-        obtido = self.service.obter_cliente(criado.id)
+        obtido = self.service.obter_cliente(criado.id, principal=self.actor)
         self.assertIsNotNone(obtido)
         self.assertEqual(obtido.campos['cidade'], 'Porto Alegre')
 
@@ -77,7 +83,7 @@ class LocalServiceClientTest(unittest.TestCase):
         atualizado = self.service.salvar_cliente(
             criado.id,
             {'tipo_pessoa': 'Jurídica', 'documento': '',
-             'nome': 'Condomínio Beta', 'status': 'Ativo'})
+             'nome': 'Condomínio Beta', 'status': 'Ativo'}, principal=self.actor)
         self.assertEqual(atualizado.versao, 2)
         self.assertEqual(atualizado.campos['nome'], 'Condomínio Beta')
 
@@ -86,7 +92,7 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(contexto.exception.titulo, 'Documento inválido')
 
     def test_missing_client_returns_none(self):
-        self.assertIsNone(self.service.obter_cliente(99999))
+        self.assertIsNone(self.service.obter_cliente(99999, principal=self.actor))
 
     def test_dashboard_summary_uses_service(self):
         self.criar(nome='Alfa')

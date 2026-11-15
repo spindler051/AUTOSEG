@@ -5,7 +5,5 @@ credentials-file: /Users/SEU_USUARIO/.cloudflared/SUBSTITUIR_UUID_DO_TUNEL.json
 
 ingress:
   - hostname: sistema.seudominio.com
-    service: http://127.0.0.1:8765
-  - hostname: portal.seudominio.com
     service: http://127.0.0.1:8766
   - service: http_status:404

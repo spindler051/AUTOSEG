@@ -90,6 +90,10 @@ class _SemRedirecionar(urllib.request.HTTPRedirectHandler):
 
 class CorrecoesRev12(unittest.TestCase):
     def setUp(self):
+        # Legacy-only fixtures need explicit provider login fallback.
+        flag_patch = mock.patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'})
+        flag_patch.start()
+        self.addCleanup(flag_patch.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_correcoes_')
         self.dir = Path(self.tmp.name)
         self.db = str(self.dir / 'teste.db')
@@ -119,10 +123,12 @@ class CorrecoesRev12(unittest.TestCase):
                              (oid,)).fetchone()[0]
 
     def _cliente(self, pid, nome='Condomínio Alfa', **extras):
+        from officina.application.object_policy import Principal
         dados = {k: '' for k in neg.CLIENTE_CAMPOS}
         dados.update(nome=nome, tipo_pessoa='Jurídica', status='Ativo')
         dados.update(extras)
-        return neg.cliente_salvar(self.db, dados, pid)
+        actor = Principal(pid, 'employee', organization_id='autoseg', provider_id=pid)
+        return neg.cliente_salvar(self.db, dados, pid, principal=actor)
 
     def _os_concluida(self, pid, cid):
         dados = {'cliente_id': str(cid), 'descricao': 'Manutenção preventiva',
@@ -580,8 +586,9 @@ class CorrecoesRev12(unittest.TestCase):
         cliente = self._login(base, 'semvisita@exemplo.com.br')
         status, html = req(cliente, base, f'/os/{oid}')
         self.assertEqual(status, 200)
-        self.assertIn('name="cobrar_visita"', html)
-        self.assertIn('value="0" selected>Não cobrar', html)
+        self.assertIn('name="cobrar_visita" value="0"', html)
+        self.assertIn('Cobrar taxa mínima de visita', html)
+        self.assertNotIn('name="cobrar_visita" value="1" checked', html)
         self.assertRegex(html, r'name="valor_mao_obra" value="72(?:[.,]0+)?"')
 
     def test_servico_1500_distribui_o_total_sem_somar_taxas(self):
@@ -1028,7 +1035,8 @@ class CorrecoesRev12(unittest.TestCase):
         # sem navegar para uma página de erro.
         cliente_c = self._login(base, 'foto.c@exemplo.com.br')
         _, html_c = req(cliente_c, base, f'/os/{oid}')
-        self.assertIn('Recurso indisponível.', html_c)
+        self.assertIn('fila compartilhada', html_c)
+        self.assertNotIn('Salvar fotos e legendas', html_c)
         _, inicio_c = req(cliente_c, base, '/')
         token_c = re.search(r'name="csrf" value="([^"]+)"', inicio_c).group(1)
         corpo = urllib.parse.urlencode({
@@ -1044,6 +1052,49 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertEqual(falha.exception.code, 403)
         dados = json.loads(falha.exception.read())
         self.assertTrue(dados.get('error'))
+
+    @mock.patch.dict('os.environ', {'AUTOSEG_OBJECT_POLICY_ENFORCEMENT': '0'})
+    def test_admin_ve_foto_de_os_de_outro_com_policy(self):
+        a = self._prestador('Técnico Foto Policy A', email='foto.policy.a@exemplo.com.br')
+        b = self._prestador('Admin Foto Policy B', email='foto.policy.b@exemplo.com.br')
+        c = self._prestador('Funcionário Foto Policy C', email='foto.policy.c@exemplo.com.br')
+        cad.definir_admin(self.db, b, True)
+        cid = self._cliente(a, 'Condomínio Foto Policy')
+        dados = {'cliente_id': str(cid), 'descricao': 'Ajustar portão',
+                 'tecnico': 'T', 'forma_pagamento': 'PIX',
+                 'valor_mao_obra': '100', 'valor_materiais_manual': '0',
+                 'materiais_presentes': '1', 'acao_status': 'salvar'}
+        oid = neg.os_salvar(self.db, dados, a)
+        ext.atribuir(self.db, oid, a)
+        _, base = self._servidor()
+        cliente_a = self._login(base, 'foto.policy.a@exemplo.com.br')
+        token = self._csrf(base, cliente_a, oid)
+        buffer = io.BytesIO()
+        Image.new('RGB', (4, 4), 'blue').save(buffer, 'PNG')
+        status, _ = multipart(
+            cliente_a, base, f'/os/{oid}/fotos',
+            [('csrf', token), ('foto_legenda[]', 'Foto do portão'),
+             ('foto_chave[]', 'chave-policy'), ('foto_visivel[]', '1')],
+            [('imagens_encerramento[]', 'portao.png', buffer.getvalue(), 'image/png')])
+        self.assertEqual(status, 200)
+        with ext.db(self.db) as c:
+            foto = c.execute('SELECT id FROM os_anexos WHERE os_id=?', (oid,)).fetchone()
+
+        admin = self._login(base, 'foto.policy.b@exemplo.com.br')
+        with admin.open(urllib.request.Request(
+                base + f'/arquivos/anexo/{foto["id"]}/thumb'), timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertEqual(resposta.headers.get_content_type(), 'image/jpeg')
+        with admin.open(urllib.request.Request(
+                base + f'/arquivos/anexo/{foto["id"]}'), timeout=30) as resposta:
+            self.assertEqual(resposta.status, 200)
+            self.assertGreater(len(resposta.read()), 0)
+
+        funcionario = self._login(base, 'foto.policy.c@exemplo.com.br')
+        status, _ = req(funcionario, base, f'/arquivos/anexo/{foto["id"]}/thumb')
+        self.assertEqual(status, 403)
+        status, _ = req(funcionario, base, f'/arquivos/anexo/{foto["id"]}')
+        self.assertEqual(status, 403)
 
     # ---------------------------------------------------------------- 2 e 3
     def test_relatorio_pdf_cnpj_prestador_ou_padrao(self):
@@ -1178,7 +1229,8 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertFalse(any(x['id'] == servico for x in cat.listar(self.db)))
 
     def test_portal_servicos_exclui_com_botao_e_confirmacao(self):
-        self._prestador()
+        pid=self._prestador()
+        cad.definir_admin(self.db,pid,True)
         servico = cat.salvar(self.db, {'nome': 'Serviço do portal',
                                        'descricao': 'Teste',
                                        'preco_servico': '100'})
@@ -1200,20 +1252,10 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIsNone(cat.obter(self.db, servico))
 
     # ---------------------------------------------------------------- 5
-    def test_emails_adicionais_entram_na_lista_final(self):
-        pid = self._prestador()
-        cid = self._cliente(pid, 'Condomínio Multi',
-                            email='cliente@exemplo.com.br',
-                            sindico_email='sindico@exemplo.com.br',
-                            administradora_email='adm@exemplo.com.br')
-        dados = {'cliente_id': str(cid), 'descricao': 'Serviço multi', 'tecnico': 'T',
-                 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
-                 'materiais_presentes': '1', 'acao_status': 'salvar'}
-        oid = neg.os_salvar(self.db, dados, pid)
-        lista = prod.destinatarios_para_os(
-            self.db, oid, ['administradora'], 'extra@exemplo.com.br, cliente@exemplo.com.br')
-        self.assertEqual(lista, ['adm@exemplo.com.br', 'extra@exemplo.com.br',
-                                 'cliente@exemplo.com.br'])
+    def test_campos_de_destinatarios_nao_aceitam_email_avulso(self):
+        self.assertNotIn('emails_adicionais', prod.CAMPOS)
+        self.assertFalse(hasattr(prod, 'destinatarios_para_os'))
+        self.assertFalse(hasattr(prod, 'destinatarios_conclusao'))
 
     def test_gmail_bloqueia_dominios_de_teste_antes_da_rede(self):
         for endereco in ('34567890175@example.org', 'teste@example.com',
@@ -1224,7 +1266,7 @@ class CorrecoesRev12(unittest.TestCase):
             self.assertIn(endereco, str(contexto.exception))
 
     # ---------------------------------------------------------------- 6
-    def test_rascunho_restaura_destinatarios_e_email_adicional(self):
+    def test_rascunho_rejeita_email_adicional(self):
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
                             sindico_email='sindico@exemplo.com.br',
@@ -1243,13 +1285,13 @@ class CorrecoesRev12(unittest.TestCase):
                 'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
                 'emails_adicionais': 'extra@exemplo.com.br'}
         status, html = req(cliente, base, f'/os/{oid}/rascunho/salvar', rasc)
-        self.assertEqual(status, 200)
-        _, html = req(cliente, base, f'/os/{oid}')
-        self.assertIn('value="extra@exemplo.com.br"', html)
-        self.assertIn('value="administradora" checked', html)
-        self.assertIn('value="cliente" checked', html)
+        self.assertEqual(status, 400)
+        self.assertIn('e-mail avulso', html.lower())
+        self.assertIsNone(ext.obter_rascunho_web(self.db, oid, pid))
 
     def test_conclusao_envia_todos_os_destinatarios_selecionados(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br',
                             sindico_email='sindico@exemplo.com.br',
@@ -1262,21 +1304,24 @@ class CorrecoesRev12(unittest.TestCase):
         servidor, base = self._servidor()
         cliente = self._login(base)
         token = self._csrf(base, cliente, oid)
-        status, html = req(cliente, base, f'/os/{oid}/salvar',
+        from flavors.autoseg.modules import gmail_service
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'AUTOSEG_GMAIL_DESATIVADO': '0'}), \
+             patch.object(gmail_service, 'enviar_email_gmail', return_value='msg-fake'):
+            status, html = req(cliente, base, f'/os/{oid}/salvar',
                            {'csrf': token, 'cliente_id': str(cid), 'descricao': 'Serviço',
                             'tecnico': 'T', 'forma_pagamento': 'PIX', 'valor_mao_obra': '10',
                             'materiais_presentes': '1', 'v9_execucao': 'exec',
                             'relatorio_tecnico': 'rel', 'acao_status': 'Concluída',
                             'modo_envio': 'encerrar', 'sem_nota_fiscal': '1',
-                            'destinatario_sel[]': ['cliente', 'sindico', 'administradora'],
-                            'emails_adicionais': 'extra@exemplo.com.br'})
+                            'destinatario_sel[]': ['cliente', 'sindico', 'administradora']})
         self.assertEqual(status, 200)
         with ext.db(self.db) as c:
             reg = c.execute('SELECT destinatarios_json FROM produtividade_email WHERE os_id=?',
                             (oid,)).fetchone()
         self.assertEqual(sorted(json.loads(reg['destinatarios_json'])),
                          sorted(['cliente@exemplo.com.br', 'sindico@exemplo.com.br',
-                                 'adm@exemplo.com.br', 'extra@exemplo.com.br']))
+                                 'adm@exemplo.com.br']))
 
     def test_anexar_nota_fiscal_preserva_rascunho(self):
         pid = self._prestador()
@@ -1358,6 +1403,9 @@ class CorrecoesRev12(unittest.TestCase):
         conclusao.update(acao_status='Concluída', v9_execucao='exec',
                          relatorio_tecnico='Relatório técnico final.')
         neg.os_salvar(self.db, conclusao, pid, oid)
+        from officina.core import os_effect_outbox as effects
+        fluxo.publicar_relatorio(self.db, oid)
+        effects.install(self.db)
         servidor, base = self._servidor()
         cliente = self._login(base)
         token = self._csrf(base, cliente, oid)
@@ -1376,7 +1424,10 @@ class CorrecoesRev12(unittest.TestCase):
         original = gmail_service.enviar_email_gmail
         gmail_service.enviar_email_gmail = fake
         try:
-            status, html = req(cliente, base, f'/os/{oid}/reenviar-email', {'csrf': token})
+            status, html = req(cliente, base, f'/os/{oid}/reenviar-email', {
+                'csrf': token, 'confirmar_duplicata': '1',
+                'reenviar_operacao': 'retry-nf-unique-request-12345',
+                'destinatario_sel[]': ['cliente']})
             self.assertEqual(status, 200)
             for _ in range(50):
                 with ext.db(self.db) as c:
@@ -1390,6 +1441,8 @@ class CorrecoesRev12(unittest.TestCase):
             gmail_service.enviar_email_gmail = original
 
     def test_conclusao_exige_nota_fiscal_ou_nao_precisa(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Multi', email='cliente@exemplo.com.br')
         dados = {'cliente_id': str(cid), 'descricao': 'Serviço', 'tecnico': 'T',
@@ -1411,14 +1464,16 @@ class CorrecoesRev12(unittest.TestCase):
         self.assertIn('nota fiscal', html.lower())
         # Com "não precisa de nota fiscal" → permitido.
         status, html = req(cliente, base, f'/os/{oid}/salvar',
-                           dict(base_form, sem_nota_fiscal='1'))
+                           dict(base_form, sem_nota_fiscal='1', sem_destinatario='1',
+                                destinatarios_presente='1'))
         self.assertEqual(status, 200)
 
-    def test_pendente_publica_pdf_e_envia_email(self):
+    def test_pendente_publica_pdf_sem_email(self):
+        from officina.core import os_effect_outbox as effects
+        effects.install(self.db)  # Temporary test DB only.
         import time
         import os
         from flavors.autoseg.modules import gmail_service
-        os.environ.pop('AUTOSEG_GMAIL_DESATIVADO', None)
         pid = self._prestador()
         cid = self._cliente(pid, 'Condomínio Pendente', email='cliente@exemplo.com.br')
         dados = {'cliente_id': str(cid), 'descricao': 'Atendimento pendente', 'tecnico': 'T',
@@ -1454,13 +1509,12 @@ class CorrecoesRev12(unittest.TestCase):
                                     (oid,)).fetchone()[0]
                     reg = c.execute('SELECT status FROM produtividade_email WHERE os_id=?',
                                     (oid,)).fetchone()
-                if doc and reg and reg['status'] in ('enviado', 'falhou'):
+                if doc:
                     break
                 time.sleep(0.05)
             self.assertGreaterEqual(doc, 1)
-            self.assertIsNotNone(reg)
-            self.assertEqual(reg['status'], 'enviado')
-            self.assertIn('orçamento', capt.get('assunto', '').lower())
+            self.assertIsNone(reg)
+            self.assertEqual(capt, {})
             with ext.db(self.db) as c:
                 self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
                                            (oid,)).fetchone()['status'], 'Pendente')
@@ -1879,7 +1933,7 @@ class CorrecoesRev12(unittest.TestCase):
         _, html = req(cliente_b, base, f'/os/{oid}')
         self.assertNotIn('Salvar fotos e legendas', html)
         self.assertNotIn(f'formaction="/os/{self._numero(oid)}/rascunho/salvar"', html)
-        self.assertIn('Recurso indisponível.', html)
+        self.assertIn('fila compartilhada', html)
         _, pagina_inicio = req(cliente_b, base, '/')
         token = re.search(r'name="csrf" value="([^"]+)"', pagina_inicio).group(1)
         buffer = io.BytesIO()

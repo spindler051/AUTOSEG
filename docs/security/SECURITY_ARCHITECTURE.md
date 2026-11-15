@@ -26,8 +26,7 @@ penetration test or a promise that every route is covered.
 This document covers:
 
 - the GTK desktop app;
-- the client portal (default port 8765);
-- the provider portal (default port 8766);
+- the single Officina Web origin (default production port 8766), serving both providers and clients;
 - the embedded finance API and the desktop JSON API;
 - SQLite storage and file storage for attachments, PDFs and drafts;
 - Cloudflare tunnels used for remote access;
@@ -90,7 +89,7 @@ Internet
 Cloudflare edge
   │  HTTP to loopback (expected deployment)
   ▼
-Client portal :8765 / Provider portal :8766
+Officina Web :8766 (production) / :8866 (DEV)
   │
   ├── in-memory sessions
   ├── CSRF/origin checks
@@ -207,8 +206,7 @@ covered by regression tests.
 ## 6. Network exposure and transport
 
 - Default bind is loopback (`127.0.0.1`) through `runtime_config` and the CLI.
-- `ServidorPortal.__init__` still defaults to `0.0.0.0`; direct instantiation
-  without an explicit host is a footgun.
+- The retired `ServidorPortal` has been removed; only the unified site is started.
 - Cloudflare tunnels provide HTTPS at the edge and forward to loopback HTTP.
   This is acceptable only if the origin remains loopback and the tunnel is the
   only remote path.

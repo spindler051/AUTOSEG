@@ -1,3 +1,22 @@
+
+
+## P0-AUTH-CLOSE-GATE — DEV rollout status
+
+Attachment/invoice transaction guards, the outbox email retry UI and
+reconciliation CLI are implemented for DEV review. This does not authorize
+production activation: object policy enforcement stays off by default.
+Validation evidence and any unresolved limitations belong to the change ZIP.
+
+### P0-AUTH-FINAL — outbox DEV, ativação pendente (2026-11-11)
+
+Migração **aditiva exclusiva de DEV** `os_effect_outbox` com backup, lease,
+reconciliação e publicação pós-commit. Revalidações e transações compartilhadas
+foram ampliadas em escritores de OS. Não é certificação de TOCTOU totalmente
+fechado: arquivos removidos/rotacionados, reenvio legado e fluxos restantes
+precisam ser cobertos antes de aprovar a flag. `AUTOSEG_OBJECT_POLICY_ENFORCEMENT`
+permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
+`BLOCKED.md` desta entrega; não habilitar na MAIN.
+
 # Roadmap vigente
 
 **Atualizado:** 2026-11-11
@@ -19,6 +38,13 @@ para depois.
 > `servidor_web.py` ou código legado. Rotas antigas que ainda forem contrato
 > público recebem redirect explícito com prazo de remoção; as obsoletas são
 > removidas. O rollback é por deploy/git, não por fallback em runtime.
+
+## P0-AUTH — gate de autorização ainda aberto
+
+Reabertura pendente restrita a admin nas duas modalidades de flag e revalidada
+em transação; alguns writers já recebem guardas transacionais. Permanecem
+operações de OS com múltiplas transações e efeitos externos, portanto a
+ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` não foi autorizada.
 
 ## Concluído
 
@@ -69,26 +95,27 @@ decisões abaixo, não apenas do código integrado:
 
 ## Agora — P0
 
-1. **Unificação real dos portais, sem fallback**
-   - prompt: [`planning/PROMPT_PORTAL_UNIFICATION.md`](planning/PROMPT_PORTAL_UNIFICATION.md);
-   - inventariar rotas e responsabilidades de `servidor_web.py`/8765;
-   - migrar para a origem única o que ainda for contrato público atual;
-   - remover o que for obsoleto e atualizar links, launchers e docs;
-   - desligar o processo 8765 e retirar `servidor_web.py` do caminho de
-     execução; depois da migração, apagar o arquivo e seus testes/launchers
-     antigos;
-   - não criar flag, shim, adaptador permanente ou caminho paralelo para manter
-     o portal antigo;
-   - critério: uma origem, um login, uma shell e um caminho de código; testes e
-     smoke cobrindo as rotas que sobreviverem.
+> **Estado:** o código do P0-AUTH está completo para DEV em
+> `feat/p0-auth-close-gate` (`fafcd8e`, 724 testes). O que resta é homologação
+> DEV, migração da outbox e ativação controlada. Ver
+> [`operations/P0_AUTH_DEV_FREEZE.md`](operations/P0_AUTH_DEV_FREEZE.md).
+
+1. **Unificação real dos portais — concluída no código**
+   - `run_site()` serve uma única origem; `servidor_web.py`/`ServidorPortal` e a
+     porta 8765 saíram do caminho de execução;
+   - `/login` atende prestador e cliente na mesma shell (`officina_web`,
+     `client_web`, `client_service`);
+   - falta apenas a ativação do login unificado (`AUTOSEG_UNIFIED_LOGIN`) e a
+     remoção do caminho legado, tratados como item próprio;
 2. **Fechar a numeração de OS na MAIN**
    - ensaiar a migração em cópia da MAIN;
    - backup, janela de manutenção e smoke;
    - manter aliases para links, PDFs e e-mails antigos;
    - não reescrever documentos já publicados.
-3. **Fechar o gate de autorização por objeto**
-   - corrigir ou aceitar formalmente o TOCTOU entre autorização e writer;
-   - rodar testes negativos de isolamento entre prestadoras e entre clientes;
+3. **Homologar o gate de autorização por objeto**
+   - rodar a branch no DEV 8866 com a outbox instalada;
+   - validar o smoke de OS, anexos, PDF, e-mail e rollback;
+   - ensaiar a migração da outbox em cópia da MAIN;
    - decidir a ativação de `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` em produção.
 4. **Decidir a sessão durável em produção**
    - retenção, revogação entre processos, backup do SQLite de sessões;
@@ -103,9 +130,12 @@ decisões abaixo, não apenas do código integrado:
 próprios dados, reutilizando autenticação, sessão e política do site, sem
 duplicar regra de negócio no widget.
 
-**Depende de:** unificação real dos portais e fechamento do gate P0 de
-autorização por objeto. É a prova de modularidade do GTK, não um segundo
-portal.
+**Status:** não iniciado. O código do gate P0-AUTH está completo para DEV em
+`feat/p0-auth-close-gate` (`fafcd8e`), mas a homologação DEV e a migração da
+outbox para a MAIN ainda não aconteceram.
+
+**Depende de:** homologação do P0-AUTH em DEV e decisão de migração da outbox.
+É a prova de modularidade do GTK, não um segundo portal.
 
 **O que falta:**
 
@@ -139,14 +169,134 @@ modo local e paridade visual completa. Esses itens ficam para a 6.6.
 A análise detalhada, decisões e critérios de aceite estão em
 [`planning/GTK_CLIENT_MODE.md`](planning/GTK_CLIENT_MODE.md).
 
+## English code + pt_BR locale (architecture track)
+
+**Regra:** inglês para código/plataforma; português para conteúdo legal/fiscal
+brasileiro e para o que o usuário vê. Detalhes em
+[`planning/ENGLISH_MIGRATION_PLAN.md`](planning/ENGLISH_MIGRATION_PLAN.md) §2.1.
+
+Ordem:
+
+1. congelar novos identificadores em português; código, testes, docs de
+   desenvolvedor e mensagens de commit em inglês;
+2. catálogo `pt_BR` para UI/PDF/e-mail; documentos legais podem manter o texto
+   português como fonte canônica;
+3. extrair o domínio brasileiro para `flavors/autoseg/br/`:
+   `tax_id` (CPF/CNPJ), `address` (CEP), `payments` (PIX/boleto), `fiscal`,
+   `legal`; promover para `workaholic/locales/pt_BR/` quando houver um segundo
+   consumidor;
+4. renomear módulos de baixo risco apenas quando forem tocados; sem rename em
+   massa;
+5. **nota fiscal** como feature de locale: porta inglesa
+   `FiscalDocumentIssuer` + adaptador `pt_BR` (NF-e/NFS-e, códigos
+   municipais, ISS/ICMS, certificado); o núcleo genérico não conhece regra
+   fiscal brasileira;
+6. docs de desenvolvedor em inglês; guias de usuário em português.
+
+Aceite: código genérico novo em inglês; locale isolado; rotas, colunas, env
+vars e launchers antigos compatíveis; nenhuma mudança de idioma visível ao
+usuário; testes verdes. Sem rename em massa e sem misturar rename com migração
+de dados.
+
+## Prioridade — MAF ⇄ AUTOSEG read interface
+
+**Registrado em 2026-11-14.** O Meu Auto Financeiro deixa de abrir `dados.db`
+diretamente e passa a consumir uma interface de leitura versionada. A migração
+precisa ser **invisível ao usuário**: mesmos valores, mesmo fluxo de vínculo,
+mesmas mensagens, sem nova configuração ou tela.
+
+- inventário de dependências, evidência da produção e contrato de paridade em
+  [`planning/MAF_AUTOSEG_READ_INTERFACE.md`](planning/MAF_AUTOSEG_READ_INTERFACE.md);
+- alvo **`/api/v2`**, não `/api/v1`: a v1 tem forma de tabela, não tem troca de
+  credencial por token e não tem snapshot de consistência; remendar a v1 deixaria
+  dívida permanente. Contrato em
+  [`planning/API_V2.md`](planning/API_V2.md);
+- a interface financeira `/api/v1` já existe e é somente leitura, por prestador,
+  com token revogável e auditoria de acesso;
+- posição: **P1**, logo após a fila A5 (A5b, A5c) e antes da extração Workaholic;
+  primeiro passo executável é só o contrato da v2 (OpenAPI + fixtures de
+  paridade), sem handler;
+- ganho: o MAF deixa de precisar de acesso ao arquivo do banco e o AUTOSEG pode
+  voltar a negar acesso de escrita ao diretório de dados.
+- **client grants e capabilities (P1):** autoridade é a concessão da sessão, não
+  o papel nem a superfície. Cada cliente (`gtk`, `web`, `api`) recebe um teto de
+  capabilities; o papel vira um pacote; a sessão carrega `client_app`
+  (asserido pelo tipo de token) e o conjunto efetivo. Permite “admin no GTK e
+  funcionário no site” sem exceção de superfície. Depende do surface registry e
+  do item anterior. Contrato em
+  [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
+- **Armazenamento de arquivos relativo ao data root (P1):** o banco guarda
+  caminhos absolutos em `os_anexos.caminho`, `os_documentos.caminho` e
+  `os_notas_fiscais.caminho` (163 linhas hoje). Cada mudança de usuário, home ou
+  disco exige um `UPDATE` de remapeamento — foi o custo das duas migrações de
+  hoje. Alvo: gravar caminhos relativos (`anexos_os/<arquivo>`) e resolver
+  contra `AUTOSEG_BASE` na leitura, com raiz neutra (`/srv/autoseg`, sem nome de
+  usuário em unit). Primeiro passo: resolvedor em modo leitura + migração em
+  cópia + testes de path traversal. Contrato em
+  [`planning/RELATIVE_FILE_STORAGE.md`](planning/RELATIVE_FILE_STORAGE.md).
+- **Admin apenas no desktop, por usuário (P1):** configuração por conta, não
+  regra de superfície. O vínculo admin ganha `scope` (`all` | `desktop`) e o
+  `Principal` carrega `client_app` asserido pelo tipo de token; a web resolve
+  como funcionário, o GTK como admin. Depende de client grants. A paridade de
+  funcionalidades continua obrigatória: só o papel muda. Ver
+  [`SURFACE_PARITY.md`](SURFACE_PARITY.md) e
+  [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
+- **Auditoria completa e visão de atividades (P1):** o registro existe em
+  `portal_auditoria`, `os_eventos` e `v9_historico_clientes`, mas é só escrita:
+  não há consulta, o ator aparece ora como id, ora como nome, faltam senha,
+  concessão/revogação de admin, desativação e mesclagem, e não há
+  append-only. Alvo: um único `log_action(principal, ação, alvo, before/after)`
+  gravado na mesma transação, com `actor_role` e `client_app`; visão de
+  atividades por usuário/cliente no Web e no GTK; depois cadeia de hash. Também
+  é o que torna auditável o “admin apenas no desktop”. Contrato em
+  [`planning/AUDIT_AND_ACTIVITY.md`](planning/AUDIT_AND_ACTIVITY.md).
+- **Firewall do host nura (P1, segurança operacional):** o kernel do Wi-Fi
+  (release `s10-wifi-v4`) não tem `CONFIG_NF_TABLES`; o `nf_tables.ko` de outra
+  build falha com `Exec format error`, então `nftables.service` está mascarado e
+  o host não tem filtro. Os serviços escutam em `127.0.0.1` e a entrada é o
+  túnel, mas é uma única barreira e sem defesa em profundidade. Correção:
+  reconstruir o kernel com `NF_TABLES` e expressões mínimas, instalar como
+  entrada de teste, aplicar política default-deny e verificar Wi-Fi + serviços +
+  SSH. Contrato em
+  [`operations/NURA_KERNEL_AND_FIREWALL.md`](operations/NURA_KERNEL_AND_FIREWALL.md).
+- **Arquitetura do Meu Auto Financeiro (P2, documentação):** o MAF deixa de ler
+  o banco do AUTOSEG e passa a ter núcleo próprio, contrato HTTP versionado,
+  CLI, contrato de UI (GTK/Qt/Swift/Compose), ledger canônico e adaptadores
+  substituíveis para bancos e importação (OFX/CSV). Foco atual: finanças
+  pessoais e familiares; empresa depois, como modo do mesmo núcleo. Herda de
+  Officina o que funciona (autoridade no servidor, capacidades, auditoria,
+  caminhos relativos) e não herda o acesso direto ao SQLite. Só documentação.
+  Contrato em [`planning/MAF_ARCHITECTURE.md`](planning/MAF_ARCHITECTURE.md).
+- **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
+  61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
+  campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
+  uma declaração + um motor genérico. Invariante (parte bem formada) e
+  autorização (quem pode agir) ficam separados de propósito. Primeiro passo:
+  declaração + relatório em modo sombra, sem enforcement.
+  **Escopo maior que PJ:** o Tier 2 (formato declarado) continua em Python e
+  deve cobrir também status de OS, tipos de documento, composição e ações de
+  superfície — a mesma pergunta vale para qualquer módulo. O Tier 3
+  (comportamento declarado) fica para a reescrita em Rust, que é também a
+  varredura natural por outras regras embutidas. As declarações são o contrato
+  que consumidores Officina leem, sem importar Python do AUTOSEG. Contrato em
+  [`planning/PARTY_AND_REPRESENTATION_MODEL.md`](planning/PARTY_AND_REPRESENTATION_MODEL.md).
+
 ## Depois
 
 - **6.6 — paridade cliente no GTK:** solicitações, documentos/PDF, “Em rota”,
   modo local (se aprovado) e paridade com o site;
 - **modos local/sync/serverless:** presets de `storage`/`transports`/`authority`,
   autoridade por entidade, version vectors, journal append-only e transportes
-  LAN/Syncthing/relay; ver
+  LAN/relay; ver
   [`planning/LOCAL_SYNC_MODES_ANALYSIS.md`](planning/LOCAL_SYNC_MODES_ANALYSIS.md);
+- **relay/auxiliary nodes (opt-in):** own orders, company metadata without
+  PDFs/images, or full media; off by default, consent, quotas and revocation
+  (a relay only forwards ciphertext it cannot read, so it gains nothing
+  directly and must never be enabled implicitly);
+- **centralization profiles and change disclosure:** approval, visibility and
+  authority per change class, with a legal floor the profile cannot cross;
+  planned in
+  [`planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md`](planning/CENTRALIZATION_AND_CHANGE_DISCLOSURE.md);
 - sincronização híbrida com servidor como autoridade de numeração, financeiro e
   estoque (somente no modo com servidor);
 - backup/restauração verificados;

@@ -53,8 +53,12 @@ class DialogoCliente(Adw.Dialog):
             self.servico = LocalService(BANCO)
         self.dados = dict(importado) if importado else {}
         if cliente_id is not None:
-            registro = self.servico.obter_cliente(cliente_id)
-            self.dados = dict(registro.campos) if registro else {}
+            kwargs = ({} if janela.remote_mode else
+                      {'principal': janela._cliente_admin_actor()})
+            registro = self.servico.obter_cliente(cliente_id, **kwargs)
+            if registro is None:
+                raise PermissionError('Recurso indisponível.')
+            self.dados = dict(registro.campos)
 
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
@@ -138,6 +142,30 @@ class DialogoCliente(Adw.Dialog):
         grupo = Adw.PreferencesGroup(title="Observações")
         pagina.add(grupo)
         self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
+
+        # The API/local read service has already excluded forbidden columns.
+        # Hide their widgets as well; do not display empty editable proxies.
+        if cliente_id is not None and not getattr(janela.sessao, 'admin', False):
+            widgets = {
+                'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
+                'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
+                'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
+                'numero': self.numero_end, 'complemento': self.complemento,
+                'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
+                'telefone': self.telefone, 'email': self.email,
+                'sindico_nome': self.sindico_nome,
+                'sindico_telefone': self.sindico_telefone,
+                'sindico_email': self.sindico_email,
+                'administradora': self.administradora,
+                'administradora_telefone': self.administradora_telefone,
+                'administradora_email': self.administradora_email,
+                'observacoes': self.observacoes,
+            }
+            for field, widget in widgets.items():
+                if field not in self.dados:
+                    widget.set_visible(False)
+            if 'cep' not in self.dados:
+                self.cep_status.set_visible(False)
 
         self._atualizar_documento_ui()
 
@@ -254,7 +282,9 @@ class DialogoCliente(Adw.Dialog):
             "status": ui.valor_combo(self.status),
         }
         try:
-            registro = self.servico.salvar_cliente(self.cliente_id, dados)
+            kwargs = ({} if self.janela.remote_mode else
+                      {'principal': self.janela._cliente_admin_actor()})
+            registro = self.servico.salvar_cliente(self.cliente_id, dados, **kwargs)
         except AppError as erro:
             ui.aviso_erro(self.janela, erro.titulo, str(erro))
             return
@@ -264,6 +294,69 @@ class DialogoCliente(Adw.Dialog):
         ui.toast(self.janela, "Cliente salvo com dados incompletos."
                  if registro.incompleto else "Cliente salvo.")
         self.janela.carregar_clientes()
+        self.close()
+
+
+class DialogoMesclarCliente(Adw.Dialog):
+    """Admin-only customer merge; writer authorization remains in cadastros_v9."""
+
+    CONFIRMACAO = ("A origem ficará inativa. As ordens de serviço e os registros "
+                   "financeiros serão movidos ao destino. Esta ação não pode "
+                   "ser desfeita pela interface.")
+
+    def __init__(self, janela, origem_id, origem_nome):
+        super().__init__()
+        self.janela = janela
+        self.origem_id = int(origem_id)
+        self.origem_nome = origem_nome
+        kwargs = ({} if janela.remote_mode else
+                  {'principal': janela._cliente_admin_actor()})
+        self.destinos = [cliente for cliente in _servico(janela).listar_clientes('', **kwargs)
+                         if cliente.id != self.origem_id and cliente.status == 'Ativo']
+        if not self.destinos:
+            raise ValueError('Nenhum outro cliente ativo disponível para mesclagem.')
+        self.set_title('Mesclar cliente duplicado')
+        self.set_content_width(580)
+        self.set_content_height(370)
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle(title='Mesclar clientes'))
+        toolbar.add_top_bar(header)
+        pagina = Adw.PreferencesPage()
+        grupo = Adw.PreferencesGroup(
+            title=f'Origem: {origem_nome}', description=self.CONFIRMACAO)
+        pagina.add(grupo)
+        self.destino = ui.campo_combo(
+            grupo, 'Cadastro principal (destino)',
+            [f'#{item.id} {item.nome}' for item in self.destinos], 0)
+        toolbar.set_content(pagina)
+        botoes = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        botoes.append(ui.botao('Cancelar', self.close))
+        botoes.append(ui.botao('Mesclar cliente', self._confirmar,
+                               css='destructive-action'))
+        toolbar.add_bottom_bar(botoes)
+        self.set_child(toolbar)
+
+    def _confirmar(self):
+        indice = int(self.destino.get_selected())
+        if not 0 <= indice < len(self.destinos):
+            return
+        destino_id = self.destinos[indice].id
+        ui.alerta(self.janela, 'Confirmar mesclagem', self.CONFIRMACAO,
+                  lambda: self._executar(destino_id), destrutivo=True,
+                  rotulo_ok='Confirmar mesclagem')
+
+    def _executar(self, destino_id):
+        try:
+            kwargs = ({} if self.janela.remote_mode else
+                      {'principal': self.janela._cliente_admin_actor()})
+            _servico(self.janela).mesclar_clientes(
+                self.origem_id, destino_id, **kwargs)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, 'Mesclagem não realizada', str(erro))
+            return
+        self.janela.carregar_clientes()
+        ui.toast(self.janela, 'Cliente mesclado; histórico preservado.')
         self.close()
 
 
@@ -1179,14 +1272,16 @@ class DialogoSenhaCliente(Adw.Dialog):
             ui.aviso_erro(self.janela, "Senha", "As duas senhas não coincidem.")
             return
         try:
-            _servico(self.janela).definir_senha_cliente(self.cliente_id, senha)
+            # Remote API authenticates its own principal; local service needs ours.
+            kwargs = ({} if self.janela.remote_mode else
+                      {'principal': self.janela._cliente_admin_actor()})
+            _servico(self.janela).definir_senha_cliente(self.cliente_id, senha, **kwargs)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Acesso do cliente", str(erro))
             return
         ui.info(self.janela, "Acesso configurado",
                 f"Senha atualizada para {self.nome}.\n\n"
-                f"Login antigo: ID {self.cliente_id} e senha escolhida.\n"
-                "Login novo: CPF e senha no Portal do Cliente.")
+                "Login: CPF ou e-mail e senha em /login da Officina Web.")
         self.close()
 
 

@@ -8,20 +8,20 @@ integra.
 
 ## Ordem
 
-**Próxima peça, antes da 6.5:** [P0 — Unificação real dos portais](PROMPT_PORTAL_UNIFICATION.md).
-Ela remove `servidor_web.py`/8765, deixa uma origem só e não é uma peça 6.x.
+**Unificação real dos portais:** concluída no código — `run_site()` serve uma
+única origem, `servidor_web.py`/8765 saíram do caminho de execução. Os prompts
+das peças já integradas foram removidos; o histórico permanece no Git.
 
 | Ordem | Peça | Depende de | Entrega | Status |
 |---|---|---|---|---|
-| 1 | [6.1 Shell, login e cliente](PROMPT_OFFICINA_6_1_SHELL.md) | 5.1–5.5 | `officina/web`, login para os dois papéis, home do cliente | Integrada |
-| 2 | [6.2 Papéis e permissões](PROMPT_OFFICINA_6_2_ROLES.md) | 6.1 | papéis de cliente, matriz, `ObjectPolicy` no serviço | Integrada atrás de flag |
-| 3 | [6.3 Sessão durável e GTK](PROMPT_OFFICINA_6_3_SESSION_GTK.md) | 6.1–6.2 | SQLite de sessões, contexto compartilhado, GTK | Integrada atrás de flag |
-| 4 | [6.4 Shell web unificado](PROMPT_OFFICINA_6_4_SHARED_SHELL.md) | 6.1–6.3 | a mesma shell para provider e client; `/cliente` como alias, módulo client-only | Integrada; login consolidado em `/login` |
+| 1 | 6.1 Shell, login e cliente | 5.1–5.5 | `officina/web`, login para os dois papéis, home do cliente | Integrada |
+| 2 | 6.2 Papéis e permissões | 6.1 | papéis de cliente, matriz, `ObjectPolicy` no serviço | Integrada atrás de flag |
+| 3 | 6.3 Sessão durável e GTK | 6.1–6.2 | SQLite de sessões, contexto compartilhado, GTK | Integrada atrás de flag |
+| 4 | 6.4 Shell web unificado | 6.1–6.3 | a mesma shell para provider e client; `/cliente` como alias, módulo client-only | Integrada; login consolidado em `/login` |
 | 5 | [6.5 Cliente no GTK](GTK_CLIENT_MODE.md) | 6.1–6.4 + gate P0 | login cliente remote-only, `/me`, home com as próprias OS, logout, bloqueio de rotas | Planejada |
 
-A 6.1 pode ser gerada sem a 6.2; a 6.2 assume a 6.1 aplicada; a 6.3 assume as
-duas; a 6.4 corrige a apresentação e assume 6.1–6.3. A 6.5 só começa depois de
-fechar ou aceitar formalmente o TOCTOU da autorização por objeto.
+A 6.5 só começa depois de fechar ou aceitar formalmente o TOCTOU da autorização
+por objeto.
 
 ## Decisões já tomadas
 
