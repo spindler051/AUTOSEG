@@ -220,15 +220,39 @@ def administrar_responsaveis(h,banco,s):
     org_q=str(params.get('org',[''])[0]).strip()[:100]
     pf_q=str(params.get('pf',[''])[0]).strip()[:100]
     with ext.db(banco) as c:
+        pid=int(s.get('pid') or 0)
+        valid=c.execute('SELECT 1 FROM prestadores WHERE id=? AND ativo=1 '
+                        'AND excluido=0',(pid,)).fetchone()
+        if not valid:
+            raise PermissionError('Prestador autenticado obrigatório.')
+        is_admin=bool(ext.administrador(c,pid))
+        membership=''' AND EXISTS (
+            SELECT 1 FROM ordens_servico os WHERE os.cliente_id=o.cliente_id
+            AND (EXISTS (SELECT 1 FROM os_responsaveis x WHERE x.os_id=os.id
+                         AND x.prestador_id=?)
+            OR EXISTS (SELECT 1 FROM os_prestadores x WHERE x.os_id=os.id
+                       AND x.prestador_id=? AND x.ativo=1)))'''
+        params=(org_q,'%'+org_q+'%',
+                '%'+cad.digitos(org_q)+'%' if cad.digitos(org_q) else '\0')
+        if not is_admin:
+            params=params+(pid,pid)
         orgs=c.execute('''SELECT o.id,o.nome,o.tipo,o.cnpj,r.usuario_id,u.nome responsavel
             FROM v9_organizacoes o LEFT JOIN v9_responsaveis r ON r.organizacao_id=o.id
             LEFT JOIN v9_usuarios u ON u.id=r.usuario_id
-            WHERE o.mesclado_em IS NULL AND (?='' OR o.nome LIKE ? OR o.cnpj LIKE ?)
-            ORDER BY o.nome LIMIT 100''',(org_q,'%'+org_q+'%','%'+cad.digitos(org_q)+'%' if cad.digitos(org_q) else '\0')).fetchall()
-        pessoas=c.execute('''SELECT u.id,u.nome,u.cpf,u.cliente_pf_id
+            WHERE o.mesclado_em IS NULL AND (?='' OR o.nome LIKE ? OR o.cnpj LIKE ?)'''
+            +('' if is_admin else membership)
+            +' ORDER BY o.nome LIMIT 100', params).fetchall()
+        pessoas=(c.execute('''SELECT u.id,u.nome,u.cpf,u.cliente_pf_id
             FROM v9_usuarios u WHERE u.ativo=1 AND
             (?='' OR u.nome LIKE ? OR u.cpf LIKE ?) ORDER BY u.nome LIMIT 100''',
             (pf_q,'%'+pf_q+'%','%'+cad.digitos(pf_q)+'%' if cad.digitos(pf_q) else '\0')).fetchall()
+            if is_admin else ())
+    if not is_admin:
+        linhas=[(str(x['id']),esc(x['nome']),esc(x['tipo']),
+                 esc(x['responsavel'] or 'Não atribuído')) for x in orgs]
+        corpo=card('Organizações vinculadas',tabela(
+            ['ID','Condomínio / Empresa','Tipo','PF nomeada'],linhas))
+        return pagina(h,'Responsáveis das organizações vinculadas',corpo,s)
     buscar=(f'<form method="get" action="/organizacoes/responsaveis">'
          +campos('Buscar organização (nome ou CNPJ)','org',org_q)
          +campos('Buscar pessoa física (nome ou CPF)','pf',pf_q)

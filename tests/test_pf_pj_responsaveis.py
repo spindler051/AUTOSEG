@@ -116,13 +116,42 @@ class PF_PJ(unittest.TestCase):
         self.assertTrue(dados['cadastro_ambiguo'])
         self.assertFalse(dados['os'])
 
+    def test_responsaveis_employee_only_sees_involved_organizations(self):
+        employee = ext.cadastrar(self.db, 'Scoped employee',
+                                 'scoped.employee@example.invalid', 'Pass12345678')
+        visitor = ext.cadastrar(self.db, 'Visitor',
+                                'visitor.scoped@example.invalid', 'Pass12345678')
+        with ext.db(self.db) as c:
+            c.execute('INSERT INTO os_responsaveis(os_id,prestador_id,assumido_em) '
+                      'VALUES(?,?,?)', (self.ids[0], employee, ext.agora()))
+        class H:
+            path = '/organizacoes/responsaveis'
+            def responder(self, html, status=200):
+                self.html = html
+                self.status = status
+        h = H()
+        portal_v9.get(h, '/organizacoes/responsaveis', self.db,
+                      {'pid': employee, 'nome': 'Scoped', 'csrf': 'test'})
+        self.assertIn('Condomínio A', h.html)
+        self.assertNotIn('Empresa B', h.html)
+        self.assertNotIn('/organizacoes/responsavel/atribuir', h.html)
+        portal_v9.get(h, '/organizacoes/responsaveis', self.db,
+                      {'pid': visitor, 'nome': 'Visitor', 'csrf': 'test'})
+        self.assertNotIn('Condomínio A', h.html)
+        self.assertNotIn('Empresa B', h.html)
+        self.assertNotIn('Pessoa Responsável A', h.html)
+
     def test_portal_prestador_tem_pagina_de_nomeacao_e_cliente_nao_tem_form(self):
         class H:
             path='/organizacoes/responsaveis'
             def responder(self,html,status=200):self.html=html;self.status=status
             def redir(self,url):self.destino=url
         h=H()
-        portal_v9.get(h,'/organizacoes/responsaveis',self.db,{'csrf':'teste','nome':'Prestador','pid':1})
+        provider=ext.cadastrar(self.db,'Portal admin','portal-admin@example.invalid',
+                               'Pass12345678')
+        cad.definir_admin(self.db,provider,True)
+        portal_v9.get(h,'/organizacoes/responsaveis',self.db,
+                      {'csrf':'teste','nome':'Prestador','pid':provider})
         self.assertIn('/organizacoes/responsavel/atribuir',h.html)
         self.assertIn('Pessoa física com login CPF ativo',h.html)
         self.assertNotIn('senha_hash',h.html)
