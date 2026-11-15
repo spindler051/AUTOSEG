@@ -35,6 +35,11 @@ def request(browser, base, path, payload=None):
 class ReadAuthorizationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Legacy provider fixture has no migrated unified account links.
+        # This class tests object reads, not the unified login rollout.
+        flag_patch = patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'})
+        flag_patch.start()
+        cls.addClassCleanup(flag_patch.stop)
         cls.tmp = tempfile.TemporaryDirectory(prefix='read_authorization_')
         cls.old_base = os.environ.get('AUTOSEG_BASE')
         os.environ['AUTOSEG_BASE'] = cls.tmp.name

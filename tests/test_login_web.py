@@ -83,18 +83,21 @@ class LoginWebTest(unittest.TestCase):
                 login_web.authenticate_and_create('db', 'id', 'pw')
             self.assertEqual('invalid', err.exception.code)
 
-    def test_provider_session_flag_off_does_not_resolve(self):
-        with (patch.object(login_web.login_flags, 'unified_login_enabled', return_value=False),
-              patch.object(login_web.web_session, 'resolve') as resolver):
-            self.assertIsNone(login_web.provider_session(self.handler, 'db'))
-            resolver.assert_not_called()
+    def test_explicit_rollback_keeps_existing_unified_cookie(self):
+        self.handler.headers = {'Cookie': 'autosseg_unified=' + 'A' * 48}
+        session = SimpleNamespace(identity=self.ident, principal=self.principal,
+            csrf='csrf', credential='hash', telemetry_session='random', expires_at=123.0)
+        with (patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'}),
+              patch.object(login_web.web_session, 'resolve', return_value=session) as resolve):
+            result = login_web.provider_session(self.handler, 'db')
+        self.assertEqual(3, result['pid'])
+        resolve.assert_called_once()
 
     def test_provider_session_flag_on_maps_legacy_dict(self):
         self.handler.headers = {'Cookie': 'autosseg_unified=' + 'A' * 48}
         session = SimpleNamespace(identity=self.ident, principal=self.principal,
             csrf='csrf', credential='hash', telemetry_session='random', expires_at=123.0)
-        with (patch.object(login_web.login_flags, 'unified_login_enabled', return_value=True),
-              patch.object(login_web.web_session, 'resolve', return_value=session)):
+        with patch.object(login_web.web_session, 'resolve', return_value=session):
             result = login_web.provider_session(self.handler, 'db')
             self.assertEqual(3, result['pid'])
             self.assertEqual('Fictitious Provider', result['nome'])
@@ -106,12 +109,10 @@ class LoginWebTest(unittest.TestCase):
         self.handler.headers = {'Cookie': 'autosseg_unified=' + 'A' * 48}
         client = identity.Identity('client', 8, 'Client', client_id=15)
         session = SimpleNamespace(identity=client, principal=Principal(8, 'customer', client_id=15))
-        with (patch.object(login_web.login_flags, 'unified_login_enabled', return_value=True),
-              patch.object(login_web.web_session, 'resolve', return_value=session)):
+        with patch.object(login_web.web_session, 'resolve', return_value=session):
             self.assertIsNone(login_web.provider_session(self.handler, 'db'))
         self.handler.headers = {'Cookie': 'autosseg_unified=invalid'}
-        with patch.object(login_web.login_flags, 'unified_login_enabled', return_value=True):
-            self.assertIsNone(login_web.provider_session(self.handler, 'db'))
+        self.assertIsNone(login_web.provider_session(self.handler, 'db'))
 
     def test_no_password_in_error(self):
         with patch.object(login_web.auth, 'authenticate', side_effect=auth.LoginError('invalid')):
@@ -221,8 +222,8 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         with portal_module.LOCK_LOGIN:
             portal_module.TENTATIVAS.clear()
 
-    def test_flag_off_serves_provider_login_at_login(self):
-        with _flag(''):
+    def test_explicit_rollback_serves_provider_login_at_login(self):
+        with _flag('0'):
             status, _headers, body = _request(_browser(), self.base, '/login')
             self.assertEqual(200, status)
             self.assertIn('action="/login"', body)
@@ -248,8 +249,36 @@ class UnifiedLoginHttpTest(unittest.TestCase):
             self.assertEqual('/', headers['Location'])
             self.assertIn('autosseg_session', {cookie.name for cookie in jar})
 
+    def test_unset_flag_defaults_to_unified(self):
+        with patch.dict(os.environ, {}, clear=True):
+            status, _headers, body = _request(_browser(), self.base, '/login')
+            self.assertEqual(200, status)
+            self.assertIn('name="identificador"', body)
+            self.assertNotIn('name="email"', body)
+            status, headers, _body = _request(
+                _browser(follow=False), self.base, '/login',
+                {'identificador': 'provider@example.test', 'senha': self.provider_password})
+        self.assertEqual(303, status)
+        self.assertEqual('/', headers['Location'])
+        self.assertIsNotNone(_unified_cookie(headers))
+
+    def test_unset_flag_client_login_reaches_client_home(self):
+        with patch.dict(os.environ, {}, clear=True):
+            status, headers, _body = _request(
+                _browser(follow=False), self.base, '/login',
+                {'identificador': 'client@example.test', 'senha': self.client_password})
+            self.assertEqual(303, status)
+            self.assertEqual('/', headers['Location'])
+            cookie = _unified_cookie(headers)
+            self.assertIsNotNone(cookie)
+            status, _headers, body = _request(
+                _browser(), self.base, '/',
+                headers={'Cookie': cookie.split(';', 1)[0]})
+        self.assertEqual(200, status)
+        self.assertIn('Portal do cliente', body)
+
     def test_entrar_is_removed(self):
-        for flag in ('1', ''):
+        for flag in ('1', '', '0'):
             with _flag(flag):
                 status, _headers, body = _request(
                     _browser(follow=False), self.base, '/entrar')
@@ -388,15 +417,14 @@ class UnifiedLoginHttpTest(unittest.TestCase):
             self.assertEqual(303, status)
             self.assertEqual('/', headers['Location'])
 
-    def test_flag_off_ignores_existing_unified_cookie(self):
+    def test_explicit_rollback_keeps_existing_unified_session(self):
         token = self._token('provider@example.test', self.provider_password)
-        with _flag(''):
+        with _flag('0'):
             status, _headers, body = _request(
                 _browser(), self.base, '/',
                 headers={'Cookie': f'autosseg_unified={token}'})
         self.assertEqual(200, status)
-        self.assertIn('action="/login"', body)
-        self.assertNotIn('Visão geral', body)
+        self.assertIn('Visão geral', body)
 
     def test_client_token_opens_client_home_but_not_provider_portal(self):
         token = self._token('client@example.test', self.client_password)
@@ -428,8 +456,8 @@ class UnifiedLoginHttpTest(unittest.TestCase):
         self.assertIn('Muitas tentativas', body)
         self.assertNotIn('autosseg_unified=', body)
 
-    def test_flag_off_rate_limiter_uses_provider_page(self):
-        with _flag(''):
+    def test_explicit_rollback_rate_limiter_uses_provider_page(self):
+        with _flag('0'):
             client = _browser(follow=False)
             for _attempt in range(10):
                 status, _headers, _body = _request(

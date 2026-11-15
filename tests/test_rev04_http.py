@@ -3,6 +3,7 @@ import http.cookiejar
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -33,6 +34,7 @@ def enviar_yaml(opener,url,csrf,filename,conteudo):
 
 
 class Rev04Http(unittest.TestCase):
+    @patch.dict('os.environ', {'AUTOSEG_UNIFIED_LOGIN': '0'})
     def test_servico_yaml_catalogo_e_estoque_admin_sem_permissao(self):
         with tempfile.TemporaryDirectory(prefix='rev04_http_') as tmp:
             db=str(Path(tmp)/'app.db');criar_banco(db);ext.instalar(db)

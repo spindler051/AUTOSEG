@@ -23,6 +23,9 @@ def csrf(html):
 
 class FeedbackDevTest(unittest.TestCase):
     def setUp(self):
+        # Legacy provider-login fixture: request the temporary rollback path.
+        self.old_login_flag = os.environ.get('AUTOSEG_UNIFIED_LOGIN')
+        os.environ['AUTOSEG_UNIFIED_LOGIN'] = '0'
         self.tmp = tempfile.TemporaryDirectory(prefix='feedback_dev_')
         self.old_reports = ext.RELATORIOS
         ext.RELATORIOS = Path(self.tmp.name) / 'relatorios_pdf'
@@ -62,6 +65,10 @@ class FeedbackDevTest(unittest.TestCase):
             os.environ.pop('AUTOSEG_BASE', None)
         else:
             os.environ['AUTOSEG_BASE'] = self.old_base
+        if self.old_login_flag is None:
+            os.environ.pop('AUTOSEG_UNIFIED_LOGIN', None)
+        else:
+            os.environ['AUTOSEG_UNIFIED_LOGIN'] = self.old_login_flag
         self.tmp.cleanup()
 
     def _criar_os(self, cliente=True, descricao='Atendimento de teste'):

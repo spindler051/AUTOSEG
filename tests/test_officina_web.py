@@ -226,20 +226,16 @@ class OfficinaWebHttpTest(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertNotIn(b'Teste de pedido', body)
 
-    def test_flag_off_ignores_customer_cookie(self):
+    def test_explicit_rollback_preserves_existing_customer_cookie(self):
         from unittest.mock import patch
         browser, _, _, _ = self.login('customer@example.test', self.client_pass)
         with patch.dict('os.environ', {'AUTOSEG_UNIFIED_LOGIN': '0'}):
-            status, _, page = self.req(browser, '/login')
+            status, headers, _ = self.req(browser, '/login')
+            self.assertEqual(status, 303)
+            self.assertEqual(headers['Location'], '/')
+            status, _, page = self.req(browser, '/')
             self.assertEqual(status, 200)
-            self.assertIn(b'action="/login"', page)
-            self.assertIn(b'login-shell', page)
-            self.assertIn(b'login-brand', page)
-            self.assertNotIn(b'name="identificador"', page)
-            denied, _, page = self.req(browser, '/')
-            self.assertEqual(denied, 200)
-            self.assertIn(b'login', page.lower())
-            self.assertNotIn(b'Minhas ordens de servi', page)
+            self.assertIn(b'Portal do cliente', page)
 
     def test_legacy_provider_login_still_works(self):
         browser = self.browser()
@@ -513,12 +509,20 @@ class UnifiedClientLoginContractTest(unittest.TestCase):
             self.assertIsNone(login_web.provider_session(SimpleNamespace(headers={}), 'db'))
             self.assertIs(login_web.client_session(SimpleNamespace(headers={}), 'db'), session)
 
-    def test_flag_off_blocks_customer_session_resolution(self):
+    def test_flag_off_keeps_existing_unified_session_valid(self):
         from unittest.mock import patch
         from flavors.autoseg.modules import login_web
-        with (patch.object(login_web.login_flags, 'unified_login_enabled', return_value=False),
-              patch.object(login_web.web_session, 'resolve') as resolve):
-            self.assertIsNone(login_web.client_session(SimpleNamespace(headers={}), 'db'))
+        session = SimpleNamespace(identity=SimpleNamespace(kind='client'),
+                                  principal=SimpleNamespace(active=True, role='customer'))
+        token = 'a' * 32
+        handler = SimpleNamespace(headers={
+            'Cookie': f'{login_web.web_cookie.COOKIE_NAME}={token}'})
+        with (patch.dict('os.environ', {'AUTOSEG_UNIFIED_LOGIN': '0'}),
+              patch.object(login_web.web_session, 'resolve', return_value=session) as resolve):
+            self.assertIs(login_web.unified_session(handler, 'db'), session)
+            resolve.assert_called_once()
+        with patch.object(login_web.web_session, 'resolve') as resolve:
+            self.assertIsNone(login_web.unified_session(SimpleNamespace(headers={}), 'db'))
             resolve.assert_not_called()
 
 if __name__ == '__main__':

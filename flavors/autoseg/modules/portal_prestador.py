@@ -647,6 +647,8 @@ body.ui-app .feedback-toast{left:50%;bottom:20px;max-width:min(560px,calc(100vw 
 """
 
 
+# Removed login endpoint: this is a not-found tombstone, never authentication.
+_RETIRED_LOGIN_PATHS = frozenset(('/entrar',))
 SESSOES = {}
 TENTATIVAS = {}
 LOCK_DOCS = threading.Lock()
@@ -3671,7 +3673,7 @@ class PortalPrestador:
 
             def do_GET(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
-                if path == '/entrar':
+                if path in _RETIRED_LOGIN_PATHS:
                     return self.erro('Página não encontrada.', 404)
                 from flavors.autoseg.modules.autoseg_web_navigation import (
                     canonical_client_path, retired_client_path)
@@ -3743,6 +3745,7 @@ class PortalPrestador:
                             return self.redir('/')
                         if login_flags.unified_login_enabled(banco):
                             return login_web.render_login(self)
+                        # Explicit temporary recovery switch: provider-only legacy form.
                         return self.login()
                     if path=='/api/versao':
                         dados=json.dumps({'app':'Gestão de Serviços — AUTOSEG','versao':VERSAO_PORTAL,
@@ -4022,7 +4025,7 @@ class PortalPrestador:
             def do_POST(self):
                 path=urlparse(self.path).path.rstrip('/') or '/'
                 path = self._normalizar_os(path)
-                if path == '/entrar':
+                if path in _RETIRED_LOGIN_PATHS:
                     return self.erro('Página não encontrada.', 404)
                 from flavors.autoseg.modules.autoseg_web_navigation import (
                     canonical_client_path, retired_client_path, MIGRATED_POST)
@@ -4067,6 +4070,7 @@ class PortalPrestador:
                     d=self.form(PREAUTH_MAX if not s_inicial else MAX_POST)
                     if path=='/login':
                         ip,tent,agora,limitado=self._login_attempt_state()
+                        # Default: unified; explicit false: operational provider recovery.
                         unified_login = login_flags.unified_login_enabled(banco)
                         if limitado:
                             if unified_login:

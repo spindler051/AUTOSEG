@@ -4,6 +4,7 @@ import os
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -68,6 +69,11 @@ def multipart(client, base, path, campos, arquivos):
 
 class MelhoriasRev12(unittest.TestCase):
     def setUp(self):
+        # Old provider HTTP cases have no migrated account links; unified
+        # client-specific cases override this explicitly in _client_portal.
+        flag_patch = patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'})
+        flag_patch.start()
+        self.addCleanup(flag_patch.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_rev12_')
         self.dir = Path(self.tmp.name)
         self.db = str(self.dir / 'teste.db')

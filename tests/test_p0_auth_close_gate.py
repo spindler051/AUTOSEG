@@ -413,8 +413,9 @@ class CloseGateHTTPTests(unittest.TestCase):
         base=f'http://127.0.0.1:{server.servidor.server_port}'
         browser=build_opener(HTTPCookieProcessor(CookieJar()))
         login=urlencode({'email':'worker@example.invalid','senha':'valid-password'}).encode()
-        with browser.open(Request(base+'/login',data=login),timeout=20) as response:
-            response.read()
+        with patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'}):
+            with browser.open(Request(base+'/login',data=login),timeout=20) as response:
+                response.read()
         with browser.open(base+f'/os/{self.oid}',timeout=20) as response:
             return response.read().decode('utf-8','replace')
 
