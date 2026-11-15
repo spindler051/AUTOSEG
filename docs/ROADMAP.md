@@ -222,6 +222,13 @@ mesmas mensagens, sem nova configuração ou tela.
   paridade), sem handler;
 - ganho: o MAF deixa de precisar de acesso ao arquivo do banco e o AUTOSEG pode
   voltar a negar acesso de escrita ao diretório de dados.
+- **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
+  61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
+  campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
+  uma declaração + um motor genérico. Invariante (parte bem formada) e
+  autorização (quem pode agir) ficam separados de propósito. Primeiro passo:
+  declaração + relatório em modo sombra, sem enforcement. Contrato em
+  [`planning/PARTY_AND_REPRESENTATION_MODEL.md`](planning/PARTY_AND_REPRESENTATION_MODEL.md).
 
 ## Depois
 
