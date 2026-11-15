@@ -41,7 +41,8 @@ MAF simply does not use it.
 the GTK desktop; it cannot express MAF's predicate, has no credential-to-token
 exchange and no consistency token. Patching it would create permanent
 compatibility debt. The boundary this item consumes is specified in
-[`API_V2.md`](API_V2.md). v1 stays frozen for its existing consumers.
+[`API_V2.md`](API_V2.md). Product and architecture direction:
+[`MAF_ARCHITECTURE.md`](MAF_ARCHITECTURE.md). v1 stays frozen for its existing consumers.
 
 ## 2. Dependency inventory
 

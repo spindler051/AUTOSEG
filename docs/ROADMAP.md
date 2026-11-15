@@ -250,6 +250,14 @@ mesmas mensagens, sem nova configuração ou tela.
   atividades por usuário/cliente no Web e no GTK; depois cadeia de hash. Também
   é o que torna auditável o “admin apenas no desktop”. Contrato em
   [`planning/AUDIT_AND_ACTIVITY.md`](planning/AUDIT_AND_ACTIVITY.md).
+- **Arquitetura do Meu Auto Financeiro (P2, documentação):** o MAF deixa de ler
+  o banco do AUTOSEG e passa a ter núcleo próprio, contrato HTTP versionado,
+  CLI, contrato de UI (GTK/Qt/Swift/Compose), ledger canônico e adaptadores
+  substituíveis para bancos e importação (OFX/CSV). Foco atual: finanças
+  pessoais e familiares; empresa depois, como modo do mesmo núcleo. Herda de
+  Officina o que funciona (autoridade no servidor, capacidades, auditoria,
+  caminhos relativos) e não herda o acesso direto ao SQLite. Só documentação.
+  Contrato em [`planning/MAF_ARCHITECTURE.md`](planning/MAF_ARCHITECTURE.md).
 - **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
   61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
