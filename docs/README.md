@@ -38,10 +38,10 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 
 - [Site único, identidade e permissões por objeto](planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md) — auditoria do estado atual + arquitetura-alvo; 5.1–5.5 e 6.1–6.4 integradas atrás de flags, com ativação de produção pendente.
 - [Officina Web e Officina GTK](planning/OFFICINA_WEB_AND_GTK.md) — como o site e o GTK atuais originam os produtos genéricos; AUTOSEG como primeira prestadora.
-- [Unificação real dos portais — P0](planning/PROMPT_PORTAL_UNIFICATION.md) — contrato executado na P0: uma única origem e nenhum fallback legado.
 - [Cliente no GTK — peça 6.5](planning/GTK_CLIENT_MODE.md) — análise das lacunas, MVP remote-only e critérios de aceite; planejado, não implementado.
 - [Prompt — outbox como único caminho de e-mail](planning/PROMPT_P0_AUTH_OUTBOX_ONLY.md) — próxima fatia do P0-AUTH, sem fallback legado.
 - [Contrato compartilhado entre site e GTK](planning/WEB_GTK_SHARED_CONTRACT.md) — mesma tela/comando/permissão, renderização nativa em cada plataforma; documentação, não implementado.
+- [Surface registry](planning/SURFACE_REGISTRY.md) — uma tabela de ações (id, permissão, handler, contrato de entrada/saída) que serve de base para o contrato GTK/site, para os testes de autorização gerados e para dividir o portal_prestador; fase 0 sem mudança de comportamento.
 - [Valor negociado na OS](planning/OS_NEGOTIATED_VALUE_UX.md) — checkbox, valor final e desconto explícito no relatório; proposta, não implementado.
 - [PGP, multiassinatura e integridade criptográfica](planning/PGP_MULTISIGNATURE_ARCHITECTURE.md)
 - [Anti-tampering financeiro com assinaturas PGP](planning/ANTI_TAMPERING_FINANCIAL_LEDGER.md)

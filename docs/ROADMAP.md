@@ -100,17 +100,13 @@ decisões abaixo, não apenas do código integrado:
 > DEV, migração da outbox e ativação controlada. Ver
 > [`operations/P0_AUTH_DEV_FREEZE.md`](operations/P0_AUTH_DEV_FREEZE.md).
 
-1. **Unificação real dos portais**
-   - prompt: [`planning/PROMPT_PORTAL_UNIFICATION.md`](planning/PROMPT_PORTAL_UNIFICATION.md);
-   - inventariar rotas e responsabilidades de `servidor_web.py`/8765;
-   - migrar para a origem única o que ainda for contrato público atual;
-   - remover o que for obsoleto e atualizar links, launchers e docs;
-   - desligar o processo 8765 e retirar `servidor_web.py` do caminho de
-     execução; depois da migração, apagar o arquivo e seus testes/launchers
-     antigos;
-   - um único caminho de código para portal, login e shell;
-   - critério: uma origem, um login, uma shell e um caminho de código; testes e
-     smoke cobrindo as rotas que sobreviverem.
+1. **Unificação real dos portais — concluída no código**
+   - `run_site()` serve uma única origem; `servidor_web.py`/`ServidorPortal` e a
+     porta 8765 saíram do caminho de execução;
+   - `/login` atende prestador e cliente na mesma shell (`officina_web`,
+     `client_web`, `client_service`);
+   - falta apenas a ativação do login unificado (`AUTOSEG_UNIFIED_LOGIN`) e a
+     remoção do caminho legado, tratados como item próprio;
 2. **Fechar a numeração de OS na MAIN**
    - ensaiar a migração em cópia da MAIN;
    - backup, janela de manutenção e smoke;
