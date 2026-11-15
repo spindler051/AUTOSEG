@@ -4586,9 +4586,9 @@ class PortalPrestador:
                         if not s.get('admin'): raise PermissionError('Somente administradores podem verificar solicitações PJ.')
                         sid=int(partes[1])
                         if partes[2]=='aceitar':
-                            resultado=pj_publico.aceitar(banco,sid,ator=s['nome'])
+                            resultado=pj_publico.aceitar(banco,sid,ator=s['nome'],prestador_id=pid)
                             return self.redir(f'{url_os(banco, resultado["os_id"])}')
-                        pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'])
+                        pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'],prestador_id=pid)
                         return self.redir('/pj-publicas')
                     if path.startswith('/financeiro/maf-'):
                         with ext.db(banco) as c:
