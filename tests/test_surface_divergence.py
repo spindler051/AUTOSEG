@@ -27,7 +27,6 @@ REPORT = 'docs/planning/SURFACE_DIVERGENCE_REPORT.md'
 SCRIPT = ROOT / 'scripts/surface_divergence.py'
 
 EXPECTED_FINDINGS = {
-    'customer.password:gtk:affordance_mismatch': 'medium',
     'customer.merge:api:missing_surface': 'medium',
     'customer.merge:gtk:missing_surface': 'medium',
     'customer.list:gtk_local:read_scope_divergence': 'medium',
@@ -75,6 +74,9 @@ class SurfaceDivergenceTest(unittest.TestCase):
             with self.subTest(identifier=identifier):
                 self.assertIn(identifier, self.by_id)
                 self.assertEqual(self.by_id[identifier].severity, severity)
+
+    def test_02b_resolved_gtk_password_affordance_is_absent(self):
+        self.assertNotIn('customer.password:gtk:affordance_mismatch', self.by_id)
 
     def test_03_synthetic_claimed_locked_guard_is_checked_against_code(self):
         modified = deepcopy(document())

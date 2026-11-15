@@ -770,10 +770,9 @@ class Janela(Adw.ApplicationWindow):
             acoes_cliente.append(ui.botao("Excluir / desativar", self._excluir_cliente,
                                           css="destructive-action"))
         if self.web.enabled:
-            acoes_cliente.extend([
-                ui.botao("Acesso web / senha", self._senha_cliente),
-                ui.botao("Abrir Officina Web", self._abrir_portal_navegador),
-            ])
+            if self.sessao is not None and self.sessao.admin:
+                acoes_cliente.append(ui.botao("Acesso web / senha", self._senha_cliente))
+            acoes_cliente.append(ui.botao("Abrir Officina Web", self._abrir_portal_navegador))
         pagina.append(ui.barra(*acoes_cliente))
         return pagina
 
