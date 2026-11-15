@@ -246,6 +246,19 @@ def redefinir_senha_prestador_desktop(banco,prestador_id,nova_senha):
         if not p:raise ValueError('Prestador não encontrado.')
         c.execute('UPDATE prestadores SET senha_hash=? WHERE id=?',
                   (senha_hash(nova_senha),prestador_id))
+        # Revoke every durable credential in the password transaction.  Legacy
+        # in-memory web sessions are invalidated on resolve by the credential
+        # fingerprint check in web_session.resolve().
+        tables = {row[0] for row in c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('desktop_sessoes', 'web_sessions')")}
+        if 'desktop_sessoes' in tables:
+            c.execute('UPDATE desktop_sessoes SET revogado_em=? '
+                      'WHERE prestador_id=? AND revogado_em IS NULL',
+                      (agora(), prestador_id))
+        if 'web_sessions' in tables:
+            c.execute("DELETE FROM web_sessions WHERE identity_kind='provider' "
+                      "AND identity_id=?", (prestador_id,))
     return True
 
 

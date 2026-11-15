@@ -46,6 +46,48 @@ class ProviderAuthTest(unittest.TestCase):
         self.assertTrue(prestador_auth.revogar_sessao(self.db, header))
         self.assertIsNone(prestador_auth.validar_sessao(self.db, header))
 
+    def test_password_reset_revokes_desktop_and_durable_web_sessions_atomically(self):
+        from flavors.autoseg.modules import web_session
+        second = ext.cadastrar(self.db, 'Other', 'other@example.invalid',
+                               'senha-second-12345')
+        first_token = prestador_auth.login(
+            self.db, 'admin-auth@example.invalid', 'senha-auth-12345')['token']
+        second_token = prestador_auth.login(
+            self.db, 'other@example.invalid', 'senha-second-12345')['token']
+        web_session.install(self.db)
+        with ext.db(self.db) as c:
+            c.execute("""INSERT INTO web_sessions
+                (token_hash, source, identity_kind, identity_id, role,
+                 client_org_ids, csrf, telemetry_session,
+                 credential_fingerprint, created_at, expires_at)
+                VALUES (?, 'legacy', 'provider', ?, 'admin', '[]',
+                        'csrf', 'tel', 'fingerprint', 100, 9999999999)""",
+                ('first-hash', self.pid))
+            c.execute("""INSERT INTO web_sessions
+                (token_hash, source, identity_kind, identity_id, role,
+                 client_org_ids, csrf, telemetry_session,
+                 credential_fingerprint, created_at, expires_at)
+                VALUES (?, 'legacy', 'provider', ?, 'employee', '[]',
+                        'csrf2', 'tel2', 'fingerprint', 100, 9999999999)""",
+                ('second-hash', second))
+        ext.redefinir_senha_prestador_desktop(
+            self.db, self.pid, 'senha-alterada-12345')
+        self.assertIsNone(prestador_auth.validar_sessao(
+            self.db, 'Bearer ' + first_token))
+        self.assertIsNotNone(prestador_auth.validar_sessao(
+            self.db, 'Bearer ' + second_token))
+        self.assertIsNone(prestador_auth.login(
+            self.db, 'admin-auth@example.invalid', 'senha-auth-12345'))
+        self.assertIsNotNone(prestador_auth.login(
+            self.db, 'admin-auth@example.invalid', 'senha-alterada-12345'))
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM web_sessions '
+                "WHERE identity_kind='provider' AND identity_id=?",
+                (self.pid,)).fetchone()[0], 0)
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM web_sessions '
+                "WHERE identity_kind='provider' AND identity_id=?",
+                (second,)).fetchone()[0], 1)
+
     def test_wrong_password_is_rejected(self):
         self.assertIsNone(prestador_auth.login(
             self.db, 'admin-auth@example.invalid', 'senha-errada'))
