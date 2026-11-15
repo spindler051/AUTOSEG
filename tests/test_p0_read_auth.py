@@ -115,6 +115,20 @@ class ReadAuthorizationTest(unittest.TestCase):
     def test_provider_cannot_download_unrelated_pdf(self):
         self.assertEqual(self.http('first','/os/OTHER-RD-2/pdf')[0],404)
 
+    def test_web_emails_and_notas_lists_do_not_leak_foreign_orders(self):
+        for path in ('/emails', '/notas'):
+            with self.subTest(path=path):
+                status, body = self.http('first', path)
+                self.assertEqual(status, 200, body[:300])
+                self.assertIn('OWN-RD-1', body)
+                self.assertNotIn('OTHER-RD-2', body)
+                self.assertNotIn('CLOSED-RD-3', body)
+                self.assertNotIn('Secret Customer', body)
+        for path in ('/emails', '/notas'):
+            status, body = self.http('admin', path)
+            self.assertEqual(status, 200, body[:300])
+            self.assertIn('OTHER-RD-2', body)
+
     def test_provider_cannot_read_unrelated_os_report_yaml(self):
         self.assertEqual(self.http('first','/os/OTHER-RD-2/relatorio.yaml')[0],404)
 

@@ -182,8 +182,26 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
             self.assertTrue(all(set(row)=={'id','nome'} for row in customers))
             self.assertNotIn('secret@invalid.test',json.dumps(data))
 
+    def test_report_and_history_lists_exclude_unrelated_os(self):
+        for path in ('/relatorios', '/historico'):
+            status, response = self.request('first', path)
+            self.assertEqual(status, 200, response)
+            rows = json.dumps(response['data'])
+            self.assertNotIn('Secret Client', rows)
+            self.assertNotIn('B-OS', rows)
+            self.assertNotIn('C-OS', rows)
+        status, summary = self.request('first', '/historico/resumo')
+        self.assertEqual(status, 200, summary)
+        self.assertEqual(summary['data']['concluidas'], 0)
+        status, summary = self.request('admin', '/historico/resumo')
+        self.assertEqual(status, 200, summary)
+        self.assertEqual(summary['data']['concluidas'], 1)
+        status, response = self.request('admin', '/relatorios')
+        self.assertEqual(status, 200, response)
+        self.assertIn('Secret Client', json.dumps(response['data']))
+
     def test_non_admin_is_denied_adjacent_global_customer_data(self):
-        for path in ('/historico','/relatorios','/pj/painel',
+        for path in ('/pj/painel',
                      '/portal/solicitacoes','/financeiro/resumo',
                      '/contexto/responsavel','/clientes/ativo?documento=22222222222'):
             with self.subTest(path=path):

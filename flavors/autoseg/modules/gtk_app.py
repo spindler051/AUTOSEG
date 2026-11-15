@@ -1145,8 +1145,9 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_historico(self):
         termo = self.busca_historico.get_text().strip() if hasattr(self, "busca_historico") else ""
-        resumo = self.service.resumo_historico()
-        registros = self.service.listar_historico(termo)
+        kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+        resumo = self.service.resumo_historico(**kwargs)
+        registros = self.service.listar_historico(termo, **kwargs)
         for chave in ("total", "abertas", "iniciadas", "pendentes", "concluidas"):
             self.cards_hist[chave].set_text(str(getattr(resumo, chave)))
         self.resumo_valores.set_text(
@@ -1300,7 +1301,8 @@ class Janela(Adw.ApplicationWindow):
         tabela = getattr(self, f"tabela_{tipo}", None)
         if tabela is None:
             return
-        registros = self.service.listar_relatorios(termo)
+        kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+        registros = self.service.listar_relatorios(termo, **kwargs)
         tabela.definir_linhas([
             (r.id, r.numero_os, r.cliente, r.status, ui.brl(r.valor_total))
             for r in registros

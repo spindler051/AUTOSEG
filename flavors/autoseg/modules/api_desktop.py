@@ -397,14 +397,12 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
         _exigir_admin(info)
         return _rota_organizacoes(handler, partes, servico, metodo)
     if recurso == 'relatorios':
-        _exigir_admin(info)
         if metodo == 'GET' and partes == ['relatorios']:
             return _enviar(handler, 200, servico.listar_relatorios(
-                str(query.get('termo', [''])[0])))
+                str(query.get('termo', [''])[0]), principal=principal))
         raise NaoEncontradoError('Rota não encontrada.')
     if recurso == 'historico':
-        _exigir_admin(info)
-        return _rota_historico(handler, partes, query, servico, metodo)
+        return _rota_historico(handler, partes, query, servico, metodo, principal)
     if recurso == 'pj':
         _exigir_admin(info)
         return _rota_pj(handler, partes, query, servico, metodo)
@@ -685,12 +683,12 @@ def _rota_organizacoes(handler, partes, servico, metodo):
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_historico(handler, partes, query, servico, metodo):
+def _rota_historico(handler, partes, query, servico, metodo, principal):
     if partes == ['historico'] and metodo == 'GET':
         return _enviar(handler, 200, servico.listar_historico(
-            str(query.get('termo', [''])[0])))
+            str(query.get('termo', [''])[0]), principal=principal))
     if partes == ['historico', 'resumo'] and metodo == 'GET':
-        return _enviar(handler, 200, servico.resumo_historico())
+        return _enviar(handler, 200, servico.resumo_historico(principal=principal))
     raise NaoEncontradoError('Rota não encontrada.')
 
 

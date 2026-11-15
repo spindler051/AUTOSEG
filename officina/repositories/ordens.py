@@ -238,3 +238,15 @@ def listar_historico_scoped(banco, provider_id, limite=500):
           GROUP BY o.id ORDER BY o.id DESC LIMIT ?""",
           (provider_id,provider_id,int(limite))).fetchall()
     return [dict(row) for row in rows]
+
+
+def listar_relatorios_scoped(banco, provider_id, limite=500):
+    """Only report rows in which a provider has a live OS relationship."""
+    with ext.db(_banco(banco)) as connection:
+        rows = connection.execute(f"""SELECT o.id,o.numero_os,o.status,o.valor_total,
+            o.data_abertura,c.nome cliente
+            FROM ordens_servico o JOIN clientes c ON c.id=o.cliente_id
+            WHERE COALESCE(o.arquivada,0)=0 AND {_INVOLVED}
+            ORDER BY o.id DESC LIMIT ?""",
+            (provider_id, provider_id, int(limite))).fetchall()
+    return [dict(row) for row in rows]

@@ -3304,7 +3304,10 @@ class PortalPrestador:
                 return self.pagina('Financeiro',corpo,s)
 
             def relatorios(self,s,tipo='relatorios'):
-                oses=ordens_repo.listar_relatorios(banco)
+                if _policy_allows(banco,s,'work_item.view.all'):
+                    oses=ordens_repo.listar_relatorios(banco)
+                else:
+                    oses=ordens_repo.listar_relatorios_scoped(banco,s['pid'])
                 if tipo=='emails':
                     title='E-mails para clientes'; explanation='Gere um rascunho .eml com o PDF anexado. Nenhum e-mail será enviado automaticamente.'
                     acao=lambda o:(botao('Preparar .eml',f'{url_os(banco, o["id"])}/email')
@@ -3982,6 +3985,8 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='os' and partes[1].isdigit() and partes[2]=='relatorio.yaml':
                         oid=int(partes[1])
                         try:
+                            read_access.require_read_work_item(
+                                banco, os_commands._provider_context(banco,s), oid)
                             texto=yaml_import.relatorio_os_yaml(banco,oid)
                         except ValueError as exc:
                             return self.erro(str(exc),404,s)

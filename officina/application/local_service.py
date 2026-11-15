@@ -227,10 +227,29 @@ class LocalService:
             telefone=str(linha['sindico_telefone'] or ''),
         )
 
-    def listar_relatorios(self, termo: str = '') -> list[RelatorioOS]:
+    def _os_read_scope(self, principal):
+        """Obtain the verified local identity, never trust a GTK admin flag."""
+        if (principal is None or not principal.active
+                or principal.organization_id != 'autoseg'
+                or type(principal.provider_id) is not int
+                or principal.provider_id <= 0):
+            raise PermissionError('Contexto autenticado obrigatório.')
+        with ext.db(self.banco) as connection:
+            provider = connection.execute(
+                'SELECT 1 FROM prestadores WHERE id=? AND ativo=1 AND excluido=0',
+                (principal.provider_id,)).fetchone()
+            if not provider:
+                raise PermissionError('Prestador não encontrado ou inativo.')
+            return (None if ext.administrador(connection, principal.provider_id)
+                    else principal.provider_id)
+
+    def listar_relatorios(self, termo: str = '', *, principal=None) -> list[RelatorioOS]:
+        scope = self._os_read_scope(principal)
         busca = str(termo or '').casefold().strip()
         resultado = []
-        for linha in ordens_repo.listar_relatorios(self.banco):
+        rows = (ordens_repo.listar_relatorios(self.banco) if scope is None
+                else ordens_repo.listar_relatorios_scoped(self.banco, scope))
+        for linha in rows:
             texto = ' '.join(str(linha[chave] or '') for chave in (
                 'numero_os', 'cliente', 'status')).casefold()
             if busca and busca not in texto:
@@ -244,7 +263,11 @@ class LocalService:
             ))
         return resultado
 
-    def listar_historico(self, termo: str = '') -> list[HistoricoOS]:
+    def listar_historico(self, termo: str = '', *, principal=None) -> list[HistoricoOS]:
+        scope = self._os_read_scope(principal)
+        filter_sql = ('' if scope is None else ' AND ' +
+                      ordens_repo._INVOLVED.replace('o.id', 'os.id'))
+        filter_params = () if scope is None else (scope, scope)
         busca = str(termo or '').strip()
         with ext.db(self.banco) as conexao:
             if busca:
@@ -256,8 +279,8 @@ class LocalService:
                        FROM ordens_servico os JOIN clientes c ON c.id=os.cliente_id
                        WHERE os.status IN ('Concluída','Cancelada','Não realizada')
                          AND (os.numero_os LIKE ? OR c.nome LIKE ? OR os.descricao LIKE ?)
-                       ORDER BY os.id DESC""",
-                    (f'%{busca}%', f'%{busca}%', f'%{busca}%')).fetchall()
+""" + filter_sql + " ORDER BY os.id DESC",
+                    (f'%{busca}%', f'%{busca}%', f'%{busca}%') + filter_params).fetchall()
             else:
                 registros = conexao.execute(
                     """SELECT os.id,os.numero_os,c.nome cliente,os.data_conclusao,
@@ -266,7 +289,7 @@ class LocalService:
                                  WHERE d.os_id=os.id AND d.tipo='relatorio_pdf') pdfs
                        FROM ordens_servico os JOIN clientes c ON c.id=os.cliente_id
                        WHERE os.status IN ('Concluída','Cancelada','Não realizada')
-                       ORDER BY os.id DESC""").fetchall()
+""" + filter_sql + " ORDER BY os.id DESC", filter_params).fetchall()
         return [HistoricoOS(
             id=int(linha['id']),
             numero_os=str(linha['numero_os'] or ''),
@@ -278,7 +301,10 @@ class LocalService:
             pdf_disponivel=bool(linha['pdfs']),
         ) for linha in registros]
 
-    def resumo_historico(self) -> ResumoHistorico:
+    def resumo_historico(self, *, principal=None) -> ResumoHistorico:
+        scope = self._os_read_scope(principal)
+        where_sql = '' if scope is None else ' WHERE ' + ordens_repo._INVOLVED
+        params = () if scope is None else (scope, scope)
         with ext.db(self.banco) as conexao:
             linha = conexao.execute(
                 """SELECT COUNT(*) total,
@@ -288,7 +314,7 @@ class LocalService:
                           COALESCE(SUM(status='Concluída'),0) concluidas,
                           COALESCE(SUM(CASE WHEN status='Concluída' THEN valor_total ELSE 0 END),0) valor_concluido,
                           COALESCE(SUM(CASE WHEN status IN ('Aberta','Iniciada','Pendente') THEN valor_total ELSE 0 END),0) valor_aberto
-                   FROM ordens_servico""").fetchone()
+                   FROM ordens_servico o""" + where_sql, params).fetchone()
         return ResumoHistorico(
             total=int(linha['total'] or 0),
             abertas=int(linha['abertas'] or 0),

@@ -136,6 +136,12 @@ class LocalServiceClientTest(unittest.TestCase):
             [item.numero_os for item in self.service.listar_os_ativas('A1')],
             ['OS-A1'])
 
+    def test_local_report_lists_fail_closed_without_principal(self):
+        with self.assertRaises(PermissionError):
+            self.service.listar_relatorios()
+        with self.assertRaises(PermissionError):
+            self.service.listar_historico()
+
     def test_history_slice_uses_contract_dtos(self):
         fluxo_os.instalar(self.db)
         self.criar(nome='Alfa')
@@ -152,10 +158,10 @@ class LocalServiceClientTest(unittest.TestCase):
                 "INSERT INTO os_documentos(os_id,tipo,versao,caminho,sha256,publicado_em) "
                 "VALUES(?,'relatorio_pdf',1,'/tmp/x.pdf','abc','2026-11-06')",
                 (concluida,))
-        resumo = self.service.resumo_historico()
+        resumo = self.service.resumo_historico(principal=self.actor)
         self.assertEqual((resumo.total, resumo.abertas, resumo.concluidas), (2, 1, 1))
         self.assertEqual(resumo.valor_concluido, 300.0)
-        linhas = self.service.listar_historico('H1')
+        linhas = self.service.listar_historico('H1', principal=self.actor)
         self.assertEqual(len(linhas), 1)
         self.assertTrue(linhas[0].pdf_disponivel)
 
