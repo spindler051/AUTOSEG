@@ -8,7 +8,7 @@
 
 ## Artwork
 
-The current icon is **hand-made in Blender** (`autoseg.blend`), exported as
+The current icon is **hand-made in Blender**, exported as
 2048×2048 PNG on 2026-11-14. It replaced the previous AI-generated icon, which
 was rejected on visual grounds.
 
