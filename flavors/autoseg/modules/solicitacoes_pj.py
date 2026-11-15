@@ -12,6 +12,7 @@ from officina.core import prestadores_ext as ext
 from officina.core import portal_negocios as neg
 from officina.core import cadastros_v9 as cad
 from officina.core.banco import proximo_numero_os
+from officina.application.work_item_access import require_pj_admin_locked
 
 
 def instalar(banco):
@@ -120,12 +121,13 @@ def _cliente_da_organizacao(c, org):
     return cid
 
 
-def aceitar(banco, solicitacao_id, ator='Prestador'):
+def aceitar(banco, solicitacao_id, ator='Prestador', *, prestador_id=None):
     instalar(banco)
     from officina.core import atendimento_os as aten
     aten.instalar(banco)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        require_pj_admin_locked(c, prestador_id)
         p = c.execute('SELECT * FROM pj_solicitacoes_publicas WHERE id=?', (int(solicitacao_id),)).fetchone()
         if not p:
             raise ValueError('Solicitação não encontrada.')
@@ -154,13 +156,14 @@ def aceitar(banco, solicitacao_id, ator='Prestador'):
         return {'os_id': oid, 'numero_os': numero, 'cliente_id': cid}
 
 
-def recusar(banco, solicitacao_id, motivo, ator='Prestador'):
+def recusar(banco, solicitacao_id, motivo, ator='Prestador', *, prestador_id=None):
     motivo = str(motivo or '').strip()
     if len(motivo) < 5:
         raise ValueError('Informe o motivo da recusa (mínimo de 5 caracteres).')
     instalar(banco)
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        require_pj_admin_locked(c, prestador_id)
         p = c.execute('SELECT * FROM pj_solicitacoes_publicas WHERE id=?', (int(solicitacao_id),)).fetchone()
         if not p:
             raise ValueError('Solicitação não encontrada.')

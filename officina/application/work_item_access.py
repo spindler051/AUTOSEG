@@ -62,6 +62,21 @@ def require_work_item_locked(connection, principal, work_id: int, action: str):
         raise PermissionError("Recurso indisponível.") from None
 
 
+def require_pj_admin_locked(connection, provider_id: int):
+    """Enforce the current provider/admin identity in a PJ writer transaction."""
+    if not connection.in_transaction:
+        raise RuntimeError('PJ decision authorization requires a writer transaction.')
+    if type(provider_id) is not int or provider_id <= 0:
+        raise PermissionError('Somente administradores podem verificar solicitações PJ.')
+    try:
+        active = connection.execute('''SELECT 1 FROM prestadores
+            WHERE id=? AND ativo=1 AND excluido=0''', (provider_id,)).fetchone()
+        if not active or not ext.administrador(connection, provider_id):
+            raise PermissionError('Somente administradores podem verificar solicitações PJ.')
+    except (sqlite3.Error, OSError, ValueError, TypeError, KeyError):
+        raise PermissionError('Somente administradores podem verificar solicitações PJ.') from None
+
+
 def require_attachment_read_locked(connection, principal, attachment_id: int):
     """Authorize an attachment and its OS using one read transaction snapshot."""
     if type(attachment_id) is not int or attachment_id <= 0 or principal is None:
