@@ -27,7 +27,8 @@ from officina.application.contracts import (
     AutenticacaoError,
     ServicoIndisponivelError,
 )
-from officina.application.http_service import HttpService
+from officina.application.http_service import (HttpService, validate_server_transport,
+                                               persist_cgnat_http_consent)
 from officina.application.session import Sessao, limpar_sessao, salvar_sessao
 from officina.core.banco import BANCO
 from flavors.autoseg.modules import prestador_auth
@@ -207,6 +208,11 @@ class LoginWindow(Adw.ApplicationWindow):
         grupo.add(self.servidor_email)
         grupo.add(self.servidor_senha)
         grupo.add(self.lembrar)
+        self.http_vpn_ack = Adw.SwitchRow(
+            title='Confirmar HTTP pela VPN Tailscale',
+            subtitle='O IP 100.64/10 não prova que a VPN está ativa. '
+                     'Confirme a conexão Tailscale antes de enviar sua senha.')
+        grupo.add(self.http_vpn_ack)
         self.servidor_erro = Gtk.Label(xalign=0, wrap=True)
         self.servidor_erro.add_css_class('error')
         self.servidor_erro.set_visible(False)
@@ -299,9 +305,21 @@ class LoginWindow(Adw.ApplicationWindow):
 
     def _entrar_servidor(self):
         url = self.servidor_url.get_text().strip().rstrip('/')
-        if not url.startswith(('http://', 'https://')):
-            self._erro_servidor(
-                'Use uma URL começando com http:// ou https://.')
+        try:
+            transport = validate_server_transport(url, require_consent=False)
+            if transport == 'tailscale-cgnat':
+                try:
+                    validate_server_transport(url)
+                except ValueError:
+                    if not self.http_vpn_ack.get_active():
+                        self._erro_servidor(
+                            'Confirme explicitamente a VPN Tailscale no controle acima. '
+                            'O endereço IP sozinho não garante criptografia.')
+                        return
+                    persist_cgnat_http_consent(url, confirmed=True)
+            validate_server_transport(url)
+        except ValueError as error:
+            self._erro_servidor(str(error))
             return
         email = self.servidor_email.get_text().strip()
         senha = self.servidor_senha.get_text()
@@ -310,7 +328,10 @@ class LoginWindow(Adw.ApplicationWindow):
             return
         self.entrar_servidor.set_sensitive(False)
         self.servidor_erro.set_visible(False)
-        self.servidor_status.set_text('Conectando…')
+        self.servidor_status.set_text(
+            'AVISO: HTTP autorizado manualmente; confirme que Tailscale '
+            'permanece conectado.' if transport == 'tailscale-cgnat'
+            else 'Conectando…')
         lembrar = self.lembrar.get_active()
 
         def worker():

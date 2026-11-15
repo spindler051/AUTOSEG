@@ -9,6 +9,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import ipaddress
+from pathlib import Path
 import time
 import urllib.error
 import urllib.parse
@@ -49,6 +51,86 @@ from officina.application.contracts import (
 from officina.core.versao_app import versao_local
 
 
+def _transport_details(url: str) -> tuple[str, str]:
+    """Parse and classify destinations without trusting CGNAT as VPN proof."""
+    parsed = urllib.parse.urlsplit(str(url or '').strip())
+    if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+            or not parsed.netloc or parsed.username is not None
+            or parsed.password is not None or parsed.query or parsed.fragment
+            or any(ch.isspace() for ch in parsed.netloc)):
+        raise ValueError('URL de servidor inválida. Use um endereço HTTPS válido.')
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError('Porta inválida na URL do servidor.') from error
+    if port == 0:
+        raise ValueError('Porta inválida na URL do servidor.')
+    if parsed.scheme == 'https':
+        return 'https', parsed.netloc.lower()
+    if parsed.hostname in ('localhost', '127.0.0.1', '::1'):
+        return 'loopback', parsed.netloc.lower()
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        address = None
+    if address is not None and address in ipaddress.ip_network('100.64.0.0/10'):
+        return 'tailscale-cgnat', parsed.netloc.lower()
+    raise ValueError('HTTP remoto bloqueado: configure HTTPS ou túnel local seguro.')
+
+
+def _http_consent_path() -> Path:
+    from officina.application.connection import settings_path
+    return settings_path().with_name('tailscale_http_consent.json')
+
+
+def _confirmed_http_hosts() -> set[str]:
+    try:
+        with _http_consent_path().open('r', encoding='utf-8') as stream:
+            data = json.load(stream)
+        return set(data.get('hosts', [])) if isinstance(data, dict) else set()
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def persist_cgnat_http_consent(url: str, *, confirmed: bool) -> None:
+    """Persist the user's affirmative risk acknowledgement for one host:port."""
+    kind, host = _transport_details(url)
+    if kind != 'tailscale-cgnat' or not confirmed:
+        raise ValueError('É necessário confirmar o endereço HTTP Tailscale.')
+    destination = _http_consent_path()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    hosts = sorted(_confirmed_http_hosts() | {host})
+    # Prevent a world-readable consent file even with a permissive umask.
+    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump({'hosts': hosts}, stream)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        raise
+
+
+def validate_server_transport(url: str, *, require_consent: bool = True) -> str:
+    """Enforce TLS, loopback, or explicit opt-in to VPN-specific HTTP risk."""
+    kind, host = _transport_details(url)
+    if (kind == 'tailscale-cgnat' and require_consent
+            and host not in _confirmed_http_hosts()):
+        raise ValueError('HTTP Tailscale exige confirmação explícita deste servidor; '
+                         'o IP sozinho não comprova que a VPN está ativa.')
+    return kind
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward bearer credentials to a redirected destination."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code,
+                                     'Redirecionamento não permitido', headers, fp)
+
+
 class HttpService(AppService):
     """Thin JSON client for the headless AUTOSEG server."""
 
@@ -56,6 +138,8 @@ class HttpService(AppService):
 
     def __init__(self, base_url: str, token: str = '', timeout: float = 2.5):
         self.base_url = str(base_url or '').rstrip('/')
+        if self.base_url:
+            validate_server_transport(self.base_url)
         self.token = str(token or '')
         self.desktop_token = os.environ.get('AUTOSEG_DESKTOP_TOKEN', '')
         self.timeout = float(timeout)
@@ -83,6 +167,7 @@ class HttpService(AppService):
         if not self.base_url:
             raise ServicoIndisponivelError(
                 'URL do servidor não configurada.', 'Servidor não configurado')
+        validate_server_transport(self.base_url)
         if not force and time.monotonic() < self._offline_until:
             raise ServicoIndisponivelError(
                 self.last_error or 'Servidor indisponível.', 'Servidor indisponível')
@@ -100,7 +185,8 @@ class HttpService(AppService):
             pedido.add_header('X-AUTOSEG-Desktop-Token', self.desktop_token)
         timeout = self.write_timeout if metodo != 'GET' else self.timeout
         try:
-            with urllib.request.urlopen(pedido, timeout=timeout) as resposta:
+            with urllib.request.build_opener(_NoRedirect()).open(
+                    pedido, timeout=timeout) as resposta:
                 bruto = resposta.read().decode('utf-8')
         except urllib.error.HTTPError as erro:
             self._erro_http(erro)

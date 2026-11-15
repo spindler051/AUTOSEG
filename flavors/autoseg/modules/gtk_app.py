@@ -287,6 +287,17 @@ class Janela(Adw.ApplicationWindow):
         self.banner_servidor.connect(
             "button-clicked", lambda *_args: self._atualizar_tudo())
         caixa = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        from officina.application.http_service import validate_server_transport
+        self.banner_transporte = Adw.Banner(
+            title='Atenção: HTTP autorizado manualmente. Verifique a VPN Tailscale.')
+        self.banner_transporte.set_revealed(False)
+        if self.sessao and self.sessao.remote:
+            try:
+                unsafe = validate_server_transport(self.sessao.server_url) == 'tailscale-cgnat'
+            except ValueError:
+                unsafe = False
+            self.banner_transporte.set_revealed(unsafe)
+        caixa.append(self.banner_transporte)
         caixa.append(self.banner_servidor)
         self.stack.set_vexpand(True)
         caixa.append(self.stack)
