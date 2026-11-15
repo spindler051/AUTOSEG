@@ -74,7 +74,7 @@ class LocalServiceClientTest(unittest.TestCase):
 
         lista = self.service.listar_clientes('porto', principal=self.actor)
         self.assertEqual([item.nome for item in lista], ['Alfa'])
-        obtido = self.service.obter_cliente(criado.id)
+        obtido = self.service.obter_cliente(criado.id, principal=self.actor)
         self.assertIsNotNone(obtido)
         self.assertEqual(obtido.campos['cidade'], 'Porto Alegre')
 
@@ -83,7 +83,7 @@ class LocalServiceClientTest(unittest.TestCase):
         atualizado = self.service.salvar_cliente(
             criado.id,
             {'tipo_pessoa': 'Jurídica', 'documento': '',
-             'nome': 'Condomínio Beta', 'status': 'Ativo'})
+             'nome': 'Condomínio Beta', 'status': 'Ativo'}, principal=self.actor)
         self.assertEqual(atualizado.versao, 2)
         self.assertEqual(atualizado.campos['nome'], 'Condomínio Beta')
 
@@ -92,7 +92,7 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(contexto.exception.titulo, 'Documento inválido')
 
     def test_missing_client_returns_none(self):
-        self.assertIsNone(self.service.obter_cliente(99999))
+        self.assertIsNone(self.service.obter_cliente(99999, principal=self.actor))
 
     def test_dashboard_summary_uses_service(self):
         self.criar(nome='Alfa')

@@ -225,7 +225,7 @@ actions:
     family: customer
     risk: read
     affordance: absent
-    state: known_gap
+    state: active
     service: officina.integration.clientes.obter_linha
     required_params: [banco, cliente_id]
     capability: customer.view.involved
@@ -238,14 +238,17 @@ actions:
     api_markers:
       - "_scoped_customer_detail(servico.banco, principal, cliente_id)"
     gtk_markers:
-      - registro = self.servico.obter_cliente(cliente_id)
+      - 'registro = self.servico.obter_cliente(cliente_id, **kwargs)'
     source_markers:
       - file: flavors/autoseg/modules/gtk_dialogos.py
-        contains: "registro = self.servico.obter_cliente(cliente_id)"
+        contains: "registro = self.servico.obter_cliente(cliente_id, **kwargs)"
       - file: officina/application/local_service.py
-        contains: "registro = clientes_core.obter(cliente_id, banco=self.banco)"
+        contains: "return obter_cliente_scoped(self.banco, principal, cliente_id)"
     negative_tests:
       - tests/test_p0_read_auth.py
+      - tests/test_p3_6_customer_detail.py
     negative_markers:
       - file: tests/test_p0_read_auth.py
         contains: "self.assertEqual(self.http('first',f'/clientes/{self.c2}')[0],404)"
+      - file: tests/test_p3_6_customer_detail.py
+        contains: "def test_local_detail_without_principal_denied(self):"

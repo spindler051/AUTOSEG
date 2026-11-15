@@ -53,8 +53,12 @@ class DialogoCliente(Adw.Dialog):
             self.servico = LocalService(BANCO)
         self.dados = dict(importado) if importado else {}
         if cliente_id is not None:
-            registro = self.servico.obter_cliente(cliente_id)
-            self.dados = dict(registro.campos) if registro else {}
+            kwargs = ({} if janela.remote_mode else
+                      {'principal': janela._cliente_admin_actor()})
+            registro = self.servico.obter_cliente(cliente_id, **kwargs)
+            if registro is None:
+                raise PermissionError('Recurso indisponível.')
+            self.dados = dict(registro.campos)
 
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
@@ -138,6 +142,30 @@ class DialogoCliente(Adw.Dialog):
         grupo = Adw.PreferencesGroup(title="Observações")
         pagina.add(grupo)
         self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
+
+        # The API/local read service has already excluded forbidden columns.
+        # Hide their widgets as well; do not display empty editable proxies.
+        if cliente_id is not None and not getattr(janela.sessao, 'admin', False):
+            widgets = {
+                'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
+                'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
+                'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
+                'numero': self.numero_end, 'complemento': self.complemento,
+                'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
+                'telefone': self.telefone, 'email': self.email,
+                'sindico_nome': self.sindico_nome,
+                'sindico_telefone': self.sindico_telefone,
+                'sindico_email': self.sindico_email,
+                'administradora': self.administradora,
+                'administradora_telefone': self.administradora_telefone,
+                'administradora_email': self.administradora_email,
+                'observacoes': self.observacoes,
+            }
+            for field, widget in widgets.items():
+                if field not in self.dados:
+                    widget.set_visible(False)
+            if 'cep' not in self.dados:
+                self.cep_status.set_visible(False)
 
         self._atualizar_documento_ui()
 

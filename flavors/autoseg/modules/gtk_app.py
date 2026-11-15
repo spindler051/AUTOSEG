@@ -817,7 +817,12 @@ class Janela(Adw.ApplicationWindow):
     def _editar_cliente(self):
         valores = self._cliente_selecionado()
         if valores:
-            dialogos.DialogoCliente(self, valores[0]).present(self)
+            try:
+                dialogos.DialogoCliente(self, valores[0]).present(self)
+            except PermissionError:
+                ui.aviso_erro(self, "Cliente", "Recurso indisponível.")
+            except Exception as erro:
+                ui.aviso_erro(self, "Cliente", str(erro))
 
     def _nova_os_cliente(self):
         valores = self._cliente_selecionado()

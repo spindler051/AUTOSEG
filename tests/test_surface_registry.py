@@ -34,7 +34,7 @@ EXPECTED_MAPPING = {
     'customer.merge': ('officina.core.cadastros_v9.mesclar_clientes', None, True, 'active'),
     'customer.password': ('officina.core.fluxo_os.definir_senha_cliente', None, True, 'active'),
     'customer.list': ('officina.integration.clientes.listar_paginado', 'customer.view.involved', False, 'active'),
-    'customer.detail': ('officina.integration.clientes.obter_linha', 'customer.view.involved', False, 'known_gap'),
+    'customer.detail': ('officina.integration.clientes.obter_linha', 'customer.view.involved', False, 'active'),
 }
 
 
