@@ -155,16 +155,16 @@ actions:
     family: customer
     risk: destructive
     affordance: absent
-    state: known_gap
+    state: active
     service: officina.core.fluxo_os.definir_senha_cliente
-    required_params: [banco, cliente_id]
+    required_params: [banco, cliente_id, principal]
     capability: null  # No explicit customer.password policy key.
     admin_only: true
     object_action: null
-    writer_guard: edge_only_gap  # The password writer itself lacks require_admin_locked.
+    writer_guard: locked
     web_markers:
       - "if (senha_nova or confirmar) and not s.get('admin'):"
-      - "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)"
+      - "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova,principal=actor)"
     api_markers:
       - "if resto == ['senha'] and metodo == 'POST':"
     gtk_markers:
@@ -175,9 +175,14 @@ actions:
       - file: flavors/autoseg/modules/gtk_app.py
         contains: 'ui.botao("Acesso web / senha", self._senha_cliente)'
       - file: flavors/autoseg/modules/portal_prestador.py
-        contains: "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova)"
-    negative_tests: []  # No direct endpoint denial test verified in phase 0A.
-    negative_markers: []
+        contains: "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova,principal=actor)"
+    negative_tests:
+      - tests/test_p0_customer_password_a5d.py
+    negative_markers:
+      - file: tests/test_p0_customer_password_a5d.py
+        contains: "def test_employee_cannot_change_password(self):"
+      - file: tests/test_p0_customer_password_a5d.py
+        contains: "with self.assertRaises(PermissionError):"
 
   - id: customer.list
     family: customer

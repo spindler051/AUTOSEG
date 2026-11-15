@@ -32,7 +32,7 @@ EXPECTED_MAPPING = {
     'customer.deactivate': ('officina.core.cadastros_v9.desativar_cliente', None, True, 'active'),
     'customer.delete': ('officina.core.portal_negocios.cliente_excluir', None, True, 'active'),
     'customer.merge': ('officina.core.cadastros_v9.mesclar_clientes', None, True, 'known_gap'),
-    'customer.password': ('officina.core.fluxo_os.definir_senha_cliente', None, True, 'known_gap'),
+    'customer.password': ('officina.core.fluxo_os.definir_senha_cliente', None, True, 'active'),
     'customer.list': ('officina.integration.clientes.listar_paginado', 'customer.view.involved', False, 'implemented_not_deployed'),
     'customer.detail': ('officina.integration.clientes.obter_linha', 'customer.view.involved', False, 'known_gap'),
 }
@@ -106,20 +106,10 @@ class SurfaceRegistryTest(unittest.TestCase):
                 continue
             with self.subTest(action=row.id):
                 writer_source = inspect.getsource(service_function(row.service))
-                if row.writer_guard == 'locked':
-                    self.assertIn('require_admin_locked(', writer_source)
-                    self.assertIn('BEGIN IMMEDIATE', writer_source)
-                else:
-                    self.assertEqual(row.id, 'customer.password')
-                    self.assertEqual(row.writer_guard, 'edge_only_gap')
-                    self.assertEqual(row.state, 'known_gap')
-                    self.assertNotIn('require_admin_locked(', writer_source)
-                    # These are edge guards, not a substitute for a writer guard.
-                    self.assertIn("if (senha_nova or confirmar) and not s.get('admin'):",
-                                  source('flavors/autoseg/modules/portal_prestador.py'))
-                    api = source('flavors/autoseg/modules/api_desktop.py')
-                    password_branch = api.split("if resto == ['senha'] and metodo == 'POST':", 1)[1]
-                    self.assertIn('_exigir_admin(info)', password_branch.split('return _enviar', 1)[0])
+                # Every admin-only action is guarded inside its writer transaction.
+                self.assertEqual(row.writer_guard, 'locked')
+                self.assertIn('require_admin_locked(', writer_source)
+                self.assertIn('BEGIN IMMEDIATE', writer_source)
 
     def test_07_exact_web_api_and_ui_source_markers(self):
         web = WEB_FILE.read_text(encoding='utf-8')
@@ -143,12 +133,7 @@ class SurfaceRegistryTest(unittest.TestCase):
         """
         for row in self.registry.actions:
             with self.subTest(action=row.id):
-                if row.id == 'customer.password':
-                    self.assertEqual(row.negative_tests, ())
-                    self.assertEqual(row.negative_markers, ())
-                    self.assertEqual(row.state, 'known_gap')
-                    continue
-                self.assertTrue(row.negative_tests)
+                self.assertTrue(row.negative_tests, row.id)
                 self.assertTrue(row.negative_markers)
                 for test_path in row.negative_tests:
                     self.assertTrue((ROOT / test_path).is_file(), test_path)

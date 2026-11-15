@@ -61,11 +61,14 @@ def instalar(banco):
     composicao.instalar_banco(banco)
 
 
-def definir_senha_cliente(banco,cliente_id,senha=None):
-    """Usar somente do desktop. Retorna a senha uma ÚNICA vez."""
-    senha = senha or secrets.token_urlsafe(16)
-    if len(senha)<10:raise ValueError('A senha deve ter pelo menos 10 caracteres.')
+def definir_senha_cliente(banco,cliente_id,senha=None,*,principal=None):
+    """Redefine o acesso legado do cliente; exige administrador ativo no writer."""
     with ext.db(banco) as c:
+        c.execute('BEGIN IMMEDIATE')
+        from officina.application.work_item_access import require_admin_locked
+        require_admin_locked(c, principal)
+        senha = senha or secrets.token_urlsafe(16)
+        if len(senha)<10:raise ValueError('A senha deve ter pelo menos 10 caracteres.')
         cliente=c.execute("SELECT id FROM clientes WHERE id=? AND status!='Inativo'",(cliente_id,)).fetchone()
         if not cliente: raise ValueError('Cliente inexistente ou inativo.')
         h=ext.senha_hash(senha)
