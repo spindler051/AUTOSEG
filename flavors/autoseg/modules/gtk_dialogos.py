@@ -1001,7 +1001,12 @@ class DialogoOS(Adw.Dialog):
                 "O PDF será publicado para o cliente. Pagamentos não são confirmados automaticamente.",
                 lambda: self._salvar("Concluída"), rotulo_ok="Concluir")
         elif situacao == "Cancelada":
-            self._salvar("Cancelada")
+            ui.alerta(
+                self.janela, "Confirmar cancelamento",
+                "Cancelar esta ordem de serviço? O motivo do cancelamento "
+                "será registrado no histórico e a OS deixará de estar ativa.",
+                lambda: self._salvar("Cancelada"), destrutivo=True,
+                rotulo_ok="Cancelar OS")
 
     def _salvar(self, acao):
         try:

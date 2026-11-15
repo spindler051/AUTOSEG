@@ -1277,9 +1277,18 @@ class Janela(Adw.ApplicationWindow):
             ui.aviso_erro(self, 'Financeiro',
                           'O recebimento de repasse é confirmado pelo técnico no portal.')
             return
+        lancamento_id = int(valores[0])
+        ui.alerta(
+            self, "Confirmar recebimento",
+            "Confirma que o pagamento foi efetivamente recebido? "
+            "Essa confirmação altera o saldo financeiro.",
+            lambda: self._confirmar_recebimento(lancamento_id),
+            rotulo_ok="Confirmar recebimento")
+
+    def _confirmar_recebimento(self, lancamento_id):
         try:
             kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
-            self.service.marcar_recebido(valores[0], **kwargs)
+            self.service.marcar_recebido(lancamento_id, **kwargs)
         except Exception as erro:
             ui.aviso_erro(self, "Financeiro", str(erro))
             return
@@ -1449,7 +1458,21 @@ class Janela(Adw.ApplicationWindow):
         valores = self._prestador_selecionado()
         if not valores:
             return
-        self.service.alternar_prestador(valores[0])
+        ativo = valores[5] == "Sim"
+        verbo = "Desativar" if ativo else "Ativar"
+        ui.alerta(
+            self, f"{verbo} prestador",
+            (f"{verbo} o prestador {valores[1]}? "
+             "Ao desativar, a conta perde acesso aos serviços até ser reativada."),
+            lambda: self._confirmar_alternancia_prestador(int(valores[0])),
+            destrutivo=ativo, rotulo_ok=verbo)
+
+    def _confirmar_alternancia_prestador(self, prestador_id):
+        try:
+            self.service.alternar_prestador(prestador_id)
+        except Exception as erro:
+            ui.aviso_erro(self, "Prestador", str(erro))
+            return
         self.carregar_prestadores()
 
     def _admin_prestador(self):
@@ -2339,10 +2362,24 @@ class Janela(Adw.ApplicationWindow):
         componente = self._componente_selecionado()
         if componente is None:
             return
-        componente["ativo"] = not componente.get("ativo", True)
-        if self._salvar_config_composicao():
-            ui.toast(self, "Componente ativado." if componente["ativo"]
-                     else "Componente desativado.")
+        ativo = not bool(componente.get("ativo", True))
+        verbo = "Ativar" if ativo else "Desativar"
+        ui.alerta(
+            self, f"{verbo} componente",
+            f"{verbo} o componente {componente.get('nome', '')}? "
+            "Essa alteração afeta os próximos cálculos da composição.",
+            lambda: self._confirmar_ativacao_componente(componente["id"], ativo),
+            destrutivo=not ativo, rotulo_ok=verbo)
+
+    def _confirmar_ativacao_componente(self, componente_id, ativo):
+        for componente in self._config_composicao["componentes"]:
+            if componente.get("id") == componente_id:
+                componente["ativo"] = bool(ativo)
+                if self._salvar_config_composicao():
+                    ui.toast(self, "Componente ativado." if ativo
+                             else "Componente desativado.")
+                return
+        ui.aviso_erro(self, "Composição", "Componente não encontrado.")
 
     def _mover_componente(self, delta):
         componente = self._componente_selecionado()
@@ -2611,6 +2648,11 @@ class Aplicativo(Adw.Application):
         self.janela = None
         self.login = None
         self.sessao = None
+        # GNOME HIG: discoverable keyboard operations stay application actions,
+        # not per-page buttons or a second navigation command registry.
+        self.set_accels_for_action("win.atualizar", ["<Primary>r"])
+        self.set_accels_for_action("win.sair", ["<Primary><Shift>q"])
+        self.set_accels_for_action("win.sobre", ["F1"])
 
     def do_activate(self):
         if self.janela is not None:

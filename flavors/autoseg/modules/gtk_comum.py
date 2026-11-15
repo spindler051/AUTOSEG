@@ -200,8 +200,16 @@ class Tabela:
         self.scroller.set_has_frame(True)
         self.scroller.set_child(self.view)
         self.scroller.add_css_class("data-table")
+        self._display = Gtk.Stack(vexpand=True, hexpand=True)
+        self._display.add_named(self.scroller, "rows")
+        self._empty = Adw.StatusPage(
+            title="Nenhum registro encontrado",
+            description="A lista está vazia ou a pesquisa não retornou resultados.",
+            icon_name="view-list-symbolic")
+        self._display.add_named(self._empty, "empty")
+        self._display.set_visible_child_name("empty")
         if altura:
-            self.scroller.set_size_request(-1, int(altura))
+            self._display.set_size_request(-1, int(altura))
 
     def _setup(self, _fabrica, item, indice, alinhamento):
         rotulo = Gtk.Label(
@@ -224,15 +232,19 @@ class Tabela:
 
     @property
     def widget(self):
-        return self.scroller
+        return self._display
 
     def limpar(self):
         self.modelo.remove_all()
+        self._display.set_visible_child_name("empty")
 
     def definir_linhas(self, linhas):
         self.modelo.remove_all()
+        count = 0
         for valores in linhas:
             self.modelo.append(_Linha(valores))
+            count += 1
+        self._display.set_visible_child_name("rows" if count else "empty")
 
     def selecionado(self):
         linha = self.selecao.get_selected_item()
