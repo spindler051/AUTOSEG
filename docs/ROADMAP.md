@@ -225,6 +225,15 @@ mesmas mensagens, sem nova configuração ou tela.
   funcionário no site” sem exceção de superfície. Depende do surface registry e
   do item anterior. Contrato em
   [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
+- **Armazenamento de arquivos relativo ao data root (P1):** o banco guarda
+  caminhos absolutos em `os_anexos.caminho`, `os_documentos.caminho` e
+  `os_notas_fiscais.caminho` (163 linhas hoje). Cada mudança de usuário, home ou
+  disco exige um `UPDATE` de remapeamento — foi o custo das duas migrações de
+  hoje. Alvo: gravar caminhos relativos (`anexos_os/<arquivo>`) e resolver
+  contra `AUTOSEG_BASE` na leitura, com raiz neutra (`/srv/autoseg`, sem nome de
+  usuário em unit). Primeiro passo: resolvedor em modo leitura + migração em
+  cópia + testes de path traversal. Contrato em
+  [`planning/RELATIVE_FILE_STORAGE.md`](planning/RELATIVE_FILE_STORAGE.md).
 - **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
   61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por
