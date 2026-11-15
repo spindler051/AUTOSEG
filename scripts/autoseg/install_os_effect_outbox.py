@@ -1,4 +1,9 @@
-"""Install, inspect or safely roll back the additive DEV outbox migration."""
+"""Install, inspect or roll back the additive OS effect outbox.
+
+DEV uses ``AUTOSEG_DEV=1``. An approved production database requires the
+explicit ``--allow-production`` flag plus a fresh verified backup; it is never
+selected implicitly by a path or an environment default.
+"""
 from __future__ import annotations
 
 import argparse
@@ -12,21 +17,25 @@ from officina.core import produtividade_os as prod
 
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description='Manage DEV-only OS effect outbox')
+    parser=argparse.ArgumentParser(description='Manage the OS effect outbox')
     parser.add_argument('--database',required=True)
     parser.add_argument('--backup')
+    parser.add_argument('--allow-production',action='store_true',
+                        help='Authorize an approved non-DEV database; a new backup is still required')
     actions=parser.add_mutually_exclusive_group()
     actions.add_argument('--status',action='store_true')
     actions.add_argument('--rollback',action='store_true')
     args=parser.parse_args(argv)
-    if os.environ.get('AUTOSEG_DEV')!='1':
-        parser.error('Migration is authorized only with AUTOSEG_DEV=1')
+    dev=os.environ.get('AUTOSEG_DEV')=='1'
+    if not dev and not args.allow_production:
+        parser.error('Migration requires AUTOSEG_DEV=1 or --allow-production')
     source=Path(args.database).resolve()
     if not source.is_file() or not source.stat().st_size:
-        parser.error('DEV SQLite source does not exist')
-    if any(part.lower() in ('gestaoservicos_main','autoseg_main')
-           for part in source.parts):
+        parser.error('SQLite source does not exist')
+    if dev and any(part.lower() in ('gestaoservicos_main','autoseg_main')
+                   for part in source.parts):
         parser.error('Refusing a known MAIN database path')
+    label='DEV' if dev else 'PRODUCTION'
     with ext.db(source) as c:
         present=outbox.installed(c)
         if present:
@@ -70,10 +79,10 @@ def main(argv=None):
                           'idx_os_effect_pdf_version'):
                 c.execute('DROP INDEX IF EXISTS '+index)
             c.execute('DROP TABLE os_effect_outbox')
-        print(f'DEV outbox removed; OS and attachments unchanged. Backup: {backup}')
+        print(f'{label} outbox removed; OS and attachments unchanged. Backup: {backup}')
     else:
         outbox.install(source)
-        print(f'Outbox installed on DEV database. Verified backup: {backup}')
+        print(f'Outbox installed on {label} database. Verified backup: {backup}')
     return 0
 
 
