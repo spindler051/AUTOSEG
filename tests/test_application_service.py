@@ -41,7 +41,8 @@ class LocalServiceClientTest(unittest.TestCase):
         from officina.application.object_policy import Principal
         pid = ext.cadastrar(self.db, 'Fixture creator',
                             'app-service-fixture@invalid.test', 'Pass12345678')
-        self.actor = Principal(pid, 'employee', organization_id='autoseg',
+        cad9.definir_admin(self.db, pid, True)
+        self.actor = Principal(pid, 'admin', organization_id='autoseg',
                                provider_id=pid)
         self.service = LocalService(self.db)
 
@@ -71,7 +72,7 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertEqual(criado.campos['nome'], 'Alfa')
         self.assertFalse(criado.incompleto)
 
-        lista = self.service.listar_clientes('porto')
+        lista = self.service.listar_clientes('porto', principal=self.actor)
         self.assertEqual([item.nome for item in lista], ['Alfa'])
         obtido = self.service.obter_cliente(criado.id)
         self.assertIsNotNone(obtido)

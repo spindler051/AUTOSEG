@@ -796,7 +796,10 @@ class Janela(Adw.ApplicationWindow):
     def carregar_clientes(self):
         termo = self.busca_clientes.get_text().strip() if hasattr(self, "busca_clientes") else ""
         linhas = []
-        for registro in self.service.listar_clientes(termo):
+        # Remote mode derives its principal from the server token; local GTK
+        # sends the same authenticated principal that the desktop API receives.
+        kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+        for registro in self.service.listar_clientes(termo, **kwargs):
             linhas.append((
                 registro.id, registro.nome or "(sem nome)",
                 cad9.formatar_documento(registro.documento),

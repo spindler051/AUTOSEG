@@ -513,9 +513,9 @@ class LocalService:
         from officina.application.desktop_context import contexto_movimento_empresa
         return contexto_movimento_empresa(self.banco)
 
-    def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:
-        return [self._resumo(registro)
-                for registro in clientes_core.listar(termo, banco=self.banco)]
+    def listar_clientes(self, termo: str = '', *, principal=None) -> list[ClienteResumo]:
+        from officina.application.customer_reads import listar_clientes_scoped
+        return listar_clientes_scoped(self.banco, principal, termo)
 
     def obter_cliente(self, cliente_id: int) -> Cliente | None:
         registro = clientes_core.obter(cliente_id, banco=self.banco)

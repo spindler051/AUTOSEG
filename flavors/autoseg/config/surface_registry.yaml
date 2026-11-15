@@ -193,7 +193,7 @@ actions:
     family: customer
     risk: read
     affordance: absent
-    state: implemented_not_deployed
+    state: active
     service: officina.integration.clientes.listar_paginado
     required_params: [banco, termo]
     capability: customer.view.involved
@@ -206,17 +206,20 @@ actions:
     api_markers:
       - "_scoped_customer_list(servico.banco, principal,"
     gtk_markers:
-      - 'for registro in self.service.listar_clientes(termo):'
+      - 'for registro in self.service.listar_clientes(termo, **kwargs):'
     source_markers:
       - file: officina/application/local_service.py
-        contains: "return [self._resumo(registro)"
+        contains: "return listar_clientes_scoped(self.banco, principal, termo)"
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: "if 'nome' not in allowed_fields:"
     negative_tests:
       - tests/test_p0_read_auth.py
+      - tests/test_p3_5_customer_list.py
     negative_markers:
       - file: tests/test_p0_read_auth.py
         contains: "self.assertNotIn('Secret Customer',body)"
+      - file: tests/test_p3_5_customer_list.py
+        contains: "def test_local_list_without_actor_denied(self):"
 
   - id: customer.detail
     family: customer

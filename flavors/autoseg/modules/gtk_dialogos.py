@@ -281,7 +281,9 @@ class DialogoMesclarCliente(Adw.Dialog):
         self.janela = janela
         self.origem_id = int(origem_id)
         self.origem_nome = origem_nome
-        self.destinos = [cliente for cliente in _servico(janela).listar_clientes('')
+        kwargs = ({} if janela.remote_mode else
+                  {'principal': janela._cliente_admin_actor()})
+        self.destinos = [cliente for cliente in _servico(janela).listar_clientes('', **kwargs)
                          if cliente.id != self.origem_id and cliente.status == 'Ativo']
         if not self.destinos:
             raise ValueError('Nenhum outro cliente ativo disponível para mesclagem.')

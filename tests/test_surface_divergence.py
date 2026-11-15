@@ -27,7 +27,6 @@ REPORT = 'docs/planning/SURFACE_DIVERGENCE_REPORT.md'
 SCRIPT = ROOT / 'scripts/surface_divergence.py'
 
 EXPECTED_FINDINGS = {
-    'customer.list:gtk_local:read_scope_divergence': 'medium',
     'customer.detail:gtk_local:read_scope_divergence': 'medium',
 }
 
@@ -153,13 +152,15 @@ class SurfaceDivergenceTest(unittest.TestCase):
             fixture_tree(dest)
             path = dest / 'officina/application/local_service.py'
             source = path.read_text(encoding='utf-8')
-            anchor = 'clientes_core.listar('
+            anchor = 'clientes_core.obter('
             self.assertIn(anchor, source)
-            path.write_text(source.replace(anchor, 'clientes_core.listar_paginado(', 1),
+            # Every detail read must leave the generic lookup, otherwise the
+            # analyzer still sees an unscoped path.
+            path.write_text(source.replace(anchor, 'clientes_core.obter_vetted('),
                             encoding='utf-8')
             result = cli(dest, '--check')
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn('RESOLVED customer.list:gtk_local:read_scope_divergence', result.stderr)
+            self.assertIn('RESOLVED customer.detail:gtk_local:read_scope_divergence', result.stderr)
 
     def test_11_gtk_markers_are_real_and_merge_is_exposed(self):
         app = (ROOT / GTK[0]).read_text(encoding='utf-8')

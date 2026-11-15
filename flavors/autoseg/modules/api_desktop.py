@@ -333,15 +333,8 @@ def _minimal_providers(banco):
 
 
 def _scoped_customer_list(banco, principal, termo=''):
-    if access.can_read_all(principal, 'customer'):
-        return LocalService(banco).listar_clientes(termo)
-    allowed = access.involved_customer_field_scopes(principal)
-    _, rows = clientes_core.listar_paginado(termo, limite=1000, banco=banco,
-                  provider_id=principal.provider_id, allowed_fields=allowed)
-    return [ClienteResumo(id=int(row['id']), nome=str(row['nome'] or ''),
-              documento=str(row['documento'] or ''), cidade=str(row['cidade'] or ''),
-              telefone=str(row['telefone'] or ''), status=str(row['status'] or ''),
-              incompleto=bool(row['dados_incompletos'])) for row in rows]
+    from officina.application.customer_reads import listar_clientes_scoped
+    return listar_clientes_scoped(banco, principal, termo)
 
 
 def _scoped_customer_os_count(banco, principal, customer_id):
