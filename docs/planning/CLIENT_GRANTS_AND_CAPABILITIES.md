@@ -184,6 +184,26 @@ account_client_grants(account_id, client_app, capability, granted_at, granted_by
 Resolution adds that set to `bundle`, still intersected with the client ceiling.
 This is the only place a per-user exception exists, and it is auditable.
 
+### 9.1 Desktop-only admin (concrete case)
+
+The admin grant carries a scope instead of a second role:
+
+```text
+v9_admin_prestadores(prestador_id, scope TEXT NOT NULL DEFAULT 'all')
+    scope = 'all'      → admin on every client (current behaviour)
+    scope = 'desktop'  → admin only when client_app = gtk
+```
+
+`require_admin_locked` (and the policy engine once it exists) resolves
+`scope = 'all' OR scope = principal.client_app`. The web session of a
+`desktop`-scoped admin therefore resolves to employee, with no separate account
+and no UI branch: the same person, two clients, two effective capability sets.
+
+Caveat: GTK **local** mode has no token, so `client_app = 'gtk'` is asserted by
+the local process, not by a credential. The meaningful enforcement is GTK
+**remote**, where the desktop token supplies the client identity. This is the
+same open trust question already recorded in §14.
+
 ## 10. Security requirements
 
 1. `client_app` is server-asserted by token family (§7).

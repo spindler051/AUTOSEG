@@ -234,6 +234,13 @@ mesmas mensagens, sem nova configuração ou tela.
   usuário em unit). Primeiro passo: resolvedor em modo leitura + migração em
   cópia + testes de path traversal. Contrato em
   [`planning/RELATIVE_FILE_STORAGE.md`](planning/RELATIVE_FILE_STORAGE.md).
+- **Admin apenas no desktop, por usuário (P1):** configuração por conta, não
+  regra de superfície. O vínculo admin ganha `scope` (`all` | `desktop`) e o
+  `Principal` carrega `client_app` asserido pelo tipo de token; a web resolve
+  como funcionário, o GTK como admin. Depende de client grants. A paridade de
+  funcionalidades continua obrigatória: só o papel muda. Ver
+  [`SURFACE_PARITY.md`](SURFACE_PARITY.md) e
+  [`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md).
 - **Party types declarados como dados (último da lista):** `tipo_pessoa` aparece
   61 vezes em 17 arquivos e `Jurídica` é ramificado em 29 lugares; declarar
   campos, cardinalidade de vínculos e papéis por capacidade troca os ramos por

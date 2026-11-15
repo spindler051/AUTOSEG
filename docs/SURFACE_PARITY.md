@@ -11,6 +11,15 @@ campos, ações, permissões, validações e textos, mas renderizar com widgets
 nativos. O contrato funcional está em
 `docs/planning/WEB_GTK_SHARED_CONTRACT.md`.
 
+**Regra de produto (2026-11-15):** toda funcionalidade que existe no site deve
+existir no GTK, e vice-versa. A única diferença permitida entre as superfícies é
+o papel administrativo. Exceção explícita, por usuário: uma conta pode ser
+configurada como **admin apenas no GTK**; na web a mesma conta é funcionário.
+Essa exceção é uma configuração do usuário, resolvida no servidor a partir do
+cliente autenticado (ver
+[`planning/CLIENT_GRANTS_AND_CAPABILITIES.md`](planning/CLIENT_GRANTS_AND_CAPABILITIES.md)),
+nunca um `if` de interface.
+
 Papéis atuais:
 
 | Papel | Onde entra hoje | Pode |
