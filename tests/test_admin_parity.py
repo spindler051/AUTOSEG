@@ -4,6 +4,7 @@ import os
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,6 +43,10 @@ def csrf(html):
 
 class AdminParityTest(unittest.TestCase):
     def setUp(self):
+        # Provider-only fixture predates unified accounts: opt into rollback.
+        flag_patch = patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'})
+        flag_patch.start()
+        self.addCleanup(flag_patch.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix='admin_parity_')
         self.old_base = os.environ.get('AUTOSEG_BASE')
         os.environ['AUTOSEG_BASE'] = self.tmp.name

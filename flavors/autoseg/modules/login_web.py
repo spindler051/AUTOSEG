@@ -1,7 +1,7 @@
 """Unified login adapter; route dispatch and presentation remain at the web edge."""
 from __future__ import annotations
 
-from flavors.autoseg.modules import auth, login_flags, web_cookie, web_session, officina_web
+from flavors.autoseg.modules import auth, web_cookie, web_session, officina_web
 
 
 def render_login(handler, error: str = "", identifier: str = "") -> None:
@@ -31,8 +31,7 @@ def authenticate_and_create(
 
 
 def unified_session(handler, banco) -> web_session.SessionData | None:
-    if not login_flags.unified_login_enabled(banco):
-        return None
+    # The fallback flag controls NEW login, not existing unified cookie validity.
     token = web_cookie.token_from_headers(handler.headers)
     if not token:
         return None

@@ -128,9 +128,11 @@ class LoginCompatHttpTest(unittest.TestCase):
         return cookie
 
     def _legacy_cookie(self, identifier, password):
-        status, headers, _body = _request(
-            _browser(follow=False), self.base, '/login',
-            {'email': identifier, 'senha': password})
+        # Only the explicit rollback flag creates a new provider legacy session.
+        with _flag('0'):
+            status, headers, _body = _request(
+                _browser(follow=False), self.base, '/login',
+                {'email': identifier, 'senha': password})
         self.assertEqual(303, status)
         cookie = _cookie(headers, 'autosseg_session')
         self.assertIsNotNone(cookie)
@@ -263,10 +265,10 @@ class LoginCompatHttpTest(unittest.TestCase):
         self.assertIsNotNone(session)
         self.assertEqual('admin', session.principal.role)
 
-    def test_flag_off_ignores_unified_cookie(self):
+    def test_explicit_rollback_keeps_existing_unified_cookie(self):
         cookie = self._unified_cookie(
             'provider@example.test', self.provider_password)
-        with _flag(''):
+        with _flag('0'):
             status, _headers, body = _request(
                 _browser(follow=False), self.base, '/login')
             self.assertEqual(200, status)
@@ -276,10 +278,9 @@ class LoginCompatHttpTest(unittest.TestCase):
                 _browser(), self.base, '/',
                 headers={'Cookie': cookie})
         self.assertEqual(200, status)
-        self.assertIn('action="/login"', body)
-        self.assertNotIn('Visão geral', body)
+        self.assertIn('Visão geral', body)
 
-    def test_flag_on_legacy_login_and_client_auth_unchanged(self):
+    def test_explicit_rollback_provider_login_and_client_auth_unchanged(self):
         cookie = self._legacy_cookie(
             'provider@example.test', self.provider_password)
         self.assertIsNotNone(cookie)

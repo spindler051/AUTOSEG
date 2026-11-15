@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import types
+from unittest.mock import patch
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,6 +40,7 @@ def schema(db):
         """)
 
 
+@patch.dict('os.environ', {'AUTOSEG_UNIFIED_LOGIN': '0'})
 def run():
     with tempfile.TemporaryDirectory(prefix='autosseg_v4_') as tmp:
         banco=str(Path(tmp)/'teste.db')

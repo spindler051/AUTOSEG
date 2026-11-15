@@ -50,17 +50,17 @@ class LoginFlagsTests(unittest.TestCase):
             db.execute("INSERT INTO login_policy VALUES (1, ?, 12, 1, '')",
                        (policy,))
 
-    def test_default_disabled(self):
+    def test_default_enabled(self):
         with patch.dict(os.environ, {}, clear=True):
-            self.assertFalse(login_flags.unified_login_enabled())
+            self.assertTrue(login_flags.unified_login_enabled())
 
     def test_enabled_values(self):
-        for value in ("1", "true", "on", "yes", "TrUe", " YES "):
+        for value in ("1", "true", "on", "yes", "TrUe", " YES ", "", "banana"):
             with self.subTest(value=value), patch.dict(os.environ, {"AUTOSEG_UNIFIED_LOGIN": value}):
                 self.assertTrue(login_flags.unified_login_enabled())
 
     def test_disabled_values(self):
-        for value in ("0", "false", "off", "", "banana"):
+        for value in ("0", "false", "off", "no", " FALSE ", " No "):
             with self.subTest(value=value), patch.dict(os.environ, {"AUTOSEG_UNIFIED_LOGIN": value}):
                 self.assertFalse(login_flags.unified_login_enabled())
 

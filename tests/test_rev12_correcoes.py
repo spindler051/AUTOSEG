@@ -90,6 +90,10 @@ class _SemRedirecionar(urllib.request.HTTPRedirectHandler):
 
 class CorrecoesRev12(unittest.TestCase):
     def setUp(self):
+        # Legacy-only fixtures need explicit provider login fallback.
+        flag_patch = mock.patch.dict(os.environ, {'AUTOSEG_UNIFIED_LOGIN': '0'})
+        flag_patch.start()
+        self.addCleanup(flag_patch.stop)
         self.tmp = tempfile.TemporaryDirectory(prefix='autoseg_correcoes_')
         self.dir = Path(self.tmp.name)
         self.db = str(self.dir / 'teste.db')

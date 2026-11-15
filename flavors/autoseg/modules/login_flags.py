@@ -1,4 +1,4 @@
-"""Read-only readiness checks for the opt-in unified login rollout."""
+"""Read-only readiness checks for unified login and temporary rollback."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 COOKIE_NAME = "autosseg_unified"
-_TRUE_VALUES = frozenset(("1", "true", "on", "yes"))
+_FALSE_VALUES = frozenset(("0", "false", "off", "no"))
 _DEFAULT_TYPES = ("email", "cpf")
 _SUPPORTED_TYPES = frozenset(("email", "cpf", "phone", "nametag"))
 _REQUIRED_TABLES = frozenset((
@@ -17,8 +17,12 @@ _REQUIRED_TABLES = frozenset((
 
 
 def unified_login_enabled(banco=None) -> bool:
-    """Return whether unified login was explicitly enabled in the environment."""
-    return str(os.environ.get("AUTOSEG_UNIFIED_LOGIN", "")).strip().lower() in _TRUE_VALUES
+    """Unified login is default; explicit false restores provider-only legacy login.
+
+    TODO(next release): remove the AUTOSEG_UNIFIED_LOGIN rollback flag after W1
+    is stable and the provider recovery path has a separate design.
+    """
+    return str(os.environ.get("AUTOSEG_UNIFIED_LOGIN", "")).strip().lower() not in _FALSE_VALUES
 
 
 def _read_only_connection(banco):
