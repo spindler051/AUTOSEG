@@ -8,9 +8,13 @@
 
 ## Artwork
 
-The current icon is **hand-made in Blender**, exported as
-2048×2048 PNG on 2026-11-14. It replaced the previous AI-generated icon, which
-was rejected on visual grounds.
+The current icon is **hand-made in Blender**, re-exported as
+2048×2048 PNG on 2026-11-15. It replaces the previous hand-made render and the
+earlier AI-generated icon, which were rejected on visual grounds.
+
+The square banners exported in the same session are design assets, not this
+horizontal `logo.png`; they stay outside the repository until a layout uses
+them.
 
 The Blender source is **intentionally not versioned**: `.blend`/`.blend1` are in
 `.gitignore` because the file is large and binary. Keep the project with the
