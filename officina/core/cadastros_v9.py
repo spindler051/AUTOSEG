@@ -712,13 +712,17 @@ def mesclar_organizacoes(banco,origem,destino,autor):
                   (b['cliente_id'],origem,'Mesclagem',f'{origem} -> {destino}',autor,ext.agora()))
         return destino
 
-def mesclar_clientes(banco, origem_id, destino_id, autor):
+def mesclar_clientes(banco, origem_id, destino_id, *, principal=None):
     """Mescla dois cadastros de cliente, movendo OS/financeiro e inativando a origem."""
-    origem_id=int(origem_id); destino_id=int(destino_id)
-    if origem_id==destino_id:
-        raise ValueError('Escolha dois clientes diferentes.')
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        admin_id=require_admin_locked(c, principal)
+        # The actor is the authenticated admin, never a caller-supplied string.
+        autor=c.execute('SELECT nome FROM prestadores WHERE id=?', (admin_id,)).fetchone()['nome']
+        origem_id=int(origem_id); destino_id=int(destino_id)
+        if origem_id==destino_id:
+            raise ValueError('Escolha dois clientes diferentes.')
         a=c.execute('SELECT * FROM clientes WHERE id=?',(origem_id,)).fetchone()
         b=c.execute('SELECT * FROM clientes WHERE id=?',(destino_id,)).fetchone()
         if not a or not b:
@@ -754,9 +758,13 @@ def mesclar_clientes(banco, origem_id, destino_id, autor):
         return destino_id
 
 
-def desativar_cliente(banco,cliente_id,autor):
+def desativar_cliente(banco,cliente_id,*,principal=None):
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        admin_id=require_admin_locked(c, principal)
+        # The actor is the authenticated admin, never a caller-supplied string.
+        autor=c.execute('SELECT nome FROM prestadores WHERE id=?', (admin_id,)).fetchone()['nome']
         cl=c.execute('SELECT nome FROM clientes WHERE id=?',(cliente_id,)).fetchone()
         if not cl:raise ValueError('Cliente não encontrado.')
         c.execute("UPDATE clientes SET status='Inativo' WHERE id=?",(cliente_id,))

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from flavors.autoseg.modules import solicitacoes_pj as pj
+from officina.application.object_policy import Principal
 from officina.core import cadastros_v9 as cad, prestadores_ext as ext
 from officina.core.banco import criar_banco
 
@@ -42,11 +43,18 @@ class PjDecisionAuthorizationA5cTest(unittest.TestCase):
                     snapshot[name] = [tuple(row) for row in c.execute(f'SELECT * FROM {name} ORDER BY rowid')]
             return snapshot
 
+    def _principal(self, pid):
+        if pid is None:
+            return None
+        role = 'admin' if pid == self.admin else 'employee'
+        return Principal(pid, role, organization_id='autoseg', provider_id=pid)
+
     def _decide(self, decision, actor):
+        principal = self._principal(actor)
         if decision == 'accept':
-            return pj.aceitar(self.db, self.request_id, ator='Displayed Name', prestador_id=actor)
+            return pj.aceitar(self.db, self.request_id, ator='Displayed Name', principal=principal)
         return pj.recusar(self.db, self.request_id, 'Request is not applicable',
-                         ator='Displayed Name', prestador_id=actor)
+                         ator='Displayed Name', principal=principal)
 
     def _denied_unchanged(self, decision, actor):
         before = self._snapshot()

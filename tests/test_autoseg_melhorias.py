@@ -66,8 +66,12 @@ class AutoSegMelhorias(unittest.TestCase):
             self.assertIsNone(c.execute('SELECT cliente_id FROM v9_organizacoes WHERE id=?',(org,)).fetchone()[0])
 
     def test_exclusao_sem_os_e_protecao_de_historico(self):
+        from officina.application.object_policy import Principal
+        admin_id=ext.cadastrar(self.db,'Admin exclusão','admin-exclusao@invalid.test','Pass12345678')
+        cad.definir_admin(self.db,admin_id,True)
+        actor=Principal(admin_id,'admin',organization_id='autoseg',provider_id=admin_id)
         cid=neg.cliente_salvar(self.db,self.dados_cliente('Condomínio Provisório'),0)
-        neg.cliente_excluir(self.db,cid,0)
+        neg.cliente_excluir(self.db,cid,admin_id,principal=actor)
         with ext.db(self.db) as c:
             self.assertFalse(c.execute('SELECT 1 FROM clientes WHERE id=?',(cid,)).fetchone())
             self.assertFalse(c.execute('SELECT 1 FROM v9_organizacoes WHERE cliente_id=?',(cid,)).fetchone())
@@ -75,7 +79,7 @@ class AutoSegMelhorias(unittest.TestCase):
         with ext.db(self.db) as c:
             c.execute("INSERT INTO ordens_servico(numero_os,cliente_id,status) VALUES('OS-0001',?,'Pendente')",(cid,))
         with self.assertRaisesRegex(ValueError,'OS vinculada'):
-            neg.cliente_excluir(self.db,cid,0)
+            neg.cliente_excluir(self.db,cid,admin_id,principal=actor)
 
     def test_solicitacao_cliente_vira_os_pendente_idempotente(self):
         uid=0

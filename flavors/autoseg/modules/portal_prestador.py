@@ -4571,7 +4571,8 @@ class PortalPrestador:
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='excluir':
                         if not s.get('admin'):
                             raise PermissionError('Somente administradores podem excluir clientes.')
-                        neg.cliente_excluir(banco,int(partes[1]),pid)
+                        neg.cliente_excluir(banco,int(partes[1]),pid,
+                                            principal=os_commands._provider_context(banco,s))
                         return self.redir('/clientes')
                     if len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='mesclar':
                         if not s.get('admin'):
@@ -4580,15 +4581,16 @@ class PortalPrestador:
                             destino=int(str(d.get('destino_id','')).strip())
                         except (TypeError,ValueError):
                             raise ValueError('Escolha o cliente de destino.') from None
-                        cad9.mesclar_clientes(banco,int(partes[1]),destino,str(s['nome']))
+                        cad9.mesclar_clientes(banco,int(partes[1]),destino,
+                                             principal=os_commands._provider_context(banco,s))
                         return self.redir(f'/clientes/{destino}')
                     if len(partes)==3 and partes[0]=='pj-publicas' and partes[1].isdigit() and partes[2] in ('aceitar','recusar'):
                         if not s.get('admin'): raise PermissionError('Somente administradores podem verificar solicitações PJ.')
                         sid=int(partes[1])
                         if partes[2]=='aceitar':
-                            resultado=pj_publico.aceitar(banco,sid,ator=s['nome'],prestador_id=pid)
+                            resultado=pj_publico.aceitar(banco,sid,ator=s['nome'],principal=os_commands._provider_context(banco,s))
                             return self.redir(f'{url_os(banco, resultado["os_id"])}')
-                        pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'],prestador_id=pid)
+                        pj_publico.recusar(banco,sid,str(d.get('motivo','')),ator=s['nome'],principal=os_commands._provider_context(banco,s))
                         return self.redir('/pj-publicas')
                     if path.startswith('/financeiro/maf-'):
                         with ext.db(banco) as c:

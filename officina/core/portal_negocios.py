@@ -127,9 +127,11 @@ def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
     return cid
 
 
-def cliente_excluir(banco,cid,pid):
+def cliente_excluir(banco,cid,pid,*,principal=None):
+    from officina.application.work_item_access import require_admin_locked
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
+        pid = require_admin_locked(c, principal)
         row=c.execute('SELECT nome FROM clientes WHERE id=?',(cid,)).fetchone()
         if not row: raise ValueError('Cliente inexistente.')
         if c.execute('SELECT 1 FROM ordens_servico WHERE cliente_id=?',(cid,)).fetchone():

@@ -311,13 +311,13 @@ class ReadAuthorizationTest(unittest.TestCase):
                              {'csrf':token_admin})
             self.assertEqual(status,200)
             approve.assert_called_once()
-            self.assertEqual(approve.call_args.kwargs['prestador_id'],self.admin)
+            self.assertEqual(approve.call_args.kwargs['principal'].provider_id,self.admin)
         with patch.object(portal_prestador.pj_publico,'recusar') as deny:
             status,_=request(self.browsers['admin'],self.base,'/pj-publicas/1/recusar',
                              {'csrf':token_admin,'motivo':'Invalid'})
             self.assertEqual(status,200)
             deny.assert_called_once()
-            self.assertEqual(deny.call_args.kwargs['prestador_id'],self.admin)
+            self.assertEqual(deny.call_args.kwargs['principal'].provider_id,self.admin)
 
     def test_z_claim_from_reduced_view(self):
         status,html=self.http('first','/os/SHARED-RD-5')

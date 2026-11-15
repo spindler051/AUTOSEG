@@ -523,12 +523,15 @@ class LocalService:
             return None
         return self._cliente(registro)
 
-    def desativar_cliente(self, cliente_id: int, motivo: str = '') -> None:
-        cad9.desativar_cliente(self.banco, int(cliente_id),
-                               motivo or 'Desktop AUTOSEG')
+    def desativar_cliente(self, cliente_id: int, motivo: str = '', *, principal=None) -> None:
+        # `motivo` stays in the transport contract; the history records the
+        # authenticated administrator, not a caller-supplied string.
+        cad9.desativar_cliente(self.banco, int(cliente_id), principal=principal)
 
-    def excluir_cliente(self, cliente_id: int) -> None:
-        neg.cliente_excluir(self.banco, int(cliente_id), 0)
+    def excluir_cliente(self, cliente_id: int, *, principal=None) -> None:
+        neg.cliente_excluir(self.banco, int(cliente_id),
+                            principal.provider_id if principal is not None else None,
+                            principal=principal)
 
     def definir_senha_cliente(self, cliente_id: int, senha: str | None = None) -> str:
         return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha)
