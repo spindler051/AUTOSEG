@@ -41,6 +41,7 @@ Não são compromissos nem autorização de implementação. A ordem prática es
 - [Cliente no GTK — peça 6.5](planning/GTK_CLIENT_MODE.md) — análise das lacunas, MVP remote-only e critérios de aceite; planejado, não implementado.
 - [Prompt — outbox como único caminho de e-mail](planning/PROMPT_P0_AUTH_OUTBOX_ONLY.md) — próxima fatia do P0-AUTH, sem fallback legado.
 - [Contrato compartilhado entre site e GTK](planning/WEB_GTK_SHARED_CONTRACT.md) — mesma tela/comando/permissão, renderização nativa em cada plataforma; documentação, não implementado.
+- [Seções, ordem e GNOME HIG](planning/SURFACE_SECTIONS_AND_HIG.md) — uma tabela única de seções para web e GTK, mesma ordem e visibilidade resolvidas no servidor, checklist HIG e fases A/B/C; planejamento.
 - [Surface registry](planning/SURFACE_REGISTRY.md) — uma tabela de ações (id, permissão, handler, contrato de entrada/saída) que serve de base para o contrato GTK/site, para os testes de autorização gerados e para dividir o portal_prestador; fase 0 sem mudança de comportamento.
 - [Client grants and capabilities](planning/CLIENT_GRANTS_AND_CAPABILITIES.md) — autoridade como concessão da sessão por cliente (gtk/web/api), com teto por cliente, papéis como pacotes e override por conta; substitui “papel por superfície”.
 - [Valor negociado na OS](planning/OS_NEGOTIATED_VALUE_UX.md) — checkbox, valor final e desconto explícito no relatório; proposta, não implementado.

@@ -91,6 +91,10 @@ Não existe segunda origem do cliente.
 Ligar `policy.yaml` ao `AppService` e aplicar AUT-001 a AUT-021 no servidor,
 fechando o gate P0 de autorização por objeto.
 
+**Ordem e visibilidade das seções:** o contrato único (web + GTK), a checklist
+GNOME HIG e as fases A/B/C estão em
+[`planning/SURFACE_SECTIONS_AND_HIG.md`](planning/SURFACE_SECTIONS_AND_HIG.md).
+
 **Login de cliente no GTK:** planejado como peça **6.5**, remote-only, depois
 desse gate. Faltam login desktop de cliente, sessão genérica, endpoints
 client-safe, navegação reduzida e testes negativos. Ver
