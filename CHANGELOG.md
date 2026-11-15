@@ -1,5 +1,15 @@
 # AUTOSEG — Changelog
 
+## Branding — 2026-11-15
+
+- Replaced the MAIN and DEV application icons with the hand-made Blender
+  artwork (2048x2048 PNG, 2026-11-14); the previous AI-generated icon was
+  retired. The Blender source is intentionally not versioned (`.blend` is
+  ignored); only the exported PNGs live in `flavors/autoseg/branding/`.
+- Documented the branding files and their resolution paths in
+  `flavors/autoseg/branding/README.md`. No code, schema or flag change.
+
+
 ## 9.6.0-dev.73 — preparação da primeira publicação pública — 2026-11-09 — develop
 
 - **Documentação — site único:** auditoria do estado atual e arquitetura-alvo de conta/vínculo, prestadora/tenant, política por objeto e OS anônima. O AUTOSEG é a primeira prestadora de serviço do ecossistema Officina; site e GTK atuais são as sementes do Officina Web/GTK. Sem mudança de código nesta fase. Ver `docs/planning/UNIFIED_SITE_AND_OBJECT_PERMISSIONS.md` e `docs/planning/OFFICINA_WEB_AND_GTK.md`.
