@@ -93,7 +93,11 @@ def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         anterior=None
-        if cliente_id is not None:
+        if cliente_id is None:
+            from officina.application.work_item_access import require_customer_create_locked
+            require_customer_create_locked(c, principal)
+            pid = principal.provider_id
+        else:
             from officina.application.work_item_access import require_customer_write_locked
             require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()

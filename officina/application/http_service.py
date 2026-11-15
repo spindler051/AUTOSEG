@@ -482,6 +482,10 @@ class HttpService(AppService):
     def excluir_cliente(self, cliente_id: int) -> None:
         self._post(f'/api/v1/desktop/clientes/{int(cliente_id)}/excluir')
 
+    def mesclar_clientes(self, origem_id: int, destino_id: int) -> None:
+        self._post(f'/api/v1/desktop/clientes/{int(origem_id)}/mesclar',
+                   {'destino_id': int(destino_id)})
+
     def definir_senha_cliente(self, cliente_id: int,
                               senha: str | None = None) -> str:
         resposta = self._post(

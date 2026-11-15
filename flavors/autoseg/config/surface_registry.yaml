@@ -10,7 +10,7 @@ actions:
     family: customer
     risk: normal
     affordance: absent
-    state: known_gap
+    state: active
     service: officina.core.portal_negocios.cliente_salvar
     variant: create
     required_params: [banco, d, pid]
@@ -128,7 +128,7 @@ actions:
     family: customer
     risk: destructive
     affordance: confirm
-    state: known_gap
+    state: active
     service: officina.core.cadastros_v9.mesclar_clientes
     required_params: [banco, origem_id, destino_id, principal]
     capability: null
@@ -138,8 +138,10 @@ actions:
     web_markers:
       - "partes[2]=='mesclar'"
       - 'action="/clientes/{cid}/mesclar"'
-    api_markers: []  # No desktop API or GTK merge operation in phase 0A inventory.
-    gtk_markers: []
+    api_markers:
+      - "if resto == ['mesclar'] and metodo == 'POST':"
+    gtk_markers:
+      - 'ui.botao("Mesclar cliente", self._mesclar_cliente,'
     source_markers:
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: "if s.get('admin'):"
@@ -147,9 +149,12 @@ actions:
         contains: "admin_id=require_admin_locked(c, principal)"
     negative_tests:
       - tests/test_p0_customer_destructive_a5b2.py
+      - tests/test_p3_234_customer_security.py
     negative_markers:
       - file: tests/test_p0_customer_destructive_a5b2.py
         contains: "def test_employee_cannot_deactivate_delete_or_merge(self):"
+      - file: tests/test_p3_234_customer_security.py
+        contains: "def test_employee_merge_denied_without_mutation(self):"
 
   - id: customer.password
     family: customer

@@ -38,6 +38,11 @@ class LocalServiceClientTest(unittest.TestCase):
         banco.criar_banco(self.db)
         ext.instalar(self.db)
         cad9.instalar(self.db)
+        from officina.application.object_policy import Principal
+        pid = ext.cadastrar(self.db, 'Fixture creator',
+                            'app-service-fixture@invalid.test', 'Pass12345678')
+        self.actor = Principal(pid, 'employee', organization_id='autoseg',
+                               provider_id=pid)
         self.service = LocalService(self.db)
 
     def tearDown(self):
@@ -51,7 +56,7 @@ class LocalServiceClientTest(unittest.TestCase):
             'status': 'Ativo',
         }
         base.update(dados)
-        return self.service.salvar_cliente(None, base)
+        return self.service.salvar_cliente(None, base, principal=self.actor)
 
     def test_health_reports_local_mode(self):
         info = self.service.health()

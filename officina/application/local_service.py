@@ -533,6 +533,10 @@ class LocalService:
                             principal.provider_id if principal is not None else None,
                             principal=principal)
 
+    def mesclar_clientes(self, origem_id: int, destino_id: int, *, principal=None) -> None:
+        cad9.mesclar_clientes(self.banco, int(origem_id), int(destino_id),
+                             principal=principal)
+
     def definir_senha_cliente(self, cliente_id: int, senha: str | None = None, *, principal=None) -> str:
         return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha, principal=principal)
 
@@ -719,11 +723,19 @@ class LocalService:
         cad9.definir_admin(self.banco, int(prestador_id), bool(ativo))
 
     def salvar_cliente(
-        self, cliente_id: int | None, dados: Mapping[str, Any]
+        self, cliente_id: int | None, dados: Mapping[str, Any], *, principal=None
     ) -> Cliente:
         try:
-            registro = clientes_core.salvar(
-                cliente_id, dict(dados), banco=self.banco)
+            if cliente_id is None:
+                from officina.application.work_item_access import require_customer_create_locked
+                with ext.db(self.banco) as connection:
+                    connection.execute('BEGIN IMMEDIATE')
+                    require_customer_create_locked(connection, principal)
+                    registro = clientes_core.salvar(
+                        cliente_id, dict(dados), banco=self.banco, connection=connection)
+            else:
+                registro = clientes_core.salvar(
+                    cliente_id, dict(dados), banco=self.banco)
         except clientes_core.ErroCliente as erro:
             raise ValidacaoError(str(erro), erro.titulo) from erro
         except WorkaholicConflictError as erro:

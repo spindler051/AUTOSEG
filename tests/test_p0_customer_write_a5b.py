@@ -167,7 +167,8 @@ class CustomerWriterTransactionTest(unittest.TestCase):
 
     def test_creation_remains_possible_without_existing_os(self):
         access.require_customer_create(self.owner_actor)
-        created=neg.cliente_salvar(self.db,{'tipo_pessoa':'Física','nome':'New A5b','status':'Ativo'},self.owner)
+        created=neg.cliente_salvar(self.db,{'tipo_pessoa':'Física','nome':'New A5b','status':'Ativo'},
+                                  self.owner,principal=self.owner_actor)
         with ext.db(self.db) as c:
             self.assertEqual(c.execute('SELECT nome FROM clientes WHERE id=?',(created,)).fetchone()[0],
                              'New A5b')
