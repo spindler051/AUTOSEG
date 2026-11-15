@@ -26,10 +26,7 @@ BASELINE = 'flavors/autoseg/config/surface_divergence_baseline.json'
 REPORT = 'docs/planning/SURFACE_DIVERGENCE_REPORT.md'
 SCRIPT = ROOT / 'scripts/surface_divergence.py'
 
-EXPECTED_FINDINGS = {
-    'customer.list:gtk_local:read_scope_divergence': 'medium',
-    'customer.detail:gtk_local:read_scope_divergence': 'medium',
-}
+EXPECTED_FINDINGS = {}
 
 
 def document():
@@ -147,19 +144,18 @@ class SurfaceDivergenceTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn('NEW customer.deactivate:web:missing_surface', result.stderr)
 
-    def test_10_cli_check_detects_baselined_disappearance(self):
-        with tempfile.TemporaryDirectory(prefix='phase1_resolved_') as temp:
+    def test_10_cli_check_detects_new_gtk_marker_gap_after_parity(self):
+        with tempfile.TemporaryDirectory(prefix='phase3_new_') as temp:
             dest = Path(temp)
             fixture_tree(dest)
-            path = dest / 'officina/application/local_service.py'
-            source = path.read_text(encoding='utf-8')
-            anchor = 'clientes_core.listar('
-            self.assertIn(anchor, source)
-            path.write_text(source.replace(anchor, 'clientes_core.listar_paginado(', 1),
-                            encoding='utf-8')
+            path = dest / REGISTRY
+            data = yaml.safe_load(path.read_text(encoding='utf-8'))
+            detail = next(item for item in data['actions'] if item['id'] == 'customer.detail')
+            detail['gtk_markers'] = ['__missing_phase36_gtk_marker__']
+            path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding='utf-8')
             result = cli(dest, '--check')
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn('RESOLVED customer.list:gtk_local:read_scope_divergence', result.stderr)
+            self.assertIn('NEW customer.detail:gtk:missing_surface', result.stderr)
 
     def test_11_gtk_markers_are_real_and_merge_is_exposed(self):
         app = (ROOT / GTK[0]).read_text(encoding='utf-8')

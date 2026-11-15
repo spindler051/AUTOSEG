@@ -513,15 +513,13 @@ class LocalService:
         from officina.application.desktop_context import contexto_movimento_empresa
         return contexto_movimento_empresa(self.banco)
 
-    def listar_clientes(self, termo: str = '') -> list[ClienteResumo]:
-        return [self._resumo(registro)
-                for registro in clientes_core.listar(termo, banco=self.banco)]
+    def listar_clientes(self, termo: str = '', *, principal=None) -> list[ClienteResumo]:
+        from officina.application.customer_reads import listar_clientes_scoped
+        return listar_clientes_scoped(self.banco, principal, termo)
 
-    def obter_cliente(self, cliente_id: int) -> Cliente | None:
-        registro = clientes_core.obter(cliente_id, banco=self.banco)
-        if registro is None:
-            return None
-        return self._cliente(registro)
+    def obter_cliente(self, cliente_id: int, *, principal=None) -> Cliente | None:
+        from officina.application.customer_reads import obter_cliente_scoped
+        return obter_cliente_scoped(self.banco, principal, cliente_id)
 
     def desativar_cliente(self, cliente_id: int, motivo: str = '', *, principal=None) -> None:
         # `motivo` stays in the transport contract; the history records the
@@ -734,8 +732,28 @@ class LocalService:
                     registro = clientes_core.salvar(
                         cliente_id, dict(dados), banco=self.banco, connection=connection)
             else:
-                registro = clientes_core.salvar(
-                    cliente_id, dict(dados), banco=self.banco)
+                from officina.application import work_item_access as access
+                with ext.db(self.banco) as connection:
+                    connection.execute('BEGIN IMMEDIATE')
+                    access.require_customer_write_locked(connection, principal, int(cliente_id))
+                    current = connection.execute('SELECT * FROM clientes WHERE id=?',
+                                                 (int(cliente_id),)).fetchone()
+                    if current is None:
+                        raise ValueError('Cliente não encontrado.')
+                    if access.can_read_all(principal, 'customer'):
+                        payload = dict(dados)
+                    else:
+                        allowed = access.involved_customer_field_scopes(principal)
+                        editable = {'nome', 'status'} | {
+                            field for field in ('documento', 'telefone', 'email', 'cidade', 'endereco')
+                            if (field if field != 'cidade' else 'endereco') in allowed}
+                        payload = {field: current[field] for field in clientes_core.CAMPOS
+                                   if field != 'dados_incompletos'}
+                        for field, value in dados.items():
+                            if field in editable:
+                                payload[field] = value
+                    registro = clientes_core.salvar(
+                        cliente_id, payload, banco=self.banco, connection=connection)
         except clientes_core.ErroCliente as erro:
             raise ValidacaoError(str(erro), erro.titulo) from erro
         except WorkaholicConflictError as erro:

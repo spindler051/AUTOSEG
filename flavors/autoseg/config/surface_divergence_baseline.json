@@ -1,13 +1,4 @@
 {
   "version": 1,
-  "accepted": [
-    {
-      "id": "customer.detail:gtk_local:read_scope_divergence",
-      "justification": "GTK local detail uses generic client lookup; Web/API require scoped access."
-    },
-    {
-      "id": "customer.list:gtk_local:read_scope_divergence",
-      "justification": "GTK local list reads clients via generic LocalService; Web/API use scoped views."
-    }
-  ]
+  "accepted": []
 }

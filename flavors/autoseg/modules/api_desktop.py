@@ -333,15 +333,8 @@ def _minimal_providers(banco):
 
 
 def _scoped_customer_list(banco, principal, termo=''):
-    if access.can_read_all(principal, 'customer'):
-        return LocalService(banco).listar_clientes(termo)
-    allowed = access.involved_customer_field_scopes(principal)
-    _, rows = clientes_core.listar_paginado(termo, limite=1000, banco=banco,
-                  provider_id=principal.provider_id, allowed_fields=allowed)
-    return [ClienteResumo(id=int(row['id']), nome=str(row['nome'] or ''),
-              documento=str(row['documento'] or ''), cidade=str(row['cidade'] or ''),
-              telefone=str(row['telefone'] or ''), status=str(row['status'] or ''),
-              incompleto=bool(row['dados_incompletos'])) for row in rows]
+    from officina.application.customer_reads import listar_clientes_scoped
+    return listar_clientes_scoped(banco, principal, termo)
 
 
 def _scoped_customer_os_count(banco, principal, customer_id):
@@ -358,24 +351,8 @@ def _scoped_customer_os_count(banco, principal, customer_id):
 
 def _scoped_customer_detail(banco, principal, customer_id):
     _require_customer(banco, principal, customer_id)
-    if access.can_read_all(principal, 'customer'):
-        return LocalService(banco).obter_cliente(customer_id)
-    allowed = access.involved_customer_field_scopes(principal)
-    with ext.db(banco) as c:
-        columns = ['id', 'nome', 'status', 'versao', 'dados_incompletos'] + [field for field in
-                   ('documento','telefone','email','cidade','endereco')
-                   if (field if field != 'cidade' else 'endereco') in allowed]
-        row = c.execute('SELECT '+','.join(columns)+""" FROM clientes WHERE id=? AND EXISTS (
-            SELECT 1 FROM ordens_servico os WHERE os.cliente_id=clientes.id
-              AND (EXISTS (SELECT 1 FROM os_responsaveis r WHERE r.os_id=os.id AND r.prestador_id=?)
-                OR EXISTS (SELECT 1 FROM os_prestadores p WHERE p.os_id=os.id AND p.prestador_id=? AND p.ativo=1)))""",
-            (customer_id, principal.provider_id,principal.provider_id)).fetchone()
-    if row is None:
-        _hidden_resource()
-    return Cliente(id=int(row['id']), versao=int(row['versao'] or 1),
-                  campos={key:row[key] for key in row.keys()
-                          if key not in ('id','versao','dados_incompletos')},
-                  incompleto=bool(row['dados_incompletos']))
+    from officina.application.customer_reads import obter_cliente_scoped
+    return obter_cliente_scoped(banco, principal, customer_id)
 
 
 def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
