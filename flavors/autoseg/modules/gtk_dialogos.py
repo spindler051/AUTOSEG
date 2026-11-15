@@ -1179,7 +1179,10 @@ class DialogoSenhaCliente(Adw.Dialog):
             ui.aviso_erro(self.janela, "Senha", "As duas senhas não coincidem.")
             return
         try:
-            _servico(self.janela).definir_senha_cliente(self.cliente_id, senha)
+            # Remote API authenticates its own principal; local service needs ours.
+            kwargs = ({} if self.janela.remote_mode else
+                      {'principal': self.janela._cliente_admin_actor()})
+            _servico(self.janela).definir_senha_cliente(self.cliente_id, senha, **kwargs)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Acesso do cliente", str(erro))
             return

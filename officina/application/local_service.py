@@ -533,8 +533,8 @@ class LocalService:
                             principal.provider_id if principal is not None else None,
                             principal=principal)
 
-    def definir_senha_cliente(self, cliente_id: int, senha: str | None = None) -> str:
-        return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha)
+    def definir_senha_cliente(self, cliente_id: int, senha: str | None = None, *, principal=None) -> str:
+        return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha, principal=principal)
 
     def atribuir_os(self, os_id: int, prestador_id: int, *, authorize=None) -> bool:
         return bool(ext.atribuir(self.banco, int(os_id), int(prestador_id),

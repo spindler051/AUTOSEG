@@ -525,7 +525,7 @@ def _rota_cliente_id(handler, cliente_id, resto, servico, metodo, info=None, pri
     if resto == ['senha'] and metodo == 'POST':
         _exigir_admin(info)
         servico.definir_senha_cliente(
-            cliente_id, _corpo(handler).get('senha'))
+            cliente_id, _corpo(handler).get('senha'), principal=principal)
         return _enviar(handler, 200, {'ok': True})
     raise NaoEncontradoError('Rota não encontrada.')
 

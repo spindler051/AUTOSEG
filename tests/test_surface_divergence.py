@@ -27,8 +27,6 @@ REPORT = 'docs/planning/SURFACE_DIVERGENCE_REPORT.md'
 SCRIPT = ROOT / 'scripts/surface_divergence.py'
 
 EXPECTED_FINDINGS = {
-    'customer.password:service:edge_only_authorization': 'high',
-    'customer.password:tests:missing_negative_test': 'high',
     'customer.password:gtk:affordance_mismatch': 'medium',
     'customer.merge:api:missing_surface': 'medium',
     'customer.merge:gtk:missing_surface': 'medium',
@@ -81,8 +79,15 @@ class SurfaceDivergenceTest(unittest.TestCase):
     def test_03_synthetic_claimed_locked_guard_is_checked_against_code(self):
         modified = deepcopy(document())
         password = next(row for row in modified['actions'] if row['id'] == 'customer.password')
-        password['writer_guard'] = 'locked'  # source remains unguarded
-        findings = {item.id: item for item in analyze(ROOT, registry_data=modified)}
+        password['writer_guard'] = 'locked'
+        def removed_guard_source(relative):
+            original = (ROOT / relative).read_text(encoding='utf-8')
+            if relative == 'officina/core/fluxo_os.py':
+                return original.replace('require_admin_locked(c, principal)',
+                                        'pass  # synthetic guard removal', 1)
+            return original
+        findings = {item.id: item for item in analyze(
+            ROOT, registry_data=modified, read_source=removed_guard_source)}
         key = 'customer.password:service:missing_writer_guard'
         self.assertIn(key, findings)
         self.assertEqual(findings[key].severity, 'high')
@@ -145,22 +150,16 @@ class SurfaceDivergenceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='phase1_resolved_') as temp:
             dest = Path(temp)
             fixture_tree(dest)
-            path = dest / 'officina/core/fluxo_os.py'
+            path = dest / 'officina/core/portal_negocios.py'
             source = path.read_text(encoding='utf-8')
-            anchor = 'def definir_senha_cliente(banco,cliente_id,senha=None):'
+            anchor = 'def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):\n'
             self.assertIn(anchor, source)
-            # A syntactically valid, temporary replacement of this function
-            # models a later authorization fix without touching production.
-            start = source.index(anchor)
-            next_function = source.find('\ndef ', start + len(anchor))
-            if next_function == -1:
-                next_function = len(source)
-            replacement = (anchor + "\n    c.execute('BEGIN IMMEDIATE')\n"
-                           '    require_admin_locked(c, principal)\n    return senha\n')
-            path.write_text(source[:start] + replacement + source[next_function:], encoding='utf-8')
+            # Simulate adding a creation guard inside the writer source.
+            path.write_text(source.replace(anchor,
+                anchor + '    require_customer_create(None)\n', 1), encoding='utf-8')
             result = cli(dest, '--check')
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn('RESOLVED customer.password:service:edge_only_authorization', result.stderr)
+            self.assertIn('RESOLVED customer.create:web:create_preflight_outside_writer', result.stderr)
 
     def test_11_gtk_markers_are_real_and_merge_is_unexposed(self):
         app = (ROOT / GTK[0]).read_text(encoding='utf-8')

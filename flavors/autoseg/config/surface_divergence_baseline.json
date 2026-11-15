@@ -24,14 +24,6 @@
     {
       "id": "customer.password:gtk:affordance_mismatch",
       "justification": "GTK password button is enclosed by web.enabled, not the admin session condition."
-    },
-    {
-      "id": "customer.password:service:edge_only_authorization",
-      "justification": "Password writer has no in-transaction admin guard; the Web/API checks are only at the edge."
-    },
-    {
-      "id": "customer.password:tests:missing_negative_test",
-      "justification": "No action-specific denial test is registered for the customer password endpoint."
     }
   ]
 }

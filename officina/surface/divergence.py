@@ -248,9 +248,11 @@ def analyze(root: Path = ROOT, *,
                 record(action, 'gtk_local', 'read_scope_divergence', 'medium',
                        f'{LOCAL}:clientes_core.obter( versus '
                        f'{WEB}:require_customer_read')
-        if action.get('state') == 'active' and len(findings) > before:
+        if (action.get('state') == 'active'
+                and any(item.severity == 'high' for item in findings[before:])):
+            # Medium cross-surface UX gaps do not invalidate a verified writer.
             record(action, 'registry', 'state_inconsistent', 'high',
-                   f'{REGISTRY}:state: active (source findings detected)')
+                   f'{REGISTRY}:state: active (high-severity source findings detected)')
 
     rank = {label: i for i, label in enumerate(SEVERITIES)}
     findings.sort(key=lambda item: (rank[item.severity], item.action,

@@ -51,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
         baseline = (_read_baseline(baseline_file) if baseline_file.exists() else
                     {'version': 1, 'accepted': []})
         findings = analyze(root)
+        highs = tuple(item.id for item in findings if item.severity == 'high')
+        if args.update_baseline and highs:
+            raise ValueError('HIGH findings cannot be baselined: ' + ', '.join(highs))
         if args.update_baseline:
             old = {row['id']: row['justification'] for row in baseline['accepted']}
             updated = {
@@ -79,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(f'NEW {ident}', file=sys.stderr)
                 for ident in resolved:
                     print(f'RESOLVED {ident}', file=sys.stderr)
+                return 1
+            # A hand-edited accepted baseline must never hide a high finding.
+            if highs:
+                print('HIGH FINDINGS NOT BASELINEABLE: ' + ', '.join(highs), file=sys.stderr)
                 return 1
             # Also prevent reporting obsolete findings in committed Markdown.
             if not report_file.is_file() or report_file.read_text(encoding='utf-8') != render_report(findings, baseline):
