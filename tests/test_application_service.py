@@ -166,6 +166,7 @@ class LocalServiceClientTest(unittest.TestCase):
         self.assertTrue(linhas[0].pdf_disponivel)
 
     def test_finance_slice_uses_contract_dtos(self):
+        fluxo_os.instalar(self.db)
         self.criar(nome='Alfa')
         with sqlite3.connect(self.db) as conexao:
             for numero, status, valor in (('OS-F1', 'Aguardando pagamento', 100),
@@ -177,14 +178,14 @@ class LocalServiceClientTest(unittest.TestCase):
                 conexao.execute(
                     "INSERT INTO financeiro(os_id,cliente_id,valor,status,forma_pagamento) "
                     "VALUES(?,1,?,?,'PIX')", (os_id, valor, status))
-        resumo = self.service.resumo_financeiro()
+        resumo = self.service.resumo_financeiro(principal=self.actor)
         self.assertEqual(resumo.a_receber, 100.0)
         self.assertEqual(resumo.recebido, 200.0)
-        linhas = self.service.listar_financeiro('F1')
+        linhas = self.service.listar_financeiro('F1', principal=self.actor)
         self.assertEqual([item.numero_os for item in linhas], ['OS-F1'])
-        self.service.marcar_recebido(linhas[0].id)
-        self.assertEqual(self.service.resumo_financeiro().a_receber, 0.0)
-        self.assertEqual(self.service.resumo_financeiro().recebido, 300.0)
+        self.service.marcar_recebido(linhas[0].id, principal=self.actor)
+        self.assertEqual(self.service.resumo_financeiro(principal=self.actor).a_receber, 0.0)
+        self.assertEqual(self.service.resumo_financeiro(principal=self.actor).recebido, 300.0)
 
     def test_portal_summary_and_rows_use_contract_dtos(self):
         self.criar(nome='Alfa')

@@ -412,8 +412,8 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
         _exigir_admin(info)
         return _rota_pj(handler, partes, query, servico, metodo)
     if recurso == 'financeiro':
-        _exigir_admin(info)
-        return _rota_financeiro(handler, partes, query, servico, metodo)
+        return _rota_financeiro(handler, partes, query, servico, metodo,
+                               info, principal)
     if recurso == 'portal':
         _exigir_admin(info)
         return _rota_portal(handler, partes, query, servico, metodo)
@@ -779,17 +779,28 @@ def _rota_pj_vinculos(handler, partes, servico, metodo):
     return _enviar(handler, 200, {'ok': True})
 
 
-def _rota_financeiro(handler, partes, query, servico, metodo):
+def _rota_financeiro(handler, partes, query, servico, metodo, info, principal):
+    if partes == ['financeiro', 'me'] and metodo == 'GET':
+        return _enviar(handler, 200,
+                       servico.financeiro_pessoal(principal=principal))
     if partes == ['financeiro'] and metodo == 'GET':
+        _exigir_admin(info)
         return _enviar(handler, 200, servico.listar_financeiro(
-            str(query.get('termo', [''])[0])))
+            str(query.get('termo', [''])[0]), principal=principal))
     if partes == ['financeiro', 'resumo'] and metodo == 'GET':
-        return _enviar(handler, 200, servico.resumo_financeiro())
-    if len(partes) == 3 and partes[2] == 'receber' and metodo == 'POST':
+        _exigir_admin(info)
+        return _enviar(handler, 200,
+                       servico.resumo_financeiro(principal=principal))
+    if (len(partes) == 3 and metodo == 'POST'
+            and partes[2] in ('receber', 'vencimento')):
         lancamento_id = _int(partes[1])
         if lancamento_id is None:
             raise NaoEncontradoError('Lançamento não encontrado.')
-        servico.marcar_recebido(lancamento_id)
+        if partes[2] == 'receber':
+            servico.marcar_recebido(lancamento_id, principal=principal)
+        else:
+            servico.definir_vencimento(lancamento_id,
+                str(_corpo(handler).get('vencimento') or ''), principal=principal)
         return _enviar(handler, 200, {'ok': True})
     raise NaoEncontradoError('Rota não encontrada.')
 

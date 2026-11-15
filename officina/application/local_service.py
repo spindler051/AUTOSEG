@@ -18,6 +18,7 @@ from officina.core import empresa_financeiro as empresa
 from officina.core import estoque_materiais as estoque
 from officina.core import fluxo_os as fluxo
 from officina.core import portal_negocios as neg
+from officina.core import produtividade_os as prod
 from officina.core import prestadores_ext as ext
 from officina.core.banco import BANCO
 from officina.integration import clientes as clientes_core
@@ -364,7 +365,20 @@ class LocalService:
             ) for linha in vinculos],
         )
 
-    def resumo_financeiro(self) -> ResumoFinanceiro:
+    def _require_company_finance(self, principal):
+        if self._os_read_scope(principal) is not None:
+            raise PermissionError('Financeiro da empresa restrito aos administradores.')
+
+    def financeiro_pessoal(self, *, principal=None) -> dict:
+        from officina.application.policy import load_policy
+        scope = self._os_read_scope(principal)
+        role = 'admin' if scope is None else 'employee'
+        if not load_policy().allows(role, 'finance.view.own'):
+            raise PermissionError('Financeiro pessoal indisponível.')
+        return prod.financeiro_pessoal(self.banco, principal.provider_id)
+
+    def resumo_financeiro(self, *, principal=None) -> ResumoFinanceiro:
+        self._require_company_finance(principal)
         with ext.db(self.banco) as conexao:
             linha = conexao.execute(
                 """SELECT COALESCE(SUM(CASE WHEN status='Aguardando pagamento' THEN valor ELSE 0 END),0) pendente,
@@ -376,8 +390,9 @@ class LocalService:
         )
 
     def listar_financeiro(
-        self, termo: str = ''
+        self, termo: str = '', *, principal=None
     ) -> list[LancamentoFinanceiro]:
+        self._require_company_finance(principal)
         with ext.db(self.banco) as conexao:
             registros = conexao.execute(
                 """SELECT f.id,os.numero_os,c.nome cliente,f.valor,f.forma_pagamento,
@@ -403,15 +418,16 @@ class LocalService:
             ))
         return resultado
 
-    def marcar_recebido(self, lancamento_id: int) -> None:
-        with ext.db(self.banco) as conexao:
-            cursor = conexao.execute(
-                "UPDATE financeiro SET status='Recebido',data_pagamento=? WHERE id=?",
-                (datetime.now().strftime('%d/%m/%Y'), int(lancamento_id)))
-            if cursor.rowcount != 1:
-                raise NaoEncontradoError(
-                    'Lançamento financeiro não encontrado.',
-                    'Financeiro')
+    def marcar_recebido(self, lancamento_id: int, *, principal=None) -> None:
+        self._os_read_scope(principal)
+        neg.financeiro_receber(self.banco, int(lancamento_id),
+                               principal.provider_id)
+
+    def definir_vencimento(self, lancamento_id: int, vencimento: str,
+                          *, principal=None) -> str:
+        self._os_read_scope(principal)
+        return neg.financeiro_definir_vencimento(
+            self.banco, int(lancamento_id), principal.provider_id, vencimento)
 
     def resumo_portal(self) -> ResumoPortal:
         dados = ordens_repo.resumo_portal(self.banco)

@@ -1230,30 +1230,67 @@ class Janela(Adw.ApplicationWindow):
             ("Vencimento", 100, False, 0.5),
         ])
         pagina.append(self.tabela_financeiro.widget)
-        pagina.append(ui.barra(
-            ui.botao("Marcar como recebido", self._marcar_recebido, css="suggested-action")))
+        self.botao_fin_receber = ui.botao(
+            "Marcar como recebido", self._marcar_recebido, css="suggested-action")
+        pagina.append(ui.barra(self.botao_fin_receber))
         return pagina
 
     def carregar_financeiro(self):
-        resumo = self.service.resumo_financeiro()
         termo = self.busca_financeiro.get_text().strip() if hasattr(
             self, "busca_financeiro") else ""
-        registros = self.service.listar_financeiro(termo)
-        self.cards_fin["receber"].set_text(ui.brl(resumo.a_receber))
-        self.cards_fin["recebido"].set_text(ui.brl(resumo.recebido))
-        self.tabela_financeiro.definir_linhas([
-            (r.id, r.numero_os, r.cliente, ui.brl(r.valor),
-             r.forma_pagamento, r.status, r.vencimento)
-            for r in registros
-        ])
+        kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+        global_view = bool(self.sessao and self.sessao.can('finance.view.all'))
+        if global_view:
+            resumo = self.service.resumo_financeiro(**kwargs)
+            registros = self.service.listar_financeiro(termo, **kwargs)
+            self.cards_fin['receber'].set_text(ui.brl(resumo.a_receber))
+            self.cards_fin['recebido'].set_text(ui.brl(resumo.recebido))
+            linhas = [(r.id, r.numero_os, r.cliente, ui.brl(r.valor),
+                       r.forma_pagamento, r.status, r.vencimento)
+                      for r in registros]
+        else:
+            pessoal = self.service.financeiro_pessoal(**kwargs)
+            linhas, receber, recebido = [], 0.0, 0.0
+            for item in pessoal.get('brutos_proprios', ()):
+                valor = max(0.0, float(item['valor'] or 0) -
+                            float(item['partes_centavos'] or 0) / 100)
+                pago = item['status'] == 'Recebido'
+                if pago:
+                    recebido += valor
+                else:
+                    receber += valor
+                linhas.append((int(item['financeiro_id']), item['numero_os'],
+                               item['cliente'], ui.brl(valor),
+                               item.get('forma_pagamento') or '',
+                               item['status'], item.get('vencimento') or ''))
+            for item in pessoal.get('receber_de_colegas', ()):
+                valor = float(item['valor_centavos'] or 0) / 100
+                pago = min(valor, float(item['pago_centavos'] or 0) / 100)
+                recebido += pago
+                receber += max(0, valor - pago)
+                linhas.append((-int(item['os_id']), item['numero_os'],
+                               item['cliente'], ui.brl(valor),
+                               'Repasse interno',
+                               'Recebido' if pago >= valor else 'A receber', ''))
+            self.cards_fin['receber'].set_text(ui.brl(receber))
+            self.cards_fin['recebido'].set_text(ui.brl(recebido))
+            busca = termo.casefold()
+            linhas = [row for row in linhas if not busca or
+                      busca in ' '.join(map(str, row)).casefold()]
+        self.tabela_financeiro.definir_linhas(linhas)
 
     def _marcar_recebido(self):
         valores = self.tabela_financeiro.selecionado()
         if valores is None:
             ui.aviso_erro(self, "Seleção", "Selecione um lançamento financeiro.")
             return
+        if int(valores[0]) <= 0:
+            ui.aviso_erro(self, 'Financeiro',
+                          'O recebimento de repasse é confirmado pelo técnico no portal.')
+            return
         try:
-            self.service.marcar_recebido(valores[0])
+            kwargs = {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+            self.service.marcar_recebido(valores[0], **kwargs)
         except Exception as erro:
             ui.aviso_erro(self, "Financeiro", str(erro))
             return

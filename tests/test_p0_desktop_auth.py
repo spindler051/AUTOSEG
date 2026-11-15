@@ -161,6 +161,47 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
         self.assertEqual(data['data']['financeiro_recebido'],0)
         self.assertEqual(self.request('first','/financeiro')[0],403)
 
+    def test_employee_personal_finance_cannot_mutate_foreign_payment(self):
+        from officina.core import produtividade_os as prod
+        prod.instalar(self.db)
+        with ext.db(self.db) as c:
+            c.execute("UPDATE ordens_servico SET status='Concluída' WHERE id=?",
+                      (self.own,))
+            c.execute('''INSERT INTO os_encerramentos
+                (os_id,situacao,ator,prestador_id,encerrado_em)
+                VALUES(?,'Concluída','first',?,'2026-11-14')''',
+                (self.own, self.users['first']))
+            own_fin = c.execute('''INSERT INTO financeiro
+                (os_id,cliente_id,valor,status)
+                VALUES(?,?,100,'Aguardando pagamento')''',
+                (self.own, self.own_client)).lastrowid
+            foreign_fin = c.execute('SELECT id FROM financeiro WHERE os_id=?',
+                                    (self.other,)).fetchone()[0]
+            c.execute("UPDATE financeiro SET status='Aguardando pagamento' "
+                      "WHERE id=?", (foreign_fin,))
+        status, data = self.request('first', '/financeiro/me')
+        self.assertEqual(status, 200, data)
+        body = json.dumps(data)
+        self.assertIn('A-OS', body)
+        self.assertNotIn('B-OS', body)
+        self.assertNotIn('Secret Client', body)
+        self.assertEqual(self.request('first', '/financeiro')[0], 403)
+        self.assertEqual(self.request('first', '/financeiro/resumo')[0], 403)
+        self.assertIn(self.request('first', f'/financeiro/{foreign_fin}/receber',
+                                   'POST')[0], (403,404))
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM financeiro WHERE id=?',
+                                       (foreign_fin,)).fetchone()[0], 'Aguardando pagamento')
+        status, data = self.request('first', f'/financeiro/{own_fin}/vencimento',
+                                    'POST', {'vencimento':'2026-12-15'})
+        self.assertEqual(status, 200, data)
+        status, data = self.request('first', f'/financeiro/{own_fin}/receber',
+                                    'POST')
+        self.assertEqual(status, 200, data)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM financeiro WHERE id=?',
+                                       (own_fin,)).fetchone()[0], 'Recebido')
+
     def test_remote_desktop_client_accepts_reduced_rows_without_money(self):
         client=HttpService(self.base)
         client.login('first@test.invalid','Pass12345678')

@@ -430,6 +430,9 @@ class HttpService(AppService):
                           params={'termo': termo})
         return [LancamentoFinanceiro(**item) for item in dados]
 
+    def financeiro_pessoal(self) -> dict:
+        return self._get('/api/v1/desktop/financeiro/me')
+
     def marcar_recebido(self, lancamento_id: int) -> None:
         self._post(f'/api/v1/desktop/financeiro/{int(lancamento_id)}/receber')
 

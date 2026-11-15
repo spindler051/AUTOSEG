@@ -519,7 +519,6 @@ def financeiro_receber(banco,fid,pid):
         c.execute('BEGIN IMMEDIATE')
         f=c.execute('SELECT os_id,status,valor FROM financeiro WHERE id=?',(fid,)).fetchone()
         if not f: raise ValueError('Lançamento não encontrado.')
-        if f['status']=='Recebido': raise ValueError('Este lançamento já está recebido.')
         final=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',(f['os_id'],)).fetchone()
         tem_admin=bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
                                  "AND name='v9_admin_prestadores'").fetchone())
@@ -527,6 +526,7 @@ def financeiro_receber(banco,fid,pid):
                              (pid,)).fetchone()) if tem_admin and pid is not None else False
         if (not final or pid is None or int(final['prestador_id'])!=int(pid)) and not admin:
             raise PermissionError('Somente o finalizador ou administrador pode confirmar recebimento.')
+        if f['status']=='Recebido': raise ValueError('Este lançamento já está recebido.')
         c.execute("UPDATE financeiro SET status='Recebido',data_pagamento=? WHERE id=?",
             (datetime.now().strftime('%d/%m/%Y'),fid))
         ext.evento(c,f['os_id'],'Pagamento recebido',f'Recebimento confirmado no portal: {dinheiro(f["valor"])}',pid,'Prestador')
