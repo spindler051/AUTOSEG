@@ -3,9 +3,9 @@
 ## Summary
 
 - High: 0
-- Medium: 6
+- Medium: 5
 - Low: 0
-- Total: 6
+- Total: 5
 
 Static source evidence only; not a behavioral penetration test.
 
@@ -23,7 +23,6 @@ Static source evidence only; not a behavioral penetration test.
 | `customer.list:gtk_local:read_scope_divergence` | `customer.list` | `gtk_local` | `read_scope_divergence` | officina/application/local_service.py:clientes_core.listar( versus flavors/autoseg/modules/portal_prestador.py:involved_customer_field_scopes | tests/test_p0_read_auth.py |
 | `customer.merge:api:missing_surface` | `customer.merge` | `api` | `missing_surface` | flavors/autoseg/modules/api_desktop.py:[] (no registered api marker) | tests/test_p0_customer_destructive_a5b2.py |
 | `customer.merge:gtk:missing_surface` | `customer.merge` | `gtk` | `missing_surface` | flavors/autoseg/modules/gtk_app.py:[] (no registered gtk marker) | tests/test_p0_customer_destructive_a5b2.py |
-| `customer.password:gtk:affordance_mismatch` | `customer.password` | `gtk` | `affordance_mismatch` | flavors/autoseg/modules/gtk_app.py:ui.botao("Acesso web / senha", self._senha_cliente) / no enclosing admin condition | tests/test_p0_customer_password_a5d.py |
 
 ## Low
 
@@ -39,4 +38,3 @@ Static source evidence only; not a behavioral penetration test.
 | `customer.list:gtk_local:read_scope_divergence` | GTK local list reads clients via generic LocalService; Web/API use scoped views. |
 | `customer.merge:api:missing_surface` | Customer merge exists on Web only; Desktop API has no registered endpoint. |
 | `customer.merge:gtk:missing_surface` | Customer merge has no registered GTK action or dialog. |
-| `customer.password:gtk:affordance_mismatch` | GTK password button is enclosed by web.enabled, not the admin session condition. |

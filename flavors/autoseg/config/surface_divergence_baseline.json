@@ -20,10 +20,6 @@
     {
       "id": "customer.merge:gtk:missing_surface",
       "justification": "Customer merge has no registered GTK action or dialog."
-    },
-    {
-      "id": "customer.password:gtk:affordance_mismatch",
-      "justification": "GTK password button is enclosed by web.enabled, not the admin session condition."
     }
   ]
 }
