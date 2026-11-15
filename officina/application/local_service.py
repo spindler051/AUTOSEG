@@ -7,6 +7,7 @@ behavior untouched while giving the GTK shell a transport-neutral contract.
 from __future__ import annotations
 
 from datetime import datetime
+from dataclasses import replace
 from typing import Any, Mapping
 
 from officina.core import atendimento_os as aten
@@ -84,10 +85,14 @@ class LocalService:
             capabilities=self._capabilities(),
         )
 
-    def resumo_inicio(self) -> ResumoInicio:
-        clientes = clientes_core.contar_ativos(self.banco)
-        os_resumo = ordens_repo.resumo(self.banco)
-        financeiro = ordens_repo.financeiro_resumo(self.banco)
+    def resumo_inicio(self, *, principal=None) -> ResumoInicio:
+        scope = self._os_read_scope(principal)
+        clientes = (clientes_core.contar_ativos(self.banco) if scope is None
+                    else ordens_repo.clientes_ativos_scoped(self.banco, scope))
+        os_resumo = (ordens_repo.resumo(self.banco) if scope is None
+                     else ordens_repo.resumo_scoped(self.banco, scope))
+        financeiro = (ordens_repo.financeiro_resumo(self.banco) if scope is None
+                     else ordens_repo.financeiro_resumo_scoped(self.banco, scope))
         return ResumoInicio(
             clientes_ativos=int(clientes),
             os_abertas=os_resumo['abertas'],
@@ -141,38 +146,54 @@ class LocalService:
             ))
         return resultado
 
-    def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
+    def _os_filter(self, scope, alias='os'):
+        if scope is None:
+            return '', ()
+        return (' AND ' + ordens_repo._INVOLVED.replace('o.id', alias + '.id'),
+                (scope, scope))
+
+    def listar_os_ativas(self, termo: str = '', *, principal=None) -> list[OSResumo]:
+        scope = self._os_read_scope(principal)
+        where, values = self._os_filter(scope)
         with ext.db(self.banco) as conexao:
             registros = conexao.execute(
                 self._SQL_OS_RESUMO
                 + " WHERE os.status IN ('Aberta','Iniciada','Pendente')"
-                  " ORDER BY os.id DESC").fetchall()
+                + where + ' ORDER BY os.id DESC', values).fetchall()
         return self._mapear_os(registros, termo)
 
-    def listar_os_recentes(self, limite: int = 6) -> list[OSResumo]:
+    def listar_os_recentes(self, limite: int = 6, *, principal=None) -> list[OSResumo]:
+        scope = self._os_read_scope(principal)
+        where, values = self._os_filter(scope)
         with ext.db(self.banco) as conexao:
-            registros = conexao.execute(
-                self._SQL_OS_RESUMO + " ORDER BY os.id DESC LIMIT ?",
-                (int(limite),)).fetchall()
+            registros = conexao.execute(self._SQL_OS_RESUMO
+                + ' WHERE 1=1' + where + ' ORDER BY os.id DESC LIMIT ?',
+                values + (int(limite),)).fetchall()
         return self._mapear_os(registros)
 
-    def listar_os_para_escolha(self, limite: int = 250) -> list[OSOpcao]:
+    def listar_os_para_escolha(self, limite: int = 250, *, principal=None) -> list[OSOpcao]:
+        scope = self._os_read_scope(principal)
+        where, values = self._os_filter(scope, 'o')
         with ext.db(self.banco) as conexao:
             linhas = conexao.execute(
-                "SELECT id,numero_os,status FROM ordens_servico ORDER BY id DESC LIMIT ?",
-                (int(limite),)).fetchall()
+                "SELECT o.id,o.numero_os,o.status FROM ordens_servico o WHERE 1=1"
+                + where + ' ORDER BY o.id DESC LIMIT ?',
+                values + (int(limite),)).fetchall()
         return [OSOpcao(
             id=int(linha['id']),
             numero_os=str(linha['numero_os'] or ''),
             status=str(linha['status'] or ''),
         ) for linha in linhas]
 
-    def listar_os_para_atribuicao(self) -> list[OSOpcao]:
+    def listar_os_para_atribuicao(self, *, principal=None) -> list[OSOpcao]:
+        scope = self._os_read_scope(principal)
+        where, values = self._os_filter(scope, 'o')
         with ext.db(self.banco) as conexao:
             linhas = conexao.execute(
                 """SELECT o.id,o.numero_os,c.nome cliente,o.status FROM ordens_servico o
                    JOIN clientes c ON c.id=o.cliente_id
-                   WHERE o.status IN ('Aberta','Iniciada','Pendente') ORDER BY o.id DESC""").fetchall()
+                   WHERE o.status IN ('Aberta','Iniciada','Pendente')"""
+                + where + ' ORDER BY o.id DESC', values).fetchall()
         return [OSOpcao(
             id=int(linha['id']),
             numero_os=str(linha['numero_os'] or ''),
@@ -180,11 +201,13 @@ class LocalService:
             status=str(linha['status'] or ''),
         ) for linha in linhas]
 
-    def contar_os_cliente(self, cliente_id: int) -> int:
+    def contar_os_cliente(self, cliente_id: int, *, principal=None) -> int:
+        scope = self._os_read_scope(principal)
+        where, values = self._os_filter(scope, 'o')
         with ext.db(self.banco) as conexao:
             return int(conexao.execute(
-                'SELECT COUNT(*) FROM ordens_servico WHERE cliente_id=?',
-                (int(cliente_id),)).fetchone()[0])
+                'SELECT COUNT(*) FROM ordens_servico o WHERE o.cliente_id=?'
+                + where, (int(cliente_id),) + values).fetchone()[0])
 
     def contar_clientes_ativos(self) -> int:
         return int(clientes_core.contar_ativos(self.banco))
@@ -518,8 +541,37 @@ class LocalService:
         cad9.alterar_vinculo(
             self.banco, int(vinculo_id), bool(aprovar), 'Desktop AUTOSEG')
 
-    def salvar_os(self, dados: OSInput, *, authorize=None) -> OSResultado:
+    def _local_actor(self, principal):
+        scope = self._os_read_scope(principal)
+        return replace(principal, role='admin' if scope is None else 'employee')
+
+    def _authorize_os(self, os_id, action, *, principal=None, authorize=None):
+        if authorize is not None:
+            return authorize
+        actor = self._local_actor(principal)
+        from officina.application import work_item_access as access
+        def check(connection):
+            access.require_work_item_locked(connection, actor, int(os_id), action)
+        return check
+
+    def _read_os(self, os_id, principal, action='view'):
+        actor = self._local_actor(principal)
+        from officina.application import work_item_access as access
+        access.require_read_work_item(self.banco, actor, int(os_id))
+        if action != 'view':
+            access.require_work_item(self.banco, actor, int(os_id), action)
+
+    def salvar_os(self, dados: OSInput, *, authorize=None, principal=None) -> OSResultado:
         from officina.application.os_write import salvar_os
+        if authorize is None:
+            actor = self._local_actor(principal)
+            if dados.os_id is None:
+                from officina.application.work_item_access import require_create
+                require_create(self.banco, actor)
+            else:
+                action = ('conclude' if dados.acao == 'Concluída'
+                          else 'cancel' if dados.acao == 'Cancelada' else 'edit')
+                authorize = self._authorize_os(dados.os_id, action, principal=actor)
         try:
             return salvar_os(self.banco, dados, authorize=authorize)
         except ValidacaoError:
@@ -527,17 +579,33 @@ class LocalService:
         except ValueError as erro:
             raise ValidacaoError(str(erro)) from erro
 
-    def contexto_os(self, os_id: int | None = None) -> dict:
+    def contexto_os(self, os_id: int | None = None, *, principal=None) -> dict:
+        actor = self._local_actor(principal)
+        if os_id is not None:
+            self._read_os(os_id, actor)
         from officina.application.desktop_context import contexto_os
-        return contexto_os(self.banco, os_id)
+        payload = contexto_os(self.banco, os_id)
+        if actor.role != 'admin':
+            from officina.integration.clientes import buscar_para_criacao_os
+            permitidos = buscar_para_criacao_os('', banco=self.banco,
+                                                provider_id=actor.provider_id)
+            ids = {int(row['id']) for row in permitidos}
+            payload['clientes'] = [row for row in payload['clientes'] if int(row['id']) in ids]
+        return payload
 
-    def contar_anexos_os(self, os_id: int) -> int:
+    def contar_anexos_os(self, os_id: int, *, principal=None) -> int:
+        self._read_os(os_id, principal)
         from officina.application.desktop_context import contar_anexos_os
         return contar_anexos_os(self.banco, os_id)
 
-    def contexto_atribuicao(self, os_id: int) -> dict:
+    def contexto_atribuicao(self, os_id: int, *, principal=None) -> dict:
+        self._read_os(os_id, principal, 'assign')
         from officina.application.desktop_context import contexto_atribuicao
-        return contexto_atribuicao(self.banco, os_id)
+        payload = contexto_atribuicao(self.banco, os_id)
+        if self._os_read_scope(principal) is not None:
+            payload['prestadores'] = [p for p in payload['prestadores']
+                                      if p['id'] == principal.provider_id]
+        return payload
 
     def documento_prestador(self, prestador_id: int) -> str:
         from officina.application.desktop_context import documento_prestador
@@ -547,11 +615,24 @@ class LocalService:
         from officina.application.desktop_context import contexto_responsavel
         return contexto_responsavel(self.banco)
 
-    def contexto_os_rapida(self) -> dict:
+    def contexto_os_rapida(self, *, principal=None) -> dict:
+        actor = self._local_actor(principal)
         from officina.application.desktop_context import contexto_os_rapida
-        return contexto_os_rapida(self.banco)
+        items = contexto_os_rapida(self.banco)
+        if actor.role != 'admin':
+            from officina.integration.clientes import buscar_para_criacao_os
+            allowed = buscar_para_criacao_os('', banco=self.banco,
+                                             provider_id=actor.provider_id)
+            allowed_ids = {int(row['id']) for row in allowed}
+            items['clientes'] = [row for row in items['clientes']
+                                if row['id'] in allowed_ids]
+            items['prestadores'] = [p for p in items['prestadores']
+                                   if p['id'] == actor.provider_id]
+        return items
 
-    def contexto_movimento_empresa(self) -> dict:
+    def contexto_movimento_empresa(self, *, principal=None) -> dict:
+        if self._os_read_scope(principal) is not None:
+            raise PermissionError('Movimentos da empresa restritos ao administrador.')
         from officina.application.desktop_context import contexto_movimento_empresa
         return contexto_movimento_empresa(self.banco)
 
@@ -580,17 +661,19 @@ class LocalService:
     def definir_senha_cliente(self, cliente_id: int, senha: str | None = None, *, principal=None) -> str:
         return fluxo.definir_senha_cliente(self.banco, int(cliente_id), senha, principal=principal)
 
-    def atribuir_os(self, os_id: int, prestador_id: int, *, authorize=None) -> bool:
+    def atribuir_os(self, os_id: int, prestador_id: int, *, authorize=None, principal=None) -> bool:
+        check = self._authorize_os(os_id, 'assign', principal=principal, authorize=authorize)
         return bool(ext.atribuir(self.banco, int(os_id), int(prestador_id),
-                                 ator='Desktop AUTOSEG', authorize=authorize))
+                                 ator='Desktop AUTOSEG', authorize=check))
 
-    def desatribuir_os(self, os_id: int, *, authorize=None) -> bool:
+    def desatribuir_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        check = self._authorize_os(os_id, 'assign', principal=principal, authorize=authorize)
         return bool(ext.desatribuir(self.banco, int(os_id),
-                                    ator='Desktop AUTOSEG', authorize=authorize))
+                                    ator='Desktop AUTOSEG', authorize=check))
 
-    def iniciar_os(self, os_id: int, *, authorize=None) -> None:
-        if authorize is None:
-            return aten.iniciar(self.banco, int(os_id))
+    def iniciar_os(self, os_id: int, *, authorize=None, principal=None) -> None:
+        authorize = self._authorize_os(os_id, 'start', principal=principal,
+                                       authorize=authorize)
         with ext.db(self.banco) as connection:
             connection.execute('BEGIN IMMEDIATE')
             authorize(connection)
@@ -631,11 +714,13 @@ class LocalService:
         return ext.definir_documento_prestador(
             self.banco, int(prestador_id), str(documento))
 
-    def publicar_pdf(self, os_id: int, *, authorize=None) -> str:
+    def publicar_pdf(self, os_id: int, *, authorize=None, principal=None) -> str:
+        check = self._authorize_os(os_id, 'publish', principal=principal, authorize=authorize)
         return str(fluxo.publicar_relatorio(self.banco, int(os_id),
-                                           authorize=authorize))
+                                           authorize=check))
 
-    def preparar_email(self, os_id: int, *, authorize=None) -> str:
+    def preparar_email(self, os_id: int, *, authorize=None, principal=None) -> str:
+        authorize = self._authorize_os(os_id, 'send', principal=principal, authorize=authorize)
         def prepare():
             publicado = fluxo.ultimo_documento(self.banco, int(os_id))
             if not publicado:
@@ -649,15 +734,15 @@ class LocalService:
             authorize(connection)
             return prepare()
 
-    def preparar_nota(self, os_id: int, *, authorize=None) -> str:
-        if authorize is None:
-            return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
+    def preparar_nota(self, os_id: int, *, authorize=None, principal=None) -> str:
+        authorize = self._authorize_os(os_id, 'send', principal=principal, authorize=authorize)
         with ext.db(self.banco) as connection:
             connection.execute('BEGIN IMMEDIATE')
             authorize(connection)
             return str(ext.criar_rascunho_fiscal(self.banco, int(os_id)))
 
-    def pdf_publicado(self, os_id: int) -> str:
+    def pdf_publicado(self, os_id: int, *, principal=None) -> str:
+        self._read_os(os_id, principal)
         publicado = fluxo.ultimo_documento(self.banco, int(os_id))
         if not publicado:
             fluxo.recuperar_relatorios_antigos(self.banco, os_id=int(os_id))

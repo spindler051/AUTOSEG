@@ -499,7 +499,7 @@ class Janela(Adw.ApplicationWindow):
         return rolagem
 
     def _atualizar_inicio(self):
-        resumo = self.service.resumo_inicio()
+        resumo = self.service.resumo_inicio(**self._os_kwargs())
         self.cards["abertas"].set_text(str(resumo.os_abertas))
         self.cards["iniciadas"].set_text(str(resumo.os_iniciadas))
         self.cards["pendentes"].set_text(str(resumo.os_pendentes))
@@ -507,7 +507,7 @@ class Janela(Adw.ApplicationWindow):
         self.cards["recebido"].set_text(ui.brl(resumo.financeiro_recebido))
         self.cards["clientes"].set_text(str(resumo.clientes_ativos))
         try:
-            recentes = self.service.listar_os_recentes(6)
+            recentes = self.service.listar_os_recentes(6, **self._os_kwargs())
         except (AppError, OSError, ValueError):
             recentes = []
         self._os_inicio = list(recentes)
@@ -660,7 +660,7 @@ class Janela(Adw.ApplicationWindow):
         return False
 
     def _escolher_os(self, titulo_texto, ao_escolher):
-        registros = self.service.listar_os_para_escolha()
+        registros = self.service.listar_os_para_escolha(**self._os_kwargs())
         if not registros:
             ui.info(self, "Ordens de serviço", "Nenhuma OS cadastrada.")
             return
@@ -676,7 +676,7 @@ class Janela(Adw.ApplicationWindow):
         if os_id is None:
             return
         try:
-            rascunho = self.service.preparar_email(os_id)
+            rascunho = self.service.preparar_email(os_id, **self._os_kwargs())
             ui.info(self, "E-mail preparado",
                     f"Rascunho .eml com PDF:\n{rascunho}\n\nNenhum e-mail foi enviado.")
             ui.abrir_caminho(rascunho, self)
@@ -690,7 +690,7 @@ class Janela(Adw.ApplicationWindow):
         if os_id is None:
             return
         try:
-            caminho = self.service.preparar_nota(os_id)
+            caminho = self.service.preparar_nota(os_id, **self._os_kwargs())
             ui.info(self, "Rascunho fiscal",
                     f"Dados preparados em:\n{caminho}\n\nNENHUMA NOTA FISCAL FOI EMITIDA.")
         except Exception as erro:
@@ -847,6 +847,9 @@ class Janela(Adw.ApplicationWindow):
         role = self.sessao.role or ('admin' if self.sessao.admin else 'employee')
         return Principal(pid, role, organization_id='autoseg', provider_id=pid)
 
+    def _os_kwargs(self):
+        return {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+
     def _excluir_cliente(self):
         valores = self._cliente_selecionado()
         if not valores:
@@ -993,7 +996,7 @@ class Janela(Adw.ApplicationWindow):
 
     def carregar_os(self):
         termo = self.busca_os.get_text().strip() if hasattr(self, "busca_os") else ""
-        registros = self.service.listar_os_ativas(termo)
+        registros = self.service.listar_os_ativas(termo, **self._os_kwargs())
         self.tabela_os.definir_linhas([
             (r.id, r.numero_os, r.cliente, r.data_abertura,
              '—' if r.origem == 'Compartilhada' else ui.brl(r.valor_total),
@@ -1071,7 +1074,7 @@ class Janela(Adw.ApplicationWindow):
     def publicar_pdf(self, os_id, enviar_email=False):
         def worker():
             try:
-                caminho = self.service.publicar_pdf(os_id)
+                caminho = self.service.publicar_pdf(os_id, **self._os_kwargs())
                 if enviar_email and not self.remote_mode:
                     GLib.idle_add(self._pdf_publicado, True, caminho)
                     GLib.idle_add(ui.aviso_erro, self, 'E-mail não enviado',
@@ -1178,7 +1181,7 @@ class Janela(Adw.ApplicationWindow):
             return
         os_id = valores[0]
         try:
-            caminho = self.service.pdf_publicado(os_id)
+            caminho = self.service.pdf_publicado(os_id, **self._os_kwargs())
             ui.abrir_caminho(caminho, self)
         except Exception as erro:
             ui.aviso_erro(self, "PDF", str(erro))
@@ -1375,11 +1378,11 @@ class Janela(Adw.ApplicationWindow):
             return
         try:
             if tipo == "notas":
-                caminho = self.service.preparar_nota(os_id)
+                caminho = self.service.preparar_nota(os_id, **self._os_kwargs())
                 texto = ("Dados preparados em:\n" + caminho +
                          "\n\nNENHUMA NOTA FISCAL FOI EMITIDA.")
             else:
-                caminho = self.service.preparar_email(os_id)
+                caminho = self.service.preparar_email(os_id, **self._os_kwargs())
                 texto = ("Rascunho .eml com PDF:\n" + caminho +
                          "\n\nNenhum e-mail foi enviado.")
             ui.info(self, "Nota fiscal" if tipo == "notas" else "E-mail", texto)
@@ -1509,7 +1512,7 @@ class Janela(Adw.ApplicationWindow):
             excluir, destrutivo=True, rotulo_ok="Excluir")
 
     def _atribuir_prestador(self):
-        ordens = self.service.listar_os_para_atribuicao()
+        ordens = self.service.listar_os_para_atribuicao(**self._os_kwargs())
         if not ordens:
             ui.info(self, "Atribuição", "Não há OS ativas para atribuir.")
             return

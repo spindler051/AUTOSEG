@@ -536,7 +536,7 @@ class DialogoOS(Adw.Dialog):
         self._construir()
 
     def _carregar(self):
-        contexto = _servico(self.janela).contexto_os(self.os_id)
+        contexto = _servico(self.janela).contexto_os(self.os_id, **self.janela._os_kwargs())
         self.clientes = contexto["clientes"]
         if self.os_id is not None:
             self.dados = contexto["dados"]
@@ -972,13 +972,13 @@ class DialogoOS(Adw.Dialog):
     def _atualizar_anexos(self):
         if self.anexos_label is None:
             return
-        existentes = _servico(self.janela).contar_anexos_os(self.os_id)
+        existentes = _servico(self.janela).contar_anexos_os(self.os_id, **self.janela._os_kwargs())
         self.anexos_label.set_text(
             f"{existentes} imagem(ns) registrada(s); {len(self.imagens)} aguardando confirmação.")
 
     def _iniciar_atendimento(self):
         try:
-            _servico(self.janela).iniciar_os(self.os_id)
+            _servico(self.janela).iniciar_os(self.os_id, **self.janela._os_kwargs())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Não foi possível iniciar", str(erro))
             return
@@ -1210,7 +1210,7 @@ class DialogoAtribuicao(Adw.Dialog):
 
     def _atribuir(self, prestador_id):
         try:
-            mudou = _servico(self.janela).atribuir_os(self.os_id, prestador_id)
+            mudou = _servico(self.janela).atribuir_os(self.os_id, prestador_id, **self.janela._os_kwargs())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Atribuição", str(erro))
             return
@@ -1220,7 +1220,7 @@ class DialogoAtribuicao(Adw.Dialog):
 
     def _liberar(self):
         try:
-            _servico(self.janela).desatribuir_os(self.os_id)
+            _servico(self.janela).desatribuir_os(self.os_id, **self.janela._os_kwargs())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Atribuição", str(erro))
             return
@@ -1858,11 +1858,11 @@ class DialogoOSRapida(Adw.Dialog):
             base_percentuais="total", materiais=(), acao="", relato="",
             motivo="", imagens=())
         try:
-            resultado = _servico(self.janela).salvar_os(entrada)
+            resultado = _servico(self.janela).salvar_os(entrada, **self.janela._os_kwargs())
             escolhido = int(self.combo_prestador.get_selected())
             if escolhido > 0 and self.prestadores:
                 _servico(self.janela).atribuir_os(
-                    resultado.os_id, self.prestadores[escolhido - 1]["id"])
+                    resultado.os_id, self.prestadores[escolhido - 1]["id"], **self.janela._os_kwargs())
         except Exception as erro:
             ui.aviso_erro(self.janela, "Não foi possível criar a OS", str(erro))
             return

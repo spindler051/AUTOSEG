@@ -12,6 +12,7 @@ from officina.core import fluxo_os
 from officina.core import prestadores_ext as ext
 from officina.application.contracts import OSInput
 from officina.application.local_service import LocalService
+from officina.application.object_policy import Principal
 
 
 class OSWriteTest(unittest.TestCase):
@@ -24,6 +25,9 @@ class OSWriteTest(unittest.TestCase):
             modulo.instalar(self.db)
         composicao.instalar()
         composicao.instalar_banco(self.db)
+        pid = ext.cadastrar(self.db, 'Local admin', 'admin-os@test.invalid', 'Password12345')
+        cadastros_v9.definir_admin(self.db, pid, True)
+        self.actor = Principal(pid, 'admin', organization_id='autoseg',provider_id=pid)
         self.service = LocalService(self.db)
         with ext.db(self.db) as conexao:
             self.cliente = conexao.execute(
@@ -61,7 +65,7 @@ class OSWriteTest(unittest.TestCase):
         return OSInput(**dados)
 
     def test_create_and_update_os_keeps_generic_text(self):
-        criada = self.service.salvar_os(self.entrada())
+        criada = self.service.salvar_os(self.entrada(), principal=self.actor)
         self.assertTrue(criada.criada)
         with ext.db(self.db) as conexao:
             linha = conexao.execute(
@@ -76,7 +80,7 @@ class OSWriteTest(unittest.TestCase):
             texto_adicional='Outro texto.',
             materiais=({'item': 'Fita', 'quantidade': 2,
                         'unidade': 'un', 'valor_unitario': 5},),
-        ))
+        ), principal=self.actor)
         self.assertEqual(atualizada.os_id, criada.os_id)
         with ext.db(self.db) as conexao:
             linha = conexao.execute(
@@ -90,21 +94,21 @@ class OSWriteTest(unittest.TestCase):
         self.assertEqual((material['item'], material['quantidade']), ('Fita', 2.0))
 
     def test_desktop_context_returns_os_dialog_data(self):
-        criada = self.service.salvar_os(self.entrada())
-        contexto = self.service.contexto_os(criada.os_id)
+        criada = self.service.salvar_os(self.entrada(), principal=self.actor)
+        contexto = self.service.contexto_os(criada.os_id, principal=self.actor)
         self.assertEqual(contexto["dados"]["id"], criada.os_id)
         self.assertEqual(contexto["dados"]["texto_adicional"], "Texto livre de teste.")
         self.assertTrue(contexto["clientes"])
-        self.assertEqual(self.service.contar_anexos_os(criada.os_id), 0)
-        atribuicao = self.service.contexto_atribuicao(criada.os_id)
+        self.assertEqual(self.service.contar_anexos_os(criada.os_id, principal=self.actor), 0)
+        atribuicao = self.service.contexto_atribuicao(criada.os_id, principal=self.actor)
         self.assertEqual(atribuicao["ordem"]["numero_os"], "OS-0001")
-        self.assertIsNotNone(self.service.contexto_os_rapida()["clientes"])
-        self.assertIsNotNone(self.service.contexto_movimento_empresa()["oses"])
+        self.assertIsNotNone(self.service.contexto_os_rapida(principal=self.actor)["clientes"])
+        self.assertIsNotNone(self.service.contexto_movimento_empresa(principal=self.actor)["oses"])
 
     def test_pendente_and_concluida_change_status(self):
-        criada = self.service.salvar_os(self.entrada())
+        criada = self.service.salvar_os(self.entrada(), principal=self.actor)
         pendente = self.service.salvar_os(self.entrada(
-            os_id=criada.os_id, acao='Pendente', relato='Aguardando peça.'))
+            os_id=criada.os_id, acao='Pendente', relato='Aguardando peça.'), principal=self.actor)
         self.assertEqual(pendente.os_id, criada.os_id)
         with ext.db(self.db) as conexao:
             self.assertEqual(
@@ -112,7 +116,7 @@ class OSWriteTest(unittest.TestCase):
                                 (criada.os_id,)).fetchone()[0],
                 'Pendente')
         concluida = self.service.salvar_os(self.entrada(
-            os_id=criada.os_id, acao='Concluída', relato='Serviço concluído.'))
+            os_id=criada.os_id, acao='Concluída', relato='Serviço concluído.'), principal=self.actor)
         self.assertTrue(concluida.encerrada)
         with ext.db(self.db) as conexao:
             self.assertEqual(

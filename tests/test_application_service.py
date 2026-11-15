@@ -109,7 +109,7 @@ class LocalServiceClientTest(unittest.TestCase):
             conexao.execute(
                 "INSERT INTO financeiro(os_id,cliente_id,valor,status) "
                 "VALUES(1,1,100,'Aguardando pagamento')")
-        resumo = self.service.resumo_inicio()
+        resumo = self.service.resumo_inicio(principal=self.actor)
         self.assertEqual(resumo.clientes_ativos, 1)
         self.assertEqual(resumo.os_abertas, 1)
         self.assertEqual(resumo.financeiro_recebido, 200.0)
@@ -127,13 +127,13 @@ class LocalServiceClientTest(unittest.TestCase):
                 "INSERT INTO ordens_servico(numero_os,cliente_id,status,valor_total,"
                 "descricao,forma_pagamento,urgencia,origem,arquivada) "
                 "VALUES('OS-A2',1,'Concluída',250,'Encerrada','PIX','Normal','App',0)")
-        linhas = self.service.listar_os_ativas()
+        linhas = self.service.listar_os_ativas(principal=self.actor)
         self.assertEqual([item.numero_os for item in linhas], ['OS-A1'])
         self.assertEqual(linhas[0].cliente, 'Alfa')
         self.assertEqual(linhas[0].responsavel, 'Não atribuído')
         self.assertFalse(linhas[0].incompleto)
         self.assertEqual(
-            [item.numero_os for item in self.service.listar_os_ativas('A1')],
+            [item.numero_os for item in self.service.listar_os_ativas('A1',principal=self.actor)],
             ['OS-A1'])
 
     def test_local_report_lists_fail_closed_without_principal(self):

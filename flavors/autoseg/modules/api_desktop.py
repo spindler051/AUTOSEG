@@ -278,8 +278,8 @@ def _scoped_os_rows(banco, principal, *, recent=False, termo='', limite=250):
     """Full involved rows and safe shared rows are separate SQL projections."""
     if access.can_read_all(principal):
         service = LocalService(banco)
-        return (service.listar_os_recentes(limite) if recent
-                else service.listar_os_ativas(termo))
+        return (service.listar_os_recentes(limite, principal=principal) if recent
+                else service.listar_os_ativas(termo, principal=principal))
     pid = principal.provider_id
     if pid is None or not principal.active or principal.organization_id != 'autoseg':
         raise PermissionError('Contexto indisponível.')
@@ -344,7 +344,7 @@ def _scoped_customer_list(banco, principal, termo=''):
 
 def _scoped_customer_os_count(banco, principal, customer_id):
     if access.can_read_all(principal, 'work_item'):
-        return LocalService(banco).contar_os_cliente(customer_id)
+        return LocalService(banco).contar_os_cliente(customer_id, principal=principal)
     with ext.db(banco) as connection:
         return int(connection.execute('''SELECT COUNT(*) FROM ordens_servico os
             WHERE os.cliente_id=? AND (EXISTS (
@@ -381,7 +381,7 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
         })
     if recurso == 'resumo' and metodo == 'GET':
         if admin:
-            return _enviar(handler, 200, servico.resumo_inicio())
+            return _enviar(handler, 200, servico.resumo_inicio(principal=principal))
         counts = ordens_repo.resumo_scoped(banco, principal.provider_id)
         finance = ordens_repo.financeiro_resumo_scoped(banco, principal.provider_id)
         return _enviar(handler, 200, {
@@ -533,7 +533,7 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
             access.require_create(banco, principal)
         return _enviar(handler, 200, servico.salvar_os(
             payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')))
-            if payload.os_id else servico.salvar_os(payload))
+            if payload.os_id else servico.salvar_os(payload, principal=principal))
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, _scoped_os_rows(banco, principal,
             termo=str(query.get('termo', [''])[0])))
@@ -544,14 +544,14 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
     if partes == ['os', 'escolha'] and metodo == 'GET':
         _exigir_admin(info)
         limite = _int(query.get('limite', ['250'])[0], 250) or 250
-        return _enviar(handler, 200, servico.listar_os_para_escolha(limite))
+        return _enviar(handler, 200, servico.listar_os_para_escolha(limite, principal=principal))
     if partes == ['os', 'atribuicao'] and metodo == 'GET':
         _exigir_admin(info)
-        return _enviar(handler, 200, servico.listar_os_para_atribuicao())
+        return _enviar(handler, 200, servico.listar_os_para_atribuicao(principal=principal))
     if partes == ['os', 'contexto'] and metodo == 'GET':
         os_id = _int(query.get('os_id', [None])[0])
         _require_object(banco, principal, os_id)
-        return _enviar(handler, 200, servico.contexto_os(os_id))
+        return _enviar(handler, 200, servico.contexto_os(os_id, principal=principal))
     if len(partes) >= 3:
         os_id = _int(partes[1])
         if os_id is None:
@@ -579,12 +579,12 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         raise NaoEncontradoError('Rota não encontrada.')
     _require_object(banco, principal, os_id, action)
     if resto == ['contexto'] and metodo == 'GET':
-        return _enviar(handler, 200, servico.contexto_os(os_id))
+        return _enviar(handler, 200, servico.contexto_os(os_id, principal=principal))
     if resto == ['anexos', 'contar'] and metodo == 'GET':
         return _enviar(handler, 200, {
-            'total': servico.contar_anexos_os(os_id)})
+            'total': servico.contar_anexos_os(os_id, principal=principal)})
     if resto == ['contexto-atribuicao'] and metodo == 'GET':
-        return _enviar(handler, 200, servico.contexto_atribuicao(os_id))
+        return _enviar(handler, 200, servico.contexto_atribuicao(os_id, principal=principal))
     if resto == ['atribuir'] and metodo == 'POST':
         prestador_id = _int(_corpo(handler).get('prestador_id'))
         if prestador_id is None:
@@ -601,7 +601,7 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         return _enviar(handler, 200, {'ok': True})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
-            'arquivo': servico.pdf_publicado(os_id)})
+            'arquivo': servico.pdf_publicado(os_id, principal=principal)})
     if resto == ['pdf', 'publicar'] and metodo == 'POST':
         return _enviar(handler, 200, {
             'arquivo': servico.publicar_pdf(os_id,
