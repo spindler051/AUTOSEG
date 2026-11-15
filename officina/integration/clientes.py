@@ -382,12 +382,50 @@ def salvar(cliente_id, dados, banco=None, *, connection=None):
     return servico.update("cliente", str(cliente_id), campos,
                           expected_version=existente["version"])
 
-def buscar_para_criacao_os(termo='', banco=None, limite=400):
-    """Provider-facing picker returns only the identity needed to open an OS."""
+def buscar_para_criacao_os(termo='', banco=None, limite=400, *, provider_id=None):
+    """Restrict the identity-only picker to customers of involved OS."""
     busca = str(termo or '').strip()[:120]
     padrao = '%' + busca.replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
+    # Ownership of a newly created customer is recorded in the existing audit
+    # table. It permits selecting a customer for the FIRST OS or quotation;
+    # unrelated customers remain hidden even when they have no OS.
     with ext.db(banco or BANCO) as connection:
-        rows = connection.execute("""SELECT id,nome FROM clientes
-          WHERE status NOT IN ('Inativo','A definir') AND nome LIKE ? ESCAPE '!'
-          ORDER BY nome LIMIT ?""", (padrao, int(limite))).fetchall()
+        created_audit = bool(connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='portal_auditoria'").fetchone())
+        where = ''
+        params = (padrao,)
+        if provider_id is not None:
+            involved = '''EXISTS (SELECT 1 FROM ordens_servico o
+                  WHERE o.cliente_id=cl.id AND (
+                    EXISTS (SELECT 1 FROM os_responsaveis r WHERE r.os_id=o.id
+                            AND r.prestador_id=?)
+                    OR EXISTS (SELECT 1 FROM os_prestadores p WHERE p.os_id=o.id
+                            AND p.prestador_id=? AND p.ativo=1)))'''
+            if created_audit:
+                involved += ''' OR EXISTS (SELECT 1 FROM portal_auditoria a
+                    WHERE a.acao='Cliente criado' AND a.referencia=CAST(cl.id AS TEXT)
+                      AND a.prestador_id=?)'''
+            where = ' AND (' + involved + ')'
+            params += (int(provider_id), int(provider_id))
+            if created_audit:
+                params += (int(provider_id),)
+        rows = connection.execute('''SELECT cl.id,cl.nome FROM clientes cl
+          WHERE cl.status NOT IN ('Inativo','A definir') AND cl.nome LIKE ? ESCAPE '!' '''
+          + where + ' ORDER BY cl.nome LIMIT ?', params + (int(limite),)).fetchall()
     return [dict(row) for row in rows]
+
+
+def cliente_criado_pelo_prestador(banco, cliente_id, prestador_id):
+    """Narrow creator relationship for name-only first OS/quotation selection."""
+    if prestador_id is None:
+        return False
+    with ext.db(banco or BANCO) as connection:
+        if not connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='portal_auditoria'").fetchone():
+            return False
+        return bool(connection.execute('''SELECT 1 FROM portal_auditoria a
+            JOIN clientes cl ON cl.id=CAST(a.referencia AS INTEGER)
+            WHERE a.acao='Cliente criado' AND cl.id=?
+              AND a.referencia=CAST(cl.id AS TEXT) AND a.prestador_id=?
+              AND cl.status NOT IN ('Inativo','A definir') LIMIT 1''',
+            (int(cliente_id),int(prestador_id))).fetchone())

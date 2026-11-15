@@ -61,6 +61,12 @@ def _policy_allows(banco, session, permission):
     principal = os_commands._provider_context(banco, session)
     return load_policy().allows(principal.role, permission)
 
+
+def _picker_provider_id(banco, session):
+    """None grants the verified administrator's global view; others are scoped."""
+    return (None if _policy_allows(banco, session, 'work_item.view.all')
+            else int(session['pid']))
+
 LOG = logging.getLogger('autosseg.portal')
 VERSAO_PORTAL = versao_local('9.6.0-dev.6')
 
@@ -1673,7 +1679,9 @@ class PortalPrestador:
                                servicos=None, materiais=None, aviso='',
                                validade='30', condicoes=''):
                 """Orçamento com cliente, vários serviços e materiais adicionais."""
-                clientes = clientes_core.buscar_para_criacao_os('', banco=banco, limite=500)
+                clientes = clientes_core.buscar_para_criacao_os(
+                    '', banco=banco, limite=500,
+                    provider_id=_picker_provider_id(banco, s))
                 catalogo_servicos = catalogo.listar(banco, ativos=True)
                 produtos = estoque.listar(banco, ativos=True)
                 if not clientes:
@@ -1930,19 +1938,28 @@ class PortalPrestador:
                 """
                 dados_form=dict(dados_form or {})
                 with ext.db(banco) as c:
+                    actor_id=_picker_provider_id(banco,s)
                     prestadores=c.execute(
-                        "SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome").fetchall()
+                        'SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0'
+                        +('' if actor_id is None else ' AND id=?')+' ORDER BY nome',
+                        () if actor_id is None else (actor_id,)).fetchall()
                 termo=str(q or '').strip()[:120]
-                clientes=clientes_core.buscar_para_criacao_os(termo,banco=banco,limite=400)
+                clientes=clientes_core.buscar_para_criacao_os(
+                    termo,banco=banco,limite=400,
+                    provider_id=_picker_provider_id(banco,s))
                 if not clientes:
-                    clientes=clientes_core.buscar_para_criacao_os('',banco=banco,limite=400)
+                    clientes=clientes_core.buscar_para_criacao_os(
+                        '',banco=banco,limite=400,
+                        provider_id=_picker_provider_id(banco,s))
                 selecionado=str(cliente_id or dados_form.get('cliente_id') or '')
                 opcoes=[('','Cliente a definir (associar depois)')]
                 for x in clientes:
                     opcoes.append((str(x['id']),x['nome']))
                 if selecionado and not any(str(v)==selecionado for v,_ in opcoes):
                     atual=next((x for x in clientes_core.buscar_para_criacao_os(
-                        '',banco=banco,limite=10000) if str(x['id'])==selecionado),None)
+                        '',banco=banco,limite=10000,
+                        provider_id=_picker_provider_id(banco,s))
+                        if str(x['id'])==selecionado),None)
                     if atual:
                         opcoes.append((str(atual['id']),atual['nome']))
                 aviso=f'<p class="bad">{esc(erro)}</p>' if erro else ''
@@ -2034,7 +2051,9 @@ class PortalPrestador:
                     except PermissionError:
                         return self.os_reduzida(s,oid)
                 with ext.db(banco) as c:
-                    cl=clientes_core.buscar_para_criacao_os(banco=banco,limite=10000)
+                    cl=clientes_core.buscar_para_criacao_os(
+                        banco=banco,limite=10000,
+                        provider_id=_picker_provider_id(banco,s))
                     o=c.execute('SELECT * FROM ordens_servico WHERE id=?',(oid,)).fetchone() if oid else None
                     mat=c.execute('SELECT * FROM materiais_os WHERE os_id=? ORDER BY id',(oid,)).fetchall() if oid else []
                     eventos=c.execute('SELECT * FROM os_eventos WHERE os_id=? ORDER BY id DESC LIMIT 150',(oid,)).fetchall() if oid else []
@@ -3901,7 +3920,9 @@ class PortalPrestador:
                     if path=='/clientes':return self.clientes_lista(s)
                     if path=='/clientes/busca':
                         termo=parse_qs(urlparse(self.path).query).get('q',[''])[0]
-                        itens=clientes_core.buscar_para_criacao_os(termo,banco=banco)
+                        itens=clientes_core.buscar_para_criacao_os(
+                            termo,banco=banco,
+                            provider_id=_picker_provider_id(banco,s))
                         return self.send_bytes(json.dumps(itens,ensure_ascii=False).encode(),
                             'application/json; charset=utf-8')
                     if path=='/orcamento':
@@ -4491,6 +4512,15 @@ class PortalPrestador:
                             return self.orcamento_form(
                                 s,erro='O YAML está em branco. Preencha a seção "orcamento" '
                                        'e remova as instruções antes de importar.')
+                        try:
+                            read_access.require_customer_read(
+                                banco, os_commands._provider_context(banco,s),
+                                int(pre['cliente_id']))
+                        except (PermissionError, ValueError, TypeError):
+                            actor=os_commands._provider_context(banco,s)
+                            if not clientes_core.cliente_criado_pelo_prestador(
+                                    banco,int(pre['cliente_id']),actor.provider_id):
+                                raise PermissionError('Cliente indisponível.') from None
                         return self.orcamento_form(
                             s,cliente_id=pre['cliente_id'],
                             servicos=pre['servicos'],materiais=pre['materiais'],
@@ -4512,9 +4542,14 @@ class PortalPrestador:
                                 validade=str(validade))
                         condicoes=str(d.get('condicoes','')).strip()[:1000]
                         actor=os_commands._provider_context(banco,s)
-                        # The budget picker shares id/name only. A provider may
-                        # prepare a name-only estimate, but document/PII must
-                        # never be fetched without customer field authorization.
+                        try:
+                            read_access.require_customer_read(banco,actor,cliente_id)
+                        except PermissionError:
+                            if not clientes_core.cliente_criado_pelo_prestador(
+                                    banco,cliente_id,actor.provider_id):
+                                raise PermissionError('Cliente indisponível.') from None
+                        # An involved or creating provider can prepare a name-only estimate;
+                        # document fields are still governed by field-level ACL.
                         with ext.db(banco) as c:
                             minimo=c.execute('''SELECT nome FROM clientes WHERE id=?
                                 AND status NOT IN ('Inativo','A definir')''',

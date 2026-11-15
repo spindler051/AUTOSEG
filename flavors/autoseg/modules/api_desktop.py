@@ -318,18 +318,23 @@ def _scoped_os_rows(banco, principal, *, recent=False, termo='', limite=250):
     return merged[:bound] if recent else merged
 
 
-def _minimal_customer_picker(banco, termo=''):
-    pattern = '%' + str(termo or '').strip()[:100].replace('!', '!!').replace('%', '!%').replace('_', '!_') + '%'
-    with ext.db(banco) as connection:
-        return [dict(row) for row in connection.execute(
-            "SELECT id,nome FROM clientes WHERE status NOT IN ('Inativo','A definir')"
-            " AND nome LIKE ? ESCAPE '!' ORDER BY nome LIMIT 250", (pattern,))]
+def _minimal_customer_picker(banco, principal, termo=''):
+    if principal is None or not principal.active:
+        raise PermissionError('Sessão inválida.')
+    return clientes_core.buscar_para_criacao_os(
+        termo, banco=banco, limite=250,
+        provider_id=None if access.can_read_all(principal) else principal.provider_id)
 
 
-def _minimal_providers(banco):
+def _minimal_providers(banco, principal):
+    if principal is None or not principal.active:
+        raise PermissionError('Sessão inválida.')
     with ext.db(banco) as connection:
         return [dict(row) for row in connection.execute(
-            'SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0 ORDER BY nome')]
+            'SELECT id,nome FROM prestadores WHERE ativo=1 AND excluido=0'
+            + ('' if access.can_read_all(principal) else ' AND id=?')
+            + ' ORDER BY nome',
+            () if access.can_read_all(principal) else (principal.provider_id,))]
 
 
 def _scoped_customer_list(banco, principal, termo=''):
@@ -425,8 +430,8 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
     if recurso == 'contexto':
         if partes == ['contexto','os-rapida'] and metodo == 'GET' and not admin:
             return _enviar(handler, 200, {
-                'clientes': _minimal_customer_picker(banco),
-                'prestadores': _minimal_providers(banco)})
+                'clientes': _minimal_customer_picker(banco, principal),
+                'prestadores': _minimal_providers(banco, principal)})
         _exigir_admin(info)
         return _rota_contexto(handler, partes, servico, metodo)
     raise NaoEncontradoError('Rota não encontrada.')
@@ -434,8 +439,8 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
 
 def _rota_clientes(handler, partes, query, servico, metodo, info=None, principal=None):
     if partes == ['clientes','busca'] and metodo == 'GET':
-        return _enviar(handler, 200, _minimal_customer_picker(servico.banco,
-                      str(query.get('termo', [''])[0])))
+        return _enviar(handler, 200, _minimal_customer_picker(
+            servico.banco, principal, str(query.get('termo', [''])[0])))
     if len(partes) == 1:
         if metodo == 'GET':
             return _enviar(handler, 200, _scoped_customer_list(servico.banco, principal,

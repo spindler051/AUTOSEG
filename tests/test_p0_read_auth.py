@@ -222,7 +222,7 @@ class ReadAuthorizationTest(unittest.TestCase):
     def test_customer_picker_returns_only_id_and_name(self):
         status,body=self.http('first','/clientes/busca?q=Secret')
         self.assertEqual(status,200)
-        self.assertEqual(json.loads(body),[{'id':self.c2,'nome':'Secret Customer'}])
+        self.assertEqual(json.loads(body),[])
 
     def test_reduced_claim_obeys_existing_write_policy(self):
         with patch.dict(os.environ,{'AUTOSEG_OBJECT_POLICY_ENFORCEMENT':'1'}):
@@ -283,7 +283,8 @@ class ReadAuthorizationTest(unittest.TestCase):
         try:
             status,body=self.http('first','/orcamento')
             self.assertEqual(status,200,body[:400])
-            self.assertIn('Secret Customer',body)
+            self.assertNotIn('Secret Customer',body)
+            self.assertIn('Visible Name',body)
             self.assertNotIn('22222222222',body)
             self.assertNotIn('secret@customer.invalid',body)
             token=self._csrf_for('first')
@@ -291,12 +292,18 @@ class ReadAuthorizationTest(unittest.TestCase):
             from pypdf import PdfReader
             params=urllib.parse.urlencode({'csrf':token,'cliente_id':self.c2,
                  'servico_id':item,'quantidade':'1','validade':'30'}).encode()
+            status,_=request(self.browsers['first'],self.base,'/orcamento/pdf',
+                {'csrf':token,'cliente_id':self.c2,'servico_id':item,
+                 'quantidade':'1','validade':'30'})
+            self.assertIn(status,(403,404))
+            params=urllib.parse.urlencode({'csrf':token,'cliente_id':self.c1,
+                 'servico_id':item,'quantidade':'1','validade':'30'}).encode()
             with self.browsers['first'].open(urllib.request.Request(
                     self.base+'/orcamento/pdf',params),timeout=20) as result:
                 self.assertEqual(result.status,200)
                 pdf=result.read()
             text=' '.join(page.extract_text() or '' for page in PdfReader(io.BytesIO(pdf)).pages)
-            self.assertIn('Secret Customer',text)
+            self.assertIn('Visible Name',text)
             self.assertNotIn('22222222222',text)
             self.assertNotIn('secret@customer.invalid',text)
         finally:

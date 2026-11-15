@@ -178,8 +178,12 @@ class DesktopObjectAuthorizationTest(unittest.TestCase):
             self.assertEqual(status,200,data)
             customers=(data['data'] if path == '/clientes/busca'
                        else data['data']['clientes'])
-            self.assertIn({'id':self.other_client,'nome':'Secret Client'},customers)
+            self.assertNotIn({'id':self.other_client,'nome':'Secret Client'},customers)
+            self.assertIn({'id':self.own_client,'nome':'Own Client'},customers)
             self.assertTrue(all(set(row)=={'id','nome'} for row in customers))
+            if path == '/contexto/os-rapida':
+                self.assertNotIn({'id':self.users['second'],'nome':'second'},
+                                 data['data']['prestadores'])
             self.assertNotIn('secret@invalid.test',json.dumps(data))
 
     def test_report_and_history_lists_exclude_unrelated_os(self):
