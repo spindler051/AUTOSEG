@@ -21,6 +21,7 @@ from email.parser import BytesParser
 from email.policy import default
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from officina.application.public_limits import PublicBudget, guarded
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse, quote, urlencode as urllib_parse_urlencode
 from officina.core import prestadores_ext as ext
@@ -4727,6 +4728,11 @@ class PortalPrestador:
                             'application/json; charset=utf-8',status=500)
                     return self.erro('Falha interna ao salvar. Consulte o log.',500,self.sessao())
 
+        # Request budgets and active slots apply before parsing public POST bodies.
+        public_budget = PublicBudget()
+        Handler.do_GET = guarded(Handler.do_GET, public_budget)
+        Handler.do_POST = guarded(Handler.do_POST, public_budget)
+        Handler.timeout = 15
         try:
             self.servidor=ThreadingHTTPServer((self.host,self.porta),Handler)
         except OSError as exc:

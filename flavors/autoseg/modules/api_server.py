@@ -14,6 +14,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+from officina.application.public_limits import PublicBudget, guarded
 from flavors.autoseg.modules import api_desktop
 from flavors.autoseg.modules import api_financeiro as api_financeiro
 from officina.core.versao_app import versao_local
@@ -80,6 +81,7 @@ class _APIServer(ThreadingHTTPServer):
 
     def __init__(self, endereco, handler, banco):
         self.banco = banco
+        self.public_budget = PublicBudget()
         super().__init__(endereco, handler)
 
 
@@ -88,6 +90,12 @@ def start(banco, host='127.0.0.1', port=8766):
     api_desktop.instalar(banco)
     api_financeiro.instalar(banco)
     server = _APIServer((host, int(port)), _APIHandler, banco)
+    # Per-server state avoids cross-instance/test interference.
+    class GuardedAPI(_APIHandler):
+        def _encaminhar(self, metodo):
+            return guarded(_APIHandler._encaminhar,
+                           self.server.public_budget)(self, metodo)
+    server.RequestHandlerClass = GuardedAPI
     import threading
     thread = threading.Thread(target=server.serve_forever,
                               name='officina-api', daemon=True)
