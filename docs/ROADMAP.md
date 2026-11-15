@@ -250,6 +250,15 @@ mesmas mensagens, sem nova configuração ou tela.
   atividades por usuário/cliente no Web e no GTK; depois cadeia de hash. Também
   é o que torna auditável o “admin apenas no desktop”. Contrato em
   [`planning/AUDIT_AND_ACTIVITY.md`](planning/AUDIT_AND_ACTIVITY.md).
+- **Firewall do host nura (P1, segurança operacional):** o kernel do Wi-Fi
+  (release `s10-wifi-v4`) não tem `CONFIG_NF_TABLES`; o `nf_tables.ko` de outra
+  build falha com `Exec format error`, então `nftables.service` está mascarado e
+  o host não tem filtro. Os serviços escutam em `127.0.0.1` e a entrada é o
+  túnel, mas é uma única barreira e sem defesa em profundidade. Correção:
+  reconstruir o kernel com `NF_TABLES` e expressões mínimas, instalar como
+  entrada de teste, aplicar política default-deny e verificar Wi-Fi + serviços +
+  SSH. Contrato em
+  [`operations/NURA_KERNEL_AND_FIREWALL.md`](operations/NURA_KERNEL_AND_FIREWALL.md).
 - **Arquitetura do Meu Auto Financeiro (P2, documentação):** o MAF deixa de ler
   o banco do AUTOSEG e passa a ter núcleo próprio, contrato HTTP versionado,
   CLI, contrato de UI (GTK/Qt/Swift/Compose), ledger canônico e adaptadores
