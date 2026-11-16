@@ -740,7 +740,8 @@ class DialogoOS(Adw.Dialog):
                     icon_name="media-playback-start-symbolic"))
             if self.dados and self.dados.get("status") in ui.ATIVAS:
                 status_opcoes = ["Selecione a situação", "Pendente", "Concluída", "Cancelada"]
-                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, 0)
+                initial = status_opcoes.index(self.modo) if self.modo in status_opcoes else 0
+                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, initial)
                 relato = ""
                 motivo = ""
                 if self.encerramento:
@@ -806,14 +807,93 @@ class DialogoOS(Adw.Dialog):
         espaco.set_hexpand(True)
         rodape.append(espaco)
         if self.os_id is not None:
-            rodape.append(ui.botao("Salvar rascunho", lambda: self._salvar(None)))
+            if self.status is not None:
+                rodape.append(ui.botao("Salvar rascunho", lambda: self._salvar(None)))
             if self.status is not None:
                 rodape.append(ui.botao("Confirmar situação", self._confirmar_situacao,
                                        css="suggested-action"))
         else:
             rodape.append(ui.botao("Salvar OS", lambda: self._salvar(None), css="suggested-action"))
+        # Historical OS actions remain available when the row leaves the
+        # active work list. They are resolved for this exact OS, not for the
+        # selected row of the main section.
+        self._dialog_work_actions = {}
+        if self.os_id is not None:
+            try:
+                if self.janela.remote_mode:
+                    allowed = self.janela.service.actions('work', self.os_id)
+                else:
+                    from dataclasses import asdict
+                    from flavors.autoseg.modules.autoseg_actions import resolved_actions
+                    allowed = [asdict(item) for item in resolved_actions(
+                        self.servico.banco if hasattr(self, 'servico') else
+                        _servico(self.janela).banco,
+                        self.janela._cliente_admin_actor(), 'work',
+                        object_id=self.os_id, surface='gtk')]
+                history_ids = {'work.archive', 'work.reopen', 'work.publish',
+                               'work.email', 'work.invoice'}
+                self._dialog_work_actions = {item['id']: item for item in allowed
+                                             if item['id'] in history_ids}
+                if self._dialog_work_actions:
+                    menu = Gio.Menu()
+                    for item in allowed:
+                        if item['id'] not in self._dialog_work_actions:
+                            continue
+                        entry = Gio.MenuItem.new(item['label'], None)
+                        entry.set_action_and_target_value('b1.execute',
+                            GLib.Variant('s', item['id']))
+                        menu.append_item(entry)
+                    group_actions = Gio.SimpleActionGroup()
+                    execute = Gio.SimpleAction.new(
+                        'execute', GLib.VariantType.new('s'))
+                    execute.connect('activate',
+                        lambda _action, parameter:
+                            self._dialog_work_activate(parameter.get_string()))
+                    group_actions.add_action(execute)
+                    self.insert_action_group('b1', group_actions)
+                    more = Gtk.MenuButton(icon_name='view-more-symbolic',
+                                          menu_model=menu)
+                    more.set_tooltip_text('Ações autorizadas para esta OS')
+                    rodape.append(more)
+            except Exception:
+                # Never present unverified controls when authorization fails.
+                self._dialog_work_actions = {}
         toolbar.add_bottom_bar(rodape)
         self.set_child(toolbar)
+
+    def _dialog_work_activate(self, action_id):
+        entry = self._dialog_work_actions.get(action_id)
+        if entry is None or self.os_id is None:
+            ui.aviso_erro(self.janela, 'OS', 'Ação indisponível.')
+            return
+
+        def execute():
+            try:
+                service = _servico(self.janela)
+                kwargs = self.janela._os_kwargs()
+                if action_id == 'work.reopen':
+                    service.reabrir_os(self.os_id, **kwargs)
+                elif action_id == 'work.archive':
+                    service.arquivar_os(self.os_id, **kwargs)
+                elif action_id == 'work.publish':
+                    self.janela.publicar_pdf(self.os_id)
+                elif action_id == 'work.email':
+                    self.janela._email_os(self.os_id)
+                elif action_id == 'work.invoice':
+                    self.janela._nota_os(self.os_id)
+                else:
+                    raise PermissionError('Ação indisponível.')
+                self.janela.carregar_os()
+                self.janela.carregar_historico()
+                self.close()
+            except Exception as error:
+                ui.aviso_erro(self.janela, entry['label'], str(error))
+
+        if entry.get('destructive'):
+            ui.alerta(self.janela, entry['label'], entry['confirm'], execute,
+                      destrutivo=True, rotulo_ok=entry['label'])
+        else:
+            execute()
 
     def _filtrar_clientes_os(self):
         termo = self.busca_cliente_os.get_text().strip().casefold() \

@@ -27,6 +27,33 @@ ACTIONS = _all_actions()
 ACTION_BY_ID = {action.id: action for action in ACTIONS}
 
 
+from officina.application.live_provider import resolve as live_provider_principal
+
+
+# UI eligibility does not replace the locked authorization in the writer.
+_WORK_ACTIVE = frozenset(('Aberta', 'Iniciada', 'Pendente'))
+_WORK_ACTIVE_ACTIONS = frozenset((
+    'work.edit', 'work.assign', 'work.assume', 'work.start', 'work.route',
+    'work.conclude', 'work.cancel', 'work.attach', 'work.materials', 'work.draft',
+))
+_WORK_CLOSED_ACTIONS = frozenset(('work.reopen', 'work.publish', 'work.email',
+                                  'work.invoice'))
+
+
+def _work_state_allows(connection, action_id, object_id):
+    row = connection.execute('SELECT status,COALESCE(arquivada,0) arquivada '
+                             'FROM ordens_servico WHERE id=?',
+                             (object_id,)).fetchone()
+    if row is None or row['arquivada']:
+        return False
+    active = row['status'] in _WORK_ACTIVE
+    if action_id in _WORK_ACTIVE_ACTIONS and not active:
+        return False
+    if action_id in _WORK_CLOSED_ACTIONS and active:
+        return False
+    return True
+
+
 def _object_permitted(banco, principal, action, object_id):
     if action.object_action in ('list', 'create'):
         if action.section == 'work' and action.object_action == 'create':
@@ -37,6 +64,9 @@ def _object_permitted(banco, principal, action, object_id):
     if object_id is None:
         return False
     if action.section == 'work':
+        with ext.db(banco) as connection:
+            if not _work_state_allows(connection, action.id, int(object_id)):
+                return False
         if action.object_action == 'assume':
             with ext.db(banco) as connection:
                 return bool(principal.provider_id and
@@ -56,8 +86,7 @@ def _object_permitted(banco, principal, action, object_id):
 
 def resolved_actions(banco, principal, section, *, object_id=None, surface=None):
     """Server-authoritative action list; object grants cannot be inferred by UI."""
-    if principal is None or not principal.active:
-        raise PermissionError('Sessão indisponível.')
+    principal = live_provider_principal(banco, principal)
     canonical = next((item for item in ITEMS if item.id == section), None)
     if canonical is None or (surface and surface not in canonical.surfaces):
         return ()

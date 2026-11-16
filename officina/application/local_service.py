@@ -742,7 +742,8 @@ class LocalService:
             connection.execute('BEGIN IMMEDIATE')
             row = connection.execute('SELECT status,arquivada,cliente_id FROM ordens_servico '
                                      'WHERE id=?', (int(os_id),)).fetchone()
-            if row is None or row['arquivada'] or row['status'] not in ext.ATIVAS:
+            if (row is None or row['arquivada']
+                    or row['status'] not in ('Concluída', 'Cancelada', 'Não realizada')):
                 raise PermissionError('OS indisponível para reabertura.')
             check = self._authorize_os(os_id, 'reopen', principal=actor,
                                        authorize=authorize)

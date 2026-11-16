@@ -609,8 +609,12 @@ class Janela(Adw.ApplicationWindow):
         if method in ('_abrir_os_documento', '_preparar_documento'):
             return getattr(self, method)(
                 'notas' if action['section'] == 'invoices' else 'emails')
-        if method == '_editar_os' and action['id'] == 'work.cancel':
-            return self._encerrar_os()
+        if action['id'] in ('work.conclude', 'work.cancel'):
+            selected = self._os_selecionada()
+            if selected:
+                status = 'Cancelada' if action['id'] == 'work.cancel' else 'Concluída'
+                return dialogos.DialogoOS(self, int(selected[0]), modo=status).present(self)
+            return None
         return getattr(self, method)()
 
     def _ir_para(self, nome):

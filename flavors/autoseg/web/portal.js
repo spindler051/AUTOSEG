@@ -2566,6 +2566,54 @@ body.ui-app .finance-item .good{color:#d9ffe9;background:rgba(124,199,162,.14);b
       if (alvo) alvo.hidden = true;
     });
   });
+  // Keep existing unsaved form values when invoking canonical OS actions.
+  document.querySelectorAll('.shared-work-actions button[data-action-id]').forEach(button => {
+    const id = button.dataset.actionId;
+    if (!['work.conclude', 'work.cancel', 'work.draft'].includes(id)) return;
+    button.addEventListener('click', () => {
+      if (id === 'work.cancel') {
+        document.getElementById('abrir-cancelar-os')?.click();
+      } else if (id === 'work.conclude') {
+        document.getElementById('abrir-situacao-os')?.click();
+        const completed = document.querySelector(
+          '#dialogo-situacao-os input[name="situacao_popup"][value="Concluída"]');
+        if (completed) completed.checked = true;
+      } else {
+        const form = document.getElementById('form-os');
+        if (!form) return;
+        const submit = document.createElement('button');
+        submit.type = 'submit';
+        submit.hidden = true;
+        submit.formAction = `${form.dataset.salvarUrl.replace(/\/salvar$/, '')}/rascunho/salvar`;
+        submit.formNoValidate = true;
+        form.appendChild(submit);
+        form.requestSubmit(submit);
+      }
+    });
+  });
+  // Canonical B1 links lead to the existing complete Web form. Only activate
+  // an action when its server-resolved ID was rendered in the action toolbar.
+  const actionIntent = new URLSearchParams(window.location.search).get('work_action');
+  if (['cancel', 'conclude', 'attach', 'materials', 'draft'].includes(actionIntent)
+      && document.querySelector(
+        `.shared-work-actions [data-action-id="work.${actionIntent}"]`)) {
+    if (actionIntent === 'cancel') {
+      document.getElementById('abrir-cancelar-os')?.click();
+    } else if (actionIntent === 'conclude') {
+      document.getElementById('abrir-situacao-os')?.click();
+      const completed = document.querySelector(
+        '#dialogo-situacao-os input[name="situacao_popup"][value="Concluída"]');
+      if (completed) completed.checked = true;
+    } else {
+      const anchor = {
+        materials: '[name="material_item[]"]',
+        attach: '[name="fotos"]',
+        draft: '#form-os'
+      }[actionIntent];
+      const target = anchor && document.querySelector(anchor);
+      target?.scrollIntoView({block: 'center'});
+    }
+  }
   registrarUi();
 }());
 // Formulário de encerramento: somente confirmação explícita; sem salvamento automático.

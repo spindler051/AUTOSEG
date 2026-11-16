@@ -731,6 +731,15 @@ def _write_action_abrir(banco, principal, os_id, data, *, ui, session, path, que
     return ui.redir(f'{url_os(banco, oid)}')
 
 
+def _write_action_reabrir(banco, principal, os_id, data, *, ui, session,
+                         path, quer_json):
+    """Reopen via the existing transactional service and its live object guard."""
+    from officina.application.local_service import LocalService
+    from flavors.autoseg.modules.portal_prestador import url_os
+    LocalService(banco).reabrir_os(int(os_id), principal=principal)
+    return ui.redir(url_os(banco, os_id))
+
+
 def _write_action_arquivar(banco, principal, os_id, data, *, ui, session, path, quer_json):
     from flavors.autoseg.modules import portal_prestador as portal
     url_os = portal.url_os
@@ -1033,6 +1042,7 @@ def _write_action_reenviar_email(banco, principal, os_id, data, *, ui, session, 
 PERMISSIONS = {
     'abrir':'edit', 'arquivar':'archive', 'rota':'start',
     'cancelar':'cancel', 'salvar':'edit', 'publicar':'publish',
+    'reabrir':'reopen',
     'atribuir':'assign', 'assumir':'assume', 'em-rota':'start',
     'cancelar-rota':'start','iniciar':'start', 'reenviar-email':'send',
 }
@@ -1103,6 +1113,7 @@ WRITERS = {
     'attach_invoice': _write_attach_invoice,
     'abrir': _write_action_abrir,
     'arquivar': _write_action_arquivar,
+    'reabrir': _write_action_reabrir,
     'rota': _write_action_rota,
     'cancelar': _write_action_cancelar,
     'salvar': _write_action_salvar,
