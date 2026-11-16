@@ -100,7 +100,7 @@ def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
             require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
             if not anterior: raise ValueError('Cliente não encontrado.')
-            payload = safe_customer_edit(banco,principal,anterior,d)
+            payload = safe_customer_edit(banco,principal,anterior,d,connection=c)
         values={x:texto(payload,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
         if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
         if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')

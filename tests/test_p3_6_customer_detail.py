@@ -43,7 +43,11 @@ class CustomerDetailParityTest(unittest.TestCase):
 
     def test_gtk_hides_fields_missing_from_scoped_projection(self):
         source = (Path(__file__).resolve().parents[1] / 'flavors/autoseg/modules/gtk_dialogos.py').read_text()
-        self.assertIn('if field not in self.dados:', source)
+        # The server's field projection drives visibility; the widget table is
+        # only an adapter and the old self.dados loop is gone.
+        self.assertIn('from flavors.autoseg.modules.autoseg_form_contracts import customer_fields', source)
+        self.assertIn('allowed_names = set()', source)
+        self.assertIn('if name not in allowed_names:', source)
         self.assertIn('widget.set_visible(False)', source)
 
     def test_unrelated_customer_denied(self):
