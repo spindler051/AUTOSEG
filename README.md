@@ -96,38 +96,39 @@ licenses. The Workaholic subproject has its own
 
 ## Running the current app
 
-Operação resumida MAIN/DEV:
+Common MAIN (production) / DEV (development) operations:
 
 ```bash
 # MAIN
-./autoseg start site      # site 8766; a API vai embutida
-./autoseg start tunnel    # túneis 8766
+./autoseg start site      # site on 8766; the API is embedded
+./autoseg start tunnel    # tunnels for 8766
 ./autoseg status
 ./autoseg stop all
 
 # DEV
-./autoseg-dev start site      # site 8866
-./autoseg-dev start tunnel    # túneis 8866
+./autoseg-dev start site      # site on 8866
+./autoseg-dev start tunnel    # tunnels for 8866
 ./autoseg-dev status
 ./autoseg-dev stop all
 ```
 
-O `start site` da MAIN já sobe a API; para uma API separada, pare o site e use
-`./autoseg start server`. No DEV, o `server`/API usa a porta 8766 e exige a MAIN
-parada. PIDs e logs ficam em `~/Library/Application Support/AUTOSEG/cli`.
+`start site` on MAIN already starts the embedded API; for a separate API,
+stop the site and use `./autoseg start server`. On DEV, `server`/API uses port
+8766 and requires MAIN to be stopped. PIDs and logs live in
+`~/Library/Application Support/AUTOSEG/cli`.
 
-`./autoseg update` apenas reinicia processos; não faz pull, merge nem altera
-código. Como MAIN e DEV usam o mesmo checkout, use `./autoseg update main` para
-validar a MAIN primeiro e `./autoseg update dev` depois, quando a mudança já
-estiver pronta para os dois.
+`./autoseg update` only restarts processes; it does not pull, merge or change
+code. MAIN and DEV share the same checkout, so use `./autoseg update main` to
+validate production first and `./autoseg update dev` afterwards, when the change
+is ready for both.
 
-macOS desktop (local, sem servidor):
+macOS desktop (local, no server):
 
 ```bash
 ./autoseg app
 ```
 
-Desktop com os portais locais ligados (comportamento antigo):
+Desktop with the local portals enabled (legacy behavior):
 
 ```bash
 ./autoseg app-web
@@ -139,18 +140,19 @@ Linux/GTK development:
 ./autoseg app
 ```
 
-DEV em modo servidor (abra o servidor primeiro):
+DEV in server mode (start the server first):
 
 ```bash
 ./autoseg server   # terminal 1
 ./autoseg dev    # terminal 2
 ```
 
-O app DEV abre com servidor selecionado por padrão. A tela de login também oferece o modo Local; o banco local só é aberto se você escolher essa opção.
-No banco fictício de DEV, use as credenciais de
-`CREDENCIAIS_FICTICIAS_DEV.txt` na pasta de dados do servidor DEV. Execute
-`./autoseg paths` para ver o caminho exato. Se o servidor estiver parado, o app
-mostra a tela de login com aviso de servidor indisponível.
+The DEV app opens with the server selected by default. The login screen also
+offers Local mode; the local database is only opened if you choose it. In the
+DEV fixture database, use the credentials from
+`CREDENCIAIS_FICTICIAS_DEV.txt` in the DEV server data directory. Run
+`./autoseg paths` to see the exact path. If the server is stopped, the app shows
+the login screen with an unavailable-server warning.
 
 Local-only GTK (no web server and no tunnel):
 
@@ -158,43 +160,44 @@ Local-only GTK (no web server and no tunnel):
 ./autoseg app-local
 ```
 
-Servidor headless no terminal (API, sem HTML, sem GTK, sem Cloudflare):
+Headless server in the terminal (API, no HTML, no GTK, no Cloudflare):
 
 ```bash
 ./autoseg api
 ```
 
-GUI do site no terminal:
+Site GUI in the terminal:
 
 ```bash
-./autoseg site-prod       # produção: 8766
-./autoseg site            # DEV: Officina Web na porta única 8866
+./autoseg site-prod       # production: 8766
+./autoseg site            # DEV: Officina Web on the single port 8866
 ```
 
-Hoje a GUI do site ainda compartilha o processo com a API embutida; a separação
-completa entre servidor e site é uma fase posterior. O servidor de dados do GTK
-é o `./autoseg server` (porta 8766). O site DEV usa somente banco fictício e porta 8866, em processo separado da MAIN.
+Today the site GUI still shares the process with the embedded API; fully
+separating server and site is a later phase. The GTK data server is
+`./autoseg server` (port 8766). The DEV site uses only the fixture database and
+port 8866, in a process separate from MAIN.
 
-O padrão do desktop agora é local-only. Use `AUTOSEG_WEB_ACCESS=1` ou
-`./autoseg app-web` somente se quiser que o próprio GTK suba os
-portais.
+The desktop default is now local-only. Use `AUTOSEG_WEB_ACCESS=1` or
+`./autoseg app-web` only if you want the GTK app itself to start the portals.
 
-## Onde ficam os dados
+## Where the data lives
 
-Nada de banco, anexo ou log fica no repositório. O servidor usa a pasta do
-sistema (`/var/lib/autoseg` no Linux, `/Library/Application Support/AUTOSEG` no
-macOS); DEV e o modo local usam pastas do usuário. Consulte
-[`docs/operations/DATA_STORAGE.md`](docs/operations/DATA_STORAGE.md) e rode
-`./autoseg paths` para ver os caminhos efetivos.
+No database, attachment or log lives in the repository. The server uses the
+system directory (`/var/lib/autoseg` on Linux,
+`/Library/Application Support/AUTOSEG` on macOS); DEV and local mode use user
+directories. See
+[`docs/operations/DATA_STORAGE.md`](docs/operations/DATA_STORAGE.md) and run
+`./autoseg paths` to see the effective paths.
 
-Identidade comercial: configure `AUTOSEG_COMPANY_CNPJ` e `AUTOSEG_WHATSAPP`
-no ambiente do servidor. O repositório público usa valores fictícios; não
-grave CNPJ ou telefone real no código.
+Business identity: set `AUTOSEG_COMPANY_CNPJ` and `AUTOSEG_WHATSAPP` in the
+server environment. The public repository uses fictitious values; never commit
+a real CNPJ or phone number.
 
 ## Documentation
 
-- [Documentation index](docs/README.md) — ponto de entrada canônico.
-- [Current handoff](docs/HANDOFF.md) — estado e próximos passos.
+- [Documentation index](docs/README.md) — canonical entry point.
+- [Current handoff](docs/HANDOFF.md) — state and next steps.
 - [Roadmap](docs/ROADMAP.md)
 - [Client GTK plan — 6.5](docs/planning/GTK_CLIENT_MODE.md)
 - [Product vision](docs/PRODUCT_VISION.md)
@@ -203,9 +206,9 @@ grave CNPJ ou telefone real no código.
 - [Security policy](SECURITY.md)
 - [Agent rules](AGENTS.md)
 - [Changelog](CHANGELOG.md)
-- [Archived documentation](docs/archive/README.md) — histórico, não vigente.
+- [Archived documentation](docs/archive/README.md) — historical, not current.
 
-## Repository layout
+## Key files
 
 ```text
 flavors/autoseg/modules/gtk_app.py           GTK desktop frontend
