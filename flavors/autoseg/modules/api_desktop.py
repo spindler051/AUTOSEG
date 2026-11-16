@@ -538,7 +538,8 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
         else:
             access.require_create(banco, principal)
         return _enviar(handler, 200, servico.salvar_os(
-            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')))
+            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')),
+            principal=principal)
             if payload.os_id else servico.salvar_os(payload, principal=principal))
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, _scoped_os_rows(banco, principal,

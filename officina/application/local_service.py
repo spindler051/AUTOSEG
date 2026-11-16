@@ -599,7 +599,8 @@ class LocalService:
                           else 'cancel' if dados.acao == 'Cancelada' else 'edit')
                 authorize = self._authorize_os(dados.os_id, action, principal=actor)
         try:
-            return salvar_os(self.banco, dados, authorize=authorize)
+            return salvar_os(self.banco, dados, authorize=authorize,
+                             principal=actor if authorize is None else principal)
         except ValidacaoError:
             raise
         except ValueError as erro:
