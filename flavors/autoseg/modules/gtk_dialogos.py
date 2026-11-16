@@ -60,6 +60,13 @@ class DialogoCliente(Adw.Dialog):
                 raise PermissionError('Recurso indisponível.')
             self.dados = dict(registro.campos)
 
+        from flavors.autoseg.modules.autoseg_form_contracts import customer_fields
+        if janela.remote_mode:
+            self._fields = self.servico.form_fields('customer',cliente_id)
+        else:
+            self._fields = customer_fields(BANCO, janela._cliente_admin_actor(),
+                                           customer_id=cliente_id)
+
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
         self.set_title(titulo)
@@ -143,29 +150,39 @@ class DialogoCliente(Adw.Dialog):
         pagina.add(grupo)
         self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
 
-        # The API/local read service has already excluded forbidden columns.
-        # Hide their widgets as well; do not display empty editable proxies.
-        if cliente_id is not None and not getattr(janela.sessao, 'admin', False):
-            widgets = {
-                'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
-                'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
-                'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
-                'numero': self.numero_end, 'complemento': self.complemento,
-                'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
-                'telefone': self.telefone, 'email': self.email,
-                'sindico_nome': self.sindico_nome,
-                'sindico_telefone': self.sindico_telefone,
-                'sindico_email': self.sindico_email,
-                'administradora': self.administradora,
-                'administradora_telefone': self.administradora_telefone,
-                'administradora_email': self.administradora_email,
-                'observacoes': self.observacoes,
-            }
-            for field, widget in widgets.items():
-                if field not in self.dados:
-                    widget.set_visible(False)
-            if 'cep' not in self.dados:
-                self.cep_status.set_visible(False)
+        # Both transports use the server's field projection; widgets are only
+        # an adapter and cannot authorize a write.
+        widgets = {
+            'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
+            'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
+            'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
+            'numero': self.numero_end, 'complemento': self.complemento,
+            'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
+            'telefone': self.telefone, 'email': self.email,
+            'sindico_nome': self.sindico_nome,
+            'sindico_telefone': self.sindico_telefone,
+            'sindico_email': self.sindico_email,
+            'administradora': self.administradora,
+            'administradora_telefone': self.administradora_telefone,
+            'administradora_email': self.administradora_email,
+            'observacoes': self.observacoes,
+        }
+        allowed_names = set()
+        for field in self._fields:
+            name = field.get('id') if isinstance(field, dict) else field.id
+            label = field.get('label') if isinstance(field, dict) else field.label
+            help_text = field.get('help') if isinstance(field, dict) else field.help
+            allowed_names.add(name)
+            widget = widgets.get(name)
+            if widget is not None:
+                widget.set_title(label)
+                if help_text:
+                    widget.set_tooltip_text(help_text)
+        for name,widget in widgets.items():
+            if name not in allowed_names:
+                widget.set_visible(False)
+        if 'cep' not in allowed_names:
+            self.cep_status.set_visible(False)
 
         self._atualizar_documento_ui()
 
@@ -187,7 +204,7 @@ class DialogoCliente(Adw.Dialog):
     def _atualizar_documento_ui(self):
         tipo = ui.valor_combo(self.tipo_pessoa)
         esperado = 11 if tipo == "Física" else 14
-        self.documento.set_title("CPF" if tipo == "Física" else "CNPJ")
+        self.documento.set_tooltip_text("CPF" if tipo == "Física" else "CNPJ")
         doc = cad9.digitos(self.documento.get_text())
         if not doc:
             self.documento_status.set_visible(False)

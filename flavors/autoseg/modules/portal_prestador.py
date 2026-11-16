@@ -1856,31 +1856,30 @@ class PortalPrestador:
                 d=dict(x) if x else {}
                 if cid is None and preenchimento:d.update(preenchimento)
                 erro_html=card('YAML não aplicado',f'<p class="bad">{esc(erro)}</p>') if erro else ''
+                from flavors.autoseg.modules.autoseg_form_contracts import customer_fields
+                visible_fields = customer_fields(
+                    banco, os_commands._provider_context(banco,s), customer_id=cid)
                 fields=[]
-                campos=[('nome','Nome / Razão social'),('documento','CPF / CNPJ'),('nome_fantasia','Nome fantasia'),
-                    ('endereco','Logradouro'),('numero','Número'),('complemento','Complemento'),('bairro','Bairro'),
-                    ('cep','CEP'),('cidade','Cidade'),('uf','UF'),('telefone','Telefone'),('email','E-mail'),
-                    ('sindico_nome','Síndico / responsável'),('sindico_telefone','Telefone do síndico'),('sindico_email','E-mail do síndico'),
-                    ('administradora','Administradora / imobiliária'),('administradora_telefone','Telefone da administradora'),
-                    ('administradora_email','E-mail da imobiliária / administradora')]
-                for k,t in campos:
-                    field_scope=('documento' if k=='documento' else
-                                 'telefone' if 'telefone' in k else
-                                 'email' if 'email' in k else
-                                 'endereco' if k in ('endereco','numero','complemento','bairro','cep','cidade','uf') else
-                                 'nome')
-                    if cid and not read_access.customer_field_allowed(
-                            banco,os_commands._provider_context(banco,s),cid,field_scope):
-                        continue
-                    fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
+                for field in visible_fields:
+                    value = d.get(field.id, field.default)
+                    if field.id == 'documento':
+                        value = cad9.formatar_documento(value)
+                    if field.type == 'select':
+                        control = select(field.label, field.input_name,
+                            [(option,option) for option in field.options],
+                            value or field.default)
+                    elif field.type == 'textarea':
+                        control = textarea(field.label, field.input_name, value or '')
+                    else:
+                        control = campos_escuros(
+                            field.label, field.input_name, value or '',
+                            required=field.required,
+                            kind='email' if field.id.endswith('email') else 'text')
+                    fields.append(f'<div data-form-field="{esc(field.id)}">{control}</div>')
                 corpo=(f'<div class="page-actions">{botao("← Clientes","/clientes","secondary")}'
                     + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
                     + f'</div><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
-                    '<div class="col2"><div>'
-                    +select('Tipo de pessoa','tipo_pessoa',[(z,z) for z in ('Jurídica','Física')],d.get('tipo_pessoa') or 'Jurídica')
-                    +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
-                    +'</div></div><div class="col2">'+''.join(f'<div>{f}</div>' for f in fields)+'</div>'
-                    +textarea('Observações','observacoes',d.get('observacoes') or '')
+                    + '<div class="col2">'+''.join(fields)+'</div>'
                     +(('<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Somente administradores podem redefinir a senha legada. A ação será auditada.</p>'
                         +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
                         +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if s.get('admin') else '')

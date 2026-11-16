@@ -148,6 +148,8 @@ class Janela(Adw.ApplicationWindow):
         breakpoint = Adw.Breakpoint.new(
             Adw.BreakpointCondition.parse('max-width: 600sp'))
         breakpoint.add_setter(split, 'collapsed', True)
+        breakpoint.add_setter(self._section_header_actions, 'visible', False)
+        breakpoint.add_setter(self._section_mobile_actions, 'visible', True)
         adaptive.add_breakpoint(breakpoint)
         adaptive.set_child(split)
         self.set_content(adaptive)
@@ -250,6 +252,47 @@ class Janela(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         self.titulo_janela = Adw.WindowTitle(title="Início")
         header.set_title_widget(self.titulo_janela)
+        self._section_primary_action = None
+        self._section_actions = ()
+        self._section_primary_button = Gtk.Button()
+        self._section_primary_button.add_css_class('suggested-action')
+        self._section_primary_button.set_visible(False)
+        self._section_primary_button.connect(
+            'clicked', lambda *_: self._activate_section_action(
+                self._section_primary_action))
+        self._section_more_button = Gtk.MenuButton(icon_name='view-more-symbolic')
+        self._section_more_button.set_tooltip_text('Mais ações da seção')
+        self._section_more_button.set_visible(False)
+        header_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        self._section_header_actions = header_actions
+        header_actions.append(self._section_primary_button)
+        header_actions.append(self._section_more_button)
+        header.pack_end(header_actions)
+        mobile = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        mobile.set_margin_start(12)
+        mobile.set_margin_end(12)
+        mobile.set_margin_top(4)
+        mobile.set_margin_bottom(6)
+        mobile.set_visible(False)
+        self._section_mobile_actions = mobile
+        self._section_mobile_primary = Gtk.Button()
+        self._section_mobile_primary.add_css_class('suggested-action')
+        self._section_mobile_primary.set_hexpand(True)
+        self._section_mobile_primary.set_visible(False)
+        self._section_mobile_primary.connect(
+            'clicked', lambda *_args: self._activate_section_action(
+                self._section_primary_action))
+        self._section_mobile_more = Gtk.MenuButton(icon_name='view-more-symbolic')
+        self._section_mobile_more.set_tooltip_text('Outras ações da seção')
+        self._section_mobile_more.set_visible(False)
+        mobile.append(self._section_mobile_primary)
+        mobile.append(self._section_mobile_more)
+        choose_action = Gio.SimpleAction.new(
+            'section-choose', GLib.VariantType.new('s'))
+        choose_action.connect(
+            'activate', lambda _act, argument:
+            self._activate_section_action(argument.get_string()))
+        self.add_action(choose_action)
         menu = Gio.Menu()
         menu.append("Atualizar dados", "win.atualizar")
         menu.append("Abrir pasta de dados", "win.pasta")
@@ -259,6 +302,7 @@ class Janela(Adw.ApplicationWindow):
         botao_menu.set_tooltip_text("Menu principal")
         header.pack_end(botao_menu)
         toolbar.add_top_bar(header)
+        toolbar.add_bottom_bar(self._section_mobile_actions)
 
         self.stack = Adw.ViewStack()
         self.stack.add_titled(self._pagina_inicio(), "inicio", "Início")
@@ -304,6 +348,15 @@ class Janela(Adw.ApplicationWindow):
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_child(clamp)
         caixa.append(scroller)
+        for attr in ('tabela_os', 'tabela_clientes', 'tabela_historico',
+                     'tabela_financeiro', 'tabela_catalogo', 'tabela_estoque',
+                     'tabela_composicao', 'tabela_prestadores'):
+            table = getattr(self, attr, None)
+            if table is not None:
+                table.selecao.connect(
+                    'notify::selected',
+                    lambda *_args: GLib.idle_add(self._refresh_section_actions))
+
         self.toast_overlay = Adw.ToastOverlay(child=caixa)
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)
@@ -343,9 +396,107 @@ class Janela(Adw.ApplicationWindow):
         self.stack.set_visible_child_name(nome)
         self.titulo_janela.set_title(titulo_texto)
         self._atualizar_pagina(nome)
-        # In collapsed mode the chosen section is the content NavigationPage;
-        # the header's native back button restores the sidebar.
+        self._refresh_section_actions()
+        # Collapsed sidebar switches to the selected content page.
         self._nav_split.set_show_content(True)
+
+    def _section_context(self):
+        from flavors.autoseg.modules.autoseg_web_navigation import ITEMS
+        section = next((item.id for item in ITEMS
+                        if item.gtk_page == self._pagina_atual
+                        and 'gtk' in item.surfaces), None)
+        table_names = {
+            'work': 'tabela_os', 'customers': 'tabela_clientes',
+            'history': 'tabela_historico', 'finance': 'tabela_financeiro',
+            'providers': 'tabela_prestadores', 'services': 'tabela_catalogo',
+            'stock': 'tabela_estoque', 'composition': 'tabela_composicao',
+        }
+        selected = getattr(self, table_names.get(section, ''), None)
+        row = selected.selecionado() if selected is not None else None
+        object_id = int(row[0]) if row and str(row[0]).isdigit() else None
+        return section, object_id
+
+    def _resolved_section_actions(self):
+        section, object_id = self._section_context()
+        if section is None:
+            return ()
+        if self.remote_mode:
+            return tuple(self.service.actions(section, object_id))
+        from dataclasses import asdict
+        from flavors.autoseg.modules.autoseg_actions import resolved_actions
+        return tuple(asdict(action) for action in resolved_actions(
+            self.service.banco, self._cliente_admin_actor(), section,
+            object_id=object_id, surface='gtk'))
+
+    def _refresh_section_actions(self):
+        try:
+            actions = self._resolved_section_actions()
+        except Exception as error:
+            self._section_primary_button.set_visible(False)
+            self._section_mobile_primary.set_visible(False)
+            self._section_more_button.set_visible(False)
+            self._section_mobile_more.set_visible(False)
+            self._section_actions = ()
+            print('Falha ao resolver ações da seção:', error)
+            return False
+        self._section_actions = actions
+        primaries = [a for a in actions if a['priority'] == 'primary']
+        primary = primaries[0] if primaries else None
+        self._section_primary_action = primary['id'] if primary else None
+        self._section_primary_button.set_visible(primary is not None)
+        self._section_mobile_primary.set_visible(primary is not None)
+        if primary:
+            self._section_primary_button.set_label(primary['label'])
+            self._section_mobile_primary.set_label(primary['label'])
+        overflow = [action for action in actions if action is not primary]
+        menu = Gio.Menu()
+        for action in overflow:
+            item = Gio.MenuItem.new(action['label'], None)
+            item.set_action_and_target_value(
+                'win.section-choose', GLib.Variant('s', action['id']))
+            menu.append_item(item)
+        self._section_more_button.set_menu_model(menu)
+        self._section_mobile_more.set_menu_model(menu)
+        self._section_more_button.set_visible(bool(overflow))
+        self._section_mobile_more.set_visible(bool(overflow))
+        return False
+
+    def _activate_section_action(self, action_id):
+        # The server recomputes the grant on every interaction; the GTK never
+        # invents an authorization result from a cached role or button state.
+        if not action_id:
+            return
+        try:
+            current = self._resolved_section_actions()
+            action = next((a for a in current if a['id'] == action_id), None)
+            if action is None:
+                raise PermissionError('Ação não disponível para este recurso.')
+        except Exception as error:
+            ui.aviso_erro(self, 'Acesso', str(error))
+            return
+        def execute():
+            try:
+                self._dispatch_section_action(action)
+            except Exception as error:
+                ui.aviso_erro(self, action['label'], str(error))
+            finally:
+                GLib.idle_add(self._refresh_section_actions)
+        if action['destructive']:
+            ui.alerta(self, action['label'], action['confirm'], execute,
+                      destrutivo=True, rotulo_ok=action['label'])
+        else:
+            execute()
+
+    def _dispatch_section_action(self, action):
+        method = action['gtk_handler']
+        if not method or not hasattr(self, method):
+            raise ValueError('Adaptador GTK ainda não disponível para esta ação.')
+        if method in ('_abrir_os_documento', '_preparar_documento'):
+            return getattr(self, method)(
+                'notas' if action['section'] == 'invoices' else 'emails')
+        if method == '_editar_os' and action['id'] == 'work.cancel':
+            return self._encerrar_os()
+        return getattr(self, method)()
 
     def _ir_para(self, nome):
         for indice, (chave, _titulo, _icone) in enumerate(self.nav_itens):
@@ -1038,6 +1189,48 @@ class Janela(Adw.ApplicationWindow):
             except Exception as erro:
                 ui.aviso_erro(self, "Atribuição", str(erro))
 
+    def _execute_work_command(self, method, *, refresh=True):
+        selected = self._os_selecionada()
+        if not selected:
+            return
+        os_id = int(selected[0])
+        result = getattr(self.service, method)(os_id, **self._os_kwargs())
+        if refresh:
+            self.carregar_os()
+            self.carregar_historico()
+        ui.toast(self, 'Ação registrada para a OS selecionada.')
+        return result
+
+    def _assumir_os_selecionada(self):
+        self._execute_work_command('assumir_os')
+
+    def _iniciar_os_selecionada(self):
+        self._execute_work_command('iniciar_os')
+
+    def _rota_os_selecionada(self):
+        self._execute_work_command('em_rota_os')
+
+    def _arquivar_os_selecionada(self):
+        self._execute_work_command('arquivar_os')
+
+    def _reabrir_os_selecionada(self):
+        self._execute_work_command('reabrir_os')
+
+    def _publicar_pdf_os_selecionada(self):
+        selected = self._os_selecionada()
+        if selected:
+            self.publicar_pdf(int(selected[0]))
+
+    def _preparar_email_os_selecionada(self):
+        selected = self._os_selecionada()
+        if selected:
+            self._email_os(int(selected[0]))
+
+    def _preparar_nota_os_selecionada(self):
+        selected = self._os_selecionada()
+        if selected:
+            self._nota_os(int(selected[0]))
+
     def _importar_os_yaml(self):
         self._escolher_yaml("Importar ordem de serviço YAML", self._os_yaml_escolhido)
 
@@ -1304,6 +1497,37 @@ class Janela(Adw.ApplicationWindow):
             "Essa confirmação altera o saldo financeiro.",
             lambda: self._confirmar_recebimento(lancamento_id),
             rotulo_ok="Confirmar recebimento")
+
+    def _alterar_vencimento(self):
+        values = self.tabela_financeiro.selecionado()
+        if not values or int(values[0]) <= 0:
+            ui.aviso_erro(self, 'Vencimento', 'Selecione um lançamento válido.')
+            return
+        lancamento_id = int(values[0])
+        dialog = Adw.AlertDialog(
+            heading='Vencimento do lançamento',
+            body='Informe a data no formato AAAA-MM-DD. O serviço validará o valor.')
+        field = Adw.EntryRow(title='Vencimento')
+        field.set_text(str(values[6] or ''))
+        dialog.set_extra_child(field)
+        dialog.add_response('cancel', 'Cancelar')
+        dialog.add_response('save', 'Alterar vencimento')
+        dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response('save')
+        def response(_dialog, answer):
+            if answer != 'save':
+                return
+            try:
+                kwargs = {} if self.remote_mode else {
+                    'principal': self._cliente_admin_actor()}
+                self.service.definir_vencimento(
+                    lancamento_id, field.get_text().strip(), **kwargs)
+                self.carregar_financeiro()
+                ui.toast(self, 'Vencimento atualizado.')
+            except Exception as error:
+                ui.aviso_erro(self, 'Vencimento', str(error))
+        dialog.connect('response', response)
+        dialog.present(self)
 
     def _confirmar_recebimento(self, lancamento_id):
         try:

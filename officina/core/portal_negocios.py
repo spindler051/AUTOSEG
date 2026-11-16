@@ -86,10 +86,6 @@ def audit(c,pid,acao,referencia,detalhes):
 
 
 def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
-    values={x:texto(d,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
-    if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
-    if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
-    if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         anterior=None
@@ -97,11 +93,18 @@ def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
             from officina.application.work_item_access import require_customer_create_locked
             require_customer_create_locked(c, principal)
             pid = principal.provider_id
+            payload = dict(d)
         else:
             from officina.application.work_item_access import require_customer_write_locked
+            from officina.application.customer_form_security import safe_customer_edit
             require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
             if not anterior: raise ValueError('Cliente não encontrado.')
+            payload = safe_customer_edit(banco,principal,anterior,d)
+        values={x:texto(payload,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
+        if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
+        if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
+        if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
         doc_novo=cad.digitos(values['documento'])
         mudou_documento=(cliente_id is None or anterior['tipo_pessoa']!=values['tipo_pessoa']
                          or cad.digitos(anterior['documento'])!=doc_novo)

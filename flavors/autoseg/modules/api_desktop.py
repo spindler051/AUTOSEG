@@ -403,6 +403,36 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
             'financeiro_a_receber': finance['a_receber']})
     if recurso in ('prestadores', 'empresa', 'composicao') and not admin:
         raise PermissionError('Somente administradores podem acessar esta área.')
+    if recurso == 'actions' and metodo == 'GET' and len(partes) == 2:
+        from flavors.autoseg.modules.autoseg_actions import action_payload
+        raw_id = query.get('id', [''])[0]
+        if raw_id:
+            object_id = _int(raw_id)
+            if object_id is None or object_id <= 0:
+                raise NaoEncontradoError('Recurso indisponível.')
+        else:
+            object_id = None
+        return _enviar(handler, 200, action_payload(
+            banco, principal, partes[1], object_id=object_id, surface='gtk'))
+    if recurso == 'forms' and metodo == 'GET' and len(partes) == 2:
+        from dataclasses import asdict
+        from flavors.autoseg.modules.autoseg_form_contracts import (customer_fields,
+                                                                     work_fields)
+        form_id = partes[1]
+        raw_id = query.get('id', [''])[0]
+        if raw_id:
+            object_id = _int(raw_id)
+            if object_id is None or object_id <= 0:
+                raise NaoEncontradoError('Recurso indisponível.')
+        else:
+            object_id = None
+        if form_id == 'customer':
+            fields = customer_fields(banco, principal, customer_id=object_id)
+        elif form_id == 'work':
+            fields = work_fields(banco, principal, os_id=object_id)
+        else:
+            raise NaoEncontradoError('Formulário indisponível.')
+        return _enviar(handler, 200, [asdict(field) for field in fields])
     if recurso == 'clientes':
         return _rota_clientes(handler, partes, query, servico, metodo, info, principal)
     if recurso == 'os':
@@ -588,6 +618,10 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         ('POST', ('atribuir',)): 'assign',
         ('POST', ('desatribuir',)): 'assign',
         ('POST', ('iniciar',)): 'start',
+        ('POST', ('assumir',)): 'assume',
+        ('POST', ('em-rota',)): 'start',
+        ('POST', ('arquivar',)): 'archive',
+        ('POST', ('reabrir',)): 'reopen',
         ('POST', ('pdf','publicar')): 'publish',
         ('POST', ('email','preparar')): 'send',
         ('POST', ('nota','preparar')): 'send',
@@ -617,6 +651,18 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
     if resto == ['iniciar'] and metodo == 'POST':
         servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start', session_id=info.get('sessao_id')))
         return _enviar(handler, 200, {'ok': True})
+    if metodo == 'POST' and resto in (['assumir'], ['em-rota'], ['arquivar'], ['reabrir']):
+        method, rule = {
+            'assumir': ('assumir_os', 'assume'),
+            'em-rota': ('em_rota_os', 'start'),
+            'arquivar': ('arquivar_os', 'archive'),
+            'reabrir': ('reabrir_os', 'reopen'),
+        }[resto[0]]
+        changed = getattr(servico, method)(
+            os_id, principal=principal,
+            authorize=_os_writer_authorize(
+                principal, os_id, rule, session_id=info.get('sessao_id')))
+        return _enviar(handler, 200, {'mudou': bool(changed)})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id, principal=principal)})

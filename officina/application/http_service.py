@@ -271,6 +271,18 @@ class HttpService(AppService):
     def me(self) -> dict:
         return self._get('/api/v1/desktop/me')
 
+    def actions(self, section: str, object_id: int | None = None) -> list[dict]:
+        if not section or '/' in section or '..' in section:
+            raise ValueError('Seção inválida.')
+        params = {'id': int(object_id)} if object_id is not None else None
+        return self._get('/api/v1/desktop/actions/' + section, params=params)
+
+    def form_fields(self, form_id: str, object_id: int | None = None) -> list[dict]:
+        if form_id not in ('customer', 'work'):
+            raise ValueError('Formulário indisponível.')
+        params = {'id': int(object_id)} if object_id is not None else None
+        return self._get('/api/v1/desktop/forms/' + form_id, params=params)
+
     def logout(self) -> None:
         try:
             self._post('/api/v1/desktop/logout')
@@ -340,6 +352,18 @@ class HttpService(AppService):
                         valor_total=0.0, forma_pagamento='',
                         origem='Compartilhada', responsavel=responsavel,
                         status=str(item['status']), incompleto=False)
+
+    def assumir_os(self, os_id: int) -> bool:
+        return bool(self._post(f'/api/v1/desktop/os/{int(os_id)}/assumir').get('mudou'))
+
+    def em_rota_os(self, os_id: int) -> bool:
+        return bool(self._post(f'/api/v1/desktop/os/{int(os_id)}/em-rota').get('mudou'))
+
+    def arquivar_os(self, os_id: int) -> bool:
+        return bool(self._post(f'/api/v1/desktop/os/{int(os_id)}/arquivar').get('mudou'))
+
+    def reabrir_os(self, os_id: int) -> bool:
+        return bool(self._post(f'/api/v1/desktop/os/{int(os_id)}/reabrir').get('mudou'))
 
     def listar_os_ativas(self, termo: str = '') -> list[OSResumo]:
         dados = self._ler('/api/v1/desktop/os/ativas', [],
@@ -424,6 +448,10 @@ class HttpService(AppService):
             a_receber=float(dados.get('a_receber') or 0),
             recebido=float(dados.get('recebido') or 0),
         )
+
+    def definir_vencimento(self, lancamento_id: int, vencimento: str) -> None:
+        self._post(f'/api/v1/desktop/financeiro/{int(lancamento_id)}/vencimento',
+                   {'vencimento': str(vencimento)})
 
     def listar_financeiro(self, termo: str = '') -> list[LancamentoFinanceiro]:
         dados = self._ler('/api/v1/desktop/financeiro', [],

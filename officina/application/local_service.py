@@ -715,6 +715,54 @@ class LocalService:
             authorize(connection)
             return aten.iniciar(self.banco, int(os_id), connection=connection)
 
+    def assumir_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'assume', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.assumir(self.banco, int(os_id), actor.provider_id,
+                                authorize=check))
+
+    def em_rota_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'start', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.marcar_em_rota(self.banco, int(os_id), actor.provider_id,
+                                      authorize=check))
+
+    def arquivar_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'archive', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.arquivar_os(self.banco, int(os_id), actor.provider_id,
+                                    ator='Desktop AUTOSEG', authorize=check))
+
+    def reabrir_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = connection.execute('SELECT status,arquivada,cliente_id FROM ordens_servico '
+                                     'WHERE id=?', (int(os_id),)).fetchone()
+            if row is None or row['arquivada'] or row['status'] not in ext.ATIVAS:
+                raise PermissionError('OS indisponível para reabertura.')
+            check = self._authorize_os(os_id, 'reopen', principal=actor,
+                                       authorize=authorize)
+            check(connection)
+            customer = connection.execute('SELECT status FROM clientes WHERE id=?',
+                                          (row['cliente_id'],)).fetchone()
+            if customer is None or customer['status'] in ('A definir', 'Inativo'):
+                raise ValueError('Cliente da OS precisa estar ativo para reabrir.')
+            connection.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,"
+                               'atualizado_em=? WHERE id=?', (ext.agora(), int(os_id)))
+            connection.execute('UPDATE os_atendimentos SET iniciado_em=NULL,'
+                               "iniciado_por=NULL,ator_inicio='',atualizado_em=? "
+                               'WHERE os_id=?', (ext.agora(), int(os_id)))
+            connection.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',
+                               (int(os_id),))
+            ext.evento(connection, int(os_id), 'OS reaberta',
+                       'Situação alterada para Aberta.', actor.provider_id,
+                       'Desktop AUTOSEG')
+        return True
+
     def atribuir_responsavel(self, organizacao_id: int, usuario_id: int, *, principal=None) -> str:
         self._company_admin(principal)
         return cad9.atribuir_responsavel(
