@@ -291,20 +291,11 @@ def _write_import_yaml_new(banco, principal, os_id, data, *, ui, session, path, 
 
 
 def _write_create_full(banco, principal, os_id, data, *, ui, session, path, quer_json):
-    from flavors.autoseg.modules import portal_prestador as portal
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    d = dict(d)
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
-        d['cliente_id'] = business._resolver_cliente_os(d,connection=c)
-        oid=write_data(banco, OSCommand.from_web(d,pid),connection=c)
-        ext.assumir(banco,oid,pid,connection=c)
-    return ui.redir(f'{url_os(banco, oid)}')
+    """The full Web creation form uses the identical OS command as GTK/API."""
+    from flavors.autoseg.modules.portal_prestador import url_os
+    result = save_order(banco, OSCommand.from_web(data, session['pid']),
+                        principal, name=session['nome'])
+    return ui.redir(url_os(banco, result.os_id))
 
 
 def _write_move_attachment(banco, principal, os_id, data, *, ui, session, path, quer_json):

@@ -704,6 +704,8 @@ class DialogoOS(Adw.Dialog):
         self.motivo = None
         self.enviar_email = None
         self.sem_nota_fiscal = None
+        self.nota_fiscal_upload = None
+        self.nota_fiscal_label = None
         self.confirmar_numero_os = None
         self.anexos_label = None
         if self.os_id is not None:
@@ -746,6 +748,14 @@ class DialogoOS(Adw.Dialog):
                              "anexe a nota fiscal antes de concluir.")
                 self.sem_nota_fiscal.set_active(False)
                 grupo.add(self.sem_nota_fiscal)
+                grupo.add(Adw.ActionRow(
+                    title="Nota fiscal em PDF",
+                    subtitle="Use um PDF válido (até 20 MB) ou declare a dispensa acima."))
+                botao_nota = ui.botao("Anexar nota fiscal PDF", self._selecionar_nota_fiscal)
+                grupo.add(_linha_custom(botao_nota))
+                self.nota_fiscal_label = Gtk.Label(label="Nenhum PDF selecionado", xalign=0)
+                self.nota_fiscal_label.add_css_class("caption")
+                grupo.add(_linha_custom(self.nota_fiscal_label))
                 caixa_fotos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 caixa_fotos.set_margin_top(8)
                 caixa_fotos.set_margin_bottom(8)
@@ -943,6 +953,40 @@ class DialogoOS(Adw.Dialog):
         self.materiais.pop(indice)
         self._atualizar_materiais()
 
+    def _selecionar_nota_fiscal(self):
+        dialogo = Gtk.FileDialog(title="Selecionar nota fiscal em PDF")
+        filtro = Gtk.FileFilter()
+        filtro.set_name("PDF")
+        filtro.add_mime_type("application/pdf")
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dialogo.set_filters(filtros)
+        dialogo.open(self.janela, None, self._nota_fiscal_escolhida)
+
+    def _nota_fiscal_escolhida(self, dialogo, resultado):
+        try:
+            arquivo = dialogo.open_finish(resultado)
+        except GLib.Error:
+            return
+        caminho = arquivo.get_path()
+        if not caminho:
+            ui.aviso_erro(self.janela, "Nota fiscal", "Selecione um PDF local.")
+            return
+        try:
+            caminho = Path(caminho)
+            if caminho.stat().st_size > 20 * 1024 * 1024:
+                raise ValueError("O PDF não pode ultrapassar 20 MB.")
+            conteudo = caminho.read_bytes()
+            if not conteudo.startswith(b"%PDF-"):
+                raise ValueError("Selecione uma nota fiscal PDF válida.")
+        except (OSError, ValueError) as erro:
+            ui.aviso_erro(self.janela, "Nota fiscal", str(erro))
+            return
+        self.nota_fiscal_upload = (caminho.name, conteudo)
+        self.nota_fiscal_label.set_text(f"Selecionado: {caminho.name}")
+        if self.sem_nota_fiscal is not None:
+            self.sem_nota_fiscal.set_active(False)
+
     def _anexar_imagens(self):
         dialogo = Gtk.FileDialog(title="Selecionar imagens do encerramento")
         filtro = Gtk.FileFilter()
@@ -1132,6 +1176,7 @@ class DialogoOS(Adw.Dialog):
             sem_nota_fiscal=(
                 self.sem_nota_fiscal is not None and
                 self.sem_nota_fiscal.get_active()),
+            nota_fiscal=self.nota_fiscal_upload,
             confirmar_numero_os=(self.confirmar_numero_os.get_text().strip()
                 if acao == "Cancelada" and self.confirmar_numero_os is not None
                 else ""),

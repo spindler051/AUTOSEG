@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
+import urllib.request
+from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -16,7 +19,7 @@ from officina.application.object_policy import Principal
 from officina.core import (atendimento_os as aten, banco, cadastros_v9 as cad9,
                           composicao, estoque_materiais as estoque, fluxo_os as fluxo,
                           prestadores_ext as ext, produtividade_os as prod)
-from flavors.autoseg.modules import os_commands
+from flavors.autoseg.modules import os_commands, api_server, prestador_auth
 
 
 class OneWriterCharacterization(unittest.TestCase):
@@ -27,11 +30,12 @@ class OneWriterCharacterization(unittest.TestCase):
         self.config.start()
         self.addCleanup(self.config.stop)
         self.databases = {}
-        for surface in ('web', 'local'):
+        for surface in ('web', 'local', 'api'):
             filename = str(Path(self.temp.name) / f'{surface}.sqlite')
             banco.criar_banco(filename)
             for installer in (ext.instalar, cad9.instalar, aten.instalar,
-                              fluxo.instalar, estoque.instalar, prod.instalar):
+                              fluxo.instalar, estoque.instalar, prod.instalar,
+                              prestador_auth.instalar):
                 installer(filename)
             composicao.instalar_banco(filename)
             pid = ext.cadastrar(filename, 'Responsible',
@@ -104,11 +108,33 @@ class OneWriterCharacterization(unittest.TestCase):
         filename, _pid, cid, actor = self.databases['local']
         return LocalService(filename).salvar_os(self.input(cid), principal=actor).os_id
 
+    def _api_create(self):
+        filename, pid, cid, actor = self.databases['api']
+        server = api_server.start(filename, '127.0.0.1', 0)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        login = prestador_auth.login(filename, 'responsible@example.invalid',
+                                     'Password12345')
+        self.assertIsNotNone(login)
+        body = asdict(self.input(cid))
+        body['imagens'] = []
+        request = urllib.request.Request(
+            f'http://127.0.0.1:{server.server_address[1]}/api/v1/desktop/os',
+            data=json.dumps(body).encode('utf-8'), method='POST',
+            headers={'Authorization': 'Bearer '+login['token'],
+                     'Content-Type': 'application/json'})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            self.assertEqual(response.status, 200)
+            payload = json.loads(response.read())
+        return int(payload['data']['os_id'])
+
     def test_create_has_the_same_business_rows_and_audit_events(self):
         web_id = self._web_create()
         local_id = self._local_create()
-        self.assertEqual(self.snapshot(self.databases['web'][0], web_id),
-                         self.snapshot(self.databases['local'][0], local_id))
+        api_id = self._api_create()
+        web_rows = self.snapshot(self.databases['web'][0], web_id)
+        self.assertEqual(web_rows, self.snapshot(self.databases['local'][0], local_id))
+        self.assertEqual(web_rows, self.snapshot(self.databases['api'][0], api_id))
 
     def test_close_without_invoice_opt_out_is_denied_on_both_surfaces(self):
         web_id = self._web_create()
