@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlparse
 
+from officina.application.os_write_service import PostCommitEffectError
 from officina.application.contracts import (
     AppError,
     ConflitoError,
@@ -181,6 +182,14 @@ def _os_input(dados: Mapping[str, Any]) -> OSInput:
             imagens.append((nome, base64.b64decode(conteudo, validate=True)))
         except (ValueError, TypeError) as erro:
             raise ValidacaoError(f'Imagem inválida: {nome}.') from erro
+    invoice = campos.get('nota_fiscal')
+    if isinstance(invoice, Mapping):
+        name = str(invoice.get('nome') or 'nota.pdf')
+        try:
+            content = base64.b64decode(invoice.get('conteudo') or '', validate=True)
+        except (ValueError, TypeError) as error:
+            raise ValidacaoError('PDF de nota fiscal inválido.') from error
+        campos['nota_fiscal'] = (name, content)
     try:
         return OSInput(**campos, imagens=tuple(imagens))
     except TypeError as erro:
@@ -1051,6 +1060,8 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
         _rota(handler, partes, query, banco, method, info, principal)
     except prestador_auth.MuitasTentativasError as erro:
         _erro(handler, 429, 'rate_limited', str(erro))
+    except PostCommitEffectError as erro:
+        _erro(handler, 503, 'effect_pending', str(erro))
     except AppError as erro:
         _erro(handler, _status_de_erro(erro), _codigo_de_erro(erro),
               erro.mensagem)

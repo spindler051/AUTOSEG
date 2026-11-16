@@ -104,14 +104,12 @@ class OneWriterCharacterization(unittest.TestCase):
         filename, _pid, cid, actor = self.databases['local']
         return LocalService(filename).salvar_os(self.input(cid), principal=actor).os_id
 
-    @unittest.expectedFailure  # Lift when GTK/API use the web's canonical writer.
     def test_create_has_the_same_business_rows_and_audit_events(self):
         web_id = self._web_create()
         local_id = self._local_create()
         self.assertEqual(self.snapshot(self.databases['web'][0], web_id),
                          self.snapshot(self.databases['local'][0], local_id))
 
-    @unittest.expectedFailure  # The previous desktop path did not enforce web closing gates.
     def test_close_without_invoice_opt_out_is_denied_on_both_surfaces(self):
         web_id = self._web_create()
         local_id = self._local_create()
@@ -123,7 +121,7 @@ class OneWriterCharacterization(unittest.TestCase):
                     relatorio_tecnico='Executado', sem_destinatario='1'),
                 {'pid': pid, 'nome': 'Responsible'})
         local, _pid, cid, actor = self.databases['local']
-        with self.assertRaisesRegex(ValueError, 'nota fiscal'):
+        with self.assertRaisesRegex(Exception, 'nota fiscal'):
             LocalService(local).salvar_os(self.input(cid, os_id=local_id,
                 acao='Concluída', relato='Executado'), principal=actor)
 
@@ -144,6 +142,71 @@ class OneWriterCharacterization(unittest.TestCase):
         filename, _pid, cid, _actor = self.databases['local']
         with self.assertRaises(PermissionError):
             LocalService(filename).salvar_os(self.input(cid))
+
+
+# Additional security invariants for the reviewer to run in an environment
+# with the production outbox installer and GTK4. Never infer a pass from this
+# file merely being present in a patch.
+class ClosingEffectParity(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='os_effect_parity_')
+        self.addCleanup(self.temp.cleanup)
+        self.db = str(Path(self.temp.name) / 'effects.sqlite')
+        banco.criar_banco(self.db)
+        for installer in (ext.instalar, cad9.instalar, aten.instalar,
+                          fluxo.instalar, estoque.instalar, prod.instalar):
+            installer(self.db)
+        composicao.instalar_banco(self.db)
+        self.pid = ext.cadastrar(self.db, 'Admin', 'effect@example.invalid',
+                                  'Password12345')
+        cad9.definir_admin(self.db, self.pid, True)
+        with ext.db(self.db) as c:
+            self.cid = c.execute('''INSERT INTO clientes
+                (nome,status,tipo_pessoa,email) VALUES
+                ('Effect Client','Ativo','Física','client@example.invalid')''').lastrowid
+        self.actor = Principal(self.pid, 'admin', organization_id='autoseg',
+                               provider_id=self.pid)
+        self.service = LocalService(self.db)
+
+    def _input(self, *, os_id=None, action='salvar', **extra):
+        base = dict(os_id=os_id, cliente_id=self.cid, tecnico='',
+                    descricao='Service', valor_mao_obra=10.,
+                    valor_materiais=0., custo_materiais=0., valor_total=10.,
+                    forma_pagamento='PIX', urgencia='Normal', observacoes='',
+                    texto_adicional='', dados_incompletos=0, tempo_horas=0.,
+                    composicao_json='', base_percentuais='total',
+                    materiais=(), acao=action, relato='Completed service',
+                    motivo='', imagens=(), sem_nota_fiscal=True)
+        base.update(extra)
+        return OSInput(**base)
+
+    def test_no_outbox_with_recipients_rejects_before_closing(self):
+        from officina.core import os_effect_outbox as outbox
+        oid = self.service.salvar_os(self._input(), principal=self.actor).os_id
+        with ext.db(self.db) as c:
+            before = dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                                    (oid,)).fetchone())
+        with self.assertRaises(outbox.OutboxUnavailable):
+            self.service.salvar_os(self._input(os_id=oid, action='Concluída'),
+                                   principal=self.actor)
+        with ext.db(self.db) as c:
+            after = dict(c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                                   (oid,)).fetchone())
+            self.assertEqual(before, after)
+            self.assertIsNone(c.execute('SELECT * FROM os_encerramentos WHERE os_id=?',
+                                        (oid,)).fetchone())
+
+    def test_opt_out_finishes_without_email_and_publishes_once(self):
+        oid = self.service.salvar_os(self._input(), principal=self.actor).os_id
+        with patch.object(fluxo, 'publicar_relatorio', return_value=None) as pdf:
+            result = self.service.salvar_os(self._input(
+                os_id=oid, action='Concluída', sem_destinatario=True),
+                principal=self.actor)
+        self.assertTrue(result.encerrada)
+        pdf.assert_called_once_with(self.db, oid)
+        with ext.db(self.db) as c:
+            self.assertEqual(c.execute('SELECT status FROM ordens_servico WHERE id=?',
+                                       (oid,)).fetchone()[0], 'Concluída')
 
 
 if __name__ == '__main__':

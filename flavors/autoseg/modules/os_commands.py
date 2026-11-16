@@ -10,7 +10,9 @@ from pathlib import Path
 from officina.application.work_item_access import (require_work_item, require_create,
     require_work_item_locked)
 from officina.application.object_policy import ObjectPolicy, Resource
-from officina.application.os_write_service import OSCommand, write_data
+from officina.application.os_write_service import (
+    OSCommand, write_data, salvar as save_order, PostCommitEffectError)
+from officina.application.os_business_support import OsBusinessSupport
 import json
 import mimetypes
 import os
@@ -149,116 +151,6 @@ def _authorize(banco, principal, os_id, permission):
 
 from officina.core import prestadores_ext as ext, cadastros_v9 as cad9, portal_negocios as neg
 from officina.integration import clientes as clientes_core
-class OsBusinessSupport:
-    """Business-side compatibility helpers moved out of HTTP Handler."""
-    def __init__(self,banco):
-        self.banco=banco
-    def _cliente_por_nome(self, nome, *, connection=None):
-        banco = self.banco
-        return clientes_core.criar_provisorio(nome, banco=banco, connection=connection)
-
-
-    def _resolver_cliente_os(self, d, oid=None, *, connection=None):
-        banco = self.banco
-        """Existing selected id, new client typed by name, or current OS client."""
-        bruto = str(d.get('cliente_id', '')).strip()
-        if bruto:
-            try:
-                cliente_id = int(bruto)
-            except (TypeError, ValueError):
-                raise ValueError('Cliente selecionado inválido.') from None
-            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-                ativo = c.execute("SELECT 1 FROM clientes WHERE id=? AND status NOT IN ('Inativo','A definir')", (cliente_id,)).fetchone()
-            if ativo:
-                return cliente_id
-            # "Cliente a definir" is intentionally allowed on an OS.
-            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-                linha = c.execute('SELECT status FROM clientes WHERE id=?',
-                                  (cliente_id,)).fetchone()
-            if linha and linha['status'] == 'A definir':
-                return cliente_id
-            raise ValueError('Cliente selecionado não encontrado ou inativo.')
-        nome = str(d.get('cliente_busca', '')).strip()
-        if len(nome) >= 2:
-            return self._cliente_por_nome(nome,connection=connection)
-        if oid is not None:
-            with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-                atual = c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
-                                  (oid,)).fetchone()
-            if atual and atual['cliente_id']:
-                return int(atual['cliente_id'])
-        raise ValueError('Selecione um cliente existente ou digite o nome de um novo cliente.')
-
-
-    def _cliente_a_definir(self, *, connection=None):
-        banco = self.banco
-        """Cadastro provisório para OS aberta antes de escolher o cliente."""
-        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-            linha=c.execute("SELECT id FROM clientes WHERE status='A definir' "
-                            "ORDER BY id LIMIT 1").fetchone()
-            if linha:
-                return int(linha['id'])
-            cur=c.execute("""INSERT INTO clientes
-                (tipo_pessoa,documento,nome,bairro,cidade,observacoes,status,criado_em)
-                VALUES('Física','','Cliente a definir','','',
-                'Criado automaticamente para uma OS aberta sem cliente. Associe o cliente depois.',
-                'A definir',?)""",(ext.agora(),))
-            return int(cur.lastrowid)
-
-
-    def _exigir_cliente_os(self, oid, acao, cliente_id=None, *, connection=None):
-        banco = self.banco
-        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-            if cliente_id:
-                linha=c.execute("SELECT nome,status FROM clientes WHERE id=?",
-                                (int(cliente_id),)).fetchone()
-            else:
-                linha=c.execute("""SELECT c.nome,c.status FROM ordens_servico o
-                    JOIN clientes c ON c.id=o.cliente_id WHERE o.id=?""",(oid,)).fetchone()
-        if not linha or linha['status'] in ('A definir','Inativo'):
-            raise ValueError(f'Escolha o cliente da OS antes de {acao}.')
-
-
-    def _persist_form_client(self, d, oid, pid, actor, rule, *, connection=None):
-        banco = self.banco
-        """Persist the client chosen in a workflow form before its action.
-
-        Workflow buttons submit the whole OS form, but only the regular
-        save route used to persist the client. Without this, selecting
-        a client and clicking "Iniciar OS" still validated the previous
-        client stored on the OS. ``rule`` mirrors the authorization of
-        each action so a denied action never changes the client.
-        """
-        if 'cliente_id' not in d and 'cliente_busca' not in d:
-            return None
-        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-            linha=c.execute('SELECT status FROM ordens_servico WHERE id=?',(oid,)).fetchone()
-            if not linha:
-                raise ValueError('OS não encontrada.')
-            if linha['status'] not in ext.ATIVAS:
-                raise ValueError('Esta OS não está ativa.')
-            responsavel=ext.responsavel_atual(c,oid)
-        if rule=='route' and responsavel is None:
-            raise ValueError('Atribua um técnico antes de marcar Em rota.')
-        # ObjectPolicy already checked the exact command before this helper.
-        cliente_id=int(self._resolver_cliente_os(d,oid,connection=connection))
-        with (nullcontext(connection) if connection is not None else ext.db(banco)) as c:
-            if connection is None:
-                c.execute('BEGIN IMMEDIATE')
-            atual=c.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',(oid,)).fetchone()
-            anterior=int(atual['cliente_id'] or 0) if atual else 0
-            if anterior!=cliente_id:
-                c.execute('UPDATE ordens_servico SET cliente_id=?,atualizado_em=? WHERE id=?',
-                          (cliente_id,ext.agora(),oid))
-                nome=c.execute('SELECT nome FROM clientes WHERE id=?',(cliente_id,)).fetchone()
-                rotulo=nome['nome'] if nome else str(cliente_id)
-                ext.evento(c,oid,'Cliente definido',
-                           f'{anterior} -> {cliente_id} ({rotulo})',pid,actor)
-                neg.audit(c,pid,'Cliente da OS alterado',oid,
-                          f'{anterior} -> {cliente_id} ({rotulo})')
-            if connection is None:
-                c.commit()
-        return cliente_id
 
 
 def _write_import_yaml_existing(banco, principal, os_id, data, *, ui, session, path, quer_json):
@@ -882,215 +774,84 @@ def _write_action_rota(banco, principal, os_id, data, *, ui, session, path, quer
 
 
 def _write_action_cancelar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    """Cancel through the same writer/effects path as a form confirmation."""
     from flavors.autoseg.modules import portal_prestador as portal
-    card = portal.card
-    botao = portal.botao
-    esc = portal.esc
-    url_os = portal.url_os
-    business = OsBusinessSupport(banco)
-    s = session
-    pid = s["pid"]
-    d = data
-    partes = path.strip('/').split('/')
-    oid = os_id
-    acao = partes[2]
-    motivo=str(d.get('motivo_encerramento','')).strip()[:2000]
+    motivo = str(data.get('motivo_encerramento', '')).strip()[:2000]
     if not motivo:
         raise ValueError('Informe o motivo do cancelamento.')
-    publish_key=None
+    # Compact cancel forms omit the order fields. Reuse the stored values rather
+    # than wiping them while writing the cancellation through the common path.
     with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
-        o=c.execute('SELECT numero_os,status,arquivada FROM ordens_servico WHERE id=?',
-                    (oid,)).fetchone()
-        if not o or o['status'] not in ext.ATIVAS:
+        order = c.execute('SELECT * FROM ordens_servico WHERE id=?',
+                          (os_id,)).fetchone()
+        if order is None:
             raise ValueError('Esta OS não está ativa.')
-        if 'arquivada' in o.keys() and o['arquivada']:
-            raise ValueError('OS arquivada: edição bloqueada.')
-        _transaction_guard(banco,principal,oid,'cancel')(c)
-        atual=ext.responsavel_atual(c,oid)
-        admin=bool(c.execute('SELECT 1 FROM v9_admin_prestadores WHERE prestador_id=?',
-                             (pid,)).fetchone())
-        if atual not in (None,pid) and not admin:
-            raise PermissionError('Somente o responsável ou administrador pode cancelar.')
-        if str(d.get('confirmar_numero_os','')).strip()!=str(o['numero_os']).strip():
-            raise ValueError('O número da OS digitado não confere.')
-        fluxo.aplicar_encerramento(
-            c,oid,'Cancelada','',motivo,prestador_id=pid,
-            ator=f'Prestador {s["nome"]}')
-        neg.audit(c,pid,'OS cancelada',oid,f'Motivo: {motivo}')
-        publish_key=_enqueue_pdf_if_installed(c,oid,'cancel')
+        materials = c.execute('''SELECT item,quantidade,unidade,valor_unitario
+            FROM materiais_os WHERE os_id=? ORDER BY id''', (os_id,)).fetchall()
+        payload = {
+            'cliente_id': str(order['cliente_id']),
+            'descricao': order['descricao'] or '',
+            'tecnico': order['tecnico'] or '',
+            'forma_pagamento': order['forma_pagamento'] or '',
+            'forma_pagamento_opcional': '1',
+            'urgencia': order['urgencia'] or 'Normal',
+            'observacoes': order['observacoes'] or '',
+            'texto_adicional': order['texto_adicional'] or '',
+            'valor_mao_obra': str(order['valor_mao_obra'] or 0),
+            'custo_materiais': str(order['custo_materiais'] or 0),
+            'tempo_horas': str(order['tempo_horas'] or 0),
+            'valor_total_override': str(order['valor_total'] or 0),
+            'materiais_presentes': '1',
+            'material_item[]': [row['item'] for row in materials],
+            'material_qtd[]': ['' if row['quantidade'] is None else
+                              str(row['quantidade']) for row in materials],
+            'material_unidade[]': [row['unidade'] or '' for row in materials],
+            'material_unit[]': [str(row['valor_unitario']) for row in materials],
+            'valor_materiais_manual': str(order['valor_materiais'] or 0)
+                                     if not materials else '0',
+            'base_percentuais': order['base_percentuais'] or 'total',
+            'motivo_encerramento': motivo,
+            'cancelar_os': '1',
+            'confirmar_numero_os': str(data.get('confirmar_numero_os', '')),
+            '_versao_os': order['atualizado_em'] or '',
+            'modo_envio': 'encerrar',
+            'acao_status': 'Cancelada',
+        }
     try:
-        if publish_key:
-            _publish_postcommit(banco,publish_key)
-        else:
-            fluxo.publicar_relatorio(banco,oid)
-    except (ValueError,OSError) as falha:
-        LOG.exception('OS %s cancelada, mas falhou a publicação do PDF',oid)
-        return ui.pagina('OS cancelada — PDF pendente',card('Cancelamento salvo',
-            '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
-            f'<p class="bad">{esc(str(falha)[:400])}</p>'
-            +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),s,503)
-    return ui.redir(f'{url_os(banco, oid)}')
-
+        result = save_order(banco,
+            OSCommand.from_web(payload, session['pid'], os_id), principal,
+            authorize=_transaction_guard(banco, principal, os_id, 'cancel'),
+            name=session['nome'])
+    except PostCommitEffectError as failure:
+        return ui.pagina('OS cancelada — PDF pendente', portal.card('Cancelamento salvo',
+            '<p>A OS foi cancelada, mas o PDF não foi publicado.</p>'
+            +f'<p class="bad">{portal.esc(str(failure)[:400])}</p>'
+            +portal.botao('Voltar à OS', portal.url_os(banco, os_id))), session, 503)
+    return ui.redir(portal.url_os(banco, result.os_id))
 
 def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, quer_json):
+    """Render only; canonical save, closing and effects live in the service."""
     from flavors.autoseg.modules import portal_prestador as portal
     card, botao, esc, url_os = portal.card, portal.botao, portal.esc, portal.url_os
-    business = OsBusinessSupport(banco)
-    pid = session['pid']
-    oid = os_id
-    d = dict(data)
-    if 'emails_adicionais' in d:
-        raise ValueError('Campo de e-mail avulso não aceito. Cadastre o contato da OS.')
-    draft = d.get('modo_envio') in ('rascunho', 'salvar')
-    if draft:
-        with ext.db(banco) as c:
-            c.execute('BEGIN IMMEDIATE')
-            guard = _transaction_guard(banco, principal, oid, 'edit')
-            if guard:
-                guard(c)
-            # No partial draft is kept if the OS data is rejected.
-            values = {key: value for key, value in d.items()
-                      if key not in ('csrf', 'modo_envio', 'nota_fiscal')}
-            ext.salvar_rascunho_web(banco, oid, pid, values, connection=c)
-            save = dict(d, acao_status='salvar')
-            save['cliente_id'] = business._resolver_cliente_os(save, oid, connection=c)
-            write_data(banco, OSCommand.from_web(save,pid,oid),connection=c,
-                         staged_attachments=outbox.installed(c))
-            cad9.salvar_detalhes(banco, oid, str(d.get('v9_diagnostico','')),
-                str(d.get('v9_execucao','')), str(d.get('v9_resultado','')),
-                connection=c)
-            if d.get('relatorio_tecnico'):
-                aten.salvar_rascunho(c,oid,str(d.get('relatorio_tecnico','')),
-                                    f'Prestador {session["nome"]}')
-            # Uploaded invoice bytes require a durable stage before the commit;
-            # reject this combination instead of silently committing only data.
-            arquivo = d.get('nota_fiscal')
-            if isinstance(arquivo,tuple) and arquivo[0]:
-                ext.salvar_nota_fiscal(banco,oid,pid,arquivo[0],arquivo[1],
-                   connection=c,staged=outbox.installed(c))
-        _flush_staged_files(banco,oid)
-        return ui.pagina('Rascunho salvo',card('Rascunho',
+    command = OSCommand.from_web(data, session['pid'], os_id)
+    try:
+        result = save_order(
+            banco, command, principal,
+            authorize=_transaction_guard(banco, principal, os_id,
+                _permission('salvar', data)), name=session['nome'])
+    except PostCommitEffectError as failure:
+        title = ('OS encerrada — PDF pendente' if failure.effect == 'publicação do PDF'
+                 else 'OS salva — efeito pendente')
+        return ui.pagina(title, card('OS salva',
+            '<p>A OS foi salva, mas um efeito pós-commit não foi confirmado.</p>'
+            f'<p class="bad">{esc(str(failure)[:400])}</p>'
+            +botao('Voltar à OS', f'{url_os(banco, failure.result.os_id)}')),
+            session, 503)
+    if result.rascunho:
+        return ui.pagina('Rascunho salvo', card('Rascunho',
             '<p class="good">Rascunho salvo com sucesso.</p>'
-            +botao('Voltar à OS',f'{url_os(banco, oid)}')),session)
-
-    cancelar_os = str(d.get('cancelar_os','')).lower() in ('1','on','true','sim')
-    acao_status = 'Cancelada' if cancelar_os else str(d.get('acao_status',''))
-    d['acao_status'] = acao_status
-    if cad9.prestador_admin(banco, pid):
-        d['_permitir_trocar_cliente'] = '1'
-    if acao_status in ('Pendente','Concluída','Cancelada') and not d.get('modo_envio'):
-        d['modo_envio'] = 'encerrar'
-    if d.get('modo_envio')!='encerrar':
-        raise ValueError('Use Confirmar situação da OS.')
-    if acao_status not in ('Pendente','Concluída','Cancelada'):
-        raise ValueError('Selecione a situação da OS: Pendente, Concluída ou Cancelada.')
-    if acao_status=='Concluída' and not (str(d.get('v9_execucao','')).strip()
-            or str(d.get('relatorio_tecnico','')).strip()):
-        raise ValueError('Preencha Serviço executado antes de concluir.')
-    if acao_status=='Concluída' and not str(d.get('forma_pagamento','')).strip():
-        raise ValueError('Selecione a forma de pagamento antes de concluir a OS.')
-    if not str(d.get('relatorio_tecnico','')).strip():
-        d['relatorio_tecnico']='\n'.join(str(d.get(x,'')).strip()
-            for x in ('v9_diagnostico','v9_execucao','v9_resultado')
-            if str(d.get(x,'')).strip())
-    sem_destinatario = str(d.get('sem_destinatario','')).lower() in ('1','on','true','sim')
-    pdf_key = email_key = None
-    references = []
-    with ext.db(banco) as c:
-        c.execute('BEGIN IMMEDIATE')
-        action = _permission('salvar',d)
-        guard = _transaction_guard(banco,principal,oid,action)
-        if guard:
-            guard(c)
-        if acao_status in ('Pendente','Concluída'):
-            pub_guard = _transaction_guard(banco,principal,oid,'publish')
-            if pub_guard:
-                pub_guard(c)
-        d['cliente_id'] = business._resolver_cliente_os(d,oid,connection=c)
-        if acao_status=='Concluída':
-            business._exigir_cliente_os(oid,'concluir a OS',d['cliente_id'],connection=c)
-            if not d.get('sem_nota_fiscal') and not c.execute(
-                    'SELECT 1 FROM os_notas_fiscais WHERE os_id=? LIMIT 1', (oid,)).fetchone():
-                raise ValueError('Anexe a nota fiscal ou marque "Não precisa de nota fiscal" antes de concluir.')
-        if not (acao_status=='Cancelada' and ext.administrador(c,pid)):
-            prod._os_ativa_responsavel(c,oid,pid)
-        use_outbox=outbox.installed(c)
-        requires_email=False
-        if acao_status=='Concluída' and not sem_destinatario:
-            explicit = str(d.get('destinatarios_presente','')) == '1'
-            references=d.get('destinatario_sel[]')
-            if references is None:
-                if explicit:
-                    references=[]
-                else:
-                    person=c.execute('SELECT tipo_pessoa FROM clientes WHERE id=?',
-                                     (d['cliente_id'],)).fetchone()
-                    references=['cliente'] if person and person['tipo_pessoa']=='Física' else ['sindico','cliente']
-            if isinstance(references,str): references=[references]
-            if not isinstance(references,list) or any(x not in
-                ('cliente','sindico','administradora') for x in references):
-                raise ValueError('Seleção de destinatários inválida.')
-            if explicit and not references:
-                raise ValueError('Selecione ao menos um destinatário ou marque "Não precisa de destinatário".')
-            contact=c.execute('''SELECT email,sindico_email,administradora_email
-                FROM clientes WHERE id=?''',(d['cliente_id'],)).fetchone()
-            fields={'cliente':'email','sindico':'sindico_email',
-                    'administradora':'administradora_email'}
-            if not contact:
-                raise ValueError('Cliente indisponível para seleção de destinatários.')
-            if d.get('destinatario_sel[]') is None and not explicit:
-                references=[ref for ref in references if contact[fields[ref]]]
-            elif any(not contact[fields[ref]] for ref in references):
-                raise ValueError('Destinatário selecionado não tem contato válido.')
-            addresses=[prod._email_validado(contact[fields[ref]]) for ref in references]
-            if not references or not addresses or any(not address for address in addresses):
-                raise ValueError('Não há endereço válido para envio. Cadastre um contato ou marque "Não precisa de destinatário".')
-            requires_email = True
-            # Reject before OS persistence; earlier transactional edits roll back.
-            if requires_email:
-                outbox.require_installed(c)
-        write_data(banco, OSCommand.from_web(d,pid,oid),connection=c,
-                         staged_attachments=use_outbox)
-        prod.limpar_rota_ao_iniciar(banco,oid,connection=c)
-        if acao_status in ('Pendente','Concluída'):
-            prod.registrar_etapa(banco,oid,pid,acao_status,d,connection=c)
-        cad9.salvar_detalhes(banco,oid,str(d.get('v9_diagnostico','')),
-            str(d.get('v9_execucao','')),str(d.get('v9_resultado','')),
-            connection=c)
-        if acao_status in fluxo.PUBLICAVEIS and use_outbox:
-            revision=_work_revision(c,oid)
-            pdf_key=outbox.enqueue_pdf(c,oid,revision,'save-'+acao_status)['operation_key']
-            if acao_status=='Concluída' and requires_email:
-                email_key=outbox.enqueue_email(c,oid,revision,'send-'+acao_status,
-                    recipient_refs=references)['operation_key']
-
-    _flush_staged_files(banco,oid)
-    if acao_status in fluxo.PUBLICAVEIS:
-        try:
-            if pdf_key:
-                _publish_postcommit(banco,pdf_key)
-            else:
-                fluxo.publicar_relatorio(banco,oid)
-        except Exception as exc:
-            LOG.exception('Encerrada OS %s, mas falhou a publicação do PDF',oid)
-            return ui.pagina('OS encerrada — PDF pendente',card('Encerramento salvo',
-                '<p>Os dados da OS foram preservados. Falhou apenas a publicação do PDF.</p>'
-                +f'<p class="bad">{esc(str(exc)[:400])}</p>'
-                +botao('Abrir OS e republicar PDF',f'{url_os(banco, oid)}')),session,503)
-        if email_key:
-            try:
-                from flavors.autoseg.modules import gmail_service
-                outbox.deliver_email(banco,email_key,
-                    lambda oid,key: gmail_service.enviar_operacao_outbox(banco,oid,key))
-            except Exception as exc:
-                LOG.exception('OS %s: e-mail não entregue pela outbox',oid)
-                return ui.pagina('OS salva — e-mail não entregue',card('Envio de e-mail',
-                    '<p>A OS foi salva, mas o envio não foi confirmado. '
-                    'Confira o estado da outbox antes de solicitar reenvio.</p>'
-                    +f'<p class="bad">{esc(str(exc)[:400])}</p>'
-                    +botao('Voltar à OS',f'{url_os(banco, oid)}')),session,503)
-    return ui.redir(f'{url_os(banco, oid)}')
+            +botao('Voltar à OS', f'{url_os(banco, result.os_id)}')), session)
+    return ui.redir(f'{url_os(banco, result.os_id)}')
 
 
 def _write_action_publicar(banco, principal, os_id, data, *, ui, session, path, quer_json):

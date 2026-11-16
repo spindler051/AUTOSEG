@@ -703,6 +703,8 @@ class DialogoOS(Adw.Dialog):
         self.relatorio = None
         self.motivo = None
         self.enviar_email = None
+        self.sem_nota_fiscal = None
+        self.confirmar_numero_os = None
         self.anexos_label = None
         if self.os_id is not None:
             grupo = Adw.PreferencesGroup(title="Atendimento e encerramento")
@@ -730,11 +732,20 @@ class DialogoOS(Adw.Dialog):
                 self.relatorio = ui.campo_texto(grupo, "Relatório técnico", relato, 120)
                 self.motivo = ui.campo_texto(grupo, "Motivo — cancelamento / não realização",
                                              motivo, 60)
+                self.confirmar_numero_os = Adw.EntryRow(
+                    title="Digite o número da OS para confirmar cancelamento")
+                grupo.add(self.confirmar_numero_os)
                 self.enviar_email = Adw.SwitchRow(
                     title="Enviar relatório por e-mail ao concluir",
                     subtitle="Desligue para concluir sem destinatário.")
                 self.enviar_email.set_active(True)
                 grupo.add(self.enviar_email)
+                self.sem_nota_fiscal = Adw.SwitchRow(
+                    title="Não precisa de nota fiscal",
+                    subtitle="Declare explicitamente a dispensa; caso contrário, "
+                             "anexe a nota fiscal antes de concluir.")
+                self.sem_nota_fiscal.set_active(False)
+                grupo.add(self.sem_nota_fiscal)
                 caixa_fotos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 caixa_fotos.set_margin_top(8)
                 caixa_fotos.set_margin_bottom(8)
@@ -1072,6 +1083,14 @@ class DialogoOS(Adw.Dialog):
             ui.aviso_erro(self.janela, "Motivo obrigatório",
                           "Descreva o motivo do cancelamento ou da não realização.")
             return
+        if acao == "Cancelada":
+            confirmacao = (self.confirmar_numero_os.get_text().strip()
+                           if self.confirmar_numero_os is not None else "")
+            esperado = str((self.dados or {}).get("numero_os") or "").strip()
+            if not esperado or confirmacao != esperado:
+                ui.aviso_erro(self.janela, "Confirmação do cancelamento",
+                    "Digite exatamente o número da OS para confirmar.")
+                return
         if acao and not relato:
             ui.aviso_erro(self.janela, "Relatório obrigatório",
                           "Preencha o relatório técnico antes de mudar o status da OS.")
@@ -1107,6 +1126,15 @@ class DialogoOS(Adw.Dialog):
             relato=relato,
             motivo=motivo,
             imagens=tuple(imagens),
+            sem_destinatario=(
+                self.enviar_email is not None and
+                not self.enviar_email.get_active()),
+            sem_nota_fiscal=(
+                self.sem_nota_fiscal is not None and
+                self.sem_nota_fiscal.get_active()),
+            confirmar_numero_os=(self.confirmar_numero_os.get_text().strip()
+                if acao == "Cancelada" and self.confirmar_numero_os is not None
+                else ""),
         )
         try:
             resultado = self.janela.service.salvar_os(entrada)
@@ -1119,19 +1147,12 @@ class DialogoOS(Adw.Dialog):
 
         os_salvo_id = resultado.os_id
         if resultado.encerrada:
-            ui.toast(self.janela, "OS encerrada. Publicando PDF…")
+            # The application service has already published the PDF and, when
+            # selected, dispatched through the outbox. A second publication
+            # here would create an unintended duplicate document/e-mail.
+            ui.toast(self.janela, "OS encerrada. PDF e envio tratados pelo serviço.")
             self.close()
-            enviar_email = (acao == "Concluída"
-                            and (self.enviar_email is None or self.enviar_email.get_active()))
-            self.janela.publicar_pdf(os_salvo_id, enviar_email=enviar_email)
             self.janela.carregar_os()
-            self.janela.carregar_historico()
-            return
-
-        if self.os_id is not None and resultado.status_anterior in ui.STATUS_FIM:
-            ui.toast(self.janela, "OS atualizada. Republicando PDF…")
-            self.close()
-            self.janela.publicar_pdf(os_salvo_id)
             self.janela.carregar_historico()
             return
 

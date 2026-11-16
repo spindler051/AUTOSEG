@@ -525,6 +525,12 @@ class HttpService(AppService):
              'conteudo': base64.b64encode(conteudo).decode('ascii')}
             for nome, conteudo in dados.imagens
         ]
+        if dados.nota_fiscal is not None:
+            filename, content = dados.nota_fiscal
+            payload['nota_fiscal'] = {
+                'nome': filename,
+                'conteudo': base64.b64encode(content).decode('ascii'),
+            }
         resposta = self._post('/api/v1/desktop/os', payload)
         return OSResultado(**resposta)
 
