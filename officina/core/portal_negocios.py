@@ -89,6 +89,8 @@ def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         anterior=None
+        from officina.application.live_provider import resolve as live_provider
+        principal = live_provider(banco, principal, connection=c)
         if cliente_id is None:
             from officina.application.work_item_access import require_customer_create_locked
             require_customer_create_locked(c, principal)

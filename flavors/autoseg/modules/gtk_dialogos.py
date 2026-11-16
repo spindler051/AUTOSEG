@@ -88,103 +88,77 @@ class DialogoCliente(Adw.Dialog):
                 subtitle="Complete os campos mínimos configurados em completude.yaml.",
                 icon_name="dialog-warning-symbolic"))
 
-        grupo = Adw.PreferencesGroup(title="Dados principais")
-        pagina.add(grupo)
-        self.tipo_pessoa = ui.campo_combo(grupo, "Tipo de pessoa", ["Jurídica", "Física"],
-                                         0 if self.dados.get("tipo_pessoa", "Jurídica") != "Física" else 1)
-        self.documento = ui.campo_entry(grupo, "CPF / CNPJ",
-                                        cad9.formatar_documento(self.dados.get("documento", "")))
-        self.documento_status = Gtk.Image()
-        self.documento_status.set_pixel_size(16)
-        self.documento_status.set_visible(False)
-        self.documento.add_suffix(self.documento_status)
-        self.tipo_pessoa.connect("notify::selected",
-                                 lambda *_args: self._atualizar_documento_ui())
-        self.documento.connect("notify::text",
-                               lambda *_args: self._atualizar_documento_ui())
-        self.nome = ui.campo_entry(grupo, "Nome / Razão Social", self.dados.get("nome", ""))
-        self.nome_fantasia = ui.campo_entry(grupo, "Nome fantasia", self.dados.get("nome_fantasia", ""))
-        status_opcoes = ["Ativo", "Inativo", "Prospect"]
-        self.status = ui.campo_combo(
-            grupo, "Status", status_opcoes,
-            status_opcoes.index(self.dados.get("status", "Ativo"))
-            if self.dados.get("status", "Ativo") in status_opcoes else 0)
+        # The field projection *constructs* the GTK form. A missing field never
+        # exists as a visible or submitted widget; it is not merely hidden.
+        # Group boundaries follow the canonical CUSTOMER order and are only
+        # presentation (authorization belongs to the writer).
+        from flavors.autoseg.modules.autoseg_form_contracts import CUSTOMER
+        field_by_id = {field.id: field for field in CUSTOMER.fields}
+        projected = {((field.get('id')) if isinstance(field, dict) else field.id): field
+                     for field in self._fields}
+        self._customer_widgets = {}
+        sections = (
+            ('Dados principais', ('tipo_pessoa','documento','nome','nome_fantasia','status')),
+            ('Endereço', ('cep','endereco','numero','complemento','bairro','cidade','uf')),
+            ('Contato', ('telefone','email')),
+            ('Síndico / responsável', ('sindico_nome','sindico_telefone','sindico_email')),
+            ('Imobiliária / administradora',
+             ('administradora','administradora_telefone','administradora_email')),
+            ('Observações', ('observacoes',)),
+        )
+        for group_name, names in sections:
+            visible = [field_by_id[name] for name in names if name in projected]
+            if not visible:
+                continue
+            group = Adw.PreferencesGroup(title=group_name)
+            pagina.add(group)
+            for field in visible:
+                remote = projected[field.id]
+                prop = (lambda key, default=None:
+                        remote.get(key, default) if isinstance(remote, dict)
+                        else getattr(remote, key, default))
+                label = prop('label', field.label)
+                choices = prop('options', field.options)
+                value = str(self.dados.get(field.id, field.default) or '')
+                if field.id == 'documento':
+                    value = cad9.formatar_documento(value)
+                if field.type == 'select':
+                    options = list(choices)
+                    selected = options.index(value) if value in options else (
+                        options.index(field.default) if field.default in options else 0)
+                    widget = ui.campo_combo(group, label, options, selected)
+                elif field.type == 'textarea':
+                    widget = ui.campo_texto(group, label, value, altura=100)
+                else:
+                    widget = ui.campo_entry(group, label, value)
+                if prop('help', field.help) or prop('hint', field.hint) or field.required:
+                    details = prop('help', field.help) or prop('hint', field.hint) or ''
+                    if prop('required', field.required):
+                        details = ('Obrigatório. ' + details).strip()
+                    widget.set_tooltip_text(details)
+                self._customer_widgets[field.id] = widget
+                setattr(self, field.widget_attribute, widget)
+                if field.id == 'documento':
+                    self.documento_status = Gtk.Image()
+                    self.documento_status.set_pixel_size(16)
+                    self.documento_status.set_visible(False)
+                    widget.add_suffix(self.documento_status)
+                    widget.connect('notify::text',
+                                   lambda *_args: self._atualizar_documento_ui())
+                elif field.id == 'tipo_pessoa':
+                    widget.connect('notify::selected',
+                                   lambda *_args: self._atualizar_documento_ui())
+                elif field.id == 'cep':
+                    search = Gtk.Button(icon_name='system-search-symbolic')
+                    search.add_css_class('flat')
+                    search.set_tooltip_text('Buscar CEP')
+                    search.connect('clicked', lambda *_args: self._buscar_cep())
+                    widget.add_suffix(search)
+                    self.cep_status = Adw.ActionRow(title='Consulta de CEP', subtitle='')
+                    group.add(self.cep_status)
 
-        grupo = Adw.PreferencesGroup(title="Endereço")
-        pagina.add(grupo)
-        self.cep = ui.campo_entry(grupo, "CEP", self.dados.get("cep", ""))
-        buscar = Gtk.Button(icon_name="system-search-symbolic")
-        buscar.add_css_class("flat")
-        buscar.set_tooltip_text("Buscar CEP")
-        buscar.connect("clicked", lambda *_args: self._buscar_cep())
-        self.cep.add_suffix(buscar)
-        self.cep_status = Adw.ActionRow(title="Consulta de CEP", subtitle="")
-        grupo.add(self.cep_status)
-        self.endereco = ui.campo_entry(grupo, "Rua / Logradouro", self.dados.get("endereco", ""))
-        self.numero_end = ui.campo_entry(grupo, "Número", self.dados.get("numero", ""))
-        self.complemento = ui.campo_entry(grupo, "Complemento", self.dados.get("complemento", ""))
-        self.bairro = ui.campo_entry(grupo, "Bairro", self.dados.get("bairro", ""))
-        self.cidade = ui.campo_entry(grupo, "Cidade", self.dados.get("cidade", ""))
-        self.uf = ui.campo_entry(grupo, "UF", self.dados.get("uf", ""))
-
-        grupo = Adw.PreferencesGroup(title="Contato")
-        pagina.add(grupo)
-        self.telefone = ui.campo_entry(grupo, "Telefone", self.dados.get("telefone", ""))
-        self.email = ui.campo_entry(grupo, "E-mail", self.dados.get("email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Síndico / responsável")
-        pagina.add(grupo)
-        self.sindico_nome = ui.campo_entry(grupo, "Nome", self.dados.get("sindico_nome", ""))
-        self.sindico_telefone = ui.campo_entry(grupo, "Telefone", self.dados.get("sindico_telefone", ""))
-        self.sindico_email = ui.campo_entry(grupo, "E-mail", self.dados.get("sindico_email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Imobiliária / administradora")
-        pagina.add(grupo)
-        self.administradora = ui.campo_entry(grupo, "Nome", self.dados.get("administradora", ""))
-        self.administradora_telefone = ui.campo_entry(grupo, "Telefone",
-                                                       self.dados.get("administradora_telefone", ""))
-        self.administradora_email = ui.campo_entry(grupo, "E-mail",
-                                                   self.dados.get("administradora_email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Observações")
-        pagina.add(grupo)
-        self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
-
-        # Both transports use the server's field projection; widgets are only
-        # an adapter and cannot authorize a write.
-        widgets = {
-            'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
-            'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
-            'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
-            'numero': self.numero_end, 'complemento': self.complemento,
-            'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
-            'telefone': self.telefone, 'email': self.email,
-            'sindico_nome': self.sindico_nome,
-            'sindico_telefone': self.sindico_telefone,
-            'sindico_email': self.sindico_email,
-            'administradora': self.administradora,
-            'administradora_telefone': self.administradora_telefone,
-            'administradora_email': self.administradora_email,
-            'observacoes': self.observacoes,
-        }
-        allowed_names = set()
-        for field in self._fields:
-            name = field.get('id') if isinstance(field, dict) else field.id
-            label = field.get('label') if isinstance(field, dict) else field.label
-            help_text = field.get('help') if isinstance(field, dict) else field.help
-            allowed_names.add(name)
-            widget = widgets.get(name)
-            if widget is not None:
-                widget.set_title(label)
-                if help_text:
-                    widget.set_tooltip_text(help_text)
-        for name,widget in widgets.items():
-            if name not in allowed_names:
-                widget.set_visible(False)
-        if 'cep' not in allowed_names:
-            self.cep_status.set_visible(False)
-
-        self._atualizar_documento_ui()
+        if 'documento' in self._customer_widgets:
+            self._atualizar_documento_ui()
 
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -202,7 +176,11 @@ class DialogoCliente(Adw.Dialog):
         self.set_child(toolbar)
 
     def _atualizar_documento_ui(self):
-        tipo = ui.valor_combo(self.tipo_pessoa)
+        if 'documento' not in self._customer_widgets:
+            return
+        tipo = (ui.valor_combo(self.tipo_pessoa)
+                if 'tipo_pessoa' in self._customer_widgets else
+                str(self.dados.get('tipo_pessoa', 'Jurídica')))
         esperado = 11 if tipo == "Física" else 14
         self.documento.set_tooltip_text("CPF" if tipo == "Física" else "CNPJ")
         doc = cad9.digitos(self.documento.get_text())
@@ -261,10 +239,11 @@ class DialogoCliente(Adw.Dialog):
         if dados.get("erro"):
             self._cep_erro()
             return False
-        self.endereco.set_text(dados.get("logradouro", ""))
-        self.bairro.set_text(dados.get("bairro", ""))
-        self.cidade.set_text(dados.get("localidade", ""))
-        self.uf.set_text(dados.get("uf", ""))
+        for field, key in (('endereco','logradouro'), ('bairro','bairro'),
+                           ('cidade','localidade'), ('uf','uf')):
+            widget = self._customer_widgets.get(field)
+            if widget is not None:
+                widget.set_text(dados.get(key, ''))
         self.cep_status.set_subtitle("Endereço encontrado.")
         return False
 
@@ -275,29 +254,21 @@ class DialogoCliente(Adw.Dialog):
         return False
 
     def _salvar(self):
-        dados = {
-            "tipo_pessoa": ui.valor_combo(self.tipo_pessoa),
-            "documento": self.documento.get_text().strip(),
-            "nome": self.nome.get_text().strip(),
-            "nome_fantasia": self.nome_fantasia.get_text().strip(),
-            "endereco": self.endereco.get_text().strip(),
-            "numero": self.numero_end.get_text().strip(),
-            "complemento": self.complemento.get_text().strip(),
-            "bairro": self.bairro.get_text().strip(),
-            "cep": self.cep.get_text().strip(),
-            "cidade": self.cidade.get_text().strip(),
-            "uf": self.uf.get_text().strip(),
-            "telefone": self.telefone.get_text().strip(),
-            "email": self.email.get_text().strip(),
-            "sindico_nome": self.sindico_nome.get_text().strip(),
-            "sindico_telefone": self.sindico_telefone.get_text().strip(),
-            "sindico_email": self.sindico_email.get_text().strip(),
-            "administradora": self.administradora.get_text().strip(),
-            "administradora_telefone": self.administradora_telefone.get_text().strip(),
-            "administradora_email": self.administradora_email.get_text().strip(),
-            "observacoes": self.observacoes.get_texto(),
-            "status": ui.valor_combo(self.status),
-        }
+        # Never round-trip absent fields: a live demotion or stale form cannot
+        # restore hidden values. Web and GTK writers recheck roles in SQLite.
+        from flavors.autoseg.modules.autoseg_form_contracts import CUSTOMER
+        dados = {}
+        for field in CUSTOMER.fields:
+            widget = self._customer_widgets.get(field.id)
+            if widget is None:
+                continue
+            if field.type == 'select':
+                value = ui.valor_combo(widget)
+            elif field.type == 'textarea':
+                value = widget.get_texto()
+            else:
+                value = widget.get_text().strip()
+            dados[field.input_name] = value
         try:
             kwargs = ({} if self.janela.remote_mode else
                       {'principal': self.janela._cliente_admin_actor()})

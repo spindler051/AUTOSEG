@@ -1933,8 +1933,10 @@ class PortalPrestador:
                 if cid is None and preenchimento:d.update(preenchimento)
                 erro_html=card('YAML não aplicado',f'<p class="bad">{esc(erro)}</p>') if erro else ''
                 from flavors.autoseg.modules.autoseg_form_contracts import customer_fields
-                visible_fields = customer_fields(
-                    banco, os_commands._provider_context(banco,s), customer_id=cid)
+                from officina.application.live_provider import resolve as live_provider
+                current_actor = live_provider(banco, os_commands._provider_context(banco,s))
+                visible_fields = customer_fields(banco, current_actor, customer_id=cid)
+                can_manage_customer_credentials = current_actor.role == 'admin'
                 fields=[]
                 for field in visible_fields:
                     value = d.get(field.id, field.default)
@@ -1951,14 +1953,18 @@ class PortalPrestador:
                             field.label, field.input_name, value or '',
                             required=field.required,
                             kind='email' if field.id.endswith('email') else 'text')
-                    fields.append(f'<div data-form-field="{esc(field.id)}">{control}</div>')
+                    hint = field.help or field.hint
+                    helper = f'<small class="muted">{esc(hint)}</small>' if hint else ''
+                    fields.append(f'<div data-form-field="{esc(field.id)}" '
+                                  f'data-required="{str(field.required).lower()}">'
+                                  +control+helper+'</div>')
                 corpo=(f'<div class="page-actions">{botao("← Clientes","/clientes","secondary")}'
                     + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
                     + f'</div><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
                     + '<div class="col2">'+''.join(fields)+'</div>'
                     +(('<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Somente administradores podem redefinir a senha legada. A ação será auditada.</p>'
                         +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
-                        +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if s.get('admin') else '')
+                        +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if can_manage_customer_credentials else '')
                     +'<button type="submit">Salvar cliente</button></form>')
                 if not cid:
                     importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data" data-no-ajax>{self.hidden(s)}'
@@ -4674,8 +4680,11 @@ class PortalPrestador:
                     if path=='/clientes/novo/salvar' or (len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='salvar'):
                         senha_nova=str(d.get('senha_cliente',''))
                         confirmar=str(d.get('confirmar_senha_cliente',''))
-                        if (senha_nova or confirmar) and not s.get('admin'):
-                            raise PermissionError('Somente administradores podem redefinir a senha do cliente.')
+                        if senha_nova or confirmar:
+                            from officina.application.live_provider import resolve as live_provider
+                            live_actor = live_provider(banco, os_commands._provider_context(banco,s))
+                            if live_actor.role != 'admin':
+                                raise PermissionError('Somente administradores podem redefinir a senha do cliente.')
                         if senha_nova or confirmar:
                             if len(senha_nova)<10:raise ValueError('A senha do cliente deve ter pelo menos 10 caracteres.')
                             if senha_nova!=confirmar:raise ValueError('A confirmação da senha não corresponde.')

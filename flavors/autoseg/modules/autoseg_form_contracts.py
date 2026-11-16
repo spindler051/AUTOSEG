@@ -86,14 +86,14 @@ CUSTOMER = Form('customer', 'customers', (
 def customer_fields(banco, principal, *, customer_id=None) -> tuple[Field, ...]:
     """Server-only projection. Never trust submitted visibility or role flags."""
     from officina.application import work_item_access as access
-    if principal is None:
-        raise PermissionError('Identidade obrigatória.')
+    from officina.application.live_provider import resolve as live_provider
+    principal = live_provider(banco, principal)
     if customer_id is None:
         access.require_customer_create(principal)
         return CUSTOMER.fields
     access.require_customer_read(banco, principal, int(customer_id))
     access.require_customer_write(banco, principal, int(customer_id))
-    if access.can_read_all(principal, 'customer'):
+    if principal.role == 'admin' and access.can_read_all(principal, 'customer'):
         return CUSTOMER.fields
     scoped = access.involved_customer_field_scopes(principal)
     return tuple(field for field in CUSTOMER.fields

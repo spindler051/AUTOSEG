@@ -966,6 +966,8 @@ class LocalService:
                 from officina.application.work_item_access import require_customer_create_locked
                 with ext.db(self.banco) as connection:
                     connection.execute('BEGIN IMMEDIATE')
+                    from officina.application.live_provider import resolve as live_provider
+                    principal = live_provider(self.banco, principal, connection=connection)
                     require_customer_create_locked(connection, principal)
                     registro = clientes_core.salvar(
                         cliente_id, dict(dados), banco=self.banco, connection=connection)
@@ -973,23 +975,16 @@ class LocalService:
                 from officina.application import work_item_access as access
                 with ext.db(self.banco) as connection:
                     connection.execute('BEGIN IMMEDIATE')
+                    from officina.application.live_provider import resolve as live_provider
+                    principal = live_provider(self.banco, principal, connection=connection)
                     access.require_customer_write_locked(connection, principal, int(cliente_id))
                     current = connection.execute('SELECT * FROM clientes WHERE id=?',
                                                  (int(cliente_id),)).fetchone()
                     if current is None:
                         raise ValueError('Cliente não encontrado.')
-                    if access.can_read_all(principal, 'customer'):
-                        payload = dict(dados)
-                    else:
-                        allowed = access.involved_customer_field_scopes(principal)
-                        editable = {'nome', 'status'} | {
-                            field for field in ('documento', 'telefone', 'email', 'cidade', 'endereco')
-                            if (field if field != 'cidade' else 'endereco') in allowed}
-                        payload = {field: current[field] for field in clientes_core.CAMPOS
-                                   if field != 'dados_incompletos'}
-                        for field, value in dados.items():
-                            if field in editable:
-                                payload[field] = value
+                    from officina.application.customer_form_security import safe_customer_edit
+                    payload = safe_customer_edit(self.banco, principal, current, dict(dados),
+                                                 connection=connection)
                     registro = clientes_core.salvar(
                         cliente_id, payload, banco=self.banco, connection=connection)
         except clientes_core.ErroCliente as erro:
