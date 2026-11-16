@@ -165,7 +165,7 @@ DEV**.
 | FB-0059 | `/os` | It was not possible to conclude an OS without choosing an e-mail recipient. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_conclusao_sem_destinatario_nao_exige_email`) |
 | FB-0060 | `/os` | The OS could be concluded without a payment method. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_conclusao_exige_forma_de_pagamento`) |
 | FB-0062 | `/login` | Login errors appeared as a full page and lost what the user had typed. All form errors should be toast/inline without navigation. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_login_erro_fica_inline_e_preserva_email`) |
-| FB-0063 | `/financeiro` (web + GTK) | Personal per-user visual mask: a checkbox on each received entry hides that value and removes it from the user's own “Recebido” card only. The item stays **Recebido**; admin/reports/server totals and other users are unchanged. Not the global 144/145 toggle. | Pendente na DEV | — |
+| FB-0063 | `/financeiro` (web + GTK) | Personal per-user visual mask stored **on the server**: a checkbox on each received entry hides that value and removes it from the user's own “Recebido” card only. The item stays **Recebido**; admin/reports/ledger and other users are unchanged. Not the global 144/145 toggle. | Pendente na DEV | — |
 
 ### FB-0063 — Mascarar valor por item recebido
 
@@ -181,9 +181,10 @@ user's view.
 - the entry remains listed and keeps the status **Recebido**;
 - its value is hidden as `•••` and excluded from that user's “Recebido” card
   only;
-- the real `financeiro`/`produtividade_repasses` rows, the server totals, the
+- the real `financeiro`/`produtividade_repasses` rows, the company ledger, the
   reports and the admin view stay untouched;
-- no permission key, no admin toggle, no audit entry, no schema.
+- no permission key, no admin toggle, no audit entry;
+- one additive server-side preference table, approved with this item.
 
 **Behavior**
 
@@ -193,15 +194,29 @@ user's view.
 - unmask restores the value and the total;
 - the choice is remembered per user.
 
-**Persistence**
+**Persistence (server-side, per user)**
 
-Client-local per user, so no schema is needed:
+The preference is stored on the server, so it follows the provider across
+devices and clients. Proposed additive table (approval is this item):
 
-- Web: `localStorage`, keyed by provider id plus the item key;
-- GTK: a small JSON in `~/.config/autoseg` (or the existing settings file);
+```text
+financeiro_mascaras(
+  prestador_id INTEGER NOT NULL,
+  item_kind   TEXT NOT NULL,   -- 'finalizador' | 'rateio'
+  item_key    TEXT NOT NULL,   -- financeiro.id or os_id
+  masked_em   TEXT NOT NULL,
+  PRIMARY KEY (prestador_id, item_kind, item_key)
+)
+```
 
-Account-synced masking across devices would need a server-side user preference
-and a schema approval; that is out of scope unless requested.
+- only the owner reads and writes their own rows; the server derives
+  `prestador_id` from the authenticated principal, never from the request;
+- the personal finance endpoint returns `masked` per item and computes that
+  user's “Recebido” total excluding the masked ones;
+- admin, reports, PDF and the real ledger are not affected;
+- unmasking deletes the row;
+- an alternative is a generic `prestador_preferencias` table if more visual
+  preferences appear; do not hide this in a business config blob.
 
 **Why it is not 144/145**
 
@@ -219,26 +234,31 @@ The two can coexist.
    secondary);
 5. legacy rows (`confirmado_por = NULL`, e.g. the 680,00 consolidation) are
    maskable like any other;
-6. persistence: client-local, no schema;
+6. persistence: server-side per provider; one additive table, no changes to
+   the ledger;
 7. reports/PDF/admin: unaffected.
 
 **Non-goals**
 
 - do not delete the received row;
 - do not alter `financeiro` or `produtividade_repasses` amounts;
-- do not change server totals, reports or the admin view;
+- do not change company totals, reports or the admin view;
 - do not confuse this with the global visual mask (144/145);
-- no schema, flags or migration.
+- the only schema addition is the per-user preference table above; no flags,
+  no migration of existing data.
 
 **Acceptance tests (when implemented)**
 
 - masking one received row keeps it as Recebido, shows `•••`, and reduces the
   card by exactly its value;
 - unmasking restores the exact total;
-- the choice survives a reload (web) and an app restart (GTK);
-- another browser/user still sees the full value and the full total;
-- server totals, reports, PDF and admin view are unchanged;
-- no database row or amount is modified.
+- the choice survives a reload (web), an app restart (GTK) and a login on
+  another device, because it is stored on the server;
+- another provider still sees the full value and the full total, and cannot
+  read or change this provider's mask;
+- company totals, reports, PDF and admin view are unchanged;
+- no `financeiro`/`produtividade_repasses` row or amount is modified;
+- unmasking deletes only the preference row.
 
 ### FB-0057 — Busca e criação de cliente na OS
 
