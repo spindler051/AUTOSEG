@@ -46,9 +46,10 @@ class CustomerDetailParityTest(unittest.TestCase):
         # The server's field projection drives visibility; the widget table is
         # only an adapter and the old self.dados loop is gone.
         self.assertIn('from flavors.autoseg.modules.autoseg_form_contracts import customer_fields', source)
-        self.assertIn('allowed_names = set()', source)
-        self.assertIn('if name not in allowed_names:', source)
-        self.assertIn('widget.set_visible(False)', source)
+        self.assertIn('self._fields = customer_fields', source)
+        self.assertIn('for group_name, names in sections:', source)
+        self.assertIn('if name in projected', source)
+        self.assertIn('self._customer_widgets = {}', source)
 
     def test_unrelated_customer_denied(self):
         with self.assertRaises(PermissionError):

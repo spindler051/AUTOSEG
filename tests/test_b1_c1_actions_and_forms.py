@@ -92,10 +92,13 @@ class ActionsAndFormsTest(unittest.TestCase):
     def test_work_actions_are_object_and_role_scoped(self):
         admin = self._ids(self.admin_actor, self.own_os)
         self.assertTrue({'work.edit', 'work.conclude', 'work.assign',
-                         'work.archive', 'work.reopen'}.issubset(admin))
+                         'work.archive'}.issubset(admin))
+        # Reopen and publish/email/invoice are state-gated; an active OS must
+        # not offer them, even to an administrator.
+        self.assertNotIn('work.reopen', admin)
         employee = self._ids(self.employee_actor, self.own_os)
         self.assertTrue({'work.open', 'work.edit', 'work.start',
-                         'work.conclude'}.issubset(employee))
+                         'work.conclude', 'work.cancel'}.issubset(employee))
         self.assertFalse({'work.assign', 'work.archive', 'work.reopen'}.intersection(employee))
         unrelated = self._ids(self.employee_actor, self.other_os)
         self.assertNotIn('work.edit', unrelated)
