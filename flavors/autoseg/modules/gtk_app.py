@@ -76,7 +76,7 @@ class Janela(Adw.ApplicationWindow):
         self.sessao = sessao
         self.set_title(ui.APP_TITLE)
         self.set_default_size(1180, 700)
-        self.set_size_request(900, 560)
+        self.set_size_request(360, 480)
         self._ativo = True
         self._links_estado = {}
         self._links_busy = False
@@ -137,11 +137,20 @@ class Janela(Adw.ApplicationWindow):
         self._instalar_css()
         self._acoes()
         split = Adw.NavigationSplitView()
+        self._nav_split = split
         split.set_min_sidebar_width(220)
         split.set_max_sidebar_width(280)
         split.set_sidebar(self._construir_lateral())
         split.set_content(self._construir_conteudo())
-        self.set_content(split)
+        # The breakpoint changes layout, never capabilities or page contents.
+        adaptive = Adw.BreakpointBin()
+        adaptive.set_size_request(360, 480)
+        breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse('max-width: 600sp'))
+        breakpoint.add_setter(split, 'collapsed', True)
+        adaptive.add_breakpoint(breakpoint)
+        adaptive.set_child(split)
+        self.set_content(adaptive)
 
     def _instalar_css(self):
         provider = Gtk.CssProvider()
@@ -286,7 +295,15 @@ class Janela(Adw.ApplicationWindow):
         caixa.append(self.banner_transporte)
         caixa.append(self.banner_servidor)
         self.stack.set_vexpand(True)
-        caixa.append(self.stack)
+        self.stack.set_hexpand(True)
+        clamp = Adw.Clamp()
+        clamp.set_maximum_size(1200)
+        clamp.set_tightening_threshold(600)
+        clamp.set_child(self.stack)
+        scroller = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroller.set_child(clamp)
+        caixa.append(scroller)
         self.toast_overlay = Adw.ToastOverlay(child=caixa)
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)
@@ -326,6 +343,9 @@ class Janela(Adw.ApplicationWindow):
         self.stack.set_visible_child_name(nome)
         self.titulo_janela.set_title(titulo_texto)
         self._atualizar_pagina(nome)
+        # In collapsed mode the chosen section is the content NavigationPage;
+        # the header's native back button restores the sidebar.
+        self._nav_split.set_show_content(True)
 
     def _ir_para(self, nome):
         for indice, (chave, _titulo, _icone) in enumerate(self.nav_itens):
