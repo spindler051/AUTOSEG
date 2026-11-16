@@ -60,6 +60,13 @@ class DialogoCliente(Adw.Dialog):
                 raise PermissionError('Recurso indisponível.')
             self.dados = dict(registro.campos)
 
+        from flavors.autoseg.modules.autoseg_form_contracts import customer_fields
+        if janela.remote_mode:
+            self._fields = self.servico.form_fields('customer',cliente_id)
+        else:
+            self._fields = customer_fields(BANCO, janela._cliente_admin_actor(),
+                                           customer_id=cliente_id)
+
         titulo = "Editar cliente" if cliente_id else (
             "Novo cliente (YAML)" if importado else "Novo cliente")
         self.set_title(titulo)
@@ -81,93 +88,77 @@ class DialogoCliente(Adw.Dialog):
                 subtitle="Complete os campos mínimos configurados em completude.yaml.",
                 icon_name="dialog-warning-symbolic"))
 
-        grupo = Adw.PreferencesGroup(title="Dados principais")
-        pagina.add(grupo)
-        self.tipo_pessoa = ui.campo_combo(grupo, "Tipo de pessoa", ["Jurídica", "Física"],
-                                         0 if self.dados.get("tipo_pessoa", "Jurídica") != "Física" else 1)
-        self.documento = ui.campo_entry(grupo, "CPF / CNPJ",
-                                        cad9.formatar_documento(self.dados.get("documento", "")))
-        self.documento_status = Gtk.Image()
-        self.documento_status.set_pixel_size(16)
-        self.documento_status.set_visible(False)
-        self.documento.add_suffix(self.documento_status)
-        self.tipo_pessoa.connect("notify::selected",
-                                 lambda *_args: self._atualizar_documento_ui())
-        self.documento.connect("notify::text",
-                               lambda *_args: self._atualizar_documento_ui())
-        self.nome = ui.campo_entry(grupo, "Nome / Razão Social", self.dados.get("nome", ""))
-        self.nome_fantasia = ui.campo_entry(grupo, "Nome fantasia", self.dados.get("nome_fantasia", ""))
-        status_opcoes = ["Ativo", "Inativo", "Prospect"]
-        self.status = ui.campo_combo(
-            grupo, "Status", status_opcoes,
-            status_opcoes.index(self.dados.get("status", "Ativo"))
-            if self.dados.get("status", "Ativo") in status_opcoes else 0)
+        # The field projection *constructs* the GTK form. A missing field never
+        # exists as a visible or submitted widget; it is not merely hidden.
+        # Group boundaries follow the canonical CUSTOMER order and are only
+        # presentation (authorization belongs to the writer).
+        from flavors.autoseg.modules.autoseg_form_contracts import CUSTOMER
+        field_by_id = {field.id: field for field in CUSTOMER.fields}
+        projected = {((field.get('id')) if isinstance(field, dict) else field.id): field
+                     for field in self._fields}
+        self._customer_widgets = {}
+        sections = (
+            ('Dados principais', ('tipo_pessoa','documento','nome','nome_fantasia','status')),
+            ('Endereço', ('cep','endereco','numero','complemento','bairro','cidade','uf')),
+            ('Contato', ('telefone','email')),
+            ('Síndico / responsável', ('sindico_nome','sindico_telefone','sindico_email')),
+            ('Imobiliária / administradora',
+             ('administradora','administradora_telefone','administradora_email')),
+            ('Observações', ('observacoes',)),
+        )
+        for group_name, names in sections:
+            visible = [field_by_id[name] for name in names if name in projected]
+            if not visible:
+                continue
+            group = Adw.PreferencesGroup(title=group_name)
+            pagina.add(group)
+            for field in visible:
+                remote = projected[field.id]
+                prop = (lambda key, default=None:
+                        remote.get(key, default) if isinstance(remote, dict)
+                        else getattr(remote, key, default))
+                label = prop('label', field.label)
+                choices = prop('options', field.options)
+                value = str(self.dados.get(field.id, field.default) or '')
+                if field.id == 'documento':
+                    value = cad9.formatar_documento(value)
+                if field.type == 'select':
+                    options = list(choices)
+                    selected = options.index(value) if value in options else (
+                        options.index(field.default) if field.default in options else 0)
+                    widget = ui.campo_combo(group, label, options, selected)
+                elif field.type == 'textarea':
+                    widget = ui.campo_texto(group, label, value, altura=100)
+                else:
+                    widget = ui.campo_entry(group, label, value)
+                if prop('help', field.help) or prop('hint', field.hint) or field.required:
+                    details = prop('help', field.help) or prop('hint', field.hint) or ''
+                    if prop('required', field.required):
+                        details = ('Obrigatório. ' + details).strip()
+                    widget.set_tooltip_text(details)
+                self._customer_widgets[field.id] = widget
+                setattr(self, field.widget_attribute, widget)
+                if field.id == 'documento':
+                    self.documento_status = Gtk.Image()
+                    self.documento_status.set_pixel_size(16)
+                    self.documento_status.set_visible(False)
+                    widget.add_suffix(self.documento_status)
+                    widget.connect('notify::text',
+                                   lambda *_args: self._atualizar_documento_ui())
+                elif field.id == 'tipo_pessoa':
+                    widget.connect('notify::selected',
+                                   lambda *_args: self._atualizar_documento_ui())
+                elif field.id == 'cep':
+                    search = Gtk.Button(icon_name='system-search-symbolic')
+                    search.add_css_class('flat')
+                    search.set_tooltip_text('Buscar CEP')
+                    search.connect('clicked', lambda *_args: self._buscar_cep())
+                    widget.add_suffix(search)
+                    self.cep_status = Adw.ActionRow(title='Consulta de CEP', subtitle='')
+                    group.add(self.cep_status)
 
-        grupo = Adw.PreferencesGroup(title="Endereço")
-        pagina.add(grupo)
-        self.cep = ui.campo_entry(grupo, "CEP", self.dados.get("cep", ""))
-        buscar = Gtk.Button(icon_name="system-search-symbolic")
-        buscar.add_css_class("flat")
-        buscar.set_tooltip_text("Buscar CEP")
-        buscar.connect("clicked", lambda *_args: self._buscar_cep())
-        self.cep.add_suffix(buscar)
-        self.cep_status = Adw.ActionRow(title="Consulta de CEP", subtitle="")
-        grupo.add(self.cep_status)
-        self.endereco = ui.campo_entry(grupo, "Rua / Logradouro", self.dados.get("endereco", ""))
-        self.numero_end = ui.campo_entry(grupo, "Número", self.dados.get("numero", ""))
-        self.complemento = ui.campo_entry(grupo, "Complemento", self.dados.get("complemento", ""))
-        self.bairro = ui.campo_entry(grupo, "Bairro", self.dados.get("bairro", ""))
-        self.cidade = ui.campo_entry(grupo, "Cidade", self.dados.get("cidade", ""))
-        self.uf = ui.campo_entry(grupo, "UF", self.dados.get("uf", ""))
-
-        grupo = Adw.PreferencesGroup(title="Contato")
-        pagina.add(grupo)
-        self.telefone = ui.campo_entry(grupo, "Telefone", self.dados.get("telefone", ""))
-        self.email = ui.campo_entry(grupo, "E-mail", self.dados.get("email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Síndico / responsável")
-        pagina.add(grupo)
-        self.sindico_nome = ui.campo_entry(grupo, "Nome", self.dados.get("sindico_nome", ""))
-        self.sindico_telefone = ui.campo_entry(grupo, "Telefone", self.dados.get("sindico_telefone", ""))
-        self.sindico_email = ui.campo_entry(grupo, "E-mail", self.dados.get("sindico_email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Imobiliária / administradora")
-        pagina.add(grupo)
-        self.administradora = ui.campo_entry(grupo, "Nome", self.dados.get("administradora", ""))
-        self.administradora_telefone = ui.campo_entry(grupo, "Telefone",
-                                                       self.dados.get("administradora_telefone", ""))
-        self.administradora_email = ui.campo_entry(grupo, "E-mail",
-                                                   self.dados.get("administradora_email", ""))
-
-        grupo = Adw.PreferencesGroup(title="Observações")
-        pagina.add(grupo)
-        self.observacoes = ui.campo_texto(grupo, "", self.dados.get("observacoes", ""), altura=100)
-
-        # The API/local read service has already excluded forbidden columns.
-        # Hide their widgets as well; do not display empty editable proxies.
-        if cliente_id is not None and not getattr(janela.sessao, 'admin', False):
-            widgets = {
-                'tipo_pessoa': self.tipo_pessoa, 'documento': self.documento,
-                'nome': self.nome, 'nome_fantasia': self.nome_fantasia,
-                'status': self.status, 'cep': self.cep, 'endereco': self.endereco,
-                'numero': self.numero_end, 'complemento': self.complemento,
-                'bairro': self.bairro, 'cidade': self.cidade, 'uf': self.uf,
-                'telefone': self.telefone, 'email': self.email,
-                'sindico_nome': self.sindico_nome,
-                'sindico_telefone': self.sindico_telefone,
-                'sindico_email': self.sindico_email,
-                'administradora': self.administradora,
-                'administradora_telefone': self.administradora_telefone,
-                'administradora_email': self.administradora_email,
-                'observacoes': self.observacoes,
-            }
-            for field, widget in widgets.items():
-                if field not in self.dados:
-                    widget.set_visible(False)
-            if 'cep' not in self.dados:
-                self.cep_status.set_visible(False)
-
-        self._atualizar_documento_ui()
+        if 'documento' in self._customer_widgets:
+            self._atualizar_documento_ui()
 
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -185,9 +176,13 @@ class DialogoCliente(Adw.Dialog):
         self.set_child(toolbar)
 
     def _atualizar_documento_ui(self):
-        tipo = ui.valor_combo(self.tipo_pessoa)
+        if 'documento' not in self._customer_widgets:
+            return
+        tipo = (ui.valor_combo(self.tipo_pessoa)
+                if 'tipo_pessoa' in self._customer_widgets else
+                str(self.dados.get('tipo_pessoa', 'Jurídica')))
         esperado = 11 if tipo == "Física" else 14
-        self.documento.set_title("CPF" if tipo == "Física" else "CNPJ")
+        self.documento.set_tooltip_text("CPF" if tipo == "Física" else "CNPJ")
         doc = cad9.digitos(self.documento.get_text())
         if not doc:
             self.documento_status.set_visible(False)
@@ -244,10 +239,11 @@ class DialogoCliente(Adw.Dialog):
         if dados.get("erro"):
             self._cep_erro()
             return False
-        self.endereco.set_text(dados.get("logradouro", ""))
-        self.bairro.set_text(dados.get("bairro", ""))
-        self.cidade.set_text(dados.get("localidade", ""))
-        self.uf.set_text(dados.get("uf", ""))
+        for field, key in (('endereco','logradouro'), ('bairro','bairro'),
+                           ('cidade','localidade'), ('uf','uf')):
+            widget = self._customer_widgets.get(field)
+            if widget is not None:
+                widget.set_text(dados.get(key, ''))
         self.cep_status.set_subtitle("Endereço encontrado.")
         return False
 
@@ -258,29 +254,21 @@ class DialogoCliente(Adw.Dialog):
         return False
 
     def _salvar(self):
-        dados = {
-            "tipo_pessoa": ui.valor_combo(self.tipo_pessoa),
-            "documento": self.documento.get_text().strip(),
-            "nome": self.nome.get_text().strip(),
-            "nome_fantasia": self.nome_fantasia.get_text().strip(),
-            "endereco": self.endereco.get_text().strip(),
-            "numero": self.numero_end.get_text().strip(),
-            "complemento": self.complemento.get_text().strip(),
-            "bairro": self.bairro.get_text().strip(),
-            "cep": self.cep.get_text().strip(),
-            "cidade": self.cidade.get_text().strip(),
-            "uf": self.uf.get_text().strip(),
-            "telefone": self.telefone.get_text().strip(),
-            "email": self.email.get_text().strip(),
-            "sindico_nome": self.sindico_nome.get_text().strip(),
-            "sindico_telefone": self.sindico_telefone.get_text().strip(),
-            "sindico_email": self.sindico_email.get_text().strip(),
-            "administradora": self.administradora.get_text().strip(),
-            "administradora_telefone": self.administradora_telefone.get_text().strip(),
-            "administradora_email": self.administradora_email.get_text().strip(),
-            "observacoes": self.observacoes.get_texto(),
-            "status": ui.valor_combo(self.status),
-        }
+        # Never round-trip absent fields: a live demotion or stale form cannot
+        # restore hidden values. Web and GTK writers recheck roles in SQLite.
+        from flavors.autoseg.modules.autoseg_form_contracts import CUSTOMER
+        dados = {}
+        for field in CUSTOMER.fields:
+            widget = self._customer_widgets.get(field.id)
+            if widget is None:
+                continue
+            if field.type == 'select':
+                value = ui.valor_combo(widget)
+            elif field.type == 'textarea':
+                value = widget.get_texto()
+            else:
+                value = widget.get_text().strip()
+            dados[field.input_name] = value
         try:
             kwargs = ({} if self.janela.remote_mode else
                       {'principal': self.janela._cliente_admin_actor()})
@@ -703,6 +691,10 @@ class DialogoOS(Adw.Dialog):
         self.relatorio = None
         self.motivo = None
         self.enviar_email = None
+        self.sem_nota_fiscal = None
+        self.nota_fiscal_upload = None
+        self.nota_fiscal_label = None
+        self.confirmar_numero_os = None
         self.anexos_label = None
         if self.os_id is not None:
             grupo = Adw.PreferencesGroup(title="Atendimento e encerramento")
@@ -719,7 +711,8 @@ class DialogoOS(Adw.Dialog):
                     icon_name="media-playback-start-symbolic"))
             if self.dados and self.dados.get("status") in ui.ATIVAS:
                 status_opcoes = ["Selecione a situação", "Pendente", "Concluída", "Cancelada"]
-                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, 0)
+                initial = status_opcoes.index(self.modo) if self.modo in status_opcoes else 0
+                self.status = ui.campo_combo(grupo, "Situação ao salvar", status_opcoes, initial)
                 relato = ""
                 motivo = ""
                 if self.encerramento:
@@ -730,11 +723,28 @@ class DialogoOS(Adw.Dialog):
                 self.relatorio = ui.campo_texto(grupo, "Relatório técnico", relato, 120)
                 self.motivo = ui.campo_texto(grupo, "Motivo — cancelamento / não realização",
                                              motivo, 60)
+                self.confirmar_numero_os = Adw.EntryRow(
+                    title="Digite o número da OS para confirmar cancelamento")
+                grupo.add(self.confirmar_numero_os)
                 self.enviar_email = Adw.SwitchRow(
                     title="Enviar relatório por e-mail ao concluir",
                     subtitle="Desligue para concluir sem destinatário.")
                 self.enviar_email.set_active(True)
                 grupo.add(self.enviar_email)
+                self.sem_nota_fiscal = Adw.SwitchRow(
+                    title="Não precisa de nota fiscal",
+                    subtitle="Declare explicitamente a dispensa; caso contrário, "
+                             "anexe a nota fiscal antes de concluir.")
+                self.sem_nota_fiscal.set_active(False)
+                grupo.add(self.sem_nota_fiscal)
+                grupo.add(Adw.ActionRow(
+                    title="Nota fiscal em PDF",
+                    subtitle="Use um PDF válido (até 20 MB) ou declare a dispensa acima."))
+                botao_nota = ui.botao("Anexar nota fiscal PDF", self._selecionar_nota_fiscal)
+                grupo.add(_linha_custom(botao_nota))
+                self.nota_fiscal_label = Gtk.Label(label="Nenhum PDF selecionado", xalign=0)
+                self.nota_fiscal_label.add_css_class("caption")
+                grupo.add(_linha_custom(self.nota_fiscal_label))
                 caixa_fotos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 caixa_fotos.set_margin_top(8)
                 caixa_fotos.set_margin_bottom(8)
@@ -768,14 +778,93 @@ class DialogoOS(Adw.Dialog):
         espaco.set_hexpand(True)
         rodape.append(espaco)
         if self.os_id is not None:
-            rodape.append(ui.botao("Salvar rascunho", lambda: self._salvar(None)))
+            if self.status is not None:
+                rodape.append(ui.botao("Salvar rascunho", lambda: self._salvar(None)))
             if self.status is not None:
                 rodape.append(ui.botao("Confirmar situação", self._confirmar_situacao,
                                        css="suggested-action"))
         else:
             rodape.append(ui.botao("Salvar OS", lambda: self._salvar(None), css="suggested-action"))
+        # Historical OS actions remain available when the row leaves the
+        # active work list. They are resolved for this exact OS, not for the
+        # selected row of the main section.
+        self._dialog_work_actions = {}
+        if self.os_id is not None:
+            try:
+                if self.janela.remote_mode:
+                    allowed = self.janela.service.actions('work', self.os_id)
+                else:
+                    from dataclasses import asdict
+                    from flavors.autoseg.modules.autoseg_actions import resolved_actions
+                    allowed = [asdict(item) for item in resolved_actions(
+                        self.servico.banco if hasattr(self, 'servico') else
+                        _servico(self.janela).banco,
+                        self.janela._cliente_admin_actor(), 'work',
+                        object_id=self.os_id, surface='gtk')]
+                history_ids = {'work.archive', 'work.reopen', 'work.publish',
+                               'work.email', 'work.invoice'}
+                self._dialog_work_actions = {item['id']: item for item in allowed
+                                             if item['id'] in history_ids}
+                if self._dialog_work_actions:
+                    menu = Gio.Menu()
+                    for item in allowed:
+                        if item['id'] not in self._dialog_work_actions:
+                            continue
+                        entry = Gio.MenuItem.new(item['label'], None)
+                        entry.set_action_and_target_value('b1.execute',
+                            GLib.Variant('s', item['id']))
+                        menu.append_item(entry)
+                    group_actions = Gio.SimpleActionGroup()
+                    execute = Gio.SimpleAction.new(
+                        'execute', GLib.VariantType.new('s'))
+                    execute.connect('activate',
+                        lambda _action, parameter:
+                            self._dialog_work_activate(parameter.get_string()))
+                    group_actions.add_action(execute)
+                    self.insert_action_group('b1', group_actions)
+                    more = Gtk.MenuButton(icon_name='view-more-symbolic',
+                                          menu_model=menu)
+                    more.set_tooltip_text('Ações autorizadas para esta OS')
+                    rodape.append(more)
+            except Exception:
+                # Never present unverified controls when authorization fails.
+                self._dialog_work_actions = {}
         toolbar.add_bottom_bar(rodape)
         self.set_child(toolbar)
+
+    def _dialog_work_activate(self, action_id):
+        entry = self._dialog_work_actions.get(action_id)
+        if entry is None or self.os_id is None:
+            ui.aviso_erro(self.janela, 'OS', 'Ação indisponível.')
+            return
+
+        def execute():
+            try:
+                service = _servico(self.janela)
+                kwargs = self.janela._os_kwargs()
+                if action_id == 'work.reopen':
+                    service.reabrir_os(self.os_id, **kwargs)
+                elif action_id == 'work.archive':
+                    service.arquivar_os(self.os_id, **kwargs)
+                elif action_id == 'work.publish':
+                    self.janela.publicar_pdf(self.os_id)
+                elif action_id == 'work.email':
+                    self.janela._email_os(self.os_id)
+                elif action_id == 'work.invoice':
+                    self.janela._nota_os(self.os_id)
+                else:
+                    raise PermissionError('Ação indisponível.')
+                self.janela.carregar_os()
+                self.janela.carregar_historico()
+                self.close()
+            except Exception as error:
+                ui.aviso_erro(self.janela, entry['label'], str(error))
+
+        if entry.get('destructive'):
+            ui.alerta(self.janela, entry['label'], entry['confirm'], execute,
+                      destrutivo=True, rotulo_ok=entry['label'])
+        else:
+            execute()
 
     def _filtrar_clientes_os(self):
         termo = self.busca_cliente_os.get_text().strip().casefold() \
@@ -932,6 +1021,40 @@ class DialogoOS(Adw.Dialog):
         self.materiais.pop(indice)
         self._atualizar_materiais()
 
+    def _selecionar_nota_fiscal(self):
+        dialogo = Gtk.FileDialog(title="Selecionar nota fiscal em PDF")
+        filtro = Gtk.FileFilter()
+        filtro.set_name("PDF")
+        filtro.add_mime_type("application/pdf")
+        filtros = Gio.ListStore.new(Gtk.FileFilter)
+        filtros.append(filtro)
+        dialogo.set_filters(filtros)
+        dialogo.open(self.janela, None, self._nota_fiscal_escolhida)
+
+    def _nota_fiscal_escolhida(self, dialogo, resultado):
+        try:
+            arquivo = dialogo.open_finish(resultado)
+        except GLib.Error:
+            return
+        caminho = arquivo.get_path()
+        if not caminho:
+            ui.aviso_erro(self.janela, "Nota fiscal", "Selecione um PDF local.")
+            return
+        try:
+            caminho = Path(caminho)
+            if caminho.stat().st_size > 20 * 1024 * 1024:
+                raise ValueError("O PDF não pode ultrapassar 20 MB.")
+            conteudo = caminho.read_bytes()
+            if not conteudo.startswith(b"%PDF-"):
+                raise ValueError("Selecione uma nota fiscal PDF válida.")
+        except (OSError, ValueError) as erro:
+            ui.aviso_erro(self.janela, "Nota fiscal", str(erro))
+            return
+        self.nota_fiscal_upload = (caminho.name, conteudo)
+        self.nota_fiscal_label.set_text(f"Selecionado: {caminho.name}")
+        if self.sem_nota_fiscal is not None:
+            self.sem_nota_fiscal.set_active(False)
+
     def _anexar_imagens(self):
         dialogo = Gtk.FileDialog(title="Selecionar imagens do encerramento")
         filtro = Gtk.FileFilter()
@@ -1072,6 +1195,14 @@ class DialogoOS(Adw.Dialog):
             ui.aviso_erro(self.janela, "Motivo obrigatório",
                           "Descreva o motivo do cancelamento ou da não realização.")
             return
+        if acao == "Cancelada":
+            confirmacao = (self.confirmar_numero_os.get_text().strip()
+                           if self.confirmar_numero_os is not None else "")
+            esperado = str((self.dados or {}).get("numero_os") or "").strip()
+            if not esperado or confirmacao != esperado:
+                ui.aviso_erro(self.janela, "Confirmação do cancelamento",
+                    "Digite exatamente o número da OS para confirmar.")
+                return
         if acao and not relato:
             ui.aviso_erro(self.janela, "Relatório obrigatório",
                           "Preencha o relatório técnico antes de mudar o status da OS.")
@@ -1107,6 +1238,16 @@ class DialogoOS(Adw.Dialog):
             relato=relato,
             motivo=motivo,
             imagens=tuple(imagens),
+            sem_destinatario=(
+                self.enviar_email is not None and
+                not self.enviar_email.get_active()),
+            sem_nota_fiscal=(
+                self.sem_nota_fiscal is not None and
+                self.sem_nota_fiscal.get_active()),
+            nota_fiscal=self.nota_fiscal_upload,
+            confirmar_numero_os=(self.confirmar_numero_os.get_text().strip()
+                if acao == "Cancelada" and self.confirmar_numero_os is not None
+                else ""),
         )
         try:
             resultado = self.janela.service.salvar_os(entrada)
@@ -1119,19 +1260,12 @@ class DialogoOS(Adw.Dialog):
 
         os_salvo_id = resultado.os_id
         if resultado.encerrada:
-            ui.toast(self.janela, "OS encerrada. Publicando PDF…")
+            # The application service has already published the PDF and, when
+            # selected, dispatched through the outbox. A second publication
+            # here would create an unintended duplicate document/e-mail.
+            ui.toast(self.janela, "OS encerrada. PDF e envio tratados pelo serviço.")
             self.close()
-            enviar_email = (acao == "Concluída"
-                            and (self.enviar_email is None or self.enviar_email.get_active()))
-            self.janela.publicar_pdf(os_salvo_id, enviar_email=enviar_email)
             self.janela.carregar_os()
-            self.janela.carregar_historico()
-            return
-
-        if self.os_id is not None and resultado.status_anterior in ui.STATUS_FIM:
-            ui.toast(self.janela, "OS atualizada. Republicando PDF…")
-            self.close()
-            self.janela.publicar_pdf(os_salvo_id)
             self.janela.carregar_historico()
             return
 

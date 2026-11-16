@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlparse
 
+from officina.application.os_write_service import (
+    PostCommitEffectError, RevokedProviderError,
+)
 from officina.application.contracts import (
     AppError,
     ConflitoError,
@@ -181,6 +184,14 @@ def _os_input(dados: Mapping[str, Any]) -> OSInput:
             imagens.append((nome, base64.b64decode(conteudo, validate=True)))
         except (ValueError, TypeError) as erro:
             raise ValidacaoError(f'Imagem inválida: {nome}.') from erro
+    invoice = campos.get('nota_fiscal')
+    if isinstance(invoice, Mapping):
+        name = str(invoice.get('nome') or 'nota.pdf')
+        try:
+            content = base64.b64decode(invoice.get('conteudo') or '', validate=True)
+        except (ValueError, TypeError) as error:
+            raise ValidacaoError('PDF de nota fiscal inválido.') from error
+        campos['nota_fiscal'] = (name, content)
     try:
         return OSInput(**campos, imagens=tuple(imagens))
     except TypeError as erro:
@@ -392,6 +403,36 @@ def _rota(handler, partes: list[str], query: dict, banco: str, metodo: str,
             'financeiro_a_receber': finance['a_receber']})
     if recurso in ('prestadores', 'empresa', 'composicao') and not admin:
         raise PermissionError('Somente administradores podem acessar esta área.')
+    if recurso == 'actions' and metodo == 'GET' and len(partes) == 2:
+        from flavors.autoseg.modules.autoseg_actions import action_payload
+        raw_id = query.get('id', [''])[0]
+        if raw_id:
+            object_id = _int(raw_id)
+            if object_id is None or object_id <= 0:
+                raise NaoEncontradoError('Recurso indisponível.')
+        else:
+            object_id = None
+        return _enviar(handler, 200, action_payload(
+            banco, principal, partes[1], object_id=object_id, surface='gtk'))
+    if recurso == 'forms' and metodo == 'GET' and len(partes) == 2:
+        from dataclasses import asdict
+        from flavors.autoseg.modules.autoseg_form_contracts import (customer_fields,
+                                                                     work_fields)
+        form_id = partes[1]
+        raw_id = query.get('id', [''])[0]
+        if raw_id:
+            object_id = _int(raw_id)
+            if object_id is None or object_id <= 0:
+                raise NaoEncontradoError('Recurso indisponível.')
+        else:
+            object_id = None
+        if form_id == 'customer':
+            fields = customer_fields(banco, principal, customer_id=object_id)
+        elif form_id == 'work':
+            fields = work_fields(banco, principal, os_id=object_id)
+        else:
+            raise NaoEncontradoError('Formulário indisponível.')
+        return _enviar(handler, 200, [asdict(field) for field in fields])
     if recurso == 'clientes':
         return _rota_clientes(handler, partes, query, servico, metodo, info, principal)
     if recurso == 'os':
@@ -538,7 +579,8 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
         else:
             access.require_create(banco, principal)
         return _enviar(handler, 200, servico.salvar_os(
-            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')))
+            payload, authorize=_os_writer_authorize(principal, int(payload.os_id), permission, session_id=info.get('sessao_id')),
+            principal=principal)
             if payload.os_id else servico.salvar_os(payload, principal=principal))
     if partes == ['os', 'ativas'] and metodo == 'GET':
         return _enviar(handler, 200, _scoped_os_rows(banco, principal,
@@ -576,6 +618,10 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         ('POST', ('atribuir',)): 'assign',
         ('POST', ('desatribuir',)): 'assign',
         ('POST', ('iniciar',)): 'start',
+        ('POST', ('assumir',)): 'assume',
+        ('POST', ('em-rota',)): 'start',
+        ('POST', ('arquivar',)): 'archive',
+        ('POST', ('reabrir',)): 'reopen',
         ('POST', ('pdf','publicar')): 'publish',
         ('POST', ('email','preparar')): 'send',
         ('POST', ('nota','preparar')): 'send',
@@ -605,6 +651,18 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
     if resto == ['iniciar'] and metodo == 'POST':
         servico.iniciar_os(os_id, authorize=_os_writer_authorize(principal, os_id, 'start', session_id=info.get('sessao_id')))
         return _enviar(handler, 200, {'ok': True})
+    if metodo == 'POST' and resto in (['assumir'], ['em-rota'], ['arquivar'], ['reabrir']):
+        method, rule = {
+            'assumir': ('assumir_os', 'assume'),
+            'em-rota': ('em_rota_os', 'start'),
+            'arquivar': ('arquivar_os', 'archive'),
+            'reabrir': ('reabrir_os', 'reopen'),
+        }[resto[0]]
+        changed = getattr(servico, method)(
+            os_id, principal=principal,
+            authorize=_os_writer_authorize(
+                principal, os_id, rule, session_id=info.get('sessao_id')))
+        return _enviar(handler, 200, {'mudou': bool(changed)})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id, principal=principal)})
@@ -1050,6 +1108,8 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
         _rota(handler, partes, query, banco, method, info, principal)
     except prestador_auth.MuitasTentativasError as erro:
         _erro(handler, 429, 'rate_limited', str(erro))
+    except PostCommitEffectError as erro:
+        _erro(handler, 503, 'effect_pending', str(erro))
     except AppError as erro:
         _erro(handler, _status_de_erro(erro), _codigo_de_erro(erro),
               erro.mensagem)
@@ -1060,6 +1120,10 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
             _erro(handler, 404, 'not_found', 'Recurso não encontrado.')
         else:
             _erro(handler, 403, 'forbidden', 'Operação não permitida.')
+    except RevokedProviderError:
+        # Keep revoked/inactive writers indistinguishable from hidden OS
+        # resources after preflight; ordinary denials remain 403.
+        _erro(handler, 404, 'not_found', 'Recurso não encontrado.')
     except PermissionError:
         _erro(handler, 403, 'forbidden', 'Operação não permitida.')
     except sqlite3.Error:

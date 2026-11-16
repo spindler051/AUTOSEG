@@ -98,6 +98,18 @@ class OSInput:
     relato: str
     motivo: str
     imagens: tuple[tuple[str, bytes], ...] = ()
+    # Explicit finalization choices; absent fields never silently opt out.
+    sem_destinatario: bool = False
+    sem_nota_fiscal: bool = False
+    destinatarios: tuple[str, ...] | None = None
+    nota_fiscal: tuple[str, bytes] | None = None
+    v9_diagnostico: str = ''
+    v9_execucao: str = ''
+    v9_resultado: str = ''
+    confirmar_numero_os: str = ''
+    composicao_yaml: Sequence[Mapping[str, Any]] | None = None
+    rateio_manual_tecnico: tuple[str, ...] = ()
+    rateio_manual_valor: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

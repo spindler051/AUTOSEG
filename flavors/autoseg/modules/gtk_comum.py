@@ -101,6 +101,9 @@ def toast(janela, mensagem, timeout=5):
 
 def barra(*filhos, margem=18, espacamento=8):
     caixa = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=espacamento)
+    # Page actions are migrated to the window-level adaptive menu; filtering
+    # and descriptive rows remain in their original page layout.
+    caixa.add_css_class('autoseg-page-bar')
     caixa.set_margin_top(10)
     caixa.set_margin_bottom(4)
     caixa.set_margin_start(margem)
@@ -130,16 +133,31 @@ def botao(texto=None, callback=None, icone=None, css=None, dica=None):
 
 
 def titulo(texto, classe="title-2"):
-    item = Gtk.Label(label=texto, xalign=0)
+    item = Gtk.Label(label=texto, xalign=0, wrap=True)
+    item.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
     item.add_css_class(classe)
     return item
 
 
 def legenda(texto):
-    item = Gtk.Label(label=texto, xalign=0)
+    item = Gtk.Label(label=texto, xalign=0, wrap=True)
+    item.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
     item.add_css_class("caption")
     item.add_css_class("dim-label")
     return item
+
+
+def grade_cartoes(*, max_por_linha=3, espacamento=10):
+    """Wrap summary cards instead of imposing a single-row minimum width."""
+    grade = Gtk.FlowBox()
+    grade.set_selection_mode(Gtk.SelectionMode.NONE)
+    grade.set_homogeneous(True)
+    grade.set_min_children_per_line(1)
+    grade.set_max_children_per_line(max_por_linha)
+    grade.set_row_spacing(espacamento)
+    grade.set_column_spacing(espacamento)
+    grade.set_hexpand(True)
+    return grade
 
 
 def cartao(titulo_texto, valor="—", classe="accent", detalhe=""):
@@ -176,6 +194,7 @@ class Tabela:
     """ColumnView reutilizável, com seleção única e ativação por duplo clique."""
 
     def __init__(self, colunas, ao_ativar=None, altura=None):
+        self._columns = tuple(colunas)
         self.modelo = Gio.ListStore(item_type=_Linha)
         self.selecao = Gtk.SingleSelection(model=self.modelo)
         self.selecao.set_autoselect(False)
@@ -198,10 +217,40 @@ class Tabela:
             self.view.connect("activate", lambda *_args: ao_ativar())
         self.scroller = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
         self.scroller.set_has_frame(True)
+        self.scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.scroller.set_min_content_width(240)
+        self.scroller.set_propagate_natural_width(False)
         self.scroller.set_child(self.view)
         self.scroller.add_css_class("data-table")
+        compact_factory = Gtk.SignalListItemFactory()
+        compact_factory.connect('setup', self._setup_compact)
+        compact_factory.connect('bind', self._bind_compact)
+        compact = Gtk.ListView(model=self.selecao, factory=compact_factory)
+        compact.add_css_class('boxed-list')
+        compact_scroller = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        compact_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        compact_scroller.set_min_content_width(240)
+        compact_scroller.set_propagate_natural_width(False)
+        compact_scroller.set_child(compact)
+        if ao_ativar is not None:
+            compact.connect('activate', lambda *_args: ao_ativar())
+        variants = Gtk.Stack(vexpand=True, hexpand=True)
+        # A hidden wide ColumnView must not determine the narrow width.
+        variants.set_hhomogeneous(False)
+        variants.set_vhomogeneous(False)
+        variants.add_named(self.scroller, 'wide')
+        variants.add_named(compact_scroller, 'compact')
+        variants.set_visible_child_name('wide')
+        adaptive = Adw.BreakpointBin()
+        rule = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse('max-width: 600sp'))
+        rule.add_setter(variants, 'visible-child-name', 'compact')
+        adaptive.add_breakpoint(rule)
+        adaptive.set_size_request(240, 120)
+        adaptive.set_child(variants)
         self._display = Gtk.Stack(vexpand=True, hexpand=True)
-        self._display.add_named(self.scroller, "rows")
+        self._display.set_hhomogeneous(False)
+        self._display.add_named(adaptive, "rows")
         self._empty = Adw.StatusPage(
             title="Nenhum registro encontrado",
             description="A lista está vazia ou a pesquisa não retornou resultados.",
@@ -229,6 +278,37 @@ class Tabela:
         valor = linha.valores[indice] if linha and indice < len(linha.valores) else ""
         rotulo.set_text("" if valor is None else str(valor))
         rotulo.set_tooltip_text("" if valor is None else str(valor))
+
+    def _setup_compact(self, _factory, item):
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        card.set_margin_start(12)
+        card.set_margin_end(12)
+        card.set_margin_top(8)
+        card.set_margin_bottom(8)
+        for title, _width, _expand, _align in self._columns:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            heading = Gtk.Label(label=str(title) + ':', xalign=0)
+            heading.add_css_class('dim-label')
+            heading.set_valign(Gtk.Align.START)
+            value = Gtk.Label(xalign=0, wrap=True)
+            value.set_hexpand(True)
+            value.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            row.append(heading)
+            row.append(value)
+            card.append(row)
+        item.set_child(card)
+
+    def _bind_compact(self, _factory, item):
+        line = item.get_item()
+        card = item.get_child()
+        row = card.get_first_child()
+        for index in range(len(self._columns)):
+            heading = row.get_first_child()
+            label = heading.get_next_sibling()
+            text = (line.valores[index] if line is not None
+                    and index < len(line.valores) else '')
+            label.set_text('' if text is None else str(text))
+            row = row.get_next_sibling()
 
     @property
     def widget(self):
@@ -268,11 +348,11 @@ class TextoRow(Adw.PreferencesRow):
         caixa.set_margin_bottom(10)
         caixa.set_margin_start(12)
         caixa.set_margin_end(12)
-        if titulo_texto:
-            rotulo = Gtk.Label(label=titulo_texto, xalign=0)
-            rotulo.add_css_class("caption")
-            rotulo.add_css_class("dim-label")
-            caixa.append(rotulo)
+        self.title_label = Gtk.Label(label=titulo_texto, xalign=0)
+        self.title_label.add_css_class("caption")
+        self.title_label.add_css_class("dim-label")
+        self.title_label.set_visible(bool(titulo_texto))
+        caixa.append(self.title_label)
         self.view = Gtk.TextView()
         self.view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.view.set_editable(bool(editavel))
@@ -284,6 +364,10 @@ class TextoRow(Adw.PreferencesRow):
         moldura.set_child(self.view)
         caixa.append(moldura)
         self.set_child(caixa)
+
+    def set_title(self, title):
+        self.title_label.set_label(str(title))
+        self.title_label.set_visible(bool(title))
 
     def get_texto(self):
         buffer = self.view.get_buffer()

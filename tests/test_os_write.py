@@ -2,6 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from officina.core import atendimento_os
 from officina.core import banco
@@ -10,6 +11,7 @@ from officina.core import composicao
 from officina.core import estoque_materiais
 from officina.core import fluxo_os
 from officina.core import prestadores_ext as ext
+from officina.core import produtividade_os
 from officina.application.contracts import OSInput
 from officina.application.local_service import LocalService
 from officina.application.object_policy import Principal
@@ -21,7 +23,7 @@ class OSWriteTest(unittest.TestCase):
         self.db = Path(self.tmp.name) / 'teste.db'
         banco.criar_banco(self.db)
         for modulo in (ext, fluxo_os, atendimento_os, cadastros_v9,
-                       estoque_materiais):
+                       estoque_materiais, produtividade_os):
             modulo.instalar(self.db)
         composicao.instalar()
         composicao.instalar_banco(self.db)
@@ -78,6 +80,10 @@ class OSWriteTest(unittest.TestCase):
             os_id=criada.os_id,
             descricao='Serviço atualizado',
             texto_adicional='Outro texto.',
+            # Labor (10) plus the new material (2 x 5) must close the
+            # canonical Web composition; do not bypass it in local mode.
+            valor_materiais=10.0,
+            valor_total=20.0,
             materiais=({'item': 'Fita', 'quantidade': 2,
                         'unidade': 'un', 'valor_unitario': 5},),
         ), principal=self.actor)
@@ -115,8 +121,10 @@ class OSWriteTest(unittest.TestCase):
                 conexao.execute('SELECT status FROM ordens_servico WHERE id=?',
                                 (criada.os_id,)).fetchone()[0],
                 'Pendente')
-        concluida = self.service.salvar_os(self.entrada(
-            os_id=criada.os_id, acao='Concluída', relato='Serviço concluído.'), principal=self.actor)
+        with patch.object(fluxo_os, 'publicar_relatorio', return_value=None):
+            concluida = self.service.salvar_os(self.entrada(
+                os_id=criada.os_id, acao='Concluída', relato='Serviço concluído.',
+                sem_nota_fiscal=True, sem_destinatario=True), principal=self.actor)
         self.assertTrue(concluida.encerrada)
         with ext.db(self.db) as conexao:
             self.assertEqual(

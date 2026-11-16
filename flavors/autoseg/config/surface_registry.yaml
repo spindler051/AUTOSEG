@@ -168,7 +168,8 @@ actions:
     object_action: null
     writer_guard: locked
     web_markers:
-      - "if (senha_nova or confirmar) and not s.get('admin'):"
+      - "live_actor = live_provider(banco, os_commands._provider_context(banco,s))"
+      - "if live_actor.role != 'admin':"
       - "if senha_nova:fluxo.definir_senha_cliente(banco,cid,senha_nova,principal=actor)"
     api_markers:
       - "if resto == ['senha'] and metodo == 'POST':"

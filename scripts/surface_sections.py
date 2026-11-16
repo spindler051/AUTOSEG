@@ -39,6 +39,10 @@ def findings():
             provider_order.add(key)
     code = (ROOT / 'flavors/autoseg/modules/gtk_app.py').read_text()
     pages = set(re.findall(r'self\.stack\.add_titled\(self\._pagina_\w+\(\),\s*"(\w+)"', code))
+    # The adaptive shell declares pages in a (section, page_id, title, builder)
+    # table and wraps each builder in a bounded page.
+    pages |= set(re.findall(
+        r"\('[\w-]+',\s*'(\w+)',\s*'[^']*',\s*self\._pagina_\w+\)", code))
     if pages != provider_gtk:
         issues.append('Mismatch GTK page factories: registry_only='
                       f'{sorted(provider_gtk-pages)}, gtk_only={sorted(pages-provider_gtk)}')

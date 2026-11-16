@@ -86,22 +86,27 @@ def audit(c,pid,acao,referencia,detalhes):
 
 
 def cliente_salvar(banco,d,pid,cliente_id=None,*,principal=None):
-    values={x:texto(d,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
-    if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
-    if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
-    if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         anterior=None
+        from officina.application.live_provider import resolve as live_provider
+        principal = live_provider(banco, principal, connection=c)
         if cliente_id is None:
             from officina.application.work_item_access import require_customer_create_locked
             require_customer_create_locked(c, principal)
             pid = principal.provider_id
+            payload = dict(d)
         else:
             from officina.application.work_item_access import require_customer_write_locked
+            from officina.application.customer_form_security import safe_customer_edit
             require_customer_write_locked(c,principal,cliente_id)
             anterior=c.execute('SELECT * FROM clientes WHERE id=?',(cliente_id,)).fetchone()
             if not anterior: raise ValueError('Cliente não encontrado.')
+            payload = safe_customer_edit(banco,principal,anterior,d,connection=c)
+        values={x:texto(payload,x,2500 if x=='observacoes' else 250) for x in CLIENTE_CAMPOS}
+        if not values['nome']: raise ValueError('Nome do cliente é obrigatório.')
+        if values['status'] not in ('Ativo','Inativo','Prospect'): raise ValueError('Situação do cliente inválida.')
+        if values['tipo_pessoa'] not in ('Física','Jurídica'): raise ValueError('Tipo de pessoa inválido.')
         doc_novo=cad.digitos(values['documento'])
         mudou_documento=(cliente_id is None or anterior['tipo_pessoa']!=values['tipo_pessoa']
                          or cad.digitos(anterior['documento'])!=doc_novo)
@@ -469,6 +474,15 @@ def os_salvar(banco,d,pid,oid=None,silent=False,*,connection=None,authorize=None
                 from officina.core import produtividade_os as prod
                 prod.registrar_rateios_na_transacao(c,oid,finalizador_id,total,d)
             audit(c,pid,'OS encerrada',oid,acao+(' | Motivo: '+motivo if motivo else ''))
+        if 'dados_incompletos' in d:
+            try:
+                incompleto=int(d['dados_incompletos'])
+            except (TypeError, ValueError):
+                raise ValueError('Dados incompletos inválidos.') from None
+            if incompleto not in (0, 1):
+                raise ValueError('Dados incompletos inválidos.')
+            c.execute('UPDATE ordens_servico SET dados_incompletos=? WHERE id=?',
+                      (incompleto, oid))
         # Estoque: lançamento/estorno transacional e idempotente, sem expor administração na web.
         estoque.reconciliar_os_conexao(c,oid,f'Prestador #{pid}')
         # Mantém financeiro Aguardando sincronizado após edição de OS já concluída.

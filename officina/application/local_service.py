@@ -589,8 +589,17 @@ class LocalService:
 
     def salvar_os(self, dados: OSInput, *, authorize=None, principal=None) -> OSResultado:
         from officina.application.os_write import salvar_os
+        # The API supplies an authenticated principal and a transaction-local
+        # callback. Defer its *live* provider check to the locked writer so a
+        # post-preflight revocation is reported as a hidden resource (404).
+        # Authorize-only local callers may use a bound identity, never an
+        # unbound callback in place of a principal.
+        if authorize is not None and principal is not None:
+            actor = principal
+        else:
+            actor = self._local_actor(principal if principal is not None
+                                      else self._principal)
         if authorize is None:
-            actor = self._local_actor(principal)
             if dados.os_id is None:
                 from officina.application.work_item_access import require_create
                 require_create(self.banco, actor)
@@ -599,7 +608,8 @@ class LocalService:
                           else 'cancel' if dados.acao == 'Cancelada' else 'edit')
                 authorize = self._authorize_os(dados.os_id, action, principal=actor)
         try:
-            return salvar_os(self.banco, dados, authorize=authorize)
+            return salvar_os(self.banco, dados, authorize=authorize,
+                             principal=actor)
         except ValidacaoError:
             raise
         except ValueError as erro:
@@ -704,6 +714,55 @@ class LocalService:
             connection.execute('BEGIN IMMEDIATE')
             authorize(connection)
             return aten.iniciar(self.banco, int(os_id), connection=connection)
+
+    def assumir_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'assume', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.assumir(self.banco, int(os_id), actor.provider_id,
+                                authorize=check))
+
+    def em_rota_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'start', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.marcar_em_rota(self.banco, int(os_id), actor.provider_id,
+                                      authorize=check))
+
+    def arquivar_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        check = self._authorize_os(os_id, 'archive', principal=actor,
+                                   authorize=authorize)
+        return bool(ext.arquivar_os(self.banco, int(os_id), actor.provider_id,
+                                    ator='Desktop AUTOSEG', authorize=check))
+
+    def reabrir_os(self, os_id: int, *, authorize=None, principal=None) -> bool:
+        actor = self._local_actor(principal)
+        with ext.db(self.banco) as connection:
+            connection.execute('BEGIN IMMEDIATE')
+            row = connection.execute('SELECT status,arquivada,cliente_id FROM ordens_servico '
+                                     'WHERE id=?', (int(os_id),)).fetchone()
+            if (row is None or row['arquivada']
+                    or row['status'] not in ('Concluída', 'Cancelada', 'Não realizada')):
+                raise PermissionError('OS indisponível para reabertura.')
+            check = self._authorize_os(os_id, 'reopen', principal=actor,
+                                       authorize=authorize)
+            check(connection)
+            customer = connection.execute('SELECT status FROM clientes WHERE id=?',
+                                          (row['cliente_id'],)).fetchone()
+            if customer is None or customer['status'] in ('A definir', 'Inativo'):
+                raise ValueError('Cliente da OS precisa estar ativo para reabrir.')
+            connection.execute("UPDATE ordens_servico SET status='Aberta',data_conclusao=NULL,"
+                               'atualizado_em=? WHERE id=?', (ext.agora(), int(os_id)))
+            connection.execute('UPDATE os_atendimentos SET iniciado_em=NULL,'
+                               "iniciado_por=NULL,ator_inicio='',atualizado_em=? "
+                               'WHERE os_id=?', (ext.agora(), int(os_id)))
+            connection.execute('DELETE FROM produtividade_deslocamentos WHERE os_id=?',
+                               (int(os_id),))
+            ext.evento(connection, int(os_id), 'OS reaberta',
+                       'Situação alterada para Aberta.', actor.provider_id,
+                       'Desktop AUTOSEG')
+        return True
 
     def atribuir_responsavel(self, organizacao_id: int, usuario_id: int, *, principal=None) -> str:
         self._company_admin(principal)
@@ -907,6 +966,8 @@ class LocalService:
                 from officina.application.work_item_access import require_customer_create_locked
                 with ext.db(self.banco) as connection:
                     connection.execute('BEGIN IMMEDIATE')
+                    from officina.application.live_provider import resolve as live_provider
+                    principal = live_provider(self.banco, principal, connection=connection)
                     require_customer_create_locked(connection, principal)
                     registro = clientes_core.salvar(
                         cliente_id, dict(dados), banco=self.banco, connection=connection)
@@ -914,23 +975,16 @@ class LocalService:
                 from officina.application import work_item_access as access
                 with ext.db(self.banco) as connection:
                     connection.execute('BEGIN IMMEDIATE')
+                    from officina.application.live_provider import resolve as live_provider
+                    principal = live_provider(self.banco, principal, connection=connection)
                     access.require_customer_write_locked(connection, principal, int(cliente_id))
                     current = connection.execute('SELECT * FROM clientes WHERE id=?',
                                                  (int(cliente_id),)).fetchone()
                     if current is None:
                         raise ValueError('Cliente não encontrado.')
-                    if access.can_read_all(principal, 'customer'):
-                        payload = dict(dados)
-                    else:
-                        allowed = access.involved_customer_field_scopes(principal)
-                        editable = {'nome', 'status'} | {
-                            field for field in ('documento', 'telefone', 'email', 'cidade', 'endereco')
-                            if (field if field != 'cidade' else 'endereco') in allowed}
-                        payload = {field: current[field] for field in clientes_core.CAMPOS
-                                   if field != 'dados_incompletos'}
-                        for field, value in dados.items():
-                            if field in editable:
-                                payload[field] = value
+                    from officina.application.customer_form_security import safe_customer_edit
+                    payload = safe_customer_edit(self.banco, principal, current, dict(dados),
+                                                 connection=connection)
                     registro = clientes_core.salvar(
                         cliente_id, payload, banco=self.banco, connection=connection)
         except clientes_core.ErroCliente as erro:

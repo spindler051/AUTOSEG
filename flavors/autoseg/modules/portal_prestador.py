@@ -1311,6 +1311,82 @@ class PortalPrestador:
                     + card('Aguardando verificação', tabela_pend)
                     + card('Histórico de verificação', tabela_hist), s)
 
+            def work_action_toolbar(self, s, oid=None):
+                """Server-resolved canonical work actions for the Web adapter.
+
+                All mutations still go through os_commands; links only open
+                the existing form, never bypassing locked writer checks.
+                """
+                from flavors.autoseg.modules.autoseg_actions import resolved_actions
+                principal = os_commands._provider_context(banco, s)
+                actions = resolved_actions(banco, principal, 'work',
+                                           object_id=oid, surface='web')
+                if not actions:
+                    return ''
+                base = url_os(banco, oid) if oid else '/os/nova'
+                writes = {
+                    'work.assume': 'assumir', 'work.start': 'iniciar',
+                    'work.route': 'em-rota', 'work.archive': 'arquivar',
+                    'work.reopen': 'reabrir', 'work.publish': 'publicar',
+                }
+                links = {
+                    'work.create': '/os/nova', 'work.yaml': '/os/nova#os-import-yaml',
+                    'work.open': base, 'work.edit': base,
+                    'work.attach': base + '?work_action=attach',
+                    'work.materials': base + '?work_action=materials',
+                    'work.draft': base + '?work_action=draft',
+                    'work.conclude': base + '?work_action=conclude',
+                    'work.cancel': base + '?work_action=cancel',
+                    'work.email': base + '/email',
+                    'work.invoice': base + '/nota',
+                }
+                controls = []
+                for action in actions:
+                    attrs = (f'data-action-id="{esc(action.id)}" '
+                             f'data-action-priority="{esc(action.priority)}" '
+                             f'data-action-confirm="{esc(action.confirm)}"')
+                    css = 'btn' if action.priority == 'primary' else 'btn secondary'
+                    if action.id == 'work.assign' and oid:
+                        # This is a real Web adapter, not a link to a GTK-only UI.
+                        candidates = [row for row in ext.listar_todos(banco)
+                                      if row.get('ativo')]
+                        choices = ''.join(
+                            f'<option value="{int(row["id"])}">{esc(row["nome"])}</option>'
+                            for row in candidates)
+                        controls.append(
+                            f'<details {attrs}><summary>{esc(action.label)}</summary>'
+                            f'<form method="post" action="{base}/atribuir" data-no-ajax>'
+                            + self.hidden(s)
+                            + '<label>Prestador<select name="prestador_id" required>'
+                            + choices + '</select></label>'
+                            + '<button type="submit">Confirmar atribuição</button>'
+                            + '</form></details>')
+                    elif action.id in writes and oid:
+                        confirm = (f' data-confirm="{esc(action.confirm)}"'
+                                   if action.destructive else '')
+                        controls.append(
+                            f'<form method="post" action="{base}/{writes[action.id]}" '
+                            f'{attrs}{confirm} data-no-ajax>'
+                            + self.hidden(s)
+                            + ('<input type="hidden" name="ativo" value="1">'
+                               if action.id == 'work.route' else '')
+                            + f'<button type="submit" class="{css}">'
+                            + esc(action.label) + '</button></form>')
+                    elif action.id in ('work.conclude', 'work.cancel', 'work.draft'):
+                        # These act on the current unsaved Web form and must not
+                        # reload the page, which would discard typed changes.
+                        controls.append(f'<button type="button" class="{css}" {attrs}>'
+                                        + esc(action.label) + '</button>')
+                    else:
+                        url = links.get(action.id)
+                        if not url:
+                            raise ValueError(f'Sem adaptador Web para {action.id}')
+                        controls.append(f'<a class="{css}" href="{esc(url)}" {attrs}>'
+                                        + esc(action.label) + '</a>')
+                return ('<nav class="page-actions shared-work-actions" '
+                        'aria-label="Ações da ordem de serviço" '
+                        'data-section-actions="work">' + ''.join(controls) + '</nav>')
+
             def os_lista(self,s,concluidas=False):
                 if concluidas:
                     principal=os_commands._provider_context(banco,s)
@@ -1361,7 +1437,7 @@ class PortalPrestador:
                     +'</select></form>')
                 return self.pagina('Ordens de serviço ativas',
                     '<p class="muted">Ordens de serviço autorizadas para a sua conta.</p>'
-                    +f'<div class="page-actions">{botao("+ Nova OS","/os/rapida")}</div>'
+                    +self.work_action_toolbar(s)
                     +filtro_ordem
                     +card('Ordens de serviço',tabela(['OS','Cliente','Status','Responsável','Participantes'],rows)),s)
 
@@ -1856,34 +1932,39 @@ class PortalPrestador:
                 d=dict(x) if x else {}
                 if cid is None and preenchimento:d.update(preenchimento)
                 erro_html=card('YAML não aplicado',f'<p class="bad">{esc(erro)}</p>') if erro else ''
+                from flavors.autoseg.modules.autoseg_form_contracts import customer_fields
+                from officina.application.live_provider import resolve as live_provider
+                current_actor = live_provider(banco, os_commands._provider_context(banco,s))
+                visible_fields = customer_fields(banco, current_actor, customer_id=cid)
+                can_manage_customer_credentials = current_actor.role == 'admin'
                 fields=[]
-                campos=[('nome','Nome / Razão social'),('documento','CPF / CNPJ'),('nome_fantasia','Nome fantasia'),
-                    ('endereco','Logradouro'),('numero','Número'),('complemento','Complemento'),('bairro','Bairro'),
-                    ('cep','CEP'),('cidade','Cidade'),('uf','UF'),('telefone','Telefone'),('email','E-mail'),
-                    ('sindico_nome','Síndico / responsável'),('sindico_telefone','Telefone do síndico'),('sindico_email','E-mail do síndico'),
-                    ('administradora','Administradora / imobiliária'),('administradora_telefone','Telefone da administradora'),
-                    ('administradora_email','E-mail da imobiliária / administradora')]
-                for k,t in campos:
-                    field_scope=('documento' if k=='documento' else
-                                 'telefone' if 'telefone' in k else
-                                 'email' if 'email' in k else
-                                 'endereco' if k in ('endereco','numero','complemento','bairro','cep','cidade','uf') else
-                                 'nome')
-                    if cid and not read_access.customer_field_allowed(
-                            banco,os_commands._provider_context(banco,s),cid,field_scope):
-                        continue
-                    fields.append(campos_escuros(t,k,cad9.formatar_documento(d.get(k,'')) if k=='documento' else (d.get(k,'') or ''),required=k=='nome',kind='email' if k.endswith('email') or k=='email' else 'text'))
+                for field in visible_fields:
+                    value = d.get(field.id, field.default)
+                    if field.id == 'documento':
+                        value = cad9.formatar_documento(value)
+                    if field.type == 'select':
+                        control = select(field.label, field.input_name,
+                            [(option,option) for option in field.options],
+                            value or field.default)
+                    elif field.type == 'textarea':
+                        control = textarea(field.label, field.input_name, value or '')
+                    else:
+                        control = campos_escuros(
+                            field.label, field.input_name, value or '',
+                            required=field.required,
+                            kind='email' if field.id.endswith('email') else 'text')
+                    hint = field.help or field.hint
+                    helper = f'<small class="muted">{esc(hint)}</small>' if hint else ''
+                    fields.append(f'<div data-form-field="{esc(field.id)}" '
+                                  f'data-required="{str(field.required).lower()}">'
+                                  +control+helper+'</div>')
                 corpo=(f'<div class="page-actions">{botao("← Clientes","/clientes","secondary")}'
                     + (botao("Novo orçamento",f"/orcamento?cliente_id={cid}","secondary") if cid else '')
                     + f'</div><form method="post" action="/clientes/{cid if cid else "novo"}/salvar">{self.hidden(s)}'
-                    '<div class="col2"><div>'
-                    +select('Tipo de pessoa','tipo_pessoa',[(z,z) for z in ('Jurídica','Física')],d.get('tipo_pessoa') or 'Jurídica')
-                    +'</div><div>'+select('Situação','status',[(z,z) for z in ('Ativo','Inativo','Prospect')],d.get('status') or 'Ativo')
-                    +'</div></div><div class="col2">'+''.join(f'<div>{f}</div>' for f in fields)+'</div>'
-                    +textarea('Observações','observacoes',d.get('observacoes') or '')
+                    + '<div class="col2">'+''.join(fields)+'</div>'
                     +(('<details class="ajuda"><summary>Acesso histórico (opcional, não usado no login CPF)</summary><p>Somente administradores podem redefinir a senha legada. A ação será auditada.</p>'
                         +campos_escuros('Senha do cliente (opcional)','senha_cliente',kind='password')
-                        +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if s.get('admin') else '')
+                        +campos_escuros('Confirmar senha','confirmar_senha_cliente',kind='password')+'</details>') if can_manage_customer_credentials else '')
                     +'<button type="submit">Salvar cliente</button></form>')
                 if not cid:
                     importar=(f'<form method="post" action="/clientes/yaml" enctype="multipart/form-data" data-no-ajax>{self.hidden(s)}'
@@ -2153,6 +2234,9 @@ class PortalPrestador:
                 corpo='' if app else botao('← Ordens de serviço','/os','secondary')
                 if oid and not app:
                     corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b></p>'
+                # Render the canonical workflow before the ticket summary so the
+                # pending-OS actions stay grouped ahead of the PDF preview.
+                corpo += self.work_action_toolbar(s, oid)
                 if oid and app:
                     cliente_info=next((x for x in cl if x['id']==d.get('cliente_id')),None)
                     cliente_nome=cliente_info['nome'] if cliente_info else ''
@@ -2160,35 +2244,27 @@ class PortalPrestador:
                     resp_nome=next((p['nome'] for p in prestadores if p['id']==responsavel),'Não atribuído')
                     status_exibicao='Em rota' if em_rota and d['status'] in ext.ATIVAS else d['status']
                     partes_meta=[x for x in (local,f'Aberta em {data_curta(d.get("data_abertura"))}',f'{url_os(banco, oid)}') if x]
+                    # The canonical action toolbar owns assume/start/route.
+                    # Retain the distinct legacy "cancel route" operation until
+                    # it has a canonical action id; it is not an OS write path.
                     ticket_botoes=[]
-                    if d['status'] in ext.ATIVAS and not arquivada:
-                        iniciado=iniciado_ativo
-                        if responsavel is None:
+                    if (d['status'] in ext.ATIVAS and not arquivada and em_rota
+                            and not iniciado_ativo):
+                        from flavors.autoseg.modules.autoseg_actions import resolved_actions
+                        # While a route is active, work.route is hidden but the
+                        # legacy cancel control remains available under the same
+                        # start permission.
+                        route_allowed = any(
+                            action.id in ('work.route', 'work.start')
+                            for action in resolved_actions(
+                                banco, os_commands._provider_context(banco, s),
+                                'work', object_id=oid, surface='web'))
+                        if route_allowed:
                             ticket_botoes.append(
-                                f'<button type="submit" form="form-os" '
-                                f'formaction="{url_os(banco, oid)}/assumir" formnovalidate '
-                                'title="Assume a OS sem iniciar o atendimento.">'
-                                f'{rotulo_assumir}</button>')
-                        if ((responsavel==s['pid'] or s.get('admin'))
-                                and responsavel is not None and not iniciado):
-                            if em_rota:
-                                ticket_botoes.append(
-                                    f'<button type="submit" class="secondary" form="form-os" '
-                                    f'formaction="{url_os(banco, oid)}/cancelar-rota" formnovalidate '
-                                    'title="Cancela o deslocamento em rota.">'
-                                    f'{rotulo_cancelar_rota}</button>')
-                            else:
-                                ticket_botoes.append(
-                                    f'<button type="submit" class="secondary" form="form-os" '
-                                    f'formaction="{url_os(banco, oid)}/em-rota" formnovalidate '
-                                    'title="Registra o início do deslocamento.">'
-                                    f'{rotulo_em_rota}</button>')
-                        if (responsavel in (None,s['pid']) or s.get('admin')) and not iniciado:
-                            ticket_botoes.append(
-                                f'<button type="submit" form="form-os" '
-                                f'formaction="{url_os(banco, oid)}/iniciar" formnovalidate '
-                                f'title="{esc(texto_iniciar)}">'
-                                f'{rotulo_iniciar}</button>')
+                                f'<button type="submit" class="secondary" form="form-os" '
+                                f'formaction="{url_os(banco, oid)}/cancelar-rota" formnovalidate '
+                                'title="Cancela o deslocamento em rota.">'
+                                f'{rotulo_cancelar_rota}</button>')
                     ticket_acoes=''.join(ticket_botoes)
                     ticket_acoes+=(f'<a class="btn secondary" href="{url_os(banco, oid)}/pdf-preview">'
                                    +icone('file')+'Baixar preview do PDF</a>')
@@ -2338,7 +2414,7 @@ class PortalPrestador:
                     corpo+='<div class="os-layout"><div class="os-main">'
                 if not oid:
                     corpo+=card('Importar OS em YAML',
-                        f'<form method="post" action="/os/yaml" enctype="multipart/form-data" data-no-ajax>{token}'
+                        f'<form id="os-import-yaml" method="post" action="/os/yaml" enctype="multipart/form-data" data-no-ajax>{token}'
                         '<label for="importar-os-yaml">Preencher a OS a partir de YAML (até 64 KB)</label>'
                         '<input id="importar-os-yaml" type="file" name="yaml" accept=".yaml,.yml" required>'
                         '<button type="submit" class="secondary">Pré-visualizar YAML</button></form>'
@@ -4610,8 +4686,11 @@ class PortalPrestador:
                     if path=='/clientes/novo/salvar' or (len(partes)==3 and partes[0]=='clientes' and partes[1].isdigit() and partes[2]=='salvar'):
                         senha_nova=str(d.get('senha_cliente',''))
                         confirmar=str(d.get('confirmar_senha_cliente',''))
-                        if (senha_nova or confirmar) and not s.get('admin'):
-                            raise PermissionError('Somente administradores podem redefinir a senha do cliente.')
+                        if senha_nova or confirmar:
+                            from officina.application.live_provider import resolve as live_provider
+                            live_actor = live_provider(banco, os_commands._provider_context(banco,s))
+                            if live_actor.role != 'admin':
+                                raise PermissionError('Somente administradores podem redefinir a senha do cliente.')
                         if senha_nova or confirmar:
                             if len(senha_nova)<10:raise ValueError('A senha do cliente deve ter pelo menos 10 caracteres.')
                             if senha_nova!=confirmar:raise ValueError('A confirmação da senha não corresponde.')
