@@ -10,6 +10,7 @@ from pathlib import Path
 from officina.application.work_item_access import (require_work_item, require_create,
     require_work_item_locked)
 from officina.application.object_policy import ObjectPolicy, Resource
+from officina.application.os_write_service import OSCommand, write_data
 import json
 import mimetypes
 import os
@@ -336,7 +337,7 @@ def _write_create_quick(banco, principal, os_id, data, *, ui, session, path, que
                    'urgencia':urgencia,'valor_mao_obra':'0',
                    'valor_materiais_manual':'0','materiais_presentes':'1',
                    'acao_status':'salvar'}
-            oid=neg.os_salvar(banco,dados,pid,connection=c)
+            oid=write_data(banco, OSCommand.from_web(dados,pid),connection=c)
             ext.assumir(banco,oid,pid,connection=c)
             if duplicada and str(d.get('confirmar_duplicidade',''))=='1':
                 ext.evento(c,oid,'Criação confirmada após aviso de duplicidade',
@@ -409,7 +410,7 @@ def _write_create_full(banco, principal, os_id, data, *, ui, session, path, quer
     with ext.db(banco) as c:
         c.execute('BEGIN IMMEDIATE')
         d['cliente_id'] = business._resolver_cliente_os(d,connection=c)
-        oid=neg.os_salvar(banco,d,pid,connection=c)
+        oid=write_data(banco, OSCommand.from_web(d,pid),connection=c)
         ext.assumir(banco,oid,pid,connection=c)
     return ui.redir(f'{url_os(banco, oid)}')
 
@@ -592,7 +593,7 @@ def _write_autosave_draft(banco, principal, os_id, data, *, ui, session, path, q
                 save=dict(data,acao_status='salvar')
                 save['cliente_id']=OsBusinessSupport(banco)._resolver_cliente_os(
                     save,oid,connection=c)
-                neg.os_salvar(banco,save,pid,oid,silent=True,connection=c,
+                write_data(banco, OSCommand.from_web(save,pid,oid),silent=True,connection=c,
                              staged_attachments=outbox.installed(c))
             cad9.salvar_detalhes(banco,oid,str(data.get('v9_diagnostico','')),
                 str(data.get('v9_execucao','')),str(data.get('v9_resultado','')),
@@ -635,7 +636,7 @@ def _write_save_draft(banco, principal, os_id, data, *, ui, session, path, quer_
         save=dict(data,acao_status='salvar')
         save['cliente_id']=OsBusinessSupport(banco)._resolver_cliente_os(
             save,oid,connection=c)
-        neg.os_salvar(banco,save,pid,oid,connection=c,
+        write_data(banco, OSCommand.from_web(save,pid,oid),connection=c,
                          staged_attachments=outbox.installed(c))
         cad9.salvar_detalhes(banco,oid,str(data.get('v9_diagnostico','')),
             str(data.get('v9_execucao','')),str(data.get('v9_resultado','')),
@@ -954,7 +955,7 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             ext.salvar_rascunho_web(banco, oid, pid, values, connection=c)
             save = dict(d, acao_status='salvar')
             save['cliente_id'] = business._resolver_cliente_os(save, oid, connection=c)
-            neg.os_salvar(banco, save, pid, oid, connection=c,
+            write_data(banco, OSCommand.from_web(save,pid,oid),connection=c,
                          staged_attachments=outbox.installed(c))
             cad9.salvar_detalhes(banco, oid, str(d.get('v9_diagnostico','')),
                 str(d.get('v9_execucao','')), str(d.get('v9_resultado','')),
@@ -1049,7 +1050,7 @@ def _write_action_salvar(banco, principal, os_id, data, *, ui, session, path, qu
             # Reject before OS persistence; earlier transactional edits roll back.
             if requires_email:
                 outbox.require_installed(c)
-        neg.os_salvar(banco,d,pid,oid,connection=c,
+        write_data(banco, OSCommand.from_web(d,pid,oid),connection=c,
                          staged_attachments=use_outbox)
         prod.limpar_rota_ao_iniciar(banco,oid,connection=c)
         if acao_status in ('Pendente','Concluída'):
