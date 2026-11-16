@@ -76,7 +76,9 @@ class Janela(Adw.ApplicationWindow):
         self.sessao = sessao
         self.set_title(ui.APP_TITLE)
         self.set_default_size(1180, 700)
-        self.set_size_request(900, 560)
+        # HIG adaptive design: the window must be able to reach a phone-like
+        # width; content adapts instead of forcing a desktop minimum.
+        self.set_size_request(360, 480)
         self._ativo = True
         self._links_estado = {}
         self._links_busy = False
@@ -142,6 +144,12 @@ class Janela(Adw.ApplicationWindow):
         split.set_sidebar(self._construir_lateral())
         split.set_content(self._construir_conteudo())
         self.set_content(split)
+        # GNOME HIG adaptive layout: the sidebar becomes a navigation page
+        # below 600sp instead of being compressed into the content.
+        breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse('max-width: 600sp'))
+        breakpoint.add_setter(split, 'collapsed', True)
+        self.add_breakpoint(breakpoint)
 
     def _instalar_css(self):
         provider = Gtk.CssProvider()
@@ -286,7 +294,14 @@ class Janela(Adw.ApplicationWindow):
         caixa.append(self.banner_transporte)
         caixa.append(self.banner_servidor)
         self.stack.set_vexpand(True)
-        caixa.append(self.stack)
+        # A page wider than the window must scroll, never be clipped outside
+        # the window. Per-page adaptive layouts are the next refinement; this
+        # keeps every control reachable at 360px in the meantime.
+        rolagem_conteudo = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        rolagem_conteudo.set_policy(Gtk.PolicyType.AUTOMATIC,
+                                    Gtk.PolicyType.AUTOMATIC)
+        rolagem_conteudo.set_child(self.stack)
+        caixa.append(rolagem_conteudo)
         self.toast_overlay = Adw.ToastOverlay(child=caixa)
         toolbar.set_content(self.toast_overlay)
         pagina.set_child(toolbar)

@@ -110,7 +110,7 @@ right primitives; the checklist keeps new sections honest.
 
 | Need | Pattern | Current |
 |---|---|---|
-| Sidebar + content | `Adw.NavigationSplitView` (collapses on narrow) | yes |
+| Sidebar + content | `Adw.NavigationSplitView` + `Adw.Breakpoint` (sidebar becomes a navigation page) | partial |
 | Page chrome | `Adw.ToolbarView` + single `Adw.HeaderBar` | yes |
 | Settings-like page | `Adw.PreferencesPage` / `Group` / `ActionRow` | partial |
 | Section empty/error/offline | `Adw.StatusPage` / `Adw.Banner` | partial |
@@ -119,11 +119,51 @@ right primitives; the checklist keeps new sections honest.
 | Lists | `Gtk.ListBox`/`Adw.ActionRow` or `Gtk.ColumnView` | yes |
 | Keyboard | `Adw.Application` actions, accelerators | partial |
 | Accessibility | labels, roles, no icon-only destructive actions | review |
+| Adaptive shell | explicit `Adw.Breakpoint` (`max-width: 600sp`) collapsing the sidebar | partial |
+| Wide content | `Adw.Clamp` keeping the reading width bounded | partial |
+| Narrow actions | primary action in a bottom toolbar, secondary in a menu | partial |
+| Dialogs | `Adw.Dialog` as a bottom sheet on narrow windows | partial |
 
 **Do not:** custom titlebar, `Gtk.HeaderBar` per page, `Gtk.Stack` as primary
 navigation, custom CSS that replaces Adwaita chrome, a second sidebar style.
 
 Restore the offline HIG for review with `docs/baixar_gnome_hig.sh`.
+
+### Adaptive layout (mandatory)
+
+The GNOME HIG asks for adaptive design, not a compressed desktop. The rules:
+
+- design for the smallest window first; keep the same functionality at every
+  size;
+- when the sidebar no longer fits, turn it into a navigation page
+  (`Adw.NavigationSplitView` collapsed by an `Adw.Breakpoint`, or
+  `Adw.OverlaySplitView`);
+- move section actions to a bottom toolbar or overflow menu on narrow windows;
+  every action stays reachable;
+- keep content readable with `Adw.Clamp`; do not stretch forms edge to edge on
+  wide screens;
+- `Adw.Dialog` becomes a bottom sheet on narrow windows;
+- declare the layout with breakpoints, not `if width` branches in handler code.
+
+Reference breakpoints, tuned at review: `max-width: 600sp` for the collapsed
+shell and `max-width: 900sp` for compact spacing. Verify at **360, 600 and
+1200 px**, with no horizontal scroll and no lost action or field.
+
+Official references:
+[GNOME HIG — adaptive](https://developer.gnome.org/hig/guidelines/adaptive.html)
+and [libadwaita — adaptive layouts](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/adaptive-layouts.html).
+
+### Observed shell defects (2026-11-15)
+
+- the window forced `set_size_request(900, 560)`, so it advertised a desktop
+  minimum and could not reach a phone-like width;
+- the page `Adw.ViewStack` was not inside a scroller, so wide or tall pages
+  were clipped outside the window instead of scrolling;
+- the sidebar had a 220–280 px width but no explicit collapse breakpoint.
+
+The shell now allows 360×480, collapses the sidebar below 600sp through
+`Adw.Breakpoint` and scrolls the page area. Per-page refinements (`Adw.Clamp`,
+bottom action bars, `Adw.Dialog` as a bottom sheet) remain part of B/C.
 
 HIG cannot be fully automated. The mechanical part is order/visibility; the
 visual part is a checklist per section at review time.
@@ -165,7 +205,8 @@ of drifting silently.
    navigation; local GTK resolves with the same function.
 3. **A3 analyzer + tests.** `surface_sections.py`, fixture failures, exit 0.
 4. **A4 HIG review.** Apply the checklist to each section; fix the obvious
-   deviations (no per-page headerbar, StatusPage/Banner for empty/offline).
+   deviations (no per-page headerbar, StatusPage/Banner for empty/offline) and
+   add an explicit `Adw.Breakpoint` for the collapsed shell.
 
 **Acceptance**
 
@@ -182,13 +223,16 @@ Extend the contract from sections to actions: `id`, section, capability,
 service/route, destructive/confirmation, both adapters. Start with **OS**
 (list, detail, conclude, publish, assign) because it is the largest and the
 most permission-sensitive. Same analyzer: every action must exist on both
-surfaces and have a negative test.
+surfaces and have a negative test. Every action must also be reachable at
+360 px: primary in the bottom toolbar, secondary in the menu, nothing lost.
 
 ### Phase C — fields and forms
 
 Shared view model per form: field id, label, type, validation, visibility
 scope; native widgets. Start with the customer form (already partially done in
-3.5/3.6) and the OS form. This is where the screen contract proposal of
+3.5/3.6) and the OS form. Forms use `Adw.Clamp` and adaptive rows, and dialogs
+become bottom sheets on narrow windows; the same fields and validation exist at
+every width. This is where the screen contract proposal of
 `WEB_GTK_SHARED_CONTRACT.md` becomes real.
 
 Phases are independent: A ships value alone, B and C each add a dimension.
