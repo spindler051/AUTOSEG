@@ -151,6 +151,10 @@ class OSSaveResult:
     rascunho: bool = False
 
 
+class RevokedProviderError(PermissionError):
+    """Provider access was revoked before the transactional OS write."""
+
+
 class PostCommitEffectError(RuntimeError):
     """The OS is committed, but a recoverable post-commit effect failed."""
 
@@ -168,16 +172,17 @@ def _authorize_locked(connection, principal, oid, action, extra_authorize=None):
 
     if not connection.in_transaction:
         raise RuntimeError('OS authorization requires BEGIN IMMEDIATE.')
-    if (principal is None or not principal.active
-            or principal.organization_id != 'autoseg'
+    if (principal is None or principal.organization_id != 'autoseg'
             or type(principal.provider_id) is not int
             or principal.provider_id <= 0):
         raise PermissionError('Identidade obrigatória para alterar OS.')
+    if not principal.active:
+        raise RevokedProviderError('Prestador inativo ou vínculo revogado.')
     pid = principal.provider_id
     provider = connection.execute('''SELECT ativo,excluido FROM prestadores
         WHERE id=?''', (pid,)).fetchone()
     if not provider or not provider['ativo'] or provider['excluido']:
-        raise PermissionError('Prestador inativo ou vínculo revogado.')
+        raise RevokedProviderError('Prestador inativo ou vínculo revogado.')
     role = 'admin' if ext.administrador(connection, pid) else 'employee'
     if principal.role != role:
         raise PermissionError('O papel do prestador foi alterado.')

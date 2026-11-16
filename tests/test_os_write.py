@@ -80,6 +80,10 @@ class OSWriteTest(unittest.TestCase):
             os_id=criada.os_id,
             descricao='Serviço atualizado',
             texto_adicional='Outro texto.',
+            # Labor (10) plus the new material (2 x 5) must close the
+            # canonical Web composition; do not bypass it in local mode.
+            valor_materiais=10.0,
+            valor_total=20.0,
             materiais=({'item': 'Fita', 'quantidade': 2,
                         'unidade': 'un', 'valor_unitario': 5},),
         ), principal=self.actor)

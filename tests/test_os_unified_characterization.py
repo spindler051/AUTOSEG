@@ -9,6 +9,8 @@ import tempfile
 import unittest
 import json
 import urllib.request
+
+import yaml
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -26,7 +28,10 @@ class OneWriterCharacterization(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='os_one_writer_')
         self.addCleanup(self.temp.cleanup)
-        self.config = patch.object(composicao, 'carregar', return_value={})
+        # Use the shipped, validated composition; {} is an invalid configuration.
+        config = composicao.validar(yaml.safe_load(
+            composicao.PADRAO.read_text(encoding='utf-8')))
+        self.config = patch.object(composicao, 'carregar', return_value=config)
         self.config.start()
         self.addCleanup(self.config.stop)
         self.databases = {}
@@ -163,6 +168,30 @@ class OneWriterCharacterization(unittest.TestCase):
             LocalService(filename).salvar_os(self.input(cid, os_id=oid,
                 descricao='Unauthorized change'), principal=foreign)
         self.assertEqual(before, self.snapshot(filename, oid))
+
+    def test_authorize_callback_uses_stored_authenticated_principal(self):
+        filename, _pid, cid, actor = self.databases['local']
+        authorized = []
+
+        def authorize(connection):
+            self.assertTrue(connection.in_transaction)
+            authorized.append(True)
+
+        # The service can carry its own authenticated identity, even when
+        # the caller supplies a transaction-local authorization callback.
+        service = LocalService(filename, principal=actor)
+        saved = service.salvar_os(self.input(cid), authorize=authorize)
+        self.assertGreater(saved.os_id, 0)
+        self.assertEqual(authorized, [True])
+
+    def test_authorize_callback_cannot_replace_missing_identity(self):
+        filename, _pid, cid, _actor = self.databases['local']
+        with self.assertRaises(PermissionError):
+            LocalService(filename).salvar_os(
+                self.input(cid), authorize=lambda connection: None)
+        with ext.db(filename) as connection:
+            self.assertEqual(connection.execute(
+                'SELECT COUNT(*) FROM ordens_servico').fetchone()[0], 0)
 
     def test_missing_actor_cannot_create(self):
         filename, _pid, cid, _actor = self.databases['local']

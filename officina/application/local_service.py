@@ -589,8 +589,17 @@ class LocalService:
 
     def salvar_os(self, dados: OSInput, *, authorize=None, principal=None) -> OSResultado:
         from officina.application.os_write import salvar_os
+        # The API supplies an authenticated principal and a transaction-local
+        # callback. Defer its *live* provider check to the locked writer so a
+        # post-preflight revocation is reported as a hidden resource (404).
+        # Authorize-only local callers may use a bound identity, never an
+        # unbound callback in place of a principal.
+        if authorize is not None and principal is not None:
+            actor = principal
+        else:
+            actor = self._local_actor(principal if principal is not None
+                                      else self._principal)
         if authorize is None:
-            actor = self._local_actor(principal)
             if dados.os_id is None:
                 from officina.application.work_item_access import require_create
                 require_create(self.banco, actor)
@@ -600,7 +609,7 @@ class LocalService:
                 authorize = self._authorize_os(dados.os_id, action, principal=actor)
         try:
             return salvar_os(self.banco, dados, authorize=authorize,
-                             principal=actor if authorize is None else principal)
+                             principal=actor)
         except ValidacaoError:
             raise
         except ValueError as erro:

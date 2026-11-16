@@ -23,7 +23,9 @@ from pathlib import Path
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlparse
 
-from officina.application.os_write_service import PostCommitEffectError
+from officina.application.os_write_service import (
+    PostCommitEffectError, RevokedProviderError,
+)
 from officina.application.contracts import (
     AppError,
     ConflitoError,
@@ -1072,6 +1074,10 @@ def handle(handler, path: str, banco: str, method: str = 'GET') -> bool:
             _erro(handler, 404, 'not_found', 'Recurso não encontrado.')
         else:
             _erro(handler, 403, 'forbidden', 'Operação não permitida.')
+    except RevokedProviderError:
+        # Keep revoked/inactive writers indistinguishable from hidden OS
+        # resources after preflight; ordinary denials remain 403.
+        _erro(handler, 404, 'not_found', 'Recurso não encontrado.')
     except PermissionError:
         _erro(handler, 403, 'forbidden', 'Operação não permitida.')
     except sqlite3.Error:
