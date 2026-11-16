@@ -2234,6 +2234,9 @@ class PortalPrestador:
                 corpo='' if app else botao('← Ordens de serviço','/os','secondary')
                 if oid and not app:
                     corpo+=f'<p class="muted">Número da OS: <b>{esc(d["numero_os"])}</b></p>'
+                # Render the canonical workflow before the ticket summary so the
+                # pending-OS actions stay grouped ahead of the PDF preview.
+                corpo += self.work_action_toolbar(s, oid)
                 if oid and app:
                     cliente_info=next((x for x in cl if x['id']==d.get('cliente_id')),None)
                     cliente_nome=cliente_info['nome'] if cliente_info else ''
@@ -2248,8 +2251,12 @@ class PortalPrestador:
                     if (d['status'] in ext.ATIVAS and not arquivada and em_rota
                             and not iniciado_ativo):
                         from flavors.autoseg.modules.autoseg_actions import resolved_actions
+                        # While a route is active, work.route is hidden but the
+                        # legacy cancel control remains available under the same
+                        # start permission.
                         route_allowed = any(
-                            action.id == 'work.route' for action in resolved_actions(
+                            action.id in ('work.route', 'work.start')
+                            for action in resolved_actions(
                                 banco, os_commands._provider_context(banco, s),
                                 'work', object_id=oid, surface='web'))
                         if route_allowed:
@@ -2277,7 +2284,6 @@ class PortalPrestador:
                         '</div></div>'
                         f'<div class="os-ticket-actions">{ticket_acoes}</div>'
                         '</section>')
-                corpo += self.work_action_toolbar(s, oid)
                 if erro:corpo+=card('Corrija o arquivo YAML',f'<p class="bad" id="yaml-erro-rev08">{esc(erro)}</p><p>Você pode selecionar outro arquivo sem sair da OS.</p>')
                 if preenchimento:
                     corpo+=('<p class="notice" id="yaml-importado-rev08" data-yaml-importado="1">'

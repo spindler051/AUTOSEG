@@ -51,6 +51,22 @@ def _work_state_allows(connection, action_id, object_id):
         return False
     if action_id in _WORK_CLOSED_ACTIONS and active:
         return False
+    if action_id == 'work.route':
+        if (connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='os_deslocamentos'").fetchone()
+                and ext.em_rota_atual(connection, object_id)):
+            return False
+    if action_id in ('work.route', 'work.start'):
+        if connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='os_atendimentos'").fetchone():
+            started = connection.execute(
+                'SELECT iniciado_em FROM os_atendimentos WHERE os_id=?',
+                (object_id,)).fetchone()
+            if (started and started['iniciado_em']
+                    and row['status'] != 'Pendente'):
+                return False
     return True
 
 

@@ -183,8 +183,10 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertIn('Visão geral', html)
             _, _, html = pedido(browser, base, url)
             csrf = token(html)
-            self.assertIn(f'formaction="{url}/em-rota"', html)
-            self.assertIn(f'formaction="{url}/iniciar"', html)
+            self.assertIn(f'action="{url}/em-rota"', html)
+            self.assertIn('data-action-id="work.route"', html)
+            self.assertIn(f'action="{url}/iniciar"', html)
+            self.assertIn('data-action-id="work.start"', html)
             status, _, _ = pedido(browser, base, f'{url}/iniciar', {'csrf': csrf})
             self.assertEqual(status, 200)
             with ext.db(self.db) as c:
@@ -227,19 +229,21 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertIn('Visão geral', html)
             _, _, html = pedido(browser, base, url)
             csrf = token(html)
-            self.assertIn('>Em rota</button>', html)
-            self.assertIn('>Iniciada</button>', html)
-            self.assertIn(f'formaction="{url}/em-rota"', html)
-            self.assertIn(f'formaction="{url}/iniciar"', html)
+            self.assertIn('>Iniciar rota</button>', html)
+            self.assertIn('>Iniciar atendimento</button>', html)
+            self.assertIn('data-action-id="work.route"', html)
+            self.assertIn('data-action-id="work.start"', html)
+            self.assertIn(f'action="{url}/em-rota"', html)
+            self.assertIn(f'action="{url}/iniciar"', html)
             self.assertIn('Baixar preview do PDF', html)
-            self.assertLess(html.find(f'formaction="{url}/em-rota"'),
+            self.assertLess(html.find('data-action-id="work.route"'),
                             html.find('Baixar preview do PDF'))
             self.assertIn('name="situacao_popup" value="Concluída"', html)
             self.assertNotIn('name="situacao_popup" value="Aberta"', html)
             self.assertNotIn('name="situacao_popup" value="Pendente"', html)
             self.assertNotIn('name="situacao_popup" value="Em rota"', html)
             self.assertNotIn('name="situacao_popup" value="Iniciada"', html)
-            self.assertEqual(html.count(f'formaction="{url}/em-rota"'), 1)
+            self.assertEqual(html.count('data-action-id="work.route"'), 1)
             status, _, _ = pedido(browser, base, f'{url}/em-rota', {
                 'csrf': csrf,
                 'cliente_id': str(self.cid),
@@ -248,7 +252,7 @@ class NumeroPublicoTest(unittest.TestCase):
             self.assertEqual(status, 200)
             _, _, html = pedido(browser, base, url)
             self.assertIn(f'formaction="{url}/cancelar-rota"', html)
-            self.assertNotIn(f'formaction="{url}/em-rota"', html)
+            self.assertNotIn('data-action-id="work.route"', html)
             self.assertNotIn('name="situacao_popup" value="Em rota"', html)
             self.assertNotIn('name="situacao_popup" value="Iniciada"', html)
         finally:
