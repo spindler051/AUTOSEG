@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="flavors/autoseg/branding/icone-readme.png" width="128" alt="AUTOSEG">
+</p>
+
 # AUTOSEG
 
 **Run your service business, not your paperwork.**

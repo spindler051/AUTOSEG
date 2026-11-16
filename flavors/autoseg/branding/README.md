@@ -5,6 +5,7 @@
 | `icone.png` | application icon (MAIN) — favicon, portal, PDF seal |
 | `icone_devel.png` | same, for DEV (`AUTOSEG_DEV=1`) |
 | `logo.png` | horizontal logo, used in PDFs and the portal header |
+| `icone-readme.png` | 256×256 optimized icon for the README; not used by the app |
 
 ## Artwork
 
