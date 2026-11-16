@@ -165,6 +165,66 @@ DEV**.
 | FB-0059 | `/os` | It was not possible to conclude an OS without choosing an e-mail recipient. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_conclusao_sem_destinatario_nao_exige_email`) |
 | FB-0060 | `/os` | The OS could be concluded without a payment method. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_conclusao_exige_forma_de_pagamento`) |
 | FB-0062 | `/login` | Login errors appeared as a full page and lost what the user had typed. All form errors should be toast/inline without navigation. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_login_erro_fica_inline_e_preserva_email`) |
+| FB-0063 | `/financeiro` (web + GTK) | Add a per-item **Mascarar valor** control on each received entry: the item stays listed as received but its value is excluded from the “Recebido” total; the mask can be toggled per item. Distinct from the global visual mask in 144/145, which hides the display but keeps the totals. | Pendente na DEV | — |
+
+### FB-0063 — Mascarar valor por item recebido
+
+**Reported directly by the maintainer.** The existing “Ocultar valores”
+(144/145) is a global visual mask: it hides KPIs and tables in the browser but
+every real total remains in the server and is still computed. This request is
+different: a **per-item accounting mask** on the received list.
+
+**Expected behavior**
+
+- each received entry (“Recebidos” section) gets a checkbox/action
+  **Mascarar valor**;
+- a masked entry remains listed and keeps its status **Recebido**;
+- its value is **excluded** from the “Recebido” card/total;
+- unmasking restores the value to the total;
+- the choice persists server-side and is visible on both Web and GTK;
+- nothing is deleted and the real ledger row is not changed.
+
+**Why it is not 144/145**
+
+144/145 hide the rendering. They do not change any sum. FB-0063 changes what
+the page computes, so it needs an explicit accounting rule and an audit trail.
+
+**Decisions required before implementation**
+
+1. **Who may mask:** the payee only, the finalizador, or an administrator?
+   The current finance page is personal, so the default would be the payee.
+2. **Per user or global:** masking for the payee's view only, or for every
+   viewer of that entry (admin/reports)?
+3. **Display:** does the masked row show the value as `•••`, or keep the value
+   visible and only remove it from the total? “Mascarar” suggests hiding the
+   value as well; the total exclusion is the accounting part.
+4. **Which entries:** only `receber_de_colegas` (secondary rateios), only the
+   finalizador rows, or both?
+5. **Legacy rows:** rows with `confirmado_por = NULL` (for example the 680,00
+   from the pre-system consolidation) are the main use case. Should they be
+   maskable like any other, or flagged as unverified first?
+6. **Persistence and schema:** a per-user flag needs storage. A new table keyed
+   by kind/id/provider, or a column, is a **schema change** and requires
+   maintainer approval; no schema is proposed here.
+7. **Reports:** the PDF, the monthly totals and the admin view must either
+   ignore masked items or show a separate “masked” line; define which.
+
+**Non-goals**
+
+- do not delete the received row;
+- do not alter `financeiro` or `produtividade_repasses` amounts;
+- do not confuse this with the global visual mask (144/145);
+- no schema, flags or migration before approval.
+
+**Acceptance tests (when implemented)**
+
+- masking one received item removes exactly its value from the “Recebido”
+  card and leaves the item visible as received;
+- unmasking restores the exact total;
+- the mask survives reload, Web/GTK, and a second login;
+- another provider cannot mask or see the mask state of this provider's items;
+- the real ledger and reports remain auditable;
+- negative test: an unauthorized principal cannot change the mask.
 
 ### FB-0057 — Busca e criação de cliente na OS
 
