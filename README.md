@@ -1,44 +1,52 @@
 # AUTOSEG
 
-AUTOSEG is a work-management application for security and automation
-professionals: clients, service orders, maintenance, budgets, technical reports,
-finance, stock and one shared Officina Web site.
+**Run your service business, not your paperwork.**
 
-The desktop application uses **GTK4 + libadwaita**
-(`flavors/autoseg/modules/gtk_app.py`). Officina Web serves providers and
-clients from one site and one login. The old client portal has been retired. The Tkinter frontend was removed in
-`9.6.0-dev.12`.
+AUTOSEG is an open-source workspace for security and automation
+professionals. Clients, service orders, maintenance, quotes, technical
+reports, finance and stock live in one place — in a native desktop app and a
+shared web portal.
+
+**What it wants to be.** AUTOSEG is the first real application of **Officina**,
+an open ecosystem for work management, built on **Workaholic**, a generic
+engine for work records. The goal is one platform that can run **centralized**
+on a server or **decentralized**, local-first, on your own machine — the same
+data, the same rules, and your choice of infrastructure.
+
+**Where it is today.** Not there yet, and we say so. AUTOSEG is the part that
+already runs a real business in production. Officina and Workaholic are being
+built around it one slice at a time; Workaholic powers only the customer slice
+today, and the decentralized model is a direction, not the current state.
+
+**How we move.** Production first, architecture second. Small changes, tested
+against a real business, with no big rewrite and no lost data. It is slow on
+purpose.
+
+**Security.** Security is part of every change, not a later pass. If you find
+a concern, please open an issue or contact the maintainers — responsible
+reports and contributions are very welcome. See [`SECURITY.md`](SECURITY.md).
 
 ## Current status
 
-Versão de desenvolvimento: `9.6.0-dev.73` (`main`).
+AUTOSEG is already used in production. The version on `main` is
+`9.6.0-dev.73`.
 
-- Working vertical application for security/automation.
-- GTK4 desktop application with provider login (local or server), identity and
-  real logout. Client login in the GTK app is not implemented yet; it is
-  planned as piece 6.5, remote-only.
-- Single Officina Web site with `/login` for provider and client when
-  `AUTOSEG_UNIFIED_LOGIN=1`; `/entrar` has been removed. With the flag off,
-  `/login` keeps the legacy provider form as the rollback path.
-- The AUTOSEG split-screen login screen is preserved; the unified form uses a
-  single “E-mail, CPF ou telefone” field.
-- The retired ID+senha history, anonymous PJ intake and customer self-registration return 410 Gone.
-- SQLite storage outside the repository, in local or server mode.
-- The active suite includes P0 migration and role-scoped PDF regressions.
-  Run the isolated discovery command in `TESTES.md` for current results;
-  historical counts from the retired two-origin portal are not applicable.
-- `AUTOSEG_OBJECT_POLICY_ENFORCEMENT` and `AUTOSEG_WEB_SESSION_DURABLE` remain
-  opt-in. Production activation is pending the TOCTOU/security review.
-- Brazilian fiscal/payment features are still part of the AUTOSEG application,
-  not yet isolated as locale modules.
-- **Workaholic** is the generic engine project under `workaholic/`. It is a
-  prototype (`0.1.0`) and is currently integrated only for the `cliente`
-  slice. It has not been abandoned; making it the engine of the whole platform
-  is a planned architectural phase.
+- native GTK4 + libadwaita desktop app; provider login works locally or
+  against a server, and client login in the desktop app is planned;
+- one Officina Web site with a single login for providers and clients; the
+  legacy provider form remains as a rollback;
+- SQLite data lives outside the repository, in a local or server data
+  directory;
+- the test suite covers the current behavior; exact counts are in
+  [`TESTES.md`](TESTES.md);
+- some hardening flags are still opt-in while the remaining authorization
+  review is finished;
+- Brazilian fiscal and payment rules are still part of AUTOSEG, not yet
+  isolated as locale modules;
+- Workaholic is a prototype today and powers only the customer slice.
 
-Next: close the object-policy gate (TOCTOU), then implement the remote-only
-client GTK slice (6.5). The ordered plan is in
-[`docs/ROADMAP.md`](docs/ROADMAP.md); the client-mode analysis is in
+Next: finish the authorization review and the remote client slice. The ordered
+plan is in [`docs/ROADMAP.md`](docs/ROADMAP.md); the client-mode analysis is in
 [`docs/planning/GTK_CLIENT_MODE.md`](docs/planning/GTK_CLIENT_MODE.md).
 
 ## Long-term direction
