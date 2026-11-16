@@ -161,9 +161,10 @@ and [libadwaita — adaptive layouts](https://gnome.pages.gitlab.gnome.org/libad
   were clipped outside the window instead of scrolling;
 - the sidebar had a 220–280 px width but no explicit collapse breakpoint.
 
-The shell now allows 360×480, collapses the sidebar below 600sp through
-`Adw.Breakpoint` and scrolls the page area. Per-page refinements (`Adw.Clamp`,
-bottom action bars, `Adw.Dialog` as a bottom sheet) remain part of B/C.
+The B/C work must allow 360×480, collapse the sidebar below 600sp through
+`Adw.Breakpoint` and scroll the page area, plus the per-page refinements
+(`Adw.Clamp`, bottom action bars, `Adw.Dialog` as a bottom sheet). Nothing here
+is implemented yet; this is the target for the adaptive part of B and C.
 
 HIG cannot be fully automated. The mechanical part is order/visibility; the
 visual part is a checklist per section at review time.
