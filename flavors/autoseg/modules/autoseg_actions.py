@@ -70,7 +70,47 @@ def _work_state_allows(connection, action_id, object_id):
     return True
 
 
+def _finance_mutation_allowed(banco, principal, object_id):
+    """Only the actual closing provider or live admin may mutate one finance row.
+
+    This controls action discoverability only; portal_negocios revalidates the
+    identity against the financial record INSIDE its write transaction.
+    """
+    if type(object_id) is not int or object_id <= 0 or not principal.provider_id:
+        return False
+    with ext.db(banco) as connection:
+        tables = {r[0] for r in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('financeiro','os_encerramentos')")}
+        if tables != {'financeiro', 'os_encerramentos'}:
+            return False
+        row = connection.execute("SELECT con.prestador_id "
+            "FROM financeiro f JOIN os_encerramentos con ON con.os_id=f.os_id "
+            "WHERE f.id=?", (object_id,)).fetchone()
+        return bool(row and (ext.administrador(connection, principal.provider_id)
+                  or int(row['prestador_id']) == int(principal.provider_id)))
+
+
 def _object_permitted(banco, principal, action, object_id):
+    if action.object_action == 'finance_write':
+        return _finance_mutation_allowed(banco, principal, object_id)
+    if action.section in ('history', 'invoices', 'email') and action.object_action != 'list':
+        if type(object_id) is not int or object_id <= 0:
+            return False
+        if action.object_action == 'download':
+            from officina.application.object_policy import ObjectPolicy, Resource
+            work = access.resource_for_work_item(banco, object_id)
+            doc = Resource('document', object_id, work.organization_id,
+                           work.owner_id, work.client_id, work.participant_ids,
+                           work.attributes, work.client_org_id)
+            access.require_read_work_item(banco, principal, object_id)
+            ObjectPolicy().require(principal, 'download', doc)
+        elif action.object_action == 'send':
+            access.require_read_work_item(banco, principal, object_id)
+            access.require_work_item(banco, principal, object_id, 'send')
+        else:
+            access.require_read_work_item(banco, principal, object_id)
+        return True
     if action.object_action in ('list', 'create'):
         if action.section == 'work' and action.object_action == 'create':
             access.require_create(banco, principal)

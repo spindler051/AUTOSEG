@@ -75,6 +75,21 @@ def _enviar(handler, status: int, payload: Mapping[str, Any]):
     handler.wfile.write(corpo)
 
 
+def _enviar_artefato(handler, dados: bytes, tipo: str, nome: str):
+    """Transport data only after OS+session authorization; never return disk paths."""
+    import re
+    filename = re.sub(r'[^A-Za-z0-9_.-]', '_', str(nome or 'artefato'))[:180]
+    handler.send_response(200)
+    handler.send_header('Content-Type', tipo)
+    handler.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+    handler.send_header('Content-Length', str(len(dados)))
+    handler.send_header('Cache-Control', 'no-store, max-age=0')
+    handler.send_header('X-Content-Type-Options', 'nosniff')
+    handler.send_header('X-AUTOSEG-API-Version', 'v1')
+    handler.end_headers()
+    handler.wfile.write(dados)
+
+
 def _erro(handler, status: int, codigo: str, mensagem: str):
     corpo = json.dumps({'error': {'code': codigo, 'message': mensagem}},
                        ensure_ascii=False).encode('utf-8')
@@ -605,16 +620,19 @@ def _rota_os(handler, partes, query, servico, metodo, banco=None, info=None, pri
         if os_id is None:
             raise NaoEncontradoError('OS não encontrada.')
         return _rota_os_id(handler, os_id, partes[2:], servico, metodo,
-                           banco, info, principal)
+                           banco, info, principal, query=query)
     raise NaoEncontradoError('Rota não encontrada.')
 
 
-def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, principal=None):
+def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, principal=None, query=None):
     actions = {
         ('GET', ('contexto',)): 'view',
         ('GET', ('contexto-atribuicao',)): 'assign',
         ('GET', ('anexos','contar')): 'view',
         ('GET', ('pdf','arquivo')): 'download',
+        ('GET', ('artefato','pdf')): 'download',
+        ('GET', ('artefato','email')): 'send',
+        ('GET', ('artefato','nota')): 'send',
         ('POST', ('atribuir',)): 'assign',
         ('POST', ('desatribuir',)): 'assign',
         ('POST', ('iniciar',)): 'start',
@@ -673,6 +691,16 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
             os_id, tecnico_id, str(dados.get('valor') or '0'), principal=principal,
             authorize=_os_writer_authorize(
                 principal, os_id, 'view', session_id=info.get('sessao_id')))})
+    if metodo == 'GET' and len(resto) == 2 and resto[0] == 'artefato':
+        from officina.application.remote_artifact import resolve_draft, load_artifact
+        kind = resto[1]
+        if kind == 'pdf':
+            path = Path(servico.pdf_publicado(os_id, principal=principal))
+        else:
+            filename = str((query or {}).get('nome', [''])[0])
+            path = resolve_draft(banco, os_id, kind, filename)
+        contents, content_type = load_artifact(path, kind)
+        return _enviar_artefato(handler, contents, content_type, path.name)
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id, principal=principal)})

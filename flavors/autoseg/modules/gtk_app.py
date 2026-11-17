@@ -1522,6 +1522,8 @@ class Janela(Adw.ApplicationWindow):
         os_id = valores[0]
         try:
             caminho = self.service.pdf_publicado(os_id, **self._os_kwargs())
+            if self.remote_mode:
+                caminho = self.service.baixar_artefato_os(os_id, 'pdf')
             ui.abrir_caminho(caminho, self)
         except Exception as erro:
             ui.aviso_erro(self, "PDF", str(erro))
@@ -1575,7 +1577,8 @@ class Janela(Adw.ApplicationWindow):
         pagina.append(self.tabela_financeiro.widget)
         self.botao_fin_receber = ui.botao(
             "Marcar como recebido", self._marcar_recebido, css="suggested-action")
-        pagina.append(ui.barra(self.botao_fin_receber))
+        pagina.append(ui.barra(self.botao_fin_receber,
+            ui.botao('Alterar vencimento', self._alterar_vencimento)))
         return pagina
 
     def carregar_financeiro(self):
@@ -1765,6 +1768,12 @@ class Janela(Adw.ApplicationWindow):
                 caminho = self.service.preparar_email(os_id, **self._os_kwargs())
                 texto = ("Rascunho .eml com PDF:\n" + caminho +
                          "\n\nNenhum e-mail foi enviado.")
+            if self.remote_mode:
+                caminho = self.service.baixar_artefato_os(
+                    os_id, 'nota' if tipo == 'notas' else 'email', caminho)
+                texto = ("Rascunho obtido no dispositivo:\n" + caminho +
+                        ("\n\nNENHUMA NOTA FISCAL FOI EMITIDA." if tipo == 'notas'
+                         else "\n\nNenhum e-mail foi enviado."))
             ui.info(self, "Nota fiscal" if tipo == "notas" else "E-mail", texto)
             ui.abrir_caminho(caminho, self)
         except (AppError, OSError, ValueError) as erro:

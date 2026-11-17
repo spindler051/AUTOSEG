@@ -692,6 +692,50 @@ class HttpService(AppService):
         resposta = self._post(f'/api/v1/desktop/os/{int(os_id)}/nota/preparar')
         return str(resposta.get('arquivo') or '')
 
+    def baixar_artefato_os(self, os_id: int, tipo: str, servidor_path: str = '') -> str:
+        """Download allowed OS artifact to a new private temporary client file.
+
+        Never try to open a server-side path on the GTK workstation.
+        """
+        import tempfile
+        if tipo not in ('pdf', 'email', 'nota'):
+            raise ValueError('Tipo de artefato desconhecido.')
+        from officina.application.remote_artifact import MAX_ARTIFACT_BYTES
+        ext = {'pdf': '.pdf', 'email': '.eml', 'nota': '.json'}[tipo]
+        nome = Path(servidor_path).name if tipo != 'pdf' else ''
+        if tipo != 'pdf' and (not nome or not nome.endswith(ext)):
+            raise ValueError('Identificador do artefato inválido.')
+        if not self.base_url or not self.token:
+            raise AutenticacaoError('Sessão remota obrigatória.')
+        validate_server_transport(self.base_url)
+        url = self._url(f'/api/v1/desktop/os/{int(os_id)}/artefato/{tipo}',
+                        {'nome': nome} if nome else None)
+        req = urllib.request.Request(url, method='GET',
+                 headers={'Authorization': 'Bearer ' + self.token,
+                          'Accept': 'application/octet-stream'})
+        if self.desktop_token:
+            req.add_header('X-AUTOSEG-Desktop-Token', self.desktop_token)
+        try:
+            with urllib.request.build_opener(_NoRedirect()).open(
+                    req, timeout=self.write_timeout) as response:
+                allowed_mime={'pdf':'application/pdf', 'email':'message/rfc822',
+                              'nota':'application/json'}[tipo]
+                if response.headers.get_content_type() != allowed_mime:
+                    raise ServicoIndisponivelError('Tipo de artefato inesperado.')
+                payload = response.read(MAX_ARTIFACT_BYTES + 1)
+        except urllib.error.HTTPError as erro:
+            self._erro_http(erro)
+        except (urllib.error.URLError, OSError) as erro:
+            raise ServicoIndisponivelError('Transferência remota indisponível.') from erro
+        if not payload or len(payload) > MAX_ARTIFACT_BYTES:
+            raise ValidacaoError('Arquivo vazio ou maior que 24 MB.')
+        if tipo == 'pdf' and not payload.startswith(b'%PDF-'):
+            raise ValidacaoError('PDF remoto inválido.')
+        with tempfile.NamedTemporaryFile(prefix='autoseg-b2b-', suffix=ext,
+                                         delete=False) as output:
+            output.write(payload)
+            return output.name
+
     def pdf_publicado(self, os_id: int) -> str:
         resposta = self._get(f'/api/v1/desktop/os/{int(os_id)}/pdf/arquivo')
         return str(resposta.get('arquivo') or '')
