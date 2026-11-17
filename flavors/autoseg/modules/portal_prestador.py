@@ -3500,8 +3500,15 @@ class PortalPrestador:
                                    esc(item['unidade'] or ''),item['saldo'],item['minimo'],
                                    dinheiro(item['venda_centavos']/100),
                                    botao('Abrir',f'/estoque/{item["id"]}','secondary')))
+                importar=(f'<form method="post" action="/estoque/yaml" enctype="multipart/form-data" data-no-ajax>'
+                         f'{self.hidden(s)}'
+                         '<label for="yaml-estoque">Arquivo YAML de estoque (máximo 64 KB)</label>'
+                         '<input id="yaml-estoque" type="file" name="yaml" accept=".yaml,.yml" required>'
+                         '<button type="submit" class="secondary">Pré-visualizar lote</button></form>'
+                         '<p class="muted">A prévia não altera saldos nem cadastra materiais.</p>')
                 return self.pagina('Estoque',
-                    (card('Novo material',botao('Cadastrar material','/estoque/novo',''))
+                    (card('Importar materiais YAML',importar)
+                     +card('Novo material',botao('Cadastrar material','/estoque/novo',''))
                      if _policy_allows(banco,s,'provider.manage.all') else '')
                     +card('Materiais',tabela(
                         ['ID','Material','Código','Unidade','Saldo','Mínimo','Venda','Ação'],
@@ -4322,6 +4329,33 @@ class PortalPrestador:
                                 raise ValueError('Ação de prestador inválida.')
                             return self.redir('/prestadores')
                         raise ValueError('Prestador inválido.')
+                    if path=='/estoque/yaml':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem importar estoque.')
+                        arquivo=d.get('yaml')
+                        if not isinstance(arquivo,tuple):
+                            raise ValueError('Selecione um arquivo YAML de estoque.')
+                        lista=yaml_import.materiais(arquivo[0],arquivo[1])
+                        linhas=[(esc(m['nome']),esc(m['sku']),esc(m['unidade']),
+                                 esc(m['custo']),esc(m['venda'])) for m in lista]
+                        fonte=arquivo[1].decode('utf-8-sig')
+                        confirm=(f'<form method="post" action="/estoque/importar">{self.hidden(s)}'
+                                 f'<textarea hidden name="yaml_text">{esc(fonte)}</textarea>'
+                                 '<button type="submit">Confirmar importação</button></form>')
+                        return self.pagina('Prévia do estoque',
+                            card('Revisar materiais',tabela(
+                                ['Material','SKU','Unidade','Custo','Venda'],linhas))
+                            +card('Confirmar lote',confirm)
+                            +botao('Cancelar','/estoque','secondary'),s)
+                    if path=='/estoque/importar':
+                        if not s.get('admin'):
+                            raise PermissionError('Somente administradores podem importar estoque.')
+                        fonte=str(d.get('yaml_text',''))
+                        lista=yaml_import.materiais('estoque.yaml',fonte.encode('utf-8'))
+                        from officina.application.local_service import LocalService
+                        LocalService(banco).estoque_importar_lote(
+                            lista,principal=os_commands._provider_context(banco,s))
+                        return self.redir('/estoque')
                     if path=='/estoque/salvar' or path.startswith('/estoque/'):
                         if not s.get('admin'):
                             raise PermissionError('Somente administradores podem gerenciar o estoque.')
