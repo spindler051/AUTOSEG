@@ -650,6 +650,13 @@ class HttpService(AppService):
         resposta = self._post('/api/v1/desktop/prestadores', dict(dados))
         return int(resposta.get('id') or 0)
 
+    def obter_cadastro_prestador(self, prestador_id: int) -> dict:
+        return self._ler(f'/api/v1/desktop/prestadores/{int(prestador_id)}/cadastro', {})
+
+    def atualizar_prestador(self, prestador_id: int, dados: Mapping[str, Any]) -> dict:
+        return self._request('PUT',
+            f'/api/v1/desktop/prestadores/{int(prestador_id)}/cadastro', payload=dict(dados))
+
     def redefinir_senha_prestador(self, prestador_id: int, senha: str) -> None:
         self._post(f'/api/v1/desktop/prestadores/{int(prestador_id)}/senha',
                    {'senha': senha})

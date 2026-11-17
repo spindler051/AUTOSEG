@@ -704,6 +704,12 @@ def _rota_prestadores(handler, partes, servico, metodo):
     if prestador_id is None:
         raise NaoEncontradoError('Prestador não encontrado.')
     acao = partes[2]
+    if acao == 'cadastro':
+        if metodo == 'GET':
+            return _enviar(handler, 200, servico.obter_cadastro_prestador(prestador_id))
+        if metodo in ('PUT', 'POST'):
+            return _enviar(handler, 200,
+                          servico.atualizar_prestador(prestador_id, _corpo(handler)))
     if acao == 'config':
         if metodo == 'GET':
             return _enviar(handler, 200,

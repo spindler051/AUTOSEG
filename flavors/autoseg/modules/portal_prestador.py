@@ -3443,7 +3443,26 @@ class PortalPrestador:
                 for p in pessoas:
                     pid=int(p['id'])
                     admin=pid in admins
-                    acoes=(f'<form method="post" action="/prestadores/{pid}/admin" style="display:inline">'
+                    registro_form=(f'<details><summary>Editar cadastro</summary>'
+                        f'<form method="post" action="/prestadores/{pid}/editar">{self.hidden(s)}'
+                        +campos_escuros('Nome','nome',str(p['nome']),required=True)
+                        +campos_escuros('E-mail (login)','email',str(p['email']),kind='email',required=True)
+                        +campos_escuros('Telefone','telefone',str(p['telefone'] or ''))
+                        +campos_escuros('Documento','documento',str(p['documento'] or ''))
+                        +campos_escuros('Especialidade','especialidade',str(p['especialidade'] or ''))
+                        +'<button>Salvar cadastro</button></form></details>')
+                    cfg=ext.obter_config_prestador(banco,pid)
+                    config_form=(f'<details><summary>Integrações</summary>'
+                        f'<form method="post" action="/prestadores/{pid}/integracoes">{self.hidden(s)}'
+                        +select('Provedor de envio','provedor_email',
+                            [(x,x or 'Nenhum') for x in ('','SMTP','Microsoft Graph','Gmail API','Outro')],
+                            str(cfg.get('provedor_email') or ''))
+                        +campos_escuros('E-mail remetente','email_remetente',str(cfg.get('email_remetente') or ''))
+                        +campos_escuros('Dados bancários','dados_bancarios_texto',
+                                       str(cfg.get('dados_bancarios_texto') or ''))
+                        +'<button>Salvar integrações</button></form></details>')
+                    acoes=registro_form+config_form+(
+                        f'<form method="post" action="/prestadores/{pid}/admin" style="display:inline">' 
                            f'{self.hidden(s)}<button class="secondary">'
                            f'{"Remover admin" if admin else "Tornar admin"}</button></form> '
                            f'<form method="post" action="/prestadores/{pid}/alternar" style="display:inline">'
@@ -4277,7 +4296,15 @@ class PortalPrestador:
                         partes=path.strip('/').split('/')
                         if len(partes)==3 and partes[1].isdigit():
                             alvo=int(partes[1])
-                            if partes[2]=='alternar':
+                            if partes[2]=='editar':
+                                ext.atualizar_cadastro_prestador(banco,alvo,d)
+                                web_session.revoke_identity(banco, 'provider',alvo)
+                            elif partes[2]=='integracoes':
+                                dados=ext.obter_config_prestador(banco,alvo)
+                                for campo in ('provedor_email','email_remetente','dados_bancarios_texto'):
+                                    dados[campo]=str(d.get(campo,'') or '')
+                                ext.salvar_config_prestador(banco,alvo,dados)
+                            elif partes[2]=='alternar':
                                 ext.alternar_ativo(banco,alvo)
                                 web_session.revoke_identity(banco, 'provider',alvo)
                             elif partes[2]=='arquivar':

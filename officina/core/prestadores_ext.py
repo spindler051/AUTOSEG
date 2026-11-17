@@ -204,6 +204,45 @@ def cadastrar(banco,nome,email,senha,telefone='',documento='',especialidade=''):
         (nome.strip(),email.strip().lower(),senha_hash(senha),telefone.strip(),documento.strip(),especialidade.strip(),agora()))
         return cur.lastrowid
 
+def obter_cadastro_prestador(banco, prestador_id):
+    """Read an active provider's registration; never expose its password hash."""
+    with db(banco) as c:
+        row = c.execute(
+            'SELECT id,nome,email,telefone,documento,especialidade,ativo '
+            'FROM prestadores WHERE id=? AND excluido=0',
+            (int(prestador_id),)).fetchone()
+        if row is None:
+            raise ValueError('Prestador não encontrado.')
+        return dict(row)
+
+
+def atualizar_cadastro_prestador(banco, prestador_id, dados):
+    """Update registration only; changing admin status requires a separate action."""
+    from officina.core import cadastros_v9 as cad
+    nome = str(dados.get('nome') or '').strip()
+    email = str(dados.get('email') or '').strip().lower()
+    telefone = str(dados.get('telefone') or '').strip()
+    documento = str(dados.get('documento') or '').strip()
+    especialidade = str(dados.get('especialidade') or '').strip()
+    if not nome or not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+        raise ValueError('Informe nome e e-mail válido.')
+    if len(nome) > 200 or len(email) > 254 or len(telefone) > 80 or len(especialidade) > 200:
+        raise ValueError('Dados cadastrais muito longos.')
+    documento = cad.validar_documento_auto(documento) if documento else ''
+    with db(banco) as c:
+        row = c.execute('SELECT id FROM prestadores WHERE id=? AND excluido=0',
+                        (int(prestador_id),)).fetchone()
+        if row is None:
+            raise ValueError('Prestador não encontrado.')
+        try:
+            c.execute('UPDATE prestadores SET nome=?,email=?,telefone=?,documento=?, '
+                      'especialidade=? WHERE id=? AND excluido=0',
+                      (nome,email,telefone,documento,especialidade,int(prestador_id)))
+        except sqlite3.IntegrityError as erro:
+            raise ValueError('E-mail de prestador já cadastrado.') from erro
+    return obter_cadastro_prestador(banco, prestador_id)
+
+
 def definir_documento_prestador(banco, prestador_id, documento):
     """Atualiza o CNPJ do prestador. O mesmo CNPJ pode existir em vários prestadores."""
     from officina.core import cadastros_v9 as cad

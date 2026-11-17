@@ -796,6 +796,15 @@ class LocalService:
             documento=str(dados.get('documento') or ''),
             especialidade=str(dados.get('especialidade') or '')))
 
+    def obter_cadastro_prestador(self, prestador_id: int, *, principal=None) -> dict:
+        self._company_admin(principal)
+        return ext.obter_cadastro_prestador(self.banco, int(prestador_id))
+
+    def atualizar_prestador(self, prestador_id: int, dados: Mapping[str, Any],
+                           *, principal=None) -> dict:
+        self._company_admin(principal)
+        return ext.atualizar_cadastro_prestador(self.banco, int(prestador_id), dict(dados))
+
     def redefinir_senha_prestador(self, prestador_id: int, senha: str, *, principal=None) -> None:
         self._company_admin(principal)
         ext.redefinir_senha_prestador_desktop(

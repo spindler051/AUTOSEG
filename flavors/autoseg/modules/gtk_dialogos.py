@@ -1681,26 +1681,30 @@ class DialogoSenhaCliente(Adw.Dialog):
 
 
 class DialogoPrestador(Adw.Dialog):
-    def __init__(self, janela):
+    def __init__(self, janela, prestador_id=None):
         super().__init__()
         self.janela = janela
-        self.set_title("Cadastrar prestador")
+        self.prestador_id = prestador_id
+        registro = (_servico(janela).obter_cadastro_prestador(prestador_id)
+                    if prestador_id is not None else {})
+        self.set_title("Editar prestador" if prestador_id else "Cadastrar prestador")
         self.set_content_width(560)
         self.set_content_height(560)
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        header.set_title_widget(Adw.WindowTitle(title="Cadastrar prestador"))
+        header.set_title_widget(Adw.WindowTitle(title="Editar prestador" if prestador_id else "Cadastrar prestador"))
         toolbar.add_top_bar(header)
         pagina = Adw.PreferencesPage()
         grupo = Adw.PreferencesGroup()
         pagina.add(grupo)
-        self.nome = ui.campo_entry(grupo, "Nome")
-        self.email = ui.campo_entry(grupo, "E-mail (login)")
-        self.telefone = ui.campo_entry(grupo, "Telefone")
-        self.documento = ui.campo_entry(grupo, "CNPJ do prestador (pode repetir)")
-        self.especialidade = ui.campo_entry(grupo, "Especialidade")
+        self.nome = ui.campo_entry(grupo, "Nome", registro.get("nome", ""))
+        self.email = ui.campo_entry(grupo, "E-mail (login)", registro.get("email", ""))
+        self.telefone = ui.campo_entry(grupo, "Telefone", registro.get("telefone", ""))
+        self.documento = ui.campo_entry(grupo, "CNPJ do prestador (pode repetir)", registro.get("documento", ""))
+        self.especialidade = ui.campo_entry(grupo, "Especialidade", registro.get("especialidade", ""))
         self.senha = Adw.PasswordEntryRow(title="Senha inicial (mínimo 10 caracteres)")
-        grupo.add(self.senha)
+        if prestador_id is None:
+            grupo.add(self.senha)
         toolbar.set_content(pagina)
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -1715,23 +1719,29 @@ class DialogoPrestador(Adw.Dialog):
 
     def _salvar(self):
         try:
-            documento = cad9.validar_documento_auto(self.documento.get_text())
+            raw_doc = self.documento.get_text().strip()
+            documento = cad9.validar_documento_auto(raw_doc) if raw_doc else ""
         except ValueError as erro:
             ui.aviso_erro(self.janela, "Documento inválido", str(erro))
             return
         try:
-            _servico(self.janela).criar_prestador({
+            dados = {
                 "nome": self.nome.get_text().strip(),
                 "email": self.email.get_text().strip(),
                 "senha": self.senha.get_text(),
                 "telefone": self.telefone.get_text().strip(),
                 "documento": documento,
                 "especialidade": self.especialidade.get_text().strip(),
-            })
+            }
+            if self.prestador_id is not None:
+                dados.pop('senha', None)
+                _servico(self.janela).atualizar_prestador(self.prestador_id, dados)
+            else:
+                _servico(self.janela).criar_prestador(dados)
         except Exception as erro:
             ui.aviso_erro(self.janela, "Cadastro", str(erro))
             return
-        ui.toast(self.janela, "Prestador cadastrado.")
+        ui.toast(self.janela, "Prestador atualizado." if self.prestador_id else "Prestador cadastrado.")
         self.janela.carregar_prestadores()
         self.close()
 

@@ -1054,7 +1054,9 @@ class Janela(Adw.ApplicationWindow):
             ui.botao("Nova OS do cliente", self._nova_os_cliente),
         ]
         if self.sessao is not None and self.sessao.admin:
-            acoes_cliente.append(ui.botao("Excluir / desativar", self._excluir_cliente,
+            acoes_cliente.append(ui.botao("Desativar cliente", self._desativar_cliente,
+                                          css="destructive-action"))
+            acoes_cliente.append(ui.botao("Excluir cliente", self._excluir_cliente,
                                           css="destructive-action"))
             acoes_cliente.append(ui.botao("Mesclar cliente", self._mesclar_cliente,
                                           css="destructive-action"))
@@ -1125,6 +1127,24 @@ class Janela(Adw.ApplicationWindow):
 
     def _os_kwargs(self):
         return {} if self.remote_mode else {'principal': self._cliente_admin_actor()}
+
+    def _desativar_cliente(self):
+        valores = self._cliente_selecionado()
+        if not valores:
+            return
+        cliente_id, nome = int(valores[0]), valores[1]
+        def desativar():
+            try:
+                self.service.desativar_cliente(cliente_id, 'AUTOSEG desktop',
+                    **self._os_kwargs())
+            except Exception as erro:
+                ui.aviso_erro(self, 'Cliente', str(erro))
+                return
+            self.carregar_clientes()
+            ui.toast(self, 'Cliente desativado; histórico preservado.')
+        ui.alerta(self, 'Desativar cliente',
+                  f'Desativar {nome} preservando OS, documentos e histórico?',
+                  desativar, destrutivo=True, rotulo_ok='Desativar')
 
     def _excluir_cliente(self):
         valores = self._cliente_selecionado()
@@ -1783,6 +1803,7 @@ class Janela(Adw.ApplicationWindow):
         ])
         pagina.append(self.tabela_prestadores.widget)
         pagina.append(ui.barra(
+            ui.botao("Editar cadastro", self._editar_prestador),
             ui.botao("Ativar / desativar", self._alternar_prestador),
             ui.botao("Administrador", self._admin_prestador),
             ui.botao("Redefinir senha", self._senha_prestador),
@@ -1818,6 +1839,14 @@ class Janela(Adw.ApplicationWindow):
 
     def _novo_prestador(self):
         dialogos.DialogoPrestador(self).present(self)
+
+    def _editar_prestador(self):
+        valores = self._prestador_selecionado()
+        if valores:
+            try:
+                dialogos.DialogoPrestador(self, int(valores[0])).present(self)
+            except Exception as erro:
+                ui.aviso_erro(self, 'Prestador', str(erro))
 
     def _alternar_prestador(self):
         valores = self._prestador_selecionado()
