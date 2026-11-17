@@ -11,6 +11,12 @@ from officina.core import prestadores_ext as ext
 from officina.core import produtividade_os as prod
 
 
+def _has_table(connection, name):
+    return connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (name,)).fetchone() is not None
+
+
 def contexto(banco, os_id, principal):
     """Read current contacts and rateio data for an already authorized OS."""
     from officina.application.live_provider import resolve as live_provider
@@ -22,9 +28,10 @@ def contexto(banco, os_id, principal):
             (int(os_id),)).fetchone()
         if not work:
             raise PermissionError('Recurso indisponível.')
-        final = connection.execute(
+        final = (connection.execute(
             'SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
             (int(os_id),)).fetchone()
+                 if _has_table(connection, 'os_encerramentos') else None)
         closer = (int(final['prestador_id']) if final and final['prestador_id'] is not None
                   else ext.responsavel_atual(connection, int(os_id)))
         is_admin = bool(ext.administrador(connection, principal.provider_id))
@@ -32,12 +39,14 @@ def contexto(banco, os_id, principal):
                     work['status'] not in ('Cancelada', 'Não realizada') and
                     (is_admin or (closer is not None and
                      int(closer) == int(principal.provider_id))))
-        rows = [dict(item) for item in connection.execute('''
+        rows = ([dict(item) for item in connection.execute('''
             SELECT r.tecnico_id,p.nome,r.valor_centavos
             FROM produtividade_rateios r JOIN prestadores p ON p.id=r.tecnico_id
             WHERE r.os_id=? ORDER BY p.nome''', (int(os_id),))]
-        nota = connection.execute('''SELECT nome_original FROM os_notas_fiscais
+                if _has_table(connection, 'produtividade_rateios') else [])
+        nota = (connection.execute('''SELECT nome_original FROM os_notas_fiscais
             WHERE os_id=? ORDER BY id DESC LIMIT 1''', (int(os_id),)).fetchone()
+                if _has_table(connection, 'os_notas_fiscais') else None)
         workers = [dict(item) for item in connection.execute('''
             SELECT id,nome FROM prestadores
             WHERE ativo=1 AND excluido=0 ORDER BY nome''')]
