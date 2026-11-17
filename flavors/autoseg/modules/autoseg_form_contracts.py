@@ -120,30 +120,60 @@ WORK = Form('work', 'work', (
     Field('custo_materiais', 'Custo real dos materiais (R$)', type='money',
           validation='work.material_cost'),
     Field('material_item[]', 'Material', type='text',
+          help='Digite ou selecione um item de estoque.',
           validation='work.material_item', gtk_attribute='materiais'),
     Field('material_qtd[]', 'Quantidade', type='number',
+          help='Deixe vazio para item de valor total, sem quantidade fixa.',
           validation='work.material_quantity', gtk_attribute='materiais'),
-    Field('material_unidade[]', 'Unidade', type='select',
-          gtk_attribute='materiais'),
+    Field('material_unidade[]', 'Unidade', type='text',
+          help='Unidade livre, por exemplo un, m ou h.', gtk_attribute='materiais'),
     Field('material_unit[]', 'Valor unitário / total (R$)', type='money',
+          help='Sem quantidade, este valor é o total do item.',
           validation='work.material_unit_price', gtk_attribute='materiais'),
+    Field('material_total', 'Total (R$)', type='readonly',
+          help='Prévia; o servidor recalcula o total ao salvar.'),
     Field('observacoes', 'Observações gerais', type='textarea'),
     Field('texto_adicional', 'Texto adicional', type='textarea'),
     Field('tempo_horas', 'Tempo de atendimento (horas)', type='number'),
+    Field('aplicar_composicao', 'Aplicar composição padrão (custos e margem)',
+          type='checkbox', default=True),
+    Field('cobrar_visita', 'Cobrar taxa mínima de visita',
+          type='checkbox', default=True),
     Field('base_percentuais', 'Composição dos valores', type='select',
+          help='A mesma base configurada no servidor é aplicada aos percentuais.',
           validation='work.composition'),
     Field('composicao_yaml', 'Composição declarativa', type='textarea',
+          help='Lista YAML/JSON declarativa; o servidor calcula os componentes.',
           validation='work.composition'),
+    Field('composicao_preview', 'Prévia da composição', type='readonly',
+          help='Prévia informativa; somente o serviço valida e persiste os valores.'),
     Field('status', 'Situação', type='select', gtk_attribute='status',
           web_name='acao_status'),
     Field('relatorio_tecnico', 'Relatório técnico', type='textarea',
           validation='work.close_report', gtk_attribute='relatorio'),
     Field('motivo_encerramento', 'Motivo do cancelamento', type='textarea',
           validation='work.cancel_reason', gtk_attribute='motivo'),
+    Field('destinatarios_presente', 'Seleção explícita de destinatários',
+          type='hidden', default='1'),
+    Field('destinatario_sel[]', 'Destinatários do relatório', type='checkbox',
+          help='Selecione apenas contatos existentes do cliente, síndico ou administradora.',
+          options=('cliente', 'sindico', 'administradora'),
+          web_name='destinatario_sel[]', gtk_attribute='destinatarios'),
+    Field('sem_destinatario', 'Não precisa de destinatário', type='checkbox',
+          help='Marque explicitamente para concluir sem enviar e-mail.'),
     Field('enviar_email', 'Enviar relatório por e-mail ao concluir', type='checkbox',
           gtk_attribute='enviar_email', web_name='sem_destinatario'),
-    Field('destinatario_sel[]', 'Destinatários do relatório', type='checkbox',
-          gtk_attribute='enviar_email'),
+    Field('sem_nota_fiscal', 'Não precisa de nota fiscal', type='checkbox',
+          help='Declare a dispensa explicitamente; caso contrário anexe a nota fiscal.'),
+    Field('nota_fiscal', 'Anexar nota fiscal (PDF, até 20 MB)', type='file',
+          help='Somente PDF válido, até 20 MB, com cabeçalho %PDF-.',
+          validation='work.invoice_pdf'),
+    Field('rateio_manual_tecnico', 'Colaborador', type='select',
+          help='Escolha o prestador ativo; o finalizador recebe o restante.',
+          validation='work.rateio_provider'),
+    Field('rateio_manual_valor', 'Valor da parcela (R$)', type='money',
+          help='A soma das parcelas não pode superar o valor total da OS.',
+          validation='work.rateio_value'),
     Field('v9_diagnostico', 'Diagnóstico', type='textarea',
           gtk_attribute='relatorio'),
     Field('v9_execucao', 'Serviço executado', type='textarea',
@@ -162,12 +192,29 @@ FORMS = (CUSTOMER, WORK)
 def work_fields(banco, principal, *, os_id=None) -> tuple[Field, ...]:
     """Resolve OS field access without trusting a client-provided role or ID."""
     from officina.application.work_item_access import require_create, require_work_item
+    from officina.application.live_provider import resolve as live_provider
     if principal is None:
         raise PermissionError('Identidade obrigatória.')
+    principal = live_provider(banco, principal)
     if os_id is None:
         require_create(banco, principal)
         return tuple(field for field in WORK.fields
                      if field.id not in ('status','relatorio_tecnico','motivo_encerramento',
-                                        'enviar_email','destinatario_sel[]'))
+                                        'enviar_email','destinatario_sel[]','destinatarios_presente',
+                                        'sem_destinatario','sem_nota_fiscal','nota_fiscal',
+                                        'rateio_manual_tecnico','rateio_manual_valor'))
+    # State gating is server-side, not a widget visibility hint.
+    from dataclasses import replace
+    from officina.core import prestadores_ext as ext
+    from officina.application.work_item_access import require_read_work_item
+    require_read_work_item(banco, principal, int(os_id))
+    with ext.db(banco) as connection:
+        state = connection.execute(
+            'SELECT status,arquivada FROM ordens_servico WHERE id=?',
+            (int(os_id),)).fetchone()
+    if state is None:
+        raise PermissionError('Recurso indisponível.')
+    if state['arquivada'] or state['status'] not in ext.ATIVAS:
+        return tuple(replace(field, visibility='readonly') for field in WORK.fields)
     require_work_item(banco, principal, int(os_id), 'edit')
     return WORK.fields

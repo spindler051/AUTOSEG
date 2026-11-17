@@ -743,6 +743,22 @@ def calcular_os_sem_visita(total_centavos=None, materiais_centavos=0,
     return comp
 
 
+def parse_declarativa(fonte):
+    """Parse a bounded C2 declarative source consistently for Web and GTK.
+
+    Decoding does not authorize writing or validate percentage calculations;
+    ``declarativa`` remains the authoritative composition calculator.
+    """
+    if not isinstance(fonte, str):
+        return fonte
+    if len(fonte) > 65536:
+        raise ValueError('Composição declarativa muito extensa.')
+    try:
+        return yaml.safe_load(fonte)
+    except yaml.YAMLError as exc:
+        raise ValueError('Composição declarativa inválida no YAML.') from exc
+
+
 def declarativa(total_centavos, blocos, config=None):
     """Composição declarativa (pai + filhos) definida no YAML da OS.
 

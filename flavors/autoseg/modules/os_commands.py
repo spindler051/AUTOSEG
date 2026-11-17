@@ -556,13 +556,10 @@ def _write_rateio(banco, principal, os_id, data, *, ui, session, path, quer_json
                 'application/json; charset=utf-8',status=400)
         raise ValueError(erro)
     try:
-        with ext.db(banco) as c:
-            c.execute('BEGIN IMMEDIATE')
-            guard=_transaction_guard(banco,principal,oid,'edit')
-            if guard:
-                guard(c)
-            prod.definir_rateio_manual(banco,oid,pid,tecnico,
-                                       str(d.get('rateio_manual_valor','0')),connection=c)
+        from officina.application.work_rateio_service import definir as definir_rateio
+        definir_rateio(banco, principal, oid, tecnico,
+                       str(d.get('rateio_manual_valor','0')),
+                       authorize=_transaction_guard(banco,principal,oid,'view'))
     except Exception as exc:
         if quer_json:
             status=403 if isinstance(exc,PermissionError) else 400

@@ -627,7 +627,17 @@ class LocalService:
                                                 provider_id=actor.provider_id)
             ids = {int(row['id']) for row in permitidos}
             payload['clientes'] = [row for row in payload['clientes'] if int(row['id']) in ids]
+        if os_id is not None:
+            from officina.application.work_rateio_service import contexto as c2_contexto
+            payload['c2'] = c2_contexto(self.banco, os_id, actor)
         return payload
+
+    def definir_rateio_os(self, os_id: int, tecnico_id: int, valor: str,
+                         *, principal=None, authorize=None) -> int:
+        from officina.application.work_rateio_service import definir
+        actor = principal if principal is not None else self._local_actor(self._principal)
+        return definir(self.banco, actor, os_id, tecnico_id, valor,
+                       authorize=authorize)
 
     def contar_anexos_os(self, os_id: int, *, principal=None) -> int:
         self._read_os(os_id, principal)

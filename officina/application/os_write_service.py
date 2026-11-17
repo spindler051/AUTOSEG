@@ -62,6 +62,11 @@ class OSCommand:
             'rateio_manual_tecnico': list(values.rateio_manual_tecnico),
             'rateio_manual_valor': list(values.rateio_manual_valor),
         }
+        # The domain conclusion path uses rateio_tecnico[] / rateio_valor[].
+        # Alias the C2 form inputs, never write rateios in the transport.
+        if values.acao == 'Concluída':
+            data['rateio_tecnico[]'] = list(values.rateio_manual_tecnico)
+            data['rateio_valor[]'] = list(values.rateio_manual_valor)
         # The negotiated total is an explicit override only when different
         # from the calculated service + material values.
         material_total = sum((float(m.get('valor_unitario') or 0) if
@@ -86,6 +91,8 @@ class OSCommand:
             # a second SQL writer or an unchecked client total.
             from officina.core import composicao
             saved = composicao.de_json(values.composicao_json)
+            if isinstance(saved, dict):
+                data['cobrar_visita'] = '0' if saved.get('sem_visita') else '1'
             if isinstance(saved, dict) and saved.get('declarativa'):
                 data['composicao_yaml'] = _declarative_fields(saved.get('componentes', []))
             elif isinstance(saved, dict) and saved.get('base_percentuais') and not saved.get('simplificada'):

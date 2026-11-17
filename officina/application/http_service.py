@@ -277,6 +277,11 @@ class HttpService(AppService):
         params = {'id': int(object_id)} if object_id is not None else None
         return self._get('/api/v1/desktop/actions/' + section, params=params)
 
+    def definir_rateio_os(self, os_id: int, tecnico_id: int, valor: str) -> int:
+        resposta = self._post(f'/api/v1/desktop/os/{int(os_id)}/rateio',
+                             {'tecnico_id': int(tecnico_id), 'valor': str(valor)})
+        return int(resposta['valor_centavos'])
+
     def form_fields(self, form_id: str, object_id: int | None = None) -> list[dict]:
         if form_id not in ('customer', 'work'):
             raise ValueError('Formulário indisponível.')

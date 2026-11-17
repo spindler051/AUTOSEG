@@ -349,10 +349,15 @@ class DialogoMesclarCliente(Adw.Dialog):
 
 
 class DialogoMaterial(Adw.Dialog):
-    def __init__(self, parent, ao_salvar, atual=None):
+    def __init__(self, parent, ao_salvar, atual=None, *, fields=None):
         super().__init__()
         self.parent = parent
         self.ao_salvar = ao_salvar
+        fields = fields or {}
+        def label(name, default):
+            field = fields.get(name)
+            return (field.get('label', default) if isinstance(field, dict)
+                    else getattr(field, 'label', default))
         self.set_title("Editar material" if atual else "Adicionar material")
         self.set_content_width(480)
         self.set_content_height(410)
@@ -364,17 +369,26 @@ class DialogoMaterial(Adw.Dialog):
         pagina = Adw.PreferencesPage()
         grupo = Adw.PreferencesGroup()
         pagina.add(grupo)
-        self.item = ui.campo_entry(grupo, "Item / descrição", (atual or {}).get("item", ""))
+        self.item = ui.campo_entry(grupo, label('material_item[]', 'Material'), (atual or {}).get("item", ""))
         quantidade = (atual or {}).get("quantidade")
         texto_quantidade = ("1" if atual is None else
                             "" if quantidade is None else
                             ui.quantidade_texto(quantidade))
-        self.quantidade = ui.campo_entry(grupo, "Quantidade (opcional)", texto_quantidade)
+        self.quantidade = ui.campo_entry(grupo, label('material_qtd[]', 'Quantidade'), texto_quantidade)
         self.unidade = ui.campo_entry(
-            grupo, "Unidade de medida (opcional)",
+            grupo, label('material_unidade[]', 'Unidade'),
             "un" if atual is None else str((atual or {}).get("unidade") or ""))
-        self.valor = ui.campo_entry(grupo, "Valor unitário (R$)",
+        self.valor = ui.campo_entry(grupo, label('material_unit[]', 'Valor unitário / total (R$)'),
                                      ui.dinheiro_texto((atual or {}).get("valor_unitario", 0)))
+        for key, widget in (('material_item[]', self.item),
+                            ('material_qtd[]', self.quantidade),
+                            ('material_unidade[]', self.unidade),
+                            ('material_unit[]', self.valor)):
+            definition = fields.get(key)
+            hint = (definition.get('help', '') if isinstance(definition, dict)
+                    else getattr(definition, 'help', ''))
+            if hint:
+                widget.set_tooltip_text(hint)
         toolbar.set_content(pagina)
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -402,12 +416,12 @@ class DialogoMaterial(Adw.Dialog):
             return
         self.ao_salvar({"item": item, "quantidade": qtd, "unidade": unidade,
                         "valor_unitario": valor,
-                        "valor_total": (qtd or 0) * valor})
+                        "valor_total": (qtd * valor if qtd is not None else valor)})
         self.close()
 
 
 class DialogoEstoqueOS(Adw.Dialog):
-    def __init__(self, parent, ao_adicionar):
+    def __init__(self, parent, ao_adicionar, *, fields=None):
         super().__init__()
         self.parent = parent
         self.produtos = _servico(self.parent).listar_materiais_estoque(ativos=True)
@@ -424,8 +438,14 @@ class DialogoEstoqueOS(Adw.Dialog):
         pagina.add(grupo)
         opcoes = [f"{p['id']} — {p['nome']} (saldo {ui.quantidade_texto(p['saldo'])})"
                   for p in self.produtos]
-        self.escolha = ui.campo_combo(grupo, "Material", opcoes or ["Nenhum material"], 0)
-        self.quantidade = ui.campo_entry(grupo, "Quantidade utilizada", "1")
+        fields = fields or {}
+        def label(name, fallback):
+            field = fields.get(name)
+            return (field.get('label', fallback) if isinstance(field, dict)
+                    else getattr(field, 'label', fallback))
+        self.escolha = ui.campo_combo(grupo, label('material_item[]', 'Material'),
+                                     opcoes or ["Nenhum material"], 0)
+        self.quantidade = ui.campo_entry(grupo, label('material_qtd[]', 'Quantidade'), "1")
         toolbar.set_content(pagina)
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -517,6 +537,17 @@ class DialogoOS(Adw.Dialog):
         self.original_portal = None
         self.andamento = None
         self.encerramento = None
+        self.c2 = {}
+        # The authenticated server projection is used by both local and remote GTK.
+        if janela.remote_mode:
+            fields = _servico(janela).form_fields('work', os_id)
+        else:
+            from flavors.autoseg.modules.autoseg_form_contracts import work_fields
+            fields = work_fields(BANCO, janela._cliente_admin_actor(), os_id=os_id)
+        self._work_fields = {
+            (item['id'] if isinstance(item, dict) else item.id): item
+            for item in fields
+        }
         self.config_composicao = _servico(janela).composicao_config()
         self._carregar()
         if self.os_id is None and self.importado:
@@ -534,6 +565,23 @@ class DialogoOS(Adw.Dialog):
             self.original_portal = contexto["original_portal"]
             self.andamento = contexto["andamento"]
             self.encerramento = contexto["encerramento"]
+            self.c2 = contexto.get('c2') or {}
+
+    def _work_prop(self, field_id, attr, default=''):
+        item = self._work_fields.get(field_id)
+        if item is None:
+            return default
+        return (item.get(attr, default) if isinstance(item, dict)
+                else getattr(item, attr, default))
+
+    def _work_label(self, field_id, default=''):
+        return self._work_prop(field_id, 'label', default)
+
+    def _work_help(self, widget, field_id):
+        details = self._work_prop(field_id, 'help') or self._work_prop(field_id, 'hint')
+        if details:
+            widget.set_tooltip_text(details)
+        return widget
 
     def _construir(self):
         titulo_texto = "Nova ordem de serviço" if self.os_id is None else "Editar ordem de serviço"
@@ -596,17 +644,17 @@ class DialogoOS(Adw.Dialog):
                     indice = i
                     break
         self.cliente = ui.campo_combo(grupo, "Cliente", self.opcoes_cliente or ["Nenhum cliente"], indice)
-        self.tecnico = ui.campo_entry(grupo, "Atendido por (cliente no local)",
+        self.tecnico = ui.campo_entry(grupo, self._work_label('tecnico'),
                                       base.get("tecnico", ""))
         pagamentos = ["Selecione a forma de pagamento", "PIX", "Transferência", "Dinheiro", "Cartão", "Boleto", "Outro"]
         pagamento = base.get("forma_pagamento", "")
         self.pagamento = ui.campo_combo(
-            grupo, "Forma de pagamento", pagamentos,
+            grupo, self._work_label('forma_pagamento'), pagamentos,
             pagamentos.index(pagamento) if pagamento in pagamentos else 0)
         urgencias = ["Baixa", "Normal", "Alta"]
         urgencia = base.get("urgencia", "Normal")
         self.urgencia = ui.campo_combo(
-            grupo, "Urgência", urgencias,
+            grupo, self._work_label('urgencia'), urgencias,
             urgencias.index(urgencia) if urgencia in urgencias else 1)
 
         grupo = Adw.PreferencesGroup(title="Serviço")
@@ -616,7 +664,7 @@ class DialogoOS(Adw.Dialog):
         if self.original_portal is not None:
             descricao = self.original_portal
             editavel = False
-        self.descricao = ui.campo_texto(grupo, "Descrição do serviço", descricao, 110, editavel)
+        self.descricao = ui.campo_texto(grupo, self._work_label('descricao'), descricao, 110, editavel)
 
         grupo = Adw.PreferencesGroup(title="Materiais utilizados")
         pagina.add(grupo)
@@ -626,10 +674,10 @@ class DialogoOS(Adw.Dialog):
         caixa_materiais.set_margin_start(10)
         caixa_materiais.set_margin_end(10)
         self.tabela_materiais = ui.Tabela([
-            ("Item / descrição", 0, True, 0.0),
-            ("Qtd.", 70, False, 0.5),
-            ("Valor unitário", 110, False, 0.5),
-            ("Total", 110, False, 0.5),
+            (self._work_label('material_item[]'), 0, True, 0.0),
+            (self._work_label('material_qtd[]'), 70, False, 0.5),
+            (self._work_label('material_unit[]'), 110, False, 0.5),
+            (self._work_label('material_total'), 110, False, 0.5),
         ], ao_ativar=self._editar_material, altura=150)
         caixa_materiais.append(self.tabela_materiais.widget)
         acoes_materiais = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -652,17 +700,17 @@ class DialogoOS(Adw.Dialog):
 
         grupo = Adw.PreferencesGroup(title="Valores")
         pagina.add(grupo)
-        self.mao_obra = ui.campo_entry(grupo, "Mão de obra (R$)",
+        self.mao_obra = ui.campo_entry(grupo, self._work_label('valor_mao_obra'),
                                        ui.dinheiro_texto(base.get("valor_mao_obra", base.get("mao_obra", 0))))
-        self.materiais_valor = ui.campo_entry(grupo, "Materiais (R$)",
+        self.materiais_valor = ui.campo_entry(grupo, self._work_label('valor_materiais'),
                                               ui.dinheiro_texto(base.get("valor_materiais", 0)))
         self.custo_materiais = ui.campo_entry(
-            grupo, "Custo real dos materiais (R$) — interno, não cobrado",
+            grupo, self._work_label('custo_materiais'),
             ui.dinheiro_texto(base.get("custo_materiais", 0)))
-        self.total = ui.campo_entry(grupo, "Valor total (R$)",
+        self.total = ui.campo_entry(grupo, self._work_label('valor_total'),
                                     ui.dinheiro_texto(base.get("valor_total", 0)))
         self.tempo_horas = ui.campo_entry(
-            grupo, "Tempo de execução (horas; 0 usa o padrão)",
+            grupo, self._work_label('tempo_horas'),
             ui.quantidade_texto(base.get("tempo_horas", 0)))
         self.mao_obra.connect("notify::text", lambda *_args: self._recalcular())
         self.materiais_valor.connect("notify::text", lambda *_args: self._recalcular())
@@ -687,10 +735,49 @@ class DialogoOS(Adw.Dialog):
         if texto_os.ajuda():
             self.texto_adicional.set_tooltip_text(texto_os.ajuda())
 
+        # Declarative and modular composition are both submitted through OSInput.
+        grupo_comp = Adw.PreferencesGroup(title='Composição dos valores')
+        pagina.add(grupo_comp)
+        comp_guardada = composicao.de_json(base.get('composicao_json')) or {}
+        if not isinstance(comp_guardada, dict):
+            comp_guardada = {}
+        bases = self.config_composicao.get('bases_percentuais') or {'total': {'nome': 'Total da OS'}}
+        self._bases_comp = list(bases)
+        atual_base = str(base.get('base_percentuais') or
+                         self.config_composicao.get('base_percentuais_padrao') or 'total')
+        indice_base = self._bases_comp.index(atual_base) if atual_base in self._bases_comp else 0
+        self.base_percentuais = ui.campo_combo(
+            grupo_comp, self._work_label('base_percentuais'),
+            [(bases[b] or {}).get('nome', b) for b in self._bases_comp], indice_base)
+        self._work_help(self.base_percentuais, 'base_percentuais')
+        self.aplicar_composicao = Adw.SwitchRow(
+            title=self._work_label('aplicar_composicao'),
+            subtitle=self._work_prop('aplicar_composicao', 'help'))
+        self.aplicar_composicao.set_active(not comp_guardada.get('simplificada', False))
+        grupo_comp.add(self.aplicar_composicao)
+        self.cobrar_visita = Adw.SwitchRow(
+            title=self._work_label('cobrar_visita'),
+            subtitle=self._work_prop('cobrar_visita', 'help'))
+        self.cobrar_visita.set_active(not comp_guardada.get('sem_visita', False))
+        grupo_comp.add(self.cobrar_visita)
+        yaml_importado = base.get('composicao_yaml')
+        if yaml_importado is None and comp_guardada.get('declarativa'):
+            from officina.application.os_write_service import _declarative_fields
+            yaml_importado = _declarative_fields(comp_guardada.get('componentes') or [])
+        yaml_texto = (json.dumps(yaml_importado, ensure_ascii=False, indent=2)
+                      if yaml_importado else '')
+        self.composicao_yaml = ui.campo_texto(
+            grupo_comp, self._work_label('composicao_yaml'), yaml_texto, 120)
+        self._work_help(self.composicao_yaml, 'composicao_yaml')
+        grupo_comp.add(_linha_custom(ui.botao(
+            self._work_label('composicao_preview'), self._prever_composicao)))
+
         self.status = None
         self.relatorio = None
         self.motivo = None
-        self.enviar_email = None
+        self.enviar_email = None  # retained for compatibility; C2 uses explicit refs.
+        self.destinatario_widgets = {}
+        self.sem_destinatario = None
         self.sem_nota_fiscal = None
         self.nota_fiscal_upload = None
         self.nota_fiscal_label = None
@@ -726,24 +813,38 @@ class DialogoOS(Adw.Dialog):
                 self.confirmar_numero_os = Adw.EntryRow(
                     title="Digite o número da OS para confirmar cancelamento")
                 grupo.add(self.confirmar_numero_os)
-                self.enviar_email = Adw.SwitchRow(
-                    title="Enviar relatório por e-mail ao concluir",
-                    subtitle="Desligue para concluir sem destinatário.")
-                self.enviar_email.set_active(True)
-                grupo.add(self.enviar_email)
+                contatos = (self.c2.get('contatos') or {})
+                for key, label in (('cliente', 'Cliente'), ('sindico', 'Síndico'),
+                                   ('administradora', 'Administradora / imobiliária')):
+                    email = str(contatos.get(key) or '').strip()
+                    if not email:
+                        continue
+                    row = Adw.SwitchRow(title=f'{label}: {email}',
+                        subtitle=self._work_prop('destinatario_sel[]', 'help'))
+                    row.set_active(False)  # never silently select a recipient
+                    grupo.add(row)
+                    self.destinatario_widgets[key] = row
+                self.sem_destinatario = Adw.SwitchRow(
+                    title=self._work_label('sem_destinatario'),
+                    subtitle=self._work_prop('sem_destinatario', 'help'))
+                self.sem_destinatario.set_active(False)
+                grupo.add(self.sem_destinatario)
                 self.sem_nota_fiscal = Adw.SwitchRow(
-                    title="Não precisa de nota fiscal",
-                    subtitle="Declare explicitamente a dispensa; caso contrário, "
-                             "anexe a nota fiscal antes de concluir.")
+                    title=self._work_label('sem_nota_fiscal'),
+                    subtitle=self._work_prop('sem_nota_fiscal', 'help'))
                 self.sem_nota_fiscal.set_active(False)
                 grupo.add(self.sem_nota_fiscal)
                 grupo.add(Adw.ActionRow(
-                    title="Nota fiscal em PDF",
-                    subtitle="Use um PDF válido (até 20 MB) ou declare a dispensa acima."))
-                botao_nota = ui.botao("Anexar nota fiscal PDF", self._selecionar_nota_fiscal)
+                    title=self._work_label('nota_fiscal'),
+                    subtitle=self._work_prop('nota_fiscal', 'help')))
+                botao_nota = ui.botao(self._work_label('nota_fiscal'),
+                                      self._selecionar_nota_fiscal)
                 grupo.add(_linha_custom(botao_nota))
-                self.nota_fiscal_label = Gtk.Label(label="Nenhum PDF selecionado", xalign=0)
-                self.nota_fiscal_label.add_css_class("caption")
+                nota_atual = self.c2.get('nota_fiscal')
+                self.nota_fiscal_label = Gtk.Label(
+                    label=('PDF já associado: ' + str(nota_atual['nome_original'])
+                           if nota_atual else 'Nenhum PDF selecionado'), xalign=0)
+                self.nota_fiscal_label.add_css_class('caption')
                 grupo.add(_linha_custom(self.nota_fiscal_label))
                 caixa_fotos = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 caixa_fotos.set_margin_top(8)
@@ -763,6 +864,47 @@ class DialogoOS(Adw.Dialog):
                     title="OS encerrada",
                     subtitle="O PDF está disponível em Histórico e Relatórios.",
                     icon_name="document-open-recent-symbolic"))
+
+        self.rateio_combo = None
+        self.rateio_valor = None
+        self._rateio_workers = []
+        if self.os_id is not None:
+            rateio_group = Adw.PreferencesGroup(title='Rateio e colaboradores')
+            pagina.add(rateio_group)
+            rateios = self.c2.get('rateios') or []
+            self._rateio_atual = {int(r['tecnico_id']): int(r['valor_centavos'])
+                                  for r in rateios}
+            for row in rateios:
+                rateio_group.add(Adw.ActionRow(
+                    title=str(row['nome']),
+                    subtitle=f"{self._work_label('rateio_manual_valor')}: "
+                             + ui.brl(int(row['valor_centavos']) / 100)))
+            if not rateios:
+                rateio_group.add(Adw.ActionRow(
+                    title='Nenhum colaborador com parcela nesta OS.'))
+            if self.c2.get('rateio_editavel'):
+                responsavel = self.c2.get('rateio_responsavel_id')
+                self._rateio_workers = [item for item in
+                    (self.c2.get('prestadores_rateio') or [])
+                    if int(item['id']) != int(responsavel or -1)]
+                if self._rateio_workers:
+                    self.rateio_combo = ui.campo_combo(
+                        rateio_group, self._work_label('rateio_manual_tecnico'),
+                        [str(item['nome']) for item in self._rateio_workers], 0)
+                    self.rateio_valor = ui.campo_entry(
+                        rateio_group, self._work_label('rateio_manual_valor'), '')
+                    self.rateio_combo.connect('notify::selected',
+                        lambda *_: self._selecionar_rateio())
+                    self._selecionar_rateio()
+                    self._work_help(self.rateio_valor, 'rateio_manual_valor')
+                    rateio_group.add(_linha_custom(ui.botao(
+                        'Salvar parcela', self._salvar_rateio)))
+                    rateio_group.add(_linha_custom(ui.botao(
+                        'Remover parcela', lambda: self._salvar_rateio(remover=True),
+                        css='destructive-action')))
+            else:
+                rateio_group.add(Adw.ActionRow(
+                    title='Somente o responsável/finalizador ou administrador pode editar o rateio.'))
 
         rodape = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         rodape.set_margin_top(10)
@@ -919,7 +1061,7 @@ class DialogoOS(Adw.Dialog):
         for material in self.materiais:
             qtd = material.get("quantidade")
             valor = float(material.get("valor_unitario") or 0)
-            subtotal = (float(qtd) if qtd is not None else 0.0) * valor
+            subtotal = (float(qtd) * valor if qtd is not None else valor)
             total += subtotal
             unidade = str(material.get("unidade") or "").strip()
             texto_qtd = "—" if qtd is None else ui.quantidade_texto(qtd)
@@ -928,7 +1070,8 @@ class DialogoOS(Adw.Dialog):
             linhas.append((material.get("item", ""), texto_qtd,
                            ui.brl(valor), ui.brl(subtotal)))
         self.tabela_materiais.definir_linhas(linhas)
-        self.total_materiais.set_text(f"Total em materiais: {ui.brl(total)}")
+        self.total_materiais.set_text(
+            f"{self._work_label('material_total')}: {ui.brl(total)}")
         if hasattr(self, "materiais_valor"):
             self.materiais_valor.set_editable(not self.materiais)
             if self.materiais:
@@ -939,8 +1082,8 @@ class DialogoOS(Adw.Dialog):
         if not hasattr(self, "mao_obra") or not hasattr(self, "total"):
             return
         mao = ui.numero(self.mao_obra.get_text())
-        materiais = sum(float(x.get("quantidade") or 0) * float(x.get("valor_unitario") or 0)
-                        for x in self.materiais)
+        materiais = sum((float(x['quantidade']) if x.get('quantidade') is not None else 1)
+                        * float(x.get('valor_unitario') or 0) for x in self.materiais)
         if not self.materiais:
             materiais = ui.numero(self.materiais_valor.get_text())
         total = mao + materiais
@@ -950,11 +1093,50 @@ class DialogoOS(Adw.Dialog):
         if not _os_tem_composicao_modular(self.dados):
             self.total.set_text(ui.dinheiro_texto(total))
 
+    def _prever_composicao(self):
+        try:
+            total = ui.numero(self.total.get_text())
+            materiais = sum((float(item['quantidade']) if item.get('quantidade') is not None else 1)
+                            * float(item.get('valor_unitario') or 0) for item in self.materiais)
+            if not self.materiais:
+                materiais = ui.numero(self.materiais_valor.get_text())
+            mao = ui.numero(self.mao_obra.get_text())
+            yaml_texto = self.composicao_yaml.get_texto().strip()
+            if yaml_texto:
+                declaracao = composicao.parse_declarativa(yaml_texto)
+                preview = composicao.declarativa(
+                    composicao.centavos_de_reais(total), declaracao,
+                    config=self.config_composicao)
+                linhas = [f"{item['nome']}: {ui.brl(item['valor_centavos']/100)}"
+                          for item in preview.get('componentes', [])]
+                ui.info(self.janela, self._work_label('composicao_preview'),
+                        '\n'.join(linhas) + '\n\nTotal: ' +
+                        ui.brl(preview['total_centavos']/100))
+                return
+            argumentos = dict(total_centavos=composicao.centavos_de_reais(total),
+                              materiais_centavos=composicao.centavos_de_reais(materiais),
+                              mao_obra_centavos=composicao.centavos_de_reais(mao),
+                              horas=ui.numero(self.tempo_horas.get_text()),
+                              config=self.config_composicao)
+            if not self.aplicar_composicao.get_active():
+                preview = composicao.calcular(**argumentos)
+            elif not self.cobrar_visita.get_active():
+                preview = composicao.calcular_os_sem_visita(**argumentos)
+            else:
+                preview = composicao.calcular_os(**argumentos,
+                    base_percentuais=self._bases_comp[int(self.base_percentuais.get_selected())])
+            linhas = [f"{item['nome']}: {ui.brl(item['valor_centavos']/100)}"
+                      for item in preview.get('componentes', [])]
+            ui.info(self.janela, self._work_label('composicao_preview'),
+                    '\n'.join(linhas) + '\n\nTotal: ' + ui.brl(preview['total_centavos']/100))
+        except Exception as erro:
+            ui.aviso_erro(self.janela, self._work_label('composicao_preview'), str(erro))
+
     def _ver_composicao(self):
         try:
             mao = ui.numero(self.mao_obra.get_text())
-            materiais = sum(float(x.get("quantidade") or 0) * float(x.get("valor_unitario") or 0)
-                            for x in self.materiais)
+            materiais = sum((float(x['quantidade']) if x.get('quantidade') is not None else 1)
+                            * float(x.get('valor_unitario') or 0) for x in self.materiais)
             if not self.materiais:
                 materiais = ui.numero(self.materiais_valor.get_text())
             total = ui.numero(self.total.get_text()) or (mao + materiais)
@@ -965,7 +1147,8 @@ class DialogoOS(Adw.Dialog):
             ui.aviso_erro(self.janela, "Composição do valor", str(erro))
 
     def _adicionar_material(self):
-        DialogoMaterial(self.janela, self._inserir_material).present(self.janela)
+        DialogoMaterial(self.janela, self._inserir_material,
+                        fields=self._work_fields).present(self.janela)
 
     def _inserir_material(self, material):
         self.materiais.append(material)
@@ -975,7 +1158,8 @@ class DialogoOS(Adw.Dialog):
         if not _servico(self.janela).listar_materiais_estoque(ativos=True):
             ui.info(self.janela, "Estoque", "Nenhum produto cadastrado no estoque.")
             return
-        DialogoEstoqueOS(self.janela, self._inserir_material).present(self.janela)
+        DialogoEstoqueOS(self.janela, self._inserir_material,
+                         fields=self._work_fields).present(self.janela)
 
     def _importar_materiais_yaml(self):
         dialogo = Gtk.FileDialog(title="Importar materiais da OS em YAML")
@@ -1011,7 +1195,8 @@ class DialogoOS(Adw.Dialog):
             self.materiais[indice] = material
             self._atualizar_materiais()
 
-        DialogoMaterial(self.janela, salvar, atual).present(self.janela)
+        DialogoMaterial(self.janela, salvar, atual,
+                        fields=self._work_fields).present(self.janela)
 
     def _remover_material(self):
         indice = self.tabela_materiais.indice()
@@ -1020,6 +1205,38 @@ class DialogoOS(Adw.Dialog):
             return
         self.materiais.pop(indice)
         self._atualizar_materiais()
+
+    def _selecionar_rateio(self):
+        if self.rateio_combo is None or self.rateio_valor is None:
+            return
+        index = int(self.rateio_combo.get_selected())
+        if 0 <= index < len(self._rateio_workers):
+            pid = int(self._rateio_workers[index]['id'])
+            cents = self._rateio_atual.get(pid)
+            self.rateio_valor.set_text(ui.dinheiro_texto(cents / 100) if cents is not None else '')
+
+    def _salvar_rateio(self, remover=False):
+        if self.os_id is None or self.rateio_combo is None:
+            return
+        index = int(self.rateio_combo.get_selected())
+        if not 0 <= index < len(self._rateio_workers):
+            return
+        pid = int(self._rateio_workers[index]['id'])
+        valor = '0' if remover else self.rateio_valor.get_text().strip()
+        try:
+            if not remover and not valor:
+                raise ValueError('Informe o valor da parcela.')
+            # The Web rateio endpoint and GTK both reach the same service.
+            centavos = _servico(self.janela).definir_rateio_os(self.os_id, pid, valor)
+            if centavos:
+                self._rateio_atual[pid] = centavos
+            else:
+                self._rateio_atual.pop(pid, None)
+            ui.toast(self.janela, 'Rateio atualizado.')
+            self.close()
+            self.janela.abrir_os_id(self.os_id)
+        except Exception as erro:
+            ui.aviso_erro(self.janela, 'Rateio', str(erro))
 
     def _selecionar_nota_fiscal(self):
         dialogo = Gtk.FileDialog(title="Selecionar nota fiscal em PDF")
@@ -1043,10 +1260,10 @@ class DialogoOS(Adw.Dialog):
         try:
             caminho = Path(caminho)
             if caminho.stat().st_size > 20 * 1024 * 1024:
-                raise ValueError("O PDF não pode ultrapassar 20 MB.")
+                raise ValueError("A nota fiscal deve ter no máximo 20 MB.")
             conteudo = caminho.read_bytes()
             if not conteudo.startswith(b"%PDF-"):
-                raise ValueError("Selecione uma nota fiscal PDF válida.")
+                raise ValueError("A nota fiscal deve ser um arquivo PDF válido.")
         except (OSError, ValueError) as erro:
             ui.aviso_erro(self.janela, "Nota fiscal", str(erro))
             return
@@ -1148,30 +1365,40 @@ class DialogoOS(Adw.Dialog):
                           "Escolha a forma de pagamento antes de salvar.")
             return
         mao_obra = ui.numero(self.mao_obra.get_text())
-        materiais = sum(float(x.get("quantidade") or 0) * float(x.get("valor_unitario") or 0)
-                        for x in self.materiais)
+        materiais = sum((float(x['quantidade']) if x.get('quantidade') is not None else 1)
+                        * float(x.get('valor_unitario') or 0) for x in self.materiais)
         if not self.materiais:
             materiais = ui.numero(self.materiais_valor.get_text())
         custo_materiais = ui.numero(self.custo_materiais.get_text())
         total = ui.numero(self.total.get_text()) or (mao_obra + materiais)
         tempo_horas = ui.numero(self.tempo_horas.get_text())
+        composicao_yaml = None
+        texto_yaml = self.composicao_yaml.get_texto().strip()
+        base_persistida = self._bases_comp[int(self.base_percentuais.get_selected())]
         try:
-            comp, base_percentuais = _composicao_da_os(
-                self.dados, total, materiais, mao_obra, tempo_horas,
-                config=self.config_composicao)
-        except ValueError as erro:
-            ui.aviso_erro(self.janela, "Composição do valor", str(erro))
+            if texto_yaml:
+                composicao_yaml = composicao.parse_declarativa(texto_yaml)
+                if not isinstance(composicao_yaml, list) or not composicao_yaml:
+                    raise ValueError('Composição declarativa deve ser uma lista não vazia.')
+                comp_json = ''  # The writer computes and validates the declarative source.
+            else:
+                kwargs = dict(total_centavos=composicao.centavos_de_reais(total),
+                              materiais_centavos=composicao.centavos_de_reais(materiais),
+                              mao_obra_centavos=composicao.centavos_de_reais(mao_obra),
+                              horas=tempo_horas, config=self.config_composicao)
+                if not self.aplicar_composicao.get_active():
+                    comp = composicao.calcular(**kwargs)
+                    comp['simplificada'] = True
+                elif not self.cobrar_visita.get_active():
+                    comp = composicao.calcular_os_sem_visita(**kwargs)
+                else:
+                    comp = composicao.calcular_os(
+                        **kwargs, base_percentuais=base_persistida)
+                comp_json = composicao.para_json(comp)
+                # The writer recomputes the same composition from submitted inputs.
+        except (ValueError, TypeError) as erro:
+            ui.aviso_erro(self.janela, 'Composição dos valores', str(erro))
             return
-        if base_percentuais:
-            total = comp["total_centavos"] / 100
-            componente_hora = next(
-                (x for x in comp["componentes"] if x.get("modo") == "hora"), None)
-            if componente_hora is not None:
-                mao_obra = componente_hora["valor_centavos"] / 100
-        base_persistida = (base_percentuais
-                           or str((self.dados or {}).get("base_percentuais") or "").strip()
-                           or "total")
-        comp_json = composicao.para_json(comp)
         if getattr(self.janela.service, "mode", "local") == "local":
             composicao.instalar_banco(BANCO)
         observacoes = self.observacoes.get_texto()
@@ -1208,6 +1435,33 @@ class DialogoOS(Adw.Dialog):
                           "Preencha o relatório técnico antes de mudar o status da OS.")
             return
 
+        destinatarios = None
+        sem_destinatario = False
+        if self.sem_destinatario is not None:
+            destinatarios = tuple(key for key, switch in self.destinatario_widgets.items()
+                                  if switch.get_active())
+            sem_destinatario = self.sem_destinatario.get_active()
+            if acao == 'Concluída':
+                if destinatarios and sem_destinatario:
+                    ui.aviso_erro(self.janela, 'Destinatários',
+                        'Escolha destinatários ou marque a dispensa, não ambos.')
+                    return
+                if not destinatarios and not sem_destinatario:
+                    ui.aviso_erro(self.janela, 'Destinatários',
+                        'Selecione ao menos um destinatário ou marque "Não precisa de destinatário".')
+                    return
+        rateio_tecnico = ()
+        rateio_valor = ()
+        # Only unsaved first parcels can travel with the conclusion; an OS
+        # with persisted rows uses the same manual rateio service above.
+        if (acao == 'Concluída' and self.rateio_combo is not None and
+                self.rateio_valor is not None and not self._rateio_atual and
+                self.rateio_valor.get_text().strip()):
+            index = int(self.rateio_combo.get_selected())
+            if 0 <= index < len(self._rateio_workers):
+                rateio_tecnico = (str(self._rateio_workers[index]['id']),)
+                rateio_valor = (self.rateio_valor.get_text().strip(),)
+
         imagens = []
         for caminho in self.imagens:
             try:
@@ -1233,14 +1487,16 @@ class DialogoOS(Adw.Dialog):
             tempo_horas=tempo_horas,
             composicao_json=comp_json,
             base_percentuais=base_persistida,
+            composicao_yaml=composicao_yaml,
             materiais=tuple(self.materiais),
             acao=acao,
             relato=relato,
             motivo=motivo,
             imagens=tuple(imagens),
-            sem_destinatario=(
-                self.enviar_email is not None and
-                not self.enviar_email.get_active()),
+            sem_destinatario=sem_destinatario,
+            destinatarios=destinatarios,
+            rateio_manual_tecnico=rateio_tecnico,
+            rateio_manual_valor=rateio_valor,
             sem_nota_fiscal=(
                 self.sem_nota_fiscal is not None and
                 self.sem_nota_fiscal.get_active()),

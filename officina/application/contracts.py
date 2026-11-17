@@ -524,6 +524,9 @@ class AppService(Protocol):
     def contexto_os(self, os_id: int | None = None) -> dict:
         ...
 
+    def definir_rateio_os(self, os_id: int, tecnico_id: int, valor: str) -> int:
+        ...
+
     def contar_anexos_os(self, os_id: int) -> int:
         ...
 

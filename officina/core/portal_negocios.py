@@ -253,12 +253,7 @@ def os_salvar(banco,d,pid,oid=None,silent=False,*,connection=None,authorize=None
         '0','nao','não','false','off')
     comp_yaml=d.get('composicao_yaml')
     if comp_yaml:
-        import json as _json_comp
-        if isinstance(comp_yaml,str):
-            try:
-                comp_yaml=_json_comp.loads(comp_yaml)
-            except ValueError as exc:
-                raise ValueError('Composição declarativa inválida no YAML.') from exc
+        comp_yaml=composicao.parse_declarativa(comp_yaml)
         total=total_negociado if total_negociado is not None else soma
         comp=composicao.declarativa(
             total_centavos=int(round(total*100)),blocos=comp_yaml)

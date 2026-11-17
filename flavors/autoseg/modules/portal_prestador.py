@@ -271,7 +271,7 @@ body.ui-app legend{color:var(--u-text);font:500 16px/1.3 var(--u-font);padding:0
 body.ui-app .col2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 body.ui-app .material-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
 body.ui-app .material-add{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) auto}
+body.ui-app .material-row-os{grid-template-columns:minmax(0,2fr) minmax(0,.7fr) minmax(0,.7fr) minmax(0,1fr) minmax(0,1fr) auto}
 body.ui-app .rateio-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:12px 0;padding:12px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-card-2)}
 body.ui-app .rateio-row label{margin:0 0 4px}
 body.ui-app .rateio-row input,body.ui-app .rateio-row select{min-height:36px}
@@ -1007,7 +1007,7 @@ button.secondary,.btn.secondary{{background:#262626;border-color:#9b9b9b;color:#
 .table-scroll{{overflow-x:auto}}table{{width:100%;border-collapse:collapse;min-width:640px}}th,td{{border-bottom:1px solid #414141;padding:12px 10px;text-align:left;vertical-align:top;overflow-wrap:normal;word-break:normal}}th{{color:var(--yellow);background:#222}}td:nth-child(3){{min-width:125px}}td:nth-child(3),td:nth-child(4),td:nth-child(5){{overflow-wrap:normal;word-break:normal}} .material-row button{{min-width:90px}}.col2{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:15px}}.actions{{display:flex;gap:8px;flex-wrap:wrap;align-items:center}}
 .kpis{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.kpi{{background:#171717;border:1px solid #444;padding:17px;border-radius:10px}}.kpi strong{{display:block;font-size:26px;color:var(--yellow)}}.kpi span{{font-size:13px;color:var(--muted)}}
 form{{max-width:100%;min-width:0}}.col2>div{{min-width:0}}.card{{min-width:0;overflow-wrap:anywhere}}.nav-more{{max-width:100%}}
-fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row-os{{grid-template-columns:minmax(0,2.4fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.1fr) auto}}.material-row label{{font-size:12px;margin:0}}.material-row input,.material-row select{{width:100%}}
+fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}legend{{color:var(--yellow);font-weight:800;padding:0 9px}}.material-row{{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end;margin:7px 0}}.material-row-os{{grid-template-columns:minmax(0,2.4fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.1fr) minmax(0,1fr) auto}}.material-row label{{font-size:12px;margin:0}}.material-row input,.material-row select{{width:100%}}
 .composicao-preview{{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 0;color:#bbb;font-size:13px}}.composicao-preview span{{white-space:nowrap}}.composicao-preview b{{font-weight:600;color:#ddd}}.composicao-preview .aviso{{flex-basis:100%;color:#e2b800}}.composicao-preview .filho{{padding-left:14px;color:#aaa}}
 .flash{{background:#163c29;border:1px solid #67e2a8;padding:13px;border-radius:8px}}.notice{{background:#3e320e;border:1px solid #937d2f;border-radius:9px;padding:13px}}.stack{{display:flex;gap:8px;flex-wrap:wrap}}.stack form{{display:inline}}.pic{{display:inline-block;padding:8px 12px;border:1px solid #555;border-radius:6px;margin:4px}}footer{{color:#999;padding:20px;text-align:center;border-top:1px solid #292929;font-size:13px}}
 @media(max-width:620px){{.material-row,.material-row-os{{grid-template-columns:1fr 1fr}}.material-row>div:first-child{{grid-column:1/-1}}.nav a{{font-size:13px;padding:9px}}.top{{padding:12px}}main{{padding:0 12px}}}}
@@ -2126,6 +2126,18 @@ class PortalPrestador:
                     card('Dados da fila',corpo)+botao('Voltar à fila','/os','secondary'),s)
 
             def os_form(self,s,oid=None,preenchimento=None,erro=None):
+                from flavors.autoseg.modules.autoseg_form_contracts import work_fields
+                actor = os_commands._provider_context(banco,s)
+                try:
+                    projection = {f.id: f for f in work_fields(banco, actor, os_id=oid)}
+                except PermissionError:
+                    if oid is not None:
+                        return self.os_reduzida(s,oid)
+                    raise
+                def c2label(field):
+                    return esc(projection[field].label)
+                def c2help(field):
+                    return esc(projection[field].help)
                 if oid is not None:
                     try:
                         read_access.require_read_work_item(
@@ -2376,7 +2388,7 @@ class PortalPrestador:
                 def _lista_composicao(valor):
                     if isinstance(valor,str):
                         try:
-                            valor=json.loads(valor)
+                            valor=composicao.parse_declarativa(valor)
                         except (TypeError,ValueError):
                             return None
                     if isinstance(valor,dict):
@@ -2426,10 +2438,6 @@ class PortalPrestador:
                     corpo+='<input type="hidden" name="acao_status" id="acao-status-os" value="">'
                 if auto_save=='1':
                     corpo+='<p class="muted auto-save-status" id="rascunho-auto-status" aria-live="polite">Salvamento automático ativo.</p>'
-                if d.get('composicao_yaml'):
-                    import json as _json_comp
-                    corpo+=('<input type="hidden" name="composicao_yaml" value="'
-                            +esc(_json_comp.dumps(d['composicao_yaml'],ensure_ascii=False))+'">')
                 servicos_ativos=catalogo.listar(banco,ativos=True)
                 bloco_modelo=''
                 if servicos_ativos:
@@ -2653,13 +2661,19 @@ class PortalPrestador:
                     unidade=(m['unidade'] if 'unidade' in m.keys() else '') or ''
                     unit=m['valor_unitario'] if 'valor_unitario' in m.keys() else ''
                     corpo+='<div class="material-row material-row-os">'
-                    corpo+=f'<div><label>Material<input name="material_item[]" value="{esc(item)}" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div>'
-                    corpo+=f'<div><label>Quantidade<input name="material_qtd[]" value="{esc(qtd)}" placeholder="—" inputmode="decimal"></label></div>'
-                    corpo+=f'<div><label>Unidade{input_unidade_material(unidade)}</label></div>'
-                    corpo+=f'<div><label>Valor unitário / total (R$)<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
+                    corpo+=f'<div><label>{c2label("material_item[]")}<input name="material_item[]" value="{esc(item)}" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div>'
+                    corpo+=f'<div><label>{c2label("material_qtd[]")}<input name="material_qtd[]" value="{esc(qtd)}" placeholder="—" inputmode="decimal"></label></div>'
+                    corpo+=f'<div><label>{c2label("material_unidade[]")}{input_unidade_material(unidade)}</label></div>'
+                    corpo+=f'<div><label>{c2label("material_unit[]")}<input name="material_unit[]" value="{esc(unit)}" placeholder="0,00"></label></div>'
+                    valor_linha = (m['valor_total'] if 'valor_total' in m.keys()
+                                   else None)
+                    corpo+=('<div><label>'+c2label('material_total')
+                            +'<output class="material-total-preview">'
+                            +(dinheiro(valor_linha) if valor_linha is not None else '—')
+                            +'</output></label></div>')
                     corpo+='<button type="button" class="secondary remover-material" title="Remover material">Remover</button></div>'
                 corpo+='</div><p class="muted">Nenhum material é obrigatório. Use “Adicionar material” somente se necessário.</p>'
-                corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>Material<input name="material_item[]" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div><div><label>Quantidade<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>Unidade{input_unidade_material("")}</label></div><div><label>Valor unitário / total (R$)<input name="material_unit[]" placeholder="0,00"></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
+                corpo+=f'''<template id="modelo-material"><div class="material-row material-row-os"><div><label>{c2label('material_item[]')}<input name="material_item[]" placeholder="Digite ou busque no estoque"{attr_estoque}></label></div><div><label>{c2label('material_qtd[]')}<input name="material_qtd[]" placeholder="—" inputmode="decimal"></label></div><div><label>{c2label('material_unidade[]')}{input_unidade_material("")}</label></div><div><label>{c2label('material_unit[]')}<input name="material_unit[]" placeholder="0,00"></label></div><div><label>{c2label('material_total')}<output class="material-total-preview">—</output></label></div><button type="button" class="secondary remover-material">Remover</button></div></template>'''
                 corpo+='<div class="material-add"><button id="adicionar-material" class="secondary" type="button">+ Adicionar material</button></div>'
                 corpo+='<div class="col2"><div>'+campos_escuros('Valor de materiais sem itens detalhados (R$)','valor_materiais_manual',d.get('valor_materiais') or '0')+'</div>'
                 corpo+='<div>'+campos_escuros('Custo real dos materiais (R$) — interno, não cobrado','custo_materiais',d.get('custo_materiais') or '0')+'</div></div>'
@@ -2679,12 +2693,12 @@ class PortalPrestador:
                              for chave,valor in bases_comp.items()]
                 corpo+='</fieldset>'
                 corpo+='<fieldset><legend>Situação e relatório técnico</legend>'
-                if oid and d['status'] in ext.ATIVAS and contatos_os:
+                if oid and d['status'] in ext.ATIVAS and not arquivada:
                     selecionados_d = d.get('destinatario_sel[]') or []
                     if isinstance(selecionados_d, str):
                         selecionados_d = [selecionados_d]
                     selecionados_d = [str(x) for x in selecionados_d if str(x).strip()]
-                    corpo+='<fieldset><legend>Destinatários do relatório</legend>'
+                    corpo+='<fieldset><legend>'+c2label('destinatario_sel[]')+'</legend>'
                     corpo+='<p class="muted">Marque apenas quem deve receber o relatório. A seleção é gravada e usada no envio automático.</p>'
                     corpo+='<input type="hidden" name="destinatarios_presente" value="1">'
                     for chave,rotulo in (('cliente','Cliente'),('sindico','Síndico'),('administradora','Administradora / imobiliária')):
@@ -2696,7 +2710,7 @@ class PortalPrestador:
                     marcado_sem_dest=' checked' if str(d.get('sem_destinatario','')) in ('1','on','true','sim') else ''
                     corpo+=(f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
                             f'<input type="checkbox" name="sem_destinatario" value="1"{marcado_sem_dest}> '
-                            'Não precisa de destinatário</label>')
+                            +c2label('sem_destinatario')+'</label>')
                     corpo+='<p class="muted">Marque para concluir a OS sem enviar o relatório por e-mail. '
                     corpo+='A lista final é registrada no banco e enviada a todos os destinatários selecionados em um único e-mail.</p></fieldset>'
                 if oid and s.get('admin'):
@@ -2725,19 +2739,27 @@ class PortalPrestador:
                     corpo+=('<div class="notice"><b>Composição itemizada desta OS</b>'
                             '<ul>'+''.join(itens_comp)+'</ul>'
                             '<p class="muted">Os itens são preservados ao salvar a OS.</p></div>')
-                else:
-                    marcado_comp='' if composicao_simplificada else ' checked'
-                    corpo+=f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1"{marcado_comp}> Aplicar composição padrão (custos e margem)</label>'
-                    corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. A taxa de visita é opcional nesta OS.</p>'
-                    corpo+=('<input type="hidden" name="cobrar_visita" value="0">'
-                            '<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
-                            f'<input type="checkbox" name="cobrar_visita" value="1"{"" if sem_visita_atual else " checked"}> '
-                            'Cobrar taxa mínima de visita</label>')
-                    corpo+='<p class="muted">Desmarque para uma OS negociada sem taxa de visita: os custos percentuais continuam incidindo sobre o total e a mão de obra recebe o restante.</p>'
-                    corpo+=select('Composição dos valores','base_percentuais',opcoes_base,base_atual)
-                    corpo+='<p class="muted">Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante. Visita mínima: os percentuais ficam dentro da visita e a hora recebe o restante. Em ambas, o total final não muda.</p>'
-                    corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
-                    corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
+                marcado_comp='' if composicao_simplificada else ' checked'
+                corpo+=f'<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:14px"><input type="checkbox" name="aplicar_composicao" value="1"{marcado_comp}> {c2label('aplicar_composicao')}</label>'
+                corpo+='<p class="muted">A hora técnica recebe o restante do total e tem mínimo de R$ 100,00. A taxa de visita é opcional nesta OS.</p>'
+                corpo+=('<input type="hidden" name="cobrar_visita" value="0">'
+                        '<label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin-top:10px">'
+                        f'<input type="checkbox" name="cobrar_visita" value="1"{"" if sem_visita_atual else " checked"}> '
+                        +c2label('cobrar_visita')+'</label>')
+                corpo+='<p class="muted">Desmarque para uma OS negociada sem taxa de visita: os custos percentuais continuam incidindo sobre o total e a mão de obra recebe o restante.</p>'
+                corpo+=select(c2label('base_percentuais'),'base_percentuais',opcoes_base,base_atual)
+                corpo+='<p class="muted">Total da OS: os percentuais entram como linhas próprias e a hora recebe o restante. Visita mínima: os percentuais ficam dentro da visita e a hora recebe o restante. Em ambas, o total final não muda.</p>'
+                corpo+='<div class="total-previsto-linha"><span>Total previsto</span><strong><span id="total-previsto">—</span></strong></div>'
+                corpo+='<div class="composicao-preview" id="composicao-prevista" aria-live="polite"></div>'
+                # Declarative OS composition is editable on Web as on GTK.
+                # JSON is also valid YAML; the Step 0 writer validates all values.
+                valor_declarativo = d.get('composicao_yaml') or []
+                corpo+=textarea(c2label('composicao_yaml'), 'composicao_yaml',
+                                json.dumps(valor_declarativo, ensure_ascii=False, indent=2)
+                                if valor_declarativo else '', rows=7)
+                corpo+='<p class="muted">'+c2help('composicao_yaml')+'</p>'
+                if valor_declarativo:
+                    corpo+='<p class="muted">A prévia modular acima não substitui a composição declarativa: a validação e os valores definitivos são feitos no servidor.</p>'
                 if oid and d['status'] in ext.ATIVAS and not arquivada:
                     if iniciado_ativo:
                         corpo+=f'<p class="good">Atendimento iniciado em {esc(andamento["iniciado_em"])} por {esc(andamento["ator_inicio"])}</p>'
@@ -2829,41 +2851,27 @@ class PortalPrestador:
                                     'data-confirm="Remover o PDF anexado?">Remover PDF</button>'
                                     '<p class="muted">Para substituir, remova o PDF atual e escolha outro arquivo.</p>')
                         else:
-                            corpo+='<label for="nota-fiscal-pdf">Anexar nota fiscal (PDF, até 20 MB)</label>'
+                            corpo+='<label for="nota-fiscal-pdf">'+c2label('nota_fiscal')+'</label>'
                             corpo+=(f'<input type="file" id="nota-fiscal-pdf" name="nota_fiscal" '
                                     'accept="application/pdf" data-auto-upload-nf '
                                     f'data-upload-url="{url_os(banco, oid)}/nota-fiscal">')
                             corpo+=('<p class="muted" id="nota-fiscal-auto-status" data-nf-status>'
-                                    'O PDF será anexado automaticamente ao escolher o arquivo '
+                                    +c2help('nota_fiscal')+' O PDF será anexado automaticamente ao escolher o arquivo '
                                     'e o rascunho será salvo.</p>')
                             corpo+=(f'<noscript><button class="secondary" type="submit" '
                                     f'formaction="{url_os(banco, oid)}/nota-fiscal" formnovalidate>Enviar PDF</button></noscript>')
                             corpo+='<div style="margin-top:12px;padding:12px;border:1px solid #E2B800;border-radius:8px;background:#2a2617">'
-                            corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> Não precisa de nota fiscal</label>'
+                            corpo+='<label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer"><input type="checkbox" name="sem_nota_fiscal" value="1" style="width:18px;height:18px"> '+c2label('sem_nota_fiscal')+'</label>'
                             corpo+='<p class="muted" style="margin:6px 0 0">Marque esta opção ou anexe o PDF da nota fiscal para poder concluir a OS.</p></div>'
                         corpo+='<p class="muted">A nota fiscal aparece na lista de documentos e é anexada ao e-mail de conclusão ou de reenvio.</p></div>'
                     corpo+='</fieldset>'
                 if oid:
-                    with ext.db(banco) as c:
-                        fin_rateio=c.execute('SELECT prestador_id FROM os_encerramentos WHERE os_id=?',
-                                             (oid,)).fetchone()
-                        rateios_atuais=[dict(x) for x in c.execute('''SELECT r.tecnico_id,
-                            p.nome,r.valor_centavos,
-                            COALESCE(rep.pago_centavos,0) pago_centavos,
-                            COALESCE(rep.enviado_centavos,0) enviado_centavos
-                            FROM produtividade_rateios r
-                            JOIN prestadores p ON p.id=r.tecnico_id
-                            LEFT JOIN produtividade_repasses rep
-                              ON rep.os_id=r.os_id AND rep.tecnico_id=r.tecnico_id
-                            WHERE r.os_id=? ORDER BY p.nome''',(oid,)).fetchall()]
-                    finalizador_rateio=(fin_rateio['prestador_id'] if fin_rateio
-                                        else responsavel)
-                    admin_rateio=bool(s.get('admin'))
-                    pode_editar_rateio=(admin_rateio or
-                        (finalizador_rateio is not None
-                         and int(finalizador_rateio)==int(s['pid'])))
-                    if arquivada or d['status'] in ('Cancelada','Não realizada'):
-                        pode_editar_rateio=False
+                    from officina.application.work_rateio_service import contexto as c2_contexto
+                    rateio_context = c2_contexto(banco, oid, actor)
+                    rateios_atuais = rateio_context['rateios']
+                    finalizador_rateio = rateio_context['rateio_responsavel_id']
+                    pode_editar_rateio = rateio_context['rateio_editavel']
+                    admin_rateio = actor.role == 'admin'
                     total_rateado=sum(int(x['valor_centavos'] or 0)
                                       for x in rateios_atuais)
                     total_os_centavos=int(round(numero_seguro(d.get('valor_total'))*100))
@@ -2881,10 +2889,10 @@ class PortalPrestador:
                             readonly='' if pode_editar_rateio else ' readonly'
                             corpo+=(f'<div class="rateio-row" data-rateio-row '
                                     f'data-tecnico-id="{int(x["tecnico_id"])}">')
-                            corpo+=(f'<div><label>Colaborador<input value="{esc(x["nome"])}" '
+                            corpo+=(f'<div><label>{c2label("rateio_manual_tecnico")}<input value="{esc(x["nome"])}" '
                                     'readonly></label></div>')
-                            corpo+=(f'<div><label>Valor da parcela (R$)'
-                                    f'<input name="rateio_manual_valor" value="{valor_texto}" '
+                            corpo+=('<div><label>'+c2label('rateio_manual_valor')
+                                    +f'<input name="rateio_manual_valor" value="{valor_texto}" '
                                     f'inputmode="decimal"{readonly}></label></div>')
                             if pode_editar_rateio:
                                 corpo+=(f'<button type="button" class="secondary remover-rateio" '
@@ -2899,8 +2907,8 @@ class PortalPrestador:
                             f'<b>Restante:</b> <span id="rateio-restante">{dinheiro(max(0,total_os_centavos-total_rateado)/100)}</span></p>')
                     if pode_editar_rateio:
                         opcoes_rateio=[('', 'Selecione o colaborador')]+[
-                            (p['id'], p['nome']) for p in prestadores
-                            if (p['id']!=s['pid'] or admin_rateio)
+                            (p['id'], p['nome']) for p in rateio_context['prestadores_rateio']
+                            if (p['id']!=actor.provider_id or admin_rateio)
                             and (finalizador_rateio is None
                                  or int(p['id'])!=int(finalizador_rateio))]
                         opcoes_html=''.join(
@@ -2909,10 +2917,10 @@ class PortalPrestador:
                         corpo+='<div class="material-add"><button id="adicionar-rateio" class="secondary" type="button">+ Adicionar colaborador</button></div>'
                         corpo+=('<template id="modelo-rateio"><div class="rateio-row" '
                                 'data-rateio-row data-novo="1">'
-                                '<div><label>Colaborador<select name="rateio_manual_tecnico">'
+                                '<div><label>'+c2label('rateio_manual_tecnico')+'<select name="rateio_manual_tecnico">'
                                 +opcoes_html+'</select></label></div>'
-                                '<div><label>Valor da parcela (R$)'
-                                '<input name="rateio_manual_valor" placeholder="0,00" '
+                                '<div><label>'+c2label('rateio_manual_valor')
+                                +'<input name="rateio_manual_valor" placeholder="0,00" '
                                 'inputmode="decimal"></label></div>'
                                 '<button type="button" class="secondary remover-rateio">Remover</button>'
                                 '</div></template>')
@@ -3939,7 +3947,7 @@ class PortalPrestador:
                             total_txt=_valor('total').strip()
                             campos={}
                             for chave,valores in qs.items():
-                                if chave in ('total','materiais','mao_obra','horas','base'):
+                                if chave in ('total','materiais','mao_obra','horas','base','composicao_yaml'):
                                     continue
                                 try:
                                     campos[chave]=composicao.centavos_de_reais(str(valores[0]))
@@ -3959,7 +3967,13 @@ class PortalPrestador:
                                                 + mao_obra_centavos)
                             cobrar_visita=str(_valor('cobrar_visita','1')).strip().lower() not in (
                                 '0','nao','não','false','off')
-                            if cobrar_visita:
+                            declarativa_txt = _valor('composicao_yaml').strip()
+                            if declarativa_txt:
+                                if len(declarativa_txt) > 65536:
+                                    raise ValueError('Composição declarativa muito extensa.')
+                                comp = composicao.declarativa(
+                                    total_centavos, composicao.parse_declarativa(declarativa_txt))
+                            elif cobrar_visita:
                                 comp=composicao.calcular_os(
                                     total_centavos=total_centavos,
                                     materiais_centavos=materiais_centavos,

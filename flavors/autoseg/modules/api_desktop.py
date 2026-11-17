@@ -625,6 +625,7 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
         ('POST', ('pdf','publicar')): 'publish',
         ('POST', ('email','preparar')): 'send',
         ('POST', ('nota','preparar')): 'send',
+        ('POST', ('rateio',)): 'view',
     }
     action = actions.get((metodo,tuple(resto)))
     if action is None:
@@ -663,6 +664,15 @@ def _rota_os_id(handler, os_id, resto, servico, metodo, banco=None, info=None, p
             authorize=_os_writer_authorize(
                 principal, os_id, rule, session_id=info.get('sessao_id')))
         return _enviar(handler, 200, {'mudou': bool(changed)})
+    if resto == ['rateio'] and metodo == 'POST':
+        dados = _corpo(handler)
+        tecnico_id = _int(dados.get('tecnico_id'))
+        if tecnico_id is None:
+            raise ValidacaoError('Selecione o técnico secundário.')
+        return _enviar(handler, 200, {'valor_centavos': servico.definir_rateio_os(
+            os_id, tecnico_id, str(dados.get('valor') or '0'), principal=principal,
+            authorize=_os_writer_authorize(
+                principal, os_id, 'view', session_id=info.get('sessao_id')))})
     if resto == ['pdf', 'arquivo'] and metodo == 'GET':
         return _enviar(handler, 200, {
             'arquivo': servico.pdf_publicado(os_id, principal=principal)})

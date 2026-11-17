@@ -168,6 +168,7 @@
     const aplicarComposicao = form.querySelector('[name="aplicar_composicao"]');
     const cobrarVisita = form.querySelector('[name="cobrar_visita"]');
     const basePercentuais = form.querySelector('[name="base_percentuais"]');
+    const declarativa = form.querySelector('[name="composicao_yaml"]');
     const sincronizarVisita = () => {
       if (!cobrarVisita || !basePercentuais) return;
       const semVisita = cobrarVisita.value === '0';
@@ -190,10 +191,13 @@
         const item = row.querySelector('[name="material_item[]"]');
         const qtd = row.querySelector('[name="material_qtd[]"]');
         const unit = row.querySelector('[name="material_unit[]"]');
+        const output = row.querySelector('.material-total-preview');
+        const quantidade = String(qtd?.value || '').trim();
+        const preview = (quantidade === '' ? 1 : number(quantidade)) * number(unit?.value);
+        if (output) output.textContent = item && item.value.trim() ? brl(preview) : '—';
         if (item && item.value.trim()) {
           hasMaterial = true;
-          const quantidade = String(qtd?.value || '').trim();
-          material += (quantidade === '' ? 1 : number(quantidade)) * number(unit?.value);
+          material += preview;
         }
       });
       if (!hasMaterial) material = number(form.elements['valor_materiais_manual'].value);
@@ -204,7 +208,8 @@
       if (composicaoPreview) composicaoPreview.replaceChildren();
     }
     async function atualizarComposicao() {
-      if (!total || !composicaoPreview || !aplicarComposicao || !aplicarComposicao.checked) {
+      if (!total || !composicaoPreview ||
+          (!declarativa?.value.trim() && (!aplicarComposicao || !aplicarComposicao.checked))) {
         limparComposicao();
         return;
       }
@@ -218,6 +223,7 @@
         base: form.elements['base_percentuais']?.value || 'total',
         cobrar_visita: cobrarVisita?.value || '1'
       });
+      if (declarativa?.value.trim()) params.set('composicao_yaml', declarativa.value.trim());
       try {
         const resposta = await fetch('/composicao/simular?' + params.toString(), {
           headers: {'Accept':'application/json'},
