@@ -1014,6 +1014,20 @@ fieldset{{border:1px solid #444;border-radius:10px;padding:14px;margin:14px 0}}l
 {CSS_MOBILE}{CSS_FEEDBACK}</style><script src="/static/portal.js?v={VERSAO_PORTAL}" defer></script></head><body>{env_banner}<header><div class="top">{topo}{us}{logout}</div><nav class="nav">{nav}</nav></header><main><h1>{esc(titulo)}</h1>{corpo}</main>{footer}{feedback_html}</body></html>'''
 
 
+def _rascunho_web_compativel(rascunho, versao_atual):
+    """Only merge a draft written against the current OS revision.
+
+    The autosave payload is a convenience snapshot, never an authority over a
+    newer server row. A missing/old ``_versao_os`` is stale and is ignored.
+    """
+    if not rascunho:
+        return False
+    atual = str(versao_atual or '').strip()
+    if not atual:
+        return True
+    return str(rascunho.get('_versao_os') or '').strip() == atual
+
+
 class PortalPrestador:
     def __init__(self,banco,host=None,porta=8766):
         self.banco=banco
@@ -2341,6 +2355,9 @@ class PortalPrestador:
                 # Carregar rascunho salvo pelo prestador se existir
                 try:
                     rasc_salvo = ext.obter_rascunho_web(banco, oid, s['pid']) if oid else None
+                    if rasc_salvo and not _rascunho_web_compativel(
+                            rasc_salvo, d.get('atualizado_em')):
+                        rasc_salvo = None
                     if rasc_salvo:
                         for k,v in rasc_salvo.items():
                             if k.startswith('_') or k in ('csrf','modo_envio','nota_fiscal'):
