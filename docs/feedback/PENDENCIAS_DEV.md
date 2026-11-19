@@ -166,11 +166,11 @@ DEV**.
 | FB-0060 | `/os` | The OS could be concluded without a payment method. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_conclusao_exige_forma_de_pagamento`) |
 | FB-0062 | `/login` | Login errors appeared as a full page and lost what the user had typed. All form errors should be toast/inline without navigation. | Corrigido na DEV | `6b2366c`; `test_feedback_dev.py` (`test_login_erro_fica_inline_e_preserva_email`) |
 | FB-0063 | `/financeiro` (web + GTK) | Personal per-user visual mask stored **on the server**: a checkbox on each received entry hides that value and removes it from the user's own “Recebido” card only. The item stays **Recebido**; admin/reports/ledger and other users are unchanged. Not the global 144/145 toggle. | Pendente na DEV | — |
-| FB-0064 | `/os/{id}/pdf-preview`, `/os/{id}/pdf`, `/icone.png` | The PDF is 9.8 MB and its download times out; a 2048×2048, ~7 MB icon is embedded as a 22×22 seal on every page, while the photos are already compressed. | Pendente na DEV | — |
-| FB-0065 | `/os/{id}` | The edit form kept showing old Solicitação original, Diagnóstico, Serviço executado and Resultado because an old `os_rascunhos_web` draft overrode the current database values. | Pendente na DEV | — |
-| FB-0066 | GTK OS edit | The GTK OS dialog has no fields for Solicitação original, Diagnóstico, Serviço executado and Resultado e testes; only the Web admin form exposes them. | Pendente na DEV | — |
-| FB-0067 | `/os/{id}` | A live admin cannot attach an invoice PDF to an OS whose responsible provider is somebody else; the Web guard accepts the admin, but the domain writer rejects it. | Pendente na DEV | — |
-| FB-0068 | `/financeiro` | After confirming a receipt/payment, the page returns to the top instead of preserving the current finance section/scroll. MAIN 162 is the same report, marked Incompleto. | Pendente na DEV | — |
+| FB-0064 | `/os/{id}/pdf-preview`, `/os/{id}/pdf`, `/icone.png` | The PDF is 9.8 MB and its download times out; a 2048×2048, ~7 MB icon is embedded as a 22×22 seal on every page, while the photos are already compressed. | Corrigido na DEV | `b867e34`; `test_branding_assets.py` |
+| FB-0065 | `/os/{id}` | The edit form kept showing old Solicitação original, Diagnóstico, Serviço executado and Resultado because an old `os_rascunhos_web` draft overrode the current database values. | Corrigido na DEV | `7f2fb5b`; `test_feedback_stale_draft.py` |
+| FB-0066 | GTK OS edit | The GTK OS dialog has no fields for Solicitação original, Diagnóstico, Serviço executado and Resultado e testes; only the Web admin form exposes them. | Corrigido na DEV | `5c4223e`; `test_feedback_gtk_os_fields.py` |
+| FB-0067 | `/os/{id}` | A live admin cannot attach an invoice PDF to an OS whose responsible provider is somebody else; the Web guard accepts the admin, but the domain writer rejects it. | Corrigido na DEV | `1acf23e`; `test_c2_work_form_parity.py` |
+| FB-0068 | `/financeiro` | After confirming a receipt/payment, the page returns to the top instead of preserving the current finance section/scroll. MAIN 162 is the same report, marked Incompleto. | Corrigido na DEV | `a9c2deb`; `test_feedback_finance_scroll.py` |
 | FB-0069 | `/os` | Add an installment checkbox + number of installments; show Parcela 1 on conclusion and release each next installment only after the previous one is received. | Pendente na DEV | — |
 
 ### FB-0063 — Mascarar valor por item recebido
@@ -282,9 +282,9 @@ The two can coexist.
   and a size-appropriate timeout can be added later as robustness, but must
   not be the only fix.
 - **Category / urgency:** defect / P1.
-- **Decision:** Pendente na DEV.
-- **Fix:** —
-- **Test:** generate a PDF with photos and assert that it stays below a small
+- **Decision:** Corrigido na DEV.
+- **Fix:** `b867e34`.
+- **Test:** `test_branding_assets.py`.  generate a PDF with photos and assert that it stays below a small
   size bound, that no 2048×2048 image is embedded, and that a real download
   completes. Check `/icone.png` response size and dimensions.
 - **Promotion:** pending `main`.
@@ -301,9 +301,9 @@ The two can coexist.
   must never silently replace admin/server changes. Saving must use the
   current OS version.
 - **Category / urgency:** defect / P1.
-- **Decision:** Pendente na DEV.
-- **Fix:** —
-- **Test:** save an OS, leave an older draft for the same provider, update the
+- **Decision:** Corrigido na DEV.
+- **Fix:** `7f2fb5b`.
+- **Test:** `test_feedback_stale_draft.py`.  save an OS, leave an older draft for the same provider, update the
   OS server-side, reload the form and assert that the current values appear;
   save and assert the current version is used and no old text is restored.
 - **Promotion:** pending `main`.
@@ -319,9 +319,9 @@ The two can coexist.
   exception must be explicit in the navigation/registry and the user must be
   directed to Web.
 - **Category / urgency:** parity defect / P2.
-- **Decision:** Pendente na DEV.
-- **Fix:** —
-- **Test:** open the GTK OS dialog, verify the fields and labels, save and
+- **Decision:** Corrigido na DEV.
+- **Fix:** `5c4223e`.
+- **Test:** `test_feedback_gtk_os_fields.py`.  open the GTK OS dialog, verify the fields and labels, save and
   reload, then confirm the values in the database and in the PDF.
 - **Promotion:** pending `main`.
 
@@ -338,9 +338,9 @@ The two can coexist.
   domain writer, with the admin actor recorded in the event. Non-admin
   non-responsible providers remain denied.
 - **Category / urgency:** defect / P1.
-- **Decision:** Pendente na DEV.
-- **Fix:** —
-- **Test:** admin attaches an invoice to another provider's OS and the file is
+- **Decision:** Corrigido na DEV.
+- **Fix:** `1acf23e`.
+- **Test:** `test_c2_work_form_parity.py`.  admin attaches an invoice to another provider's OS and the file is
   linked; responsible provider still can; unrelated employee is denied; the
   event records the admin actor.
 - **Promotion:** pending `main`.
@@ -354,9 +354,9 @@ The two can coexist.
 - **Expected:** preserve the active finance tab and the scroll position across
   the AJAX/refresh cycle; 162 is closed as a duplicate.
 - **Category / urgency:** defect / P1.
-- **Decision:** Pendente na DEV.
-- **Fix:** —
-- **Test:** open A receber, scroll to an item, confirm it, and assert the page
+- **Decision:** Corrigido na DEV.
+- **Fix:** `a9c2deb`.
+- **Test:** `test_feedback_finance_scroll.py`.  open A receber, scroll to an item, confirm it, and assert the page
   remains in A receber at the same relative position; also test Recebidos and
   Repasses.
 - **Promotion:** pending `main`.

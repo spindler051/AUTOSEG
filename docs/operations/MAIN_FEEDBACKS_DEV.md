@@ -45,10 +45,10 @@ Read-only review of all 139 rows in the MAIN `portal_feedback` table.
   MAIN database for three active providers. The `A receber` KPI rendered
   present and nonzero in all three. No code gap found; no DEV fix opened.
 - **157** installment plan is a planned DEV feature; tracked as FB-0069.
-- **158/162** finance scroll reset is a DEV UX defect; tracked as FB-0068.
-  `162` is an incomplete duplicate.
-- **160** admin invoice attachment is a real DEV authorization mismatch;
-  tracked as FB-0067.
+- **158/162** finance scroll reset was fixed in DEV by `a9c2deb`
+  (`test_feedback_finance_scroll.py`); `162` is an incomplete duplicate.
+- **160** admin invoice attachment was fixed in DEV by `1acf23e`
+  (`test_c2_work_form_parity.py`).
 - **152/153** the old `/auto-financeiro` route was intentionally removed; MAF
   is the separate site. No AUTOSEG route rebuild.
 
