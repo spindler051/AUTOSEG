@@ -19,9 +19,9 @@ permanece `0`. Consultar `docs/operations/OBJECT_POLICY_ROLLOUT.md` e o
 
 # Roadmap vigente
 
-**Atualizado:** 2026-11-11
+**Atualizado:** 2026-11-19
 **Versão:** `9.6.0-dev.73`
-**Branch:** `main`
+**Branch:** `dev` (promoção para `main` pendente)
 **Foco:** produção do AUTOSEG. Arquitetura genérica e outros toolkits ficam
 para depois.
 
@@ -123,6 +123,52 @@ decisões abaixo, não apenas do código integrado:
 5. **Consolidar a API/contrato do desktop**
    - manter a paridade do prestador entre GTK, site e API;
    - preparar os endpoints client-safe que a peça 6.5 vai consumir.
+
+## Fila aberta da DEV — 2026-11-19
+
+**Base:** `dev @ 8555bcf`; `main` em `cffe4b6`; nura em `069eff6`.
+
+### Feedbacks abertos
+
+| ID | Escopo | Estado | Observação |
+|---|---|---|---|
+| **FB-0063** | `/financeiro` Web + GTK | Pendente na DEV | Máscara **por usuário e por item recebido**, persistida no servidor; afeta somente o cartão “Recebido” do próprio usuário. Exige tabela aditiva de preferência; não confundir com a máscara visual global 144/145. |
+| **FB-0069** | `/os` | Pendente na DEV | Parcelamento: checkbox + quantidade de parcelas; Parcela 1 aparece na conclusão e cada parcela seguinte só é liberada após o recebimento da anterior. Exige modelo financeiro próprio; não altera o escritor Step 0. |
+
+Os dois são **features**, não regressões. Nenhum schema ou comportamento
+financeiro deve ser inventado sem decisão explícita.
+
+### Fechado neste ciclo
+
+```text
+FB-0064  PDF/ícone bounded + build_branding.py
+FB-0065  rascunho web antigo não sobrepõe OS mais nova
+FB-0066  GTK edita Solicitação original/Diagnóstico/Serviço/Resultado
+FB-0067  admin anexa nota fiscal em OS de outro responsável
+FB-0068  scroll/aba do financeiro preservado após recebimento
+```
+
+### Follow-ups antes da produção
+
+```text
+revisão legal/privacidade dos registros de feedback
+teste ao vivo da IA com o provedor configurado
+definir quem recebe e triagem os feedbacks em cada instalação
+job de retenção das aberturas e eventos de telemetria
+revisar regex de anonimização com texto real em português
+```
+
+### Próximo gate de release
+
+```text
+auditar auth, OS, dados, PDF/outbox e artefatos remotos
+backup e rollback da nura
+merge dev -> main
+deploy, smoke Web + GTK 360/600/1200
+nura: kernel CVE-2026-98432 + NF_TABLES + firewall
+Cloudflare: named tunnel + Access + token rotation
+GitHub: main branch protection
+```
 
 ## Próximo — 6.5 Cliente no GTK (remote-only)
 
