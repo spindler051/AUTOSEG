@@ -29,6 +29,32 @@ Backup do estado atual:
 | 154 | Caixa da empresa em aba separada, só admin | Aba “Caixa da empresa” separada; a visibilidade é decidida pela permissão `finance.view.all` da policy, não por um `if admin`. Admin recebe `*`; employee recebe apenas `finance.view.own`. |
 | 156 | Dados bancários na sessão de finanças pessoais | A aba “Finanças pessoais” concentra os dados bancários/cadastrais. |
 
+## 2026-11-19 — review of all MAIN feedback
+
+Read-only review of all 139 rows in the MAIN `portal_feedback` table.
+
+```text
+122 Resolvido
+ 16 Novo
+  1 Incompleto
+```
+
+- **143–156** remain resolved in DEV by `0531d5f`; the MAIN triage state is
+  stale. No new code fix.
+- **161** (`A receber` total) was verified in DEV with a realistic finance
+  fixture (`financeiro` + `os_encerramentos`): the KPI rendered
+  `R$ 100,00`. No code gap found; recheck with the user's real data before
+  opening a code item.
+- **157** installment plan is a planned DEV feature; tracked as FB-0069.
+- **158/162** finance scroll reset is a DEV UX defect; tracked as FB-0068.
+  `162` is an incomplete duplicate.
+- **160** admin invoice attachment is a real DEV authorization mismatch;
+  tracked as FB-0067.
+- **152/153** the old `/auto-financeiro` route was intentionally removed; MAF
+  is the separate site. No AUTOSEG route rebuild.
+
+No MAIN row, code, service or database data was changed by this review.
+
 ## Permissões
 
 - **Caixa da empresa:** `_policy_allows` carrega a policy e resolve o papel pela identidade

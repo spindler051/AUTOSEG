@@ -169,6 +169,9 @@ DEV**.
 | FB-0064 | `/os/{id}/pdf-preview`, `/os/{id}/pdf`, `/icone.png` | The PDF is 9.8 MB and its download times out; a 2048×2048, ~7 MB icon is embedded as a 22×22 seal on every page, while the photos are already compressed. | Pendente na DEV | — |
 | FB-0065 | `/os/{id}` | The edit form kept showing old Solicitação original, Diagnóstico, Serviço executado and Resultado because an old `os_rascunhos_web` draft overrode the current database values. | Pendente na DEV | — |
 | FB-0066 | GTK OS edit | The GTK OS dialog has no fields for Solicitação original, Diagnóstico, Serviço executado and Resultado e testes; only the Web admin form exposes them. | Pendente na DEV | — |
+| FB-0067 | `/os/{id}` | A live admin cannot attach an invoice PDF to an OS whose responsible provider is somebody else; the Web guard accepts the admin, but the domain writer rejects it. | Pendente na DEV | — |
+| FB-0068 | `/financeiro` | After confirming a receipt/payment, the page returns to the top instead of preserving the current finance section/scroll. MAIN 162 is the same report, marked Incompleto. | Pendente na DEV | — |
+| FB-0069 | `/os` | Add an installment checkbox + number of installments; show Parcela 1 on conclusion and release each next installment only after the previous one is received. | Pendente na DEV | — |
 
 ### FB-0063 — Mascarar valor por item recebido
 
@@ -320,6 +323,60 @@ The two can coexist.
 - **Fix:** —
 - **Test:** open the GTK OS dialog, verify the fields and labels, save and
   reload, then confirm the values in the database and in the PDF.
+- **Promotion:** pending `main`.
+
+### FB-0067 — Admin cannot attach an invoice PDF to another provider's OS
+
+- **Page:** `/os/{id}`
+- **Reported:** the live MAIN admin could not attach the invoice PDF to an OS
+  whose responsible provider was somebody else.
+- **Evidence:** `os_commands._write_attach_invoice` accepts the admin, but then
+  calls `ext.salvar_nota_fiscal(banco, oid, pid, ...)`; the domain function
+  still rejects any `pid` that is not the current responsible provider.
+  The Web guard and the domain guard disagree.
+- **Expected:** an active administrator can attach the invoice through the same
+  domain writer, with the admin actor recorded in the event. Non-admin
+  non-responsible providers remain denied.
+- **Category / urgency:** defect / P1.
+- **Decision:** Pendente na DEV.
+- **Fix:** —
+- **Test:** admin attaches an invoice to another provider's OS and the file is
+  linked; responsible provider still can; unrelated employee is denied; the
+  event records the admin actor.
+- **Promotion:** pending `main`.
+
+### FB-0068 — Finance scroll position resets after a receipt/payment action
+
+- **Page:** `/financeiro`
+- **Reported:** after confirming a payment or a transfer, the page reloads and
+  jumps back to the top; the user wants to stay in the same finance section and
+  scroll position. MAIN 162 is the same report, marked Incompleto.
+- **Expected:** preserve the active finance tab and the scroll position across
+  the AJAX/refresh cycle; 162 is closed as a duplicate.
+- **Category / urgency:** defect / P1.
+- **Decision:** Pendente na DEV.
+- **Fix:** —
+- **Test:** open A receber, scroll to an item, confirm it, and assert the page
+  remains in A receber at the same relative position; also test Recebidos and
+  Repasses.
+- **Promotion:** pending `main`.
+
+### FB-0069 — Installment plan for the OS
+
+- **Page:** `/os`
+- **Reported:** add a checkbox and a number-of-installments field in the
+  Situação e relatório section. Applying is automatic, without a confirm
+  button. On conclusion, A receber shows Parcela 1; the next installment is
+  released only after the previous one is received.
+- **Expected:** checkbox + installment count; Parcela 1 created with the
+  concluded OS; sequential release in A receber; no change to the Step 0
+  writer or to the existing finance rules.
+- **Category / urgency:** product feature / P2.
+- **Decision:** Pendente na DEV.
+- **Fix:** —
+- **Test:** conclude an OS with N installments and assert only Parcela 1 is
+  visible; confirm Parcela 1 and assert Parcela 2 appears; repeat through the
+  last installment; no duplicate receivable rows.
 - **Promotion:** pending `main`.
 
 ### FB-0057 — Busca e criação de cliente na OS
