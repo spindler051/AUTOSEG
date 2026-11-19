@@ -3462,7 +3462,7 @@ class PortalPrestador:
                                        str(cfg.get('dados_bancarios_texto') or ''))
                         +'<button>Salvar integrações</button></form></details>')
                     acoes=registro_form+config_form+(
-                        f'<form method="post" action="/prestadores/{pid}/admin" style="display:inline">' 
+                        f'<form method="post" action="/prestadores/{pid}/admin" style="display:inline">'
                            f'{self.hidden(s)}<button class="secondary">'
                            f'{"Remover admin" if admin else "Tornar admin"}</button></form> '
                            f'<form method="post" action="/prestadores/{pid}/alternar" style="display:inline">'

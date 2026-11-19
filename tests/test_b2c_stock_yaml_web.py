@@ -37,12 +37,12 @@ class B2cTests(unittest.TestCase):
             # The reviewer grants live admin through its normal fixture.
             with patch.object(LocalService, '_company_admin', return_value=None):
                 service=LocalService(db)
-                service.estoque_importar_lote([{'nome':'A','sku':'SKU-A','unidade':'un',
+                service.estoque_importar_lote([{'nome':'Material A','sku':'SKU-A','unidade':'un',
                     'custo':'3','venda':'6','minimo':'0'}])
                 with self.assertRaises(ValueError):
                     service.estoque_importar_lote([
-                        {'nome':'B','sku':'SKU-B','unidade':'un','custo':'1','venda':'2','minimo':'0'},
-                        {'nome':'A','sku':'SKU-A','unidade':'un','custo':'1','venda':'2','minimo':'0'}])
+                        {'nome':'Material B','sku':'SKU-B','unidade':'un','custo':'1','venda':'2','minimo':'0'},
+                        {'nome':'Material A','sku':'SKU-A','unidade':'un','custo':'1','venda':'2','minimo':'0'}])
             names=[x['nome'] for x in estoque_materiais.listar(db)]
-            self.assertIn('A', names)
-            self.assertNotIn('B', names)
+            self.assertIn('Material A', names)
+            self.assertNotIn('Material B', names)
