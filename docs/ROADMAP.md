@@ -126,7 +126,7 @@ decisões abaixo, não apenas do código integrado:
 
 ## Fila aberta da DEV — 2026-11-19
 
-**Base:** `dev @ 8555bcf`; `main` em `cffe4b6`; nura em `069eff6`.
+**Base:** `dev @ 7c0ee08`; `main` em `7c0ee08`; nura em `7c0ee08`.
 
 ### Feedbacks abertos
 
@@ -158,13 +158,30 @@ job de retenção das aberturas e eventos de telemetria
 revisar regex de anonimização com texto real em português
 ```
 
+### Produção — 2026-11-19
+
+`main` e nura promovidos para `7c0ee08` por fast-forward, sem parar o túnel.
+
+```text
+backup      /home/s10/backups/pre-upgrade-20261119-101513
+            snapshot SQLite quick_check=ok; código+dados completos;
+            config Gmail; SHA256
+túnel       cloudflared-quick ativo, PID 7023, sem restart
+serviços    somente autoseg-main e autoseg-api reiniciados; ambos ativos
+web         /, /login, /static/portal.js (marcador novo), /icone.png 71 KB,
+            /logo.png 48 KB -> 200
+pdf         OS 24 (9 fotos) regenerada em 2,5 MB (antes 5,97 MB)
+banco       61 tabelas, 41 OS, 475 clientes, quick_check=ok
+gmail       refresh do token OK (escopo gmail.send)
+```
+
+Pendente de smoke autenticado: login real, salvar OS e download HTTP do PDF.
+
 ### Próximo gate de release
 
 ```text
 auditar auth, OS, dados, PDF/outbox e artefatos remotos
-backup e rollback da nura
-merge dev -> main
-deploy, smoke Web + GTK 360/600/1200
+smoke autenticado Web + GTK 360/600/1200
 nura: kernel CVE-2026-98432 + NF_TABLES + firewall
 Cloudflare: named tunnel + Access + token rotation
 GitHub: main branch protection
