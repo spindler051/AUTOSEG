@@ -1075,8 +1075,8 @@ def salvar_nota_fiscal(banco, os_id, pid, nome, conteudo, *, connection=None, st
             p = c.execute('SELECT nome FROM prestadores WHERE id=? AND ativo=1', (pid,)).fetchone()
             if not p:
                 raise PermissionError('Prestador inativo.')
-            if responsavel_atual(c, os_id) != pid:
-                raise PermissionError('Somente o responsável pela OS pode anexar nota fiscal.')
+            if responsavel_atual(c, os_id) != pid and not administrador(c, pid):
+                raise PermissionError('Somente o responsável ou administrador pode anexar nota fiscal.')
         existente = c.execute('SELECT id FROM os_notas_fiscais WHERE os_id=? AND sha256=?',
                               (os_id, digest)).fetchone()
         if existente:

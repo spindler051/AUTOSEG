@@ -192,6 +192,23 @@ class C2LiveServiceTest(unittest.TestCase):
             ext.salvar_nota_fiscal(self.db, self.os_id, self.worker,
                                   'grande.pdf', b'%PDF-' + b'x' * (20 * 1024 * 1024))
 
+    def test_admin_can_attach_invoice_to_another_providers_os(self):
+        with tempfile.TemporaryDirectory() as notas, \
+             patch.object(ext, 'NOTAS', Path(notas)):
+            nota_id = ext.salvar_nota_fiscal(
+                self.db, self.os_id, self.admin, 'admin.pdf',
+                b'%PDF-1.4\n% admin invoice\n%%EOF\n')
+            with ext.db(self.db) as conn:
+                row = conn.execute(
+                    'SELECT prestador_id,nome_original FROM os_notas_fiscais WHERE id=?',
+                    (nota_id,)).fetchone()
+            self.assertEqual(row['prestador_id'], self.admin)
+            self.assertEqual(row['nome_original'], 'admin.pdf')
+            with self.assertRaises(PermissionError):
+                ext.salvar_nota_fiscal(
+                    self.db, self.os_id, self.stranger, 'stranger.pdf',
+                    b'%PDF-1.4\n% denied\n%%EOF\n')
+
     def test_explicit_recipient_refs_must_have_existing_contact(self):
         with ext.db(self.db) as conn:
             cust = conn.execute('SELECT cliente_id FROM ordens_servico WHERE id=?',
