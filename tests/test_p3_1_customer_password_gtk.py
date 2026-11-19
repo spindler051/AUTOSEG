@@ -57,7 +57,8 @@ def render_customer_actions(*, admin: bool, web_enabled: bool = True) -> list[st
         carregar_clientes=noop, _importar_cliente_yaml=noop,
         _modelo_cliente_yaml=noop, _atribuir_responsavel=noop,
         novo_cliente=noop, _editar_cliente=noop, _nova_os_cliente=noop,
-        _excluir_cliente=noop, _mesclar_cliente=noop, _senha_cliente=noop,
+        _excluir_cliente=noop, _desativar_cliente=noop, _mesclar_cliente=noop,
+        _senha_cliente=noop,
         _abrir_portal_navegador=noop,
     )
     page_widget = namespace['_pagina_clientes'](window_instance)
@@ -74,11 +75,13 @@ class CustomerPasswordGtkAffordanceTest(unittest.TestCase):
         labels = render_customer_actions(admin=False)
         self.assertNotIn('Acesso web / senha', labels)
         self.assertIn('Abrir Officina Web', labels)
-        self.assertNotIn('Excluir / desativar', labels)
+        self.assertNotIn('Desativar cliente', labels)
+        self.assertNotIn('Excluir cliente', labels)
 
     def test_remote_admin_still_sees_destructive_customer_control(self):
         labels = render_customer_actions(admin=True)
-        self.assertIn('Excluir / desativar', labels)
+        self.assertIn('Desativar cliente', labels)
+        self.assertIn('Excluir cliente', labels)
 
     def test_password_control_requires_web_access_as_before(self):
         labels = render_customer_actions(admin=True, web_enabled=False)

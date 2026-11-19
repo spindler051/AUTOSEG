@@ -192,7 +192,8 @@ class CustomerSecurityPhase3234Test(unittest.TestCase):
                 web=SimpleNamespace(enabled=True), carregar_clientes=noop,
                 _importar_cliente_yaml=noop,_modelo_cliente_yaml=noop,
                 _atribuir_responsavel=noop, novo_cliente=noop,_editar_cliente=noop,
-                _nova_os_cliente=noop,_excluir_cliente=noop,_mesclar_cliente=noop,
+                _nova_os_cliente=noop,_excluir_cliente=noop,
+                _desativar_cliente=noop,_mesclar_cliente=noop,
                 _senha_cliente=noop,_abrir_portal_navegador=noop)
             page=ns['_pagina_clientes'](fake)
             labels=[x['label'] for x in page.children[-1]]

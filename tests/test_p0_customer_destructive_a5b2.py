@@ -255,7 +255,7 @@ class DestructiveCustomerAuthorizationTest(unittest.TestCase):
                              _modelo_cliente_yaml=noop,_atribuir_responsavel=noop,
                              novo_cliente=noop,_editar_cliente=noop,
                              _nova_os_cliente=noop,_excluir_cliente=noop,
-                             _mesclar_cliente=noop)
+                             _desativar_cliente=noop,_mesclar_cliente=noop)
         rendered=globals_['_pagina_clientes'](fake)
         return [control['label'] for control in rendered.children[-1]]
 
@@ -263,20 +263,26 @@ class DestructiveCustomerAuthorizationTest(unittest.TestCase):
         session=Sessao('remote',self.admin,'Admin','',True,
                        permissions=frozenset())
         labels=self._gtk_customer_action_labels(session)
-        self.assertEqual(labels.count('Excluir / desativar'),1)
+        self.assertEqual(labels.count('Desativar cliente'),1)
+        self.assertEqual(labels.count('Excluir cliente'),1)
 
     def test_gtk_remote_employee_empty_permissions_hides_destructive_action(self):
         session=Sessao('remote',self.employee,'Employee','',False,
                        permissions=frozenset())
         labels=self._gtk_customer_action_labels(session)
-        self.assertNotIn('Excluir / desativar',labels)
+        self.assertNotIn('Desativar cliente',labels)
+        self.assertNotIn('Excluir cliente',labels)
 
     def test_gtk_local_admin_shows_destructive_action(self):
         session=Sessao('local',self.admin,'Admin','',True,
                        permissions=frozenset({'*'}))
-        self.assertIn('Excluir / desativar',self._gtk_customer_action_labels(session))
+        labels=self._gtk_customer_action_labels(session)
+        self.assertIn('Desativar cliente',labels)
+        self.assertIn('Excluir cliente',labels)
 
     def test_gtk_local_employee_hides_destructive_action(self):
         session=Sessao('local',self.employee,'Employee','',False,
                        permissions=frozenset())
-        self.assertNotIn('Excluir / desativar',self._gtk_customer_action_labels(session))
+        labels=self._gtk_customer_action_labels(session)
+        self.assertNotIn('Desativar cliente',labels)
+        self.assertNotIn('Excluir cliente',labels)
