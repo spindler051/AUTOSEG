@@ -41,10 +41,9 @@ Read-only review of all 139 rows in the MAIN `portal_feedback` table.
 
 - **143–156** remain resolved in DEV by `0531d5f`; the MAIN triage state is
   stale. No new code fix.
-- **161** (`A receber` total) was verified in DEV with a realistic finance
-  fixture (`financeiro` + `os_encerramentos`): the KPI rendered
-  `R$ 100,00`. No code gap found; recheck with the user's real data before
-  opening a code item.
+- **161** (`A receber` total) was verified against a read-only copy of the
+  MAIN database for three active providers. The `A receber` KPI rendered
+  present and nonzero in all three. No code gap found; no DEV fix opened.
 - **157** installment plan is a planned DEV feature; tracked as FB-0069.
 - **158/162** finance scroll reset is a DEV UX defect; tracked as FB-0068.
   `162` is an incomplete duplicate.
