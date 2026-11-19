@@ -579,6 +579,23 @@
   const finTabs = Array.from(document.querySelectorAll('[data-fin-tab]'));
   const finPanels = Array.from(document.querySelectorAll('[data-fin-panel]'));
   const FIN_TAB_KEY = 'autoseg:fin-tab';
+  const FIN_SCROLL_KEY = 'autoseg:fin-scroll';
+  const salvarScrollFin = () => {
+    try { sessionStorage.setItem(FIN_SCROLL_KEY, String(window.scrollY || 0)); } catch (_erro) {}
+  };
+  const restaurarScrollFin = () => {
+    try {
+      const salvo = Number(sessionStorage.getItem(FIN_SCROLL_KEY));
+      if (Number.isFinite(salvo) && salvo > 0) {
+        requestAnimationFrame(() => window.scrollTo(0, salvo));
+      }
+    } catch (_erro) {}
+  };
+  if (finTabs.length) {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    window.addEventListener('pagehide', salvarScrollFin);
+    window.addEventListener('beforeunload', salvarScrollFin);
+  }
   const ativarFin = (nome, persistir = true) => {
     finTabs.forEach(botao => {
       const ativo = botao.dataset.finTab === nome;
@@ -615,6 +632,7 @@
       if (salva && finTabs.some(botao => botao.dataset.finTab === salva)) finInicial = salva;
     } catch (_erro) {}
     ativarFin(finInicial, false);
+    restaurarScrollFin();
   }
   const brlNumero = texto => {
     const limpo = String(texto || '').replace(/[^\d,.-]/g,'')
@@ -629,6 +647,7 @@
     form.addEventListener('submit', async evento => {
       evento.preventDefault();
       if (!window.confirm(mensagem)) return;
+      const scrollAntes = window.scrollY;
       const botao = form.querySelector('button[type="submit"]');
       if (botao) {
         botao.disabled = true;
@@ -675,6 +694,8 @@
               brlNumero(recebido.textContent) + valor);
           }
         }
+        requestAnimationFrame(() => window.scrollTo(0, scrollAntes));
+        salvarScrollFin();
       } catch (erro) {
         window.alert(erro.message || 'Não foi possível confirmar o recebimento.');
         if (botao) {
