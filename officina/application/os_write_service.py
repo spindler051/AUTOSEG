@@ -59,6 +59,7 @@ class OSCommand:
             'v9_diagnostico': values.v9_diagnostico,
             'v9_execucao': values.v9_execucao,
             'v9_resultado': values.v9_resultado,
+            'solicitacao_original': values.solicitacao_original,
             'rateio_manual_tecnico': list(values.rateio_manual_tecnico),
             'rateio_manual_valor': list(values.rateio_manual_valor),
         }

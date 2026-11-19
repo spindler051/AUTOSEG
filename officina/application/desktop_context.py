@@ -15,6 +15,8 @@ def contexto_os(banco, os_id=None) -> dict:
         'dados': None,
         'materiais': [],
         'original_portal': None,
+        'solicitacao_original': '',
+        'detalhes': {},
         'andamento': None,
         'encerramento': None,
     }
@@ -31,12 +33,25 @@ def contexto_os(banco, os_id=None) -> dict:
         resultado['materiais'] = [dict(linha) for linha in conexao.execute(
             'SELECT item,quantidade,unidade,valor_unitario,valor_total FROM materiais_os '
             'WHERE os_id=? ORDER BY id', (os_id,))]
-        if resultado['dados'].get('origem') == 'Portal':
+        original = None
+        if conexao.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='os_solicitacoes'").fetchone():
             original = conexao.execute(
                 'SELECT descricao_original FROM os_solicitacoes WHERE os_id=?',
                 (os_id,)).fetchone()
+        resultado['solicitacao_original'] = (
+            original['descricao_original'] if original else '')
+        if resultado['dados'].get('origem') == 'Portal':
             resultado['original_portal'] = (
-                original['descricao_original'] if original else None)
+                resultado['solicitacao_original'] or None)
+        if conexao.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='v9_detalhes_os'").fetchone():
+            detalhes = conexao.execute(
+                'SELECT diagnostico,execucao,resultado FROM v9_detalhes_os '
+                'WHERE os_id=?', (os_id,)).fetchone()
+            resultado['detalhes'] = dict(detalhes) if detalhes else {}
         andamento = conexao.execute(
             'SELECT iniciado_em,rascunho FROM os_atendimentos WHERE os_id=?',
             (os_id,)).fetchone()

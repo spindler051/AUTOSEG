@@ -106,6 +106,7 @@ class OSInput:
     v9_diagnostico: str = ''
     v9_execucao: str = ''
     v9_resultado: str = ''
+    solicitacao_original: str = ''
     confirmar_numero_os: str = ''
     composicao_yaml: Sequence[Mapping[str, Any]] | None = None
     rateio_manual_tecnico: tuple[str, ...] = ()

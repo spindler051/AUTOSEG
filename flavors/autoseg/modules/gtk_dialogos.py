@@ -535,6 +535,8 @@ class DialogoOS(Adw.Dialog):
         self.imagens = []
         self.dados = None
         self.original_portal = None
+        self.solicitacao_original_text = ''
+        self.detalhes = {}
         self.andamento = None
         self.encerramento = None
         self.c2 = {}
@@ -563,6 +565,9 @@ class DialogoOS(Adw.Dialog):
                 raise ValueError("OS não encontrada.")
             self.materiais = contexto["materiais"]
             self.original_portal = contexto["original_portal"]
+            self.solicitacao_original_text = contexto.get(
+                'solicitacao_original') or ''
+            self.detalhes = contexto.get('detalhes') or {}
             self.andamento = contexto["andamento"]
             self.encerramento = contexto["encerramento"]
             self.c2 = contexto.get('c2') or {}
@@ -665,6 +670,22 @@ class DialogoOS(Adw.Dialog):
             descricao = self.original_portal
             editavel = False
         self.descricao = ui.campo_texto(grupo, self._work_label('descricao'), descricao, 110, editavel)
+
+        grupo = Adw.PreferencesGroup(title="Relatório e diagnóstico")
+        pagina.add(grupo)
+        admin_original = bool(getattr(self.janela.sessao, 'admin', False))
+        self.solicitacao_original = ui.campo_texto(
+            grupo, "Solicitação original", self.solicitacao_original_text,
+            90, admin_original)
+        if not admin_original:
+            self.solicitacao_original.set_tooltip_text(
+                "Somente administradores alteram a solicitação original.")
+        self.diagnostico = ui.campo_texto(
+            grupo, "Diagnóstico", (self.detalhes.get('diagnostico') or ''), 90)
+        self.execucao = ui.campo_texto(
+            grupo, "Serviço executado", (self.detalhes.get('execucao') or ''), 90)
+        self.resultado = ui.campo_texto(
+            grupo, "Resultado e testes", (self.detalhes.get('resultado') or ''), 90)
 
         grupo = Adw.PreferencesGroup(title="Materiais utilizados")
         pagina.add(grupo)
@@ -1501,6 +1522,10 @@ class DialogoOS(Adw.Dialog):
                 self.sem_nota_fiscal is not None and
                 self.sem_nota_fiscal.get_active()),
             nota_fiscal=self.nota_fiscal_upload,
+            v9_diagnostico=self.diagnostico.get_texto(),
+            v9_execucao=self.execucao.get_texto(),
+            v9_resultado=self.resultado.get_texto(),
+            solicitacao_original=self.solicitacao_original.get_texto(),
             confirmar_numero_os=(self.confirmar_numero_os.get_text().strip()
                 if acao == "Cancelada" and self.confirmar_numero_os is not None
                 else ""),
