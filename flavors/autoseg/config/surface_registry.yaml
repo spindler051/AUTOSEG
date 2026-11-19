@@ -84,7 +84,7 @@ actions:
     api_markers:
       - "if resto == ['desativar'] and metodo == 'POST':"
     gtk_markers:
-      - ui.botao("Excluir / desativar", self._excluir_cliente,
+      - ui.botao("Desativar cliente", self._desativar_cliente,
     source_markers:
       - file: flavors/autoseg/modules/portal_prestador.py
         contains: 'action="/clientes/{cid}/desativar"'
@@ -112,7 +112,7 @@ actions:
     api_markers:
       - "if resto == ['excluir'] and metodo == 'POST':"
     gtk_markers:
-      - ui.botao("Excluir / desativar", self._excluir_cliente,
+      - ui.botao("Excluir cliente", self._excluir_cliente,
     source_markers:
       - file: officina/core/portal_negocios.py
         contains: "pid = require_admin_locked(c, principal)"
